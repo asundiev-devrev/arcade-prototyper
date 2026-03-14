@@ -464,29 +464,45 @@ All colors use HSL triplets. Use `hsl(var(--token))` in CSS, or `hsla(var(--toke
 
 ## Figma integration
 
-You have direct access to Figma Desktop via the **figma-cli** tool at `/Users/andrey.sundiev/figma-cli`. This is the **only** way to interact with Figma. It connects directly to the running Figma Desktop app — no API token, no Figma REST API, no third-party services.
+You have direct access to Figma Desktop via **figma-cli** (`silships/figma-cli` on GitHub). It connects directly to the running Figma Desktop app — no API token, no Figma REST API, no third-party services.
 
 **CRITICAL RULES:**
 - **NEVER ask the user for a Figma API token.** You don't need one. figma-cli connects locally.
 - **NEVER use the Figma REST API** (`api.figma.com`). It doesn't work here.
-- **NEVER use `npx figma-cli`** or any npm package. Use the local tool at the path above.
+- **NEVER use `npx figma-cli`** or any npm package. Use the local clone.
 - **NEVER use `figma-use`** directly. Use figma-cli commands instead.
+
+### Locating figma-cli
+
+figma-cli should be cloned to `~/figma-cli`. To find it:
+
+```bash
+FIGMA_CLI=$(find ~ -maxdepth 2 -type d -name "figma-cli" 2>/dev/null | head -1)
+```
+
+If not found, install it:
+
+```bash
+cd ~ && git clone https://github.com/silships/figma-cli.git && cd figma-cli && npm install
+```
 
 ### Setup
 
 Before first use, ensure the daemon is connected:
 
 ```bash
-cd /Users/andrey.sundiev/figma-cli && node src/index.js daemon status
+cd $FIGMA_CLI && node src/index.js daemon status
 ```
 
 If not connected:
 
 ```bash
-cd /Users/andrey.sundiev/figma-cli && node src/index.js connect
+cd $FIGMA_CLI && node src/index.js connect
 ```
 
 ### Key commands for prototyping
+
+All commands run from the figma-cli directory.
 
 | Task | Command |
 |------|---------|
@@ -499,8 +515,6 @@ cd /Users/andrey.sundiev/figma-cli && node src/index.js connect
 | Export screenshot | `node src/index.js export screenshot -o /tmp/screen.png -s 2` |
 | Select a node | `node src/index.js select "1038:14518"` |
 | What's on canvas | `node src/index.js canvas info` |
-
-All commands run from `/Users/andrey.sundiev/figma-cli`.
 
 **Node ID format**: Use colon format (`1038:14518`), not dash format (`1038-14518`). Figma URLs show dashes in `node-id=` params — convert them to colons.
 
@@ -525,7 +539,7 @@ When the user shares a Figma URL or asks to prototype a frame:
 
 ### Full reference
 
-See `/Users/andrey.sundiev/figma-cli/CLAUDE.md` for quick start and `/Users/andrey.sundiev/figma-cli/REFERENCE.md` for the complete command reference.
+See `$FIGMA_CLI/CLAUDE.md` for quick start and `$FIGMA_CLI/REFERENCE.md` for the complete command reference.
 
 ## Tips
 
