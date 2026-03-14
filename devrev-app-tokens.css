@@ -1,52 +1,51 @@
+/* DevRev App Theme Tokens — extracted from devrev-web monorepo */
 /*
- * DevRev App Design System — Standalone Tokens
- * Extracted verbatim from core-styles.css + dark-styles.css + light-styles.css
- * No build step required.
+ * Source files:
+ *   apps/product/styles/core-styles.css   — base HSL primitives
+ *   apps/product/styles/dark-styles.css   — dark mode semantic tokens
+ *   apps/product/styles/light-styles.css  — light mode semantic tokens
  *
  * Usage:
  *   <link rel="stylesheet" href="devrev-app-tokens.css">
- *   <html data-theme="devrev-app" class="light">
- *
- * Modes: class="light" (default) or remove class for dark
+ *   <html data-theme="devrev-app">          — dark mode (default)
+ *   <html data-theme="devrev-app" class="light"> — light mode
  */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@80..900&display=swap');
-
 /* ============================================================
-   1. CORE PRIMITIVES — from core-styles.css (verbatim)
+   1. CORE PRIMITIVES — from core-styles.css
+   Scoped to data-theme="devrev-app" so it coexists with Arcade.
    ============================================================ */
 
-:root {
-  /* Base hue / saturation anchors */
+:root[data-theme='devrev-app'] {
   --accent-h: 237;
   --accent-s: 81%;
+  --accent-l: 56%;
+
   --neutral-h: 228;
   --neutral-s: 10%;
+
   --alert-h: 360;
   --alert-s: 72%;
+
   --warning-h: 47;
   --warning-s: 74%;
+
   --success-h: 135;
   --success-s: 55%;
+
   --smart-h: 256;
   --smart-s: 94%;
 
-  /* Day / Night */
-  --day: 0 0% 100%;
-  --night: 0 0% 6%;
+  --accent-100: var(--accent-h) var(--accent-s) calc(var(--accent-l) - 19%);
+  --accent-200: var(--accent-h) var(--accent-s) calc(var(--accent-l) - 14%);
+  --accent-300: var(--accent-h) var(--accent-s) calc(var(--accent-l) - 9%);
+  --accent-400: var(--accent-h) var(--accent-s) calc(var(--accent-l) - 4%);
+  --accent-500: var(--accent-h) var(--accent-s) var(--accent-l);
+  --accent-600: var(--accent-h) var(--accent-s) calc(var(--accent-l) + 5%);
+  --accent-700: var(--accent-h) var(--accent-s) calc(var(--accent-l) + 13%);
+  --accent-800: var(--accent-h) var(--accent-s) calc(var(--accent-l) + 20%);
+  --accent-900: var(--accent-h) var(--accent-s) calc(var(--accent-l) + 26%);
 
-  /* Accent scale */
-  --accent-100: var(--accent-h) var(--accent-s) 34%;
-  --accent-200: var(--accent-h) var(--accent-s) 40%;
-  --accent-300: var(--accent-h) var(--accent-s) 46%;
-  --accent-400: var(--accent-h) var(--accent-s) 52%;
-  --accent-500: var(--accent-h) var(--accent-s) 56%;
-  --accent-600: var(--accent-h) var(--accent-s) 61%;
-  --accent-700: var(--accent-h) var(--accent-s) 69%;
-  --accent-800: var(--accent-h) var(--accent-s) 76%;
-  --accent-900: var(--accent-h) var(--accent-s) 82%;
-
-  /* Warning scale */
   --warning-100: var(--warning-h) var(--warning-s) 25%;
   --warning-200: var(--warning-h) var(--warning-s) 32%;
   --warning-300: var(--warning-h) var(--warning-s) 40%;
@@ -57,7 +56,6 @@
   --warning-800: var(--warning-h) var(--warning-s) 80%;
   --warning-900: var(--warning-h) var(--warning-s) 88%;
 
-  /* Success scale */
   --success-100: var(--success-h) var(--success-s) 25%;
   --success-200: var(--success-h) var(--success-s) 32%;
   --success-300: var(--success-h) var(--success-s) 40%;
@@ -68,7 +66,6 @@
   --success-800: var(--success-h) var(--success-s) 80%;
   --success-900: var(--success-h) var(--success-s) 88%;
 
-  /* Smart / Intelligence scale */
   --smart-100: var(--smart-h) var(--smart-s) 48%;
   --smart-200: var(--smart-h) var(--smart-s) 53%;
   --smart-300: var(--smart-h) var(--smart-s) 57%;
@@ -79,7 +76,6 @@
   --smart-800: var(--smart-h) var(--smart-s) 78%;
   --smart-900: var(--smart-h) var(--smart-s) 84%;
 
-  /* Alert scale */
   --alert-100: var(--alert-h) var(--alert-s) 28%;
   --alert-200: var(--alert-h) var(--alert-s) 34%;
   --alert-300: var(--alert-h) var(--alert-s) 40%;
@@ -90,7 +86,6 @@
   --alert-800: var(--alert-h) var(--alert-s) 72%;
   --alert-900: var(--alert-h) var(--alert-s) 80%;
 
-  /* Neutral scale — 28 steps */
   --neutral-80: var(--neutral-h) var(--neutral-s) 8%;
   --neutral-100: var(--neutral-h) var(--neutral-s) 10%;
   --neutral-120: var(--neutral-h) var(--neutral-s) 12%;
@@ -99,18 +94,22 @@
   --neutral-180: var(--neutral-h) var(--neutral-s) 18%;
   --neutral-200: var(--neutral-h) var(--neutral-s) 20%;
   --neutral-220: var(--neutral-h) var(--neutral-s) 22%;
+
   --neutral-240: var(--neutral-h) var(--neutral-s) 24%;
   --neutral-280: var(--neutral-h) var(--neutral-s) 28%;
   --neutral-320: var(--neutral-h) var(--neutral-s) 32%;
   --neutral-360: var(--neutral-h) var(--neutral-s) 36%;
+
   --neutral-400: var(--neutral-h) var(--neutral-s) 40%;
   --neutral-480: var(--neutral-h) var(--neutral-s) 48%;
   --neutral-560: var(--neutral-h) var(--neutral-s) 56%;
   --neutral-620: var(--neutral-h) var(--neutral-s) 62%;
+
   --neutral-700: var(--neutral-h) var(--neutral-s) 70%;
   --neutral-740: var(--neutral-h) var(--neutral-s) 74%;
   --neutral-780: var(--neutral-h) var(--neutral-s) 78%;
   --neutral-820: var(--neutral-h) var(--neutral-s) 82%;
+
   --neutral-860: var(--neutral-h) var(--neutral-s) 86%;
   --neutral-880: var(--neutral-h) var(--neutral-s) 88%;
   --neutral-900: var(--neutral-h) var(--neutral-s) 90%;
@@ -120,9 +119,6 @@
   --neutral-980: var(--neutral-h) var(--neutral-s) 98%;
   --neutral-1000: var(--neutral-h) var(--neutral-s) 100%;
 
-  /* Named color palettes — verbatim from core-styles.css */
-
-  /* Red */
   --red-1000: 358 89% 93%;
   --red-950: 358 83% 91%;
   --red-900: 358 90% 88%;
@@ -142,8 +138,6 @@
   --red-200: 353 63% 25%;
   --red-150: 351 64% 21%;
   --red-100: 350 78% 17%;
-
-  /* Orange */
   --orange-1000: 22 100% 91%;
   --orange-950: 22 89% 86%;
   --orange-900: 23 92% 79%;
@@ -163,8 +157,6 @@
   --orange-200: 27 74% 26%;
   --orange-150: 28 74% 23%;
   --orange-100: 27 85% 20%;
-
-  /* Yellow */
   --yellow-1000: 51 90% 88%;
   --yellow-950: 47 86% 83%;
   --yellow-900: 46 85% 76%;
@@ -184,8 +176,6 @@
   --yellow-200: 41 75% 28%;
   --yellow-150: 41 79% 24%;
   --yellow-100: 40 75% 22%;
-
-  /* Lime */
   --lime-1000: 58 98% 79%;
   --lime-950: 60 78% 72%;
   --lime-900: 61 74% 64%;
@@ -205,8 +195,6 @@
   --lime-200: 68 48% 16%;
   --lime-150: 68 43% 14%;
   --lime-100: 68 54% 11%;
-
-  /* Green */
   --green-1000: 111 84% 90%;
   --green-950: 113 78% 81%;
   --green-900: 116 69% 72%;
@@ -226,8 +214,6 @@
   --green-200: 117 70% 10%;
   --green-150: 112 78% 7%;
   --green-100: 109 81% 4%;
-
-  /* Teal */
   --teal-1000: 158 75% 91%;
   --teal-950: 162 83% 77%;
   --teal-900: 164 66% 71%;
@@ -247,8 +233,6 @@
   --teal-200: 163 33% 12%;
   --teal-150: 160 33% 9%;
   --teal-100: 160 33% 5%;
-
-  /* Sky */
   --sky-1000: 186 71% 92%;
   --sky-950: 188 74% 84%;
   --sky-900: 188 76% 74%;
@@ -268,8 +252,6 @@
   --sky-200: 188 33% 13%;
   --sky-150: 188 32% 9%;
   --sky-100: 186 36% 5%;
-
-  /* Blue */
   --blue-1000: 215 76% 95%;
   --blue-950: 215 83% 91%;
   --blue-900: 217 83% 86%;
@@ -289,8 +271,6 @@
   --blue-200: 207 71% 15%;
   --blue-150: 206 74% 10%;
   --blue-100: 206 76% 6%;
-
-  /* Violet */
   --violet-1000: 266 70% 96%;
   --violet-950: 265 78% 93%;
   --violet-900: 240 79% 89%;
@@ -310,8 +290,6 @@
   --violet-200: 249 72% 20%;
   --violet-150: 246 76% 15%;
   --violet-100: 242 80% 10%;
-
-  /* Pink */
   --pink-1000: 322 80% 96%;
   --pink-950: 319 81% 92%;
   --pink-900: 320 82% 87%;
@@ -331,16 +309,15 @@
   --pink-200: 315 74% 16%;
   --pink-150: 314 77% 12%;
   --pink-100: 311 80% 8%;
-
-  /* --- Font --- */
-  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 /* ============================================================
-   2. DARK MODE — from dark-styles.css (verbatim)
-   Default when class="light" is NOT present.
+   2. DARK MODE — from dark-styles.css
+   Original selector: :root:not(.dark) .force-inverted[class], :root, .force-dark
+   Dark is the default mode (active when .light is NOT present).
    ============================================================ */
 
+:root[data-theme='devrev-app']:not(.light) .force-inverted[class],
 :root[data-theme='devrev-app']:not(.light),
 :root[data-theme='devrev-app'] .force-dark {
   --color-primary: var(--neutral-1000);
@@ -351,13 +328,20 @@
   --color-action: var(--accent-500);
   --color-contrast-action: var(--accent-300);
   --color-intelligence: var(--smart-500);
-  --color-vibrant: var(--smart-500);
+  --color-vibrant: var(--color-primary);
   --color-surface-inset: var(--neutral-80);
   --color-surface-backdrop: var(--neutral-120);
+  --color-stroke-field-idle: var(--neutral-120);
+  --color-stroke-field-hover: var(--neutral-140);
+  --color-stroke-outline: var(--accent-500);
+  --color-foreground-intelligence-onbold: var(--intelligence-500);
 
   /* Background */
   --bg-bubble-receiver: var(--neutral-220);
   --bg-bubble-sender: var(--neutral-120);
+  --bg-thoughts-background: var(--neutral-120);
+  --bg-topic-card: var(--neutral-100);
+  --bg-sku-popular: var(--neutral-100);
 
   --bg-layer-00: var(--neutral-100);
   --bg-layer-01: var(--neutral-120);
@@ -365,7 +349,7 @@
   --bg-layer-03: var(--neutral-160);
   --bg-layer-04: var(--neutral-180);
 
-  --bg-inverted: var(--neutral-1000);
+  --bg-layer-overlay: var(--neutral-140);
 
   --bg-outline-00: var(--neutral-160);
   --bg-outline-01: var(--neutral-180);
@@ -398,12 +382,12 @@
   --bg-interactive-bucket-hovered: var(--neutral-160);
   --bg-interactive-bucket-pressed: var(--neutral-200);
 
+  --bg-interactive-tab-hovered: var(--neutral-180);
+  --bg-interactive-tab-pressed: var(--neutral-220);
+
   --bg-interactive-stack-pressed: var(--neutral-180);
   --bg-interactive-stack-resting: var(--neutral-140);
   --bg-interactive-stack-hovered: var(--neutral-160);
-
-  --bg-interactive-tab-hovered: var(--neutral-180);
-  --bg-interactive-tab-pressed: var(--neutral-220);
 
   --bg-input-text-resting: var(--neutral-100);
   --bg-input-text-pressed: var(--neutral-80);
@@ -417,6 +401,8 @@
   --bg-input-select-resting: var(--neutral-240);
   --bg-input-select-disabled: var(--neutral-240);
 
+  --bg-surface-paper: var(--neutral-160);
+
   --bg-attribute-lilac: 244 27% 54%;
   --bg-attribute-purple: 284 24% 48%;
   --bg-attribute-blue: 210 45% 46%;
@@ -427,7 +413,25 @@
   --bg-attribute-red: 1 31% 49%;
   --bg-attribute-grey: 0 0% 40%;
 
+  /* smart loading bar */
+  /* TODO @pranav - change these hardcoded values when we have correct token values */
+  --bg-smart-loading: 250 80% 64%;
+  --gradient-smart-loading: linear-gradient(
+    to right,
+    hsla(249, 84%, 93%, 0),
+    hsla(249, 84%, 93%, 1),
+    hsla(249, 84%, 93%, 0)
+  );
+  --gradient-smart-loading-reverse: linear-gradient(
+    to right,
+    hsla(249, 84%, 93%, 1),
+    hsla(250, 80%, 64%, 1) 15%,
+    90%,
+    hsla(249, 84%, 93%, 1) 100%
+  );
+
   /* Border */
+
   --border-outline-00: var(--neutral-160);
   --border-outline-01: var(--neutral-180);
   --border-outline-02: var(--neutral-220);
@@ -478,7 +482,10 @@
   --border-input-select-pressed: var(--accent-700);
   --border-input-select-disabled: var(--neutral-320);
 
-  /* Text */
+  --border-field-idle: var(--neutral-160);
+  --border-field-hovered: var(--neutral-200);
+
+  /* text */
   --text-color-highlight: var(--neutral-1000);
   --text-color-primary: var(--neutral-940);
   --text-color-secondary: var(--neutral-740);
@@ -523,8 +530,7 @@
   --text-attribute-orange: 21 88% 94%;
   --text-attribute-red: 357 100% 95%;
   --text-attribute-grey: 0 0% 93%;
-
-  /* Feedback */
+  /* feedback */
   --color-feedback-alert: var(--alert-600);
   --color-feedback-warning: var(--warning-500);
   --color-feedback-success: var(--success-600);
@@ -533,13 +539,12 @@
   --color-feedback-accent: var(--accent-700);
   --color-feedback-neutral: var(--neutral-620);
 
-  /* Object colors */
   --color-object-developer: var(--blue-900);
   --color-object-customer: var(--green-800);
   --color-object-mention: var(--orange-800);
   --color-object-engagement: var(--pink-750);
   --color-object-opportunity: var(--lime-750);
-  --color-object-conversation: var(--green-700);
+  --color-object-conversation: var(--orange-700);
   --color-object-ticket: var(--yellow-750);
   --color-object-issue: var(--blue-700);
   --color-object-sub-feature: var(--sky-700);
@@ -555,7 +560,12 @@
   --color-object-sprint-board: var(--lime-900);
   --color-object-incident: var(--red-700);
 
-  /* Decorative */
+  --color-transparent-opacity: var(--neutral-1000);
+
+  --color-skeleton: var(--neutral-480);
+  --color-skeleton-light: var(--neutral-1000);
+  --color-skeleton-dark: var(--neutral-480);
+
   --color-decorative-red: var(--red-700);
   --color-decorative-orange: var(--orange-700);
   --color-decorative-yellow: var(--yellow-850);
@@ -565,11 +575,8 @@
   --color-decorative-blue: var(--blue-800);
   --color-decorative-violet: var(--violet-800);
   --color-decorative-pink: var(--pink-850);
-  --color-decorative-teal: var(--teal-850);
 
-  --color-transparent-opacity: var(--neutral-1000);
-
-  /* Stroke */
+  /* stroke */
   --color-stroke-bold: var(--neutral-980);
   --color-stroke-medium: var(--neutral-620);
   --color-stroke-subtle: var(--neutral-480);
@@ -580,12 +587,10 @@
   --color-stroke-info: var(--blue-700);
   --color-stroke-intelligence: var(--smart-500);
 
-  /* Skeleton */
-  --color-skeleton: var(--neutral-480);
-  --color-skeleton-light: var(--neutral-1000);
-  --color-skeleton-dark: var(--neutral-480);
+  /*attachment*/
+  --color-attachment-error: var(--alert-200);
 
-  /* Charts */
+  /* charts */
   --chart-grid-line: var(--neutral-360);
 
   --chart-category-01-base: var(--violet-750);
@@ -610,29 +615,37 @@
 
   --chart-axis-label-background: var(--neutral-280);
 
+  --chart-widget-background: var(--color-gray-800);
+
+  /* charts ticks color */
   --chart-text-color-primary: var(--neutral-940);
+
   --chart-text-color-tertiary: var(--neutral-620);
 
-  /* Smart loading */
-  --bg-smart-loading: 250 80% 64%;
-  --gradient-smart-loading: linear-gradient(
-    to right,
-    hsla(249, 84%, 93%, 0),
-    hsla(249, 84%, 93%, 1),
-    hsla(249, 84%, 93%, 0)
-  );
-  --gradient-smart-loading-reverse: linear-gradient(
-    to right,
-    hsla(249, 84%, 93%, 1),
-    hsla(250, 80%, 64%, 1) 15%,
-    90%,
-    hsla(249, 84%, 93%, 1) 100%
-  );
+  /* charts new colors */
+  --chart-category-1-lighter: 249 79% 85%;
+  --chart-category-1-base: 250 79% 67%;
 
-  /* Shadows */
+  --chart-category-2-lighter: 45 91% 87%;
+  --chart-category-2-base: 45 87% 62%;
+
+  --chart-category-3-lighter: 250 79% 86%;
+  --chart-category-3-base: 174 42% 60%;
+
+  --chart-category-4-base: 69 98% 40%;
+
+  --chart-category-5-base: 26 100% 66%;
+
+  --chart-category-6-base: 343 100% 77%;
+
+  --chart-category-7-base: 210 90% 69%;
+
+  --chart-category-8-base: 286 89% 68%;
+
+  /* shadows */
   --shadow-depth-04: 0 2px 8px 0 hsla(var(--neutral-100) / 0.8), 0 16px 24px 0 hsla(var(--neutral-100) / 0.8);
   --shadow-depth-03: 0 0 0 1px hsla(var(--neutral-100) / 0.8), 0 2px 16px 0 hsla(var(--neutral-100) / 0.8);
-  --shadow-depth-02: 2px 2px 12px 0 hsla(var(--neutral-100) / 0.8), 0 0 6px 0 hsla(var(--neutral-100) / 0.8);
+  --shadow-depth-02: 2px 2px 24px 0 hsla(var(--neutral-100) / 1), 0 0 12px 0 hsla(var(--neutral-100) / 1);
   --shadow-depth-01: 0 0 1px 0 hsla(var(--neutral-100) / 0.25), 0 2px 1px 0 hsla(var(--neutral-100) / 0.15);
   --shadow-popover-arrow: 0px 2px 0px hsla(var(--border-outline-01) / 1);
   --shadow-interactive-focused: 0px 0px 0px 4px hsl(var(--neutral-1000) / 0.1),
@@ -640,14 +653,25 @@
   --shadow-interactive-lifted: 0 2px 8px 0 hsl(var(--neutral-100) / 0.08);
   --shadow-interactive-pressed: inset 0 2px 0 0 hsl(var(--neutral-120) / 0.05);
   --shadow-interactive-resting: 0 1px 2px 0 hsl(var(--neutral-100) / 0.05);
+  --shadow-depth-inverted: -0.01px -0.12px 3px 0px rgba(0, 0, 0, 0.07), -0.02px -0.6px 7px 0px rgba(0, 0, 0, 0.08),
+    -0.06px -1.4px 14px 0px rgba(0, 0, 0, 0.09), -0.11px -2.5px 27px 0px rgba(0, 0, 0, 0.09),
+    -0.18px -4.5px 50px 0px rgba(0, 0, 0, 0.1), -0.28px -7px 87px 0px rgba(0, 0, 0, 0.12);
   --shadow-effect-2d: 0px -1px 0px 0px hsl(var(--neutral-1000) / 0.05) inset;
+  --shadow-stackbar-b: 0 1px 1px 0 hsla(var(--neutral-100) / 0.6);
+  --shadow-stackbar-l: -1px 0px 1px 0 hsla(var(--neutral-100) / 0.6);
+  --shadow-spotlight-results: 0 0 50px -12px hsla(var(--color-black), 0.25);
+  --shadow-local-top: 0 37px 22px 0 rgba(0, 0, 0, 0.04), 0 17px 17px 0 rgba(0, 0, 0, 0.07),
+    0 4px 9px 0 rgba(0, 0, 0, 0.08), 0 -34px 10px 0 rgba(0, 0, 0, 0), 0 -22px 9px 0 rgba(0, 0, 0, 0),
+    0 -12px 7px 0 rgba(0, 0, 0, 0), 0 -5px 5px 0 rgba(0, 0, 0, 0.01), 0 -1px 3px 0 rgba(0, 0, 0, 0.01);
 }
 
 /* ============================================================
-   3. LIGHT MODE — from light-styles.css (verbatim)
+   3. LIGHT MODE — from light-styles.css
+   Original selector: :root:not(.light) .force-inverted[class], :root.light, .force-light
    Active when class="light" is present on <html>.
    ============================================================ */
 
+:root[data-theme='devrev-app']:not(.light) .force-inverted[class],
 :root[data-theme='devrev-app'].light,
 :root[data-theme='devrev-app'] .force-light {
   --color-primary: var(--neutral-120);
@@ -658,12 +682,19 @@
   --color-action: var(--accent-500);
   --color-contrast-action: var(--accent-300);
   --color-intelligence: var(--smart-500);
+  --color-vibrant: var(--color-primary);
   --color-surface-inset: var(--neutral-980);
-  --color-surface-backdrop: var(--neutral-120);
+  --color-surface-backdrop: var(--neutral-1000);
+  --color-foreground-tertiary: var(--neutral-480);
+  --color-stroke-outline: var(--accent-500);
+  --color-foreground-intelligence-onbold: var(--intelligence-100);
 
   /* Background */
   --bg-bubble-receiver: var(--neutral-940);
   --bg-bubble-sender: var(--neutral-960);
+  --bg-thoughts-background: var(--neutral-1000);
+  --bg-topic-card: var(--sky-1000);
+  --bg-sku-popular: var(--neutral-100);
 
   --bg-layer-00: var(--neutral-980);
   --bg-layer-01: var(--neutral-1000);
@@ -671,7 +702,7 @@
   --bg-layer-03: var(--neutral-1000);
   --bg-layer-04: var(--neutral-1000);
 
-  --bg-inverted: var(--neutral-100);
+  --bg-layer-overlay: var(--neutral-980);
 
   --bg-outline-00: var(--neutral-920);
   --bg-outline-01: var(--neutral-940);
@@ -683,8 +714,8 @@
   --bg-interactive-primary-pressed: var(--accent-300);
 
   --bg-interactive-secondary-resting: var(--neutral-1000);
-  --bg-interactive-secondary-hovered: var(--neutral-980);
-  --bg-interactive-secondary-pressed: var(--neutral-960);
+  --bg-interactive-secondary-hovered: var(--neutral-960);
+  --bg-interactive-secondary-pressed: var(--neutral-920);
 
   --bg-interactive-tertiary-hovered: var(--neutral-960);
   --bg-interactive-tertiary-pressed: var(--neutral-940);
@@ -704,12 +735,12 @@
   --bg-interactive-bucket-hovered: var(--neutral-940);
   --bg-interactive-bucket-pressed: var(--neutral-1000);
 
+  --bg-interactive-tab-hovered: var(--neutral-940);
+  --bg-interactive-tab-pressed: var(--neutral-1000);
+
   --bg-interactive-stack-pressed: var(--neutral-940);
   --bg-interactive-stack-resting: var(--neutral-980);
   --bg-interactive-stack-hovered: var(--neutral-960);
-
-  --bg-interactive-tab-hovered: var(--neutral-940);
-  --bg-interactive-tab-pressed: var(--neutral-1000);
 
   --bg-input-text-resting: var(--neutral-980);
   --bg-input-text-pressed: var(--neutral-1000);
@@ -723,6 +754,8 @@
   --bg-input-select-resting: var(--neutral-860);
   --bg-input-select-hovered: var(--neutral-820);
 
+  --bg-surface-paper: var(--neutral-940);
+
   --bg-attribute-lilac: 240 50% 95%;
   --bg-attribute-purple: 288 33% 94%;
   --bg-attribute-blue: 213 60% 94%;
@@ -732,6 +765,23 @@
   --bg-attribute-orange: 21 88% 94%;
   --bg-attribute-red: 357 100% 95%;
   --bg-attribute-grey: 0 0% 88%;
+
+  /* smart loading bar */
+  /* TODO @pranav - change these hardcoded values when we have correct token values */
+  --bg-smart-loading: 250 80% 64%;
+  --gradient-smart-loading: linear-gradient(
+    to right,
+    hsla(249, 84%, 93%, 0),
+    hsla(249, 84%, 93%, 1),
+    hsla(249, 84%, 93%, 0)
+  );
+  --gradient-smart-loading-reverse: linear-gradient(
+    to right,
+    hsla(249, 84%, 93%, 1),
+    hsla(250, 80%, 64%, 1) 15%,
+    90%,
+    hsla(249, 84%, 93%, 1) 100%
+  );
 
   /* Border */
   --border-outline-00: var(--neutral-920);
@@ -744,8 +794,8 @@
   --border-interactive-primary-pressed: var(--accent-200);
 
   --border-interactive-secondary-resting: var(--neutral-960);
-  --border-interactive-secondary-hovered: var(--neutral-940);
-  --border-interactive-secondary-pressed: var(--neutral-920);
+  --border-interactive-secondary-hovered: var(--neutral-920);
+  --border-interactive-secondary-pressed: var(--neutral-900);
 
   --border-interactive-tertiary-hovered: var(--neutral-960);
   --border-interactive-tertiary-pressed: var(--neutral-920);
@@ -782,7 +832,10 @@
   --border-input-select-pressed: var(--accent-300);
   --border-input-select-disabled: var(--neutral-900);
 
-  /* Text */
+  --border-field-idle: var(--neutral-160);
+  --border-field-hovered: var(--neutral-200);
+
+  /* text */
   --text-color-highlight: var(--neutral-80);
   --text-color-primary: var(--neutral-120);
   --text-color-secondary: var(--neutral-360);
@@ -800,6 +853,7 @@
 
   --text-interactive-tertiary-resting: var(--text-color-secondary);
   --text-interactive-tertiary-hovered: var(--text-color-primary);
+  --text-interactive-tertiary-active: var(--text-color-highlight);
 
   --text-interactive-navigation-resting: var(--text-color-secondary);
   --text-interactive-navigation-pressed: var(--text-static-white);
@@ -826,8 +880,7 @@
   --text-attribute-orange: 28 100% 14%;
   --text-attribute-red: 355 68% 20%;
   --text-attribute-grey: 0 0% 18%;
-
-  /* Feedback */
+  /* feedback */
   --color-feedback-alert: var(--alert-400);
   --color-feedback-warning: var(--warning-400);
   --color-feedback-success: var(--success-400);
@@ -836,18 +889,16 @@
   --color-feedback-accent: var(--accent-600);
   --color-feedback-neutral: var(--neutral-480);
 
-  /* Skeleton */
-  --color-skeleton: var(--neutral-780);
-  --color-skeleton-light: var(--neutral-1000);
-  --color-skeleton-dark: var(--neutral-780);
+  /*attachment*/
+  --color-attachment-error: var(--alert-100);
 
-  /* Object colors */
+  /* object */
   --color-object-developer: var(--blue-600);
   --color-object-customer: var(--green-600);
   --color-object-mention: var(--orange-600);
   --color-object-engagement: var(--pink-500);
   --color-object-opportunity: var(--lime-500);
-  --color-object-conversation: var(--green-500);
+  --color-object-conversation: var(--orange-500);
   --color-object-ticket: var(--yellow-300);
   --color-object-issue: var(--blue-500);
   --color-object-sub-feature: var(--sky-500);
@@ -862,8 +913,13 @@
   --color-object-capability: var(--blue-500);
   --color-object-sprint-board: var(--lime-500);
   --color-object-incident: var(--red-500);
+  --color-transparent-opacity: var(--neutral-80);
 
-  /* Decorative */
+  /* skeleton */
+  --color-skeleton: var(--neutral-780);
+  --color-skeleton-light: var(--neutral-1000);
+  --color-skeleton-dark: var(--neutral-780);
+
   --color-decorative-red: var(--red-400);
   --color-decorative-orange: var(--orange-550);
   --color-decorative-yellow: var(--yellow-600);
@@ -873,9 +929,8 @@
   --color-decorative-blue: var(--blue-600);
   --color-decorative-violet: var(--violet-550);
   --color-decorative-pink: var(--pink-650);
-  --color-transparent-opacity: var(--neutral-80);
 
-  /* Stroke */
+  /* stroke */
   --color-stroke-bold: var(--neutral-120);
   --color-stroke-medium: var(--neutral-480);
   --color-stroke-subtle: var(--neutral-480);
@@ -886,7 +941,7 @@
   --color-stroke-info: var(--blue-400);
   --color-stroke-intelligence: var(--smart-100);
 
-  /* Charts */
+  /* charts */
   --chart-grid-line: var(--neutral-820);
 
   --chart-category-01-base: var(--violet-650);
@@ -911,26 +966,34 @@
 
   --chart-axis-label-background: var(--neutral-920);
 
+  --chart-widget-background: var(--color-white);
+
+  /* charts ticks color */
   --chart-text-color-primary: var(--neutral-120);
+
   --chart-text-color-tertiary: var(--neutral-480);
 
-  /* Smart loading */
-  --bg-smart-loading: 250 80% 64%;
-  --gradient-smart-loading: linear-gradient(
-    to right,
-    hsla(249, 84%, 93%, 0),
-    hsla(249, 84%, 93%, 1),
-    hsla(249, 84%, 93%, 0)
-  );
-  --gradient-smart-loading-reverse: linear-gradient(
-    to right,
-    hsla(249, 84%, 93%, 1),
-    hsla(250, 80%, 64%, 1) 15%,
-    90%,
-    hsla(249, 84%, 93%, 1) 100%
-  );
+  /* charts new colors */
+  --chart-category-1-lighter: 249 79% 85%;
+  --chart-category-1-base: 250 80% 64%;
 
-  /* Shadows */
+  --chart-category-2-lighter: 45 91% 79%;
+  --chart-category-2-base: 45 100% 45%;
+
+  --chart-category-3-lighter: 250 79% 86%;
+  --chart-category-3-base: 174 58% 44%;
+
+  --chart-category-4-base: 69 98% 40%;
+
+  --chart-category-5-base: 27 100% 60%;
+
+  --chart-category-6-base: 343 100% 73%;
+
+  --chart-category-7-base: 210 88% 65%;
+
+  --chart-category-8-base: 286 79% 64%;
+
+  /* shadows */
   --shadow-depth-04: 0 4px 12px 0 hsla(var(--neutral-80) / 0.1), 0 32px 80px 0 hsla(var(--neutral-80) / 0.2);
   --shadow-depth-03: 0 0 6px 1px hsla(var(--neutral-80) / 0.05), 0 2px 24px 0 hsla(var(--neutral-80) / 0.08);
   --shadow-depth-02: 0 2px 12px 0 hsla(var(--neutral-80) / 0.12), 0 0 6px 0 hsla(var(--neutral-80) / 0.05);
@@ -941,280 +1004,14 @@
   --shadow-interactive-lifted: 0 2px 8px 0 hsl(var(--neutral-100) / 0.08);
   --shadow-interactive-pressed: inset 0 2px 0 0 hsl(var(--neutral-120) / 0.05);
   --shadow-interactive-resting: 0 1px 2px 0 hsl(var(--neutral-120) / 0.05);
+  --shadow-depth-inverted: -0.01px -0.12px 3px 0px rgba(0, 0, 0, 0.02), -0.02px -0.6px 7px 0px rgba(0, 0, 0, 0.03),
+    -0.06px -1.4px 14px 0px rgba(0, 0, 0, 0.04), -0.11px -2.5px 27px 0px rgba(0, 0, 0, 0.04),
+    -0.18px -4.5px 50px 0px rgba(0, 0, 0, 0.05), -0.28px -7px 87px 0px rgba(0, 0, 0, 0.07);
   --shadow-effect-2d: 0px -1px 0px 0px hsl(var(--neutral-120) / 0.05) inset;
-}
-
-/* ============================================================
-   4. SPACING — phi-based scales (same as Arcade)
-   ============================================================ */
-
-:root {
-  /* Global (rem) — fixed regardless of context */
-  --spacing-global-5xs: 0.0625rem;  /* 1px */
-  --spacing-global-4xs: 0.125rem;   /* 2px */
-  --spacing-global-3xs: 0.1875rem;  /* 3px */
-  --spacing-global-2xs: 0.25rem;    /* 4px */
-  --spacing-global-xs: 0.375rem;    /* 6px */
-  --spacing-global-sm: 0.5rem;      /* 8px */
-  --spacing-global-base: 0.625rem;  /* 10px */
-  --spacing-global-md: 0.75rem;     /* 12px */
-  --spacing-global-lg: 1rem;        /* 16px */
-  --spacing-global-xl: 1.25rem;     /* 20px */
-  --spacing-global-2xl: 1.5rem;     /* 24px */
-  --spacing-global-3xl: 2rem;       /* 32px */
-  --spacing-global-4xl: 2.5rem;     /* 40px */
-  --spacing-global-5xl: 3rem;       /* 48px */
-
-  /* Dynamic (em) — scales with parent font-size */
-  --spacing-dynamic-5xs: 0.0625em;
-  --spacing-dynamic-4xs: 0.125em;
-  --spacing-dynamic-3xs: 0.1875em;
-  --spacing-dynamic-2xs: 0.25em;
-  --spacing-dynamic-xs: 0.375em;
-  --spacing-dynamic-sm: 0.5em;
-  --spacing-dynamic-base: 0.625em;
-  --spacing-dynamic-md: 0.75em;
-  --spacing-dynamic-lg: 1em;
-  --spacing-dynamic-xl: 1.25em;
-  --spacing-dynamic-2xl: 1.5em;
-  --spacing-dynamic-3xl: 2em;
-  --spacing-dynamic-4xl: 2.5em;
-  --spacing-dynamic-5xl: 3em;
-}
-
-/* ============================================================
-   5. UTILITY CLASSES
-   ============================================================ */
-
-/* Base reset */
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-}
-
-html {
-  font-family: var(--font-family);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-body {
-  background: hsl(var(--bg-layer-00));
-  color: hsl(var(--text-color-primary));
-  font-size: 1rem;
-  line-height: 1.5rem;
-  font-variation-settings: "wght" 440;
-}
-
-/* Typography utility classes — from typography-tokens.js (product app) */
-
-/* Titles */
-.text-title-large      { font-size: 2.125rem;  line-height: 2.375rem; font-variation-settings: "wght" 660; }
-.text-title-1          { font-size: 1.8125rem; line-height: 2rem;     font-variation-settings: "wght" 660; }
-.text-title-2          { font-size: 1.5rem;    line-height: 2rem;     font-variation-settings: "wght" 660; }
-.text-title-3          { font-size: 1.25rem;   line-height: 1.75rem;  font-variation-settings: "wght" 660; }
-
-/* Body */
-.text-body-large       { font-size: 1.125rem;  line-height: 1.625rem; font-variation-settings: "wght" 440; }
-.text-body-large-medium { font-size: 1.125rem; line-height: 1.625rem; font-variation-settings: "wght" 540; }
-.text-body-large-bold  { font-size: 1.125rem;  line-height: 1.625rem; font-variation-settings: "wght" 660; }
-.text-body             { font-size: 1rem;      line-height: 1.5rem;   font-variation-settings: "wght" 440; }
-.text-body-medium      { font-size: 1rem;      line-height: 1.5rem;   font-variation-settings: "wght" 540; }
-.text-body-bold        { font-size: 1rem;      line-height: 1.5rem;   font-variation-settings: "wght" 660; }
-.text-body-small       { font-size: 0.875rem;  line-height: 1.375rem; font-variation-settings: "wght" 440; }
-.text-body-small-medium { font-size: 0.875rem; line-height: 1.375rem; font-variation-settings: "wght" 540; }
-
-/* System */
-.text-system           { font-size: 0.875rem;  line-height: 1.25rem;  font-variation-settings: "wght" 440; }
-.text-system-medium    { font-size: 0.875rem;  line-height: 1.25rem;  font-variation-settings: "wght" 540; }
-.text-system-bold      { font-size: 0.875rem;  line-height: 1.25rem;  font-variation-settings: "wght" 660; }
-.text-system-small     { font-size: 0.75rem;   line-height: 1rem;     font-variation-settings: "wght" 440; }
-.text-system-small-medium { font-size: 0.75rem; line-height: 1rem;    font-variation-settings: "wght" 540; }
-.text-system-small-bold { font-size: 0.75rem;  line-height: 1rem;     font-variation-settings: "wght" 660; }
-
-/* Callout */
-.text-callout          { font-size: 0.8125rem; line-height: 1.25rem;  font-variation-settings: "wght" 440; }
-.text-callout-medium   { font-size: 0.8125rem; line-height: 1.25rem;  font-variation-settings: "wght" 540; }
-.text-callout-bold     { font-size: 0.8125rem; line-height: 1.25rem;  font-variation-settings: "wght" 660; }
-
-/* Caption */
-.text-caption          { font-size: 0.6875rem; line-height: 1rem;     font-variation-settings: "wght" 440; }
-.text-caption-medium   { font-size: 0.6875rem; line-height: 1rem;     font-variation-settings: "wght" 540; }
-.text-caption-bold     { font-size: 0.6875rem; line-height: 1rem;     font-variation-settings: "wght" 660; }
-
-/* Code */
-.text-code             { font-size: 0.875rem;  line-height: 1.25rem;  font-variation-settings: "wght" 440; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
-
-/* Font weight utilities (variable font) */
-.font-normal  { font-variation-settings: "wght" 440; }
-.font-medium  { font-variation-settings: "wght" 540; }
-.font-bold    { font-variation-settings: "wght" 660; }
-
-/* Spacing utilities — based on global spacing */
-.gap-5xs { gap: var(--spacing-global-5xs); }
-.gap-4xs { gap: var(--spacing-global-4xs); }
-.gap-3xs { gap: var(--spacing-global-3xs); }
-.gap-2xs { gap: var(--spacing-global-2xs); }
-.gap-xs  { gap: var(--spacing-global-xs); }
-.gap-sm  { gap: var(--spacing-global-sm); }
-.gap-base { gap: var(--spacing-global-base); }
-.gap-md  { gap: var(--spacing-global-md); }
-.gap-lg  { gap: var(--spacing-global-lg); }
-.gap-xl  { gap: var(--spacing-global-xl); }
-.gap-2xl { gap: var(--spacing-global-2xl); }
-
-.p-5xs { padding: var(--spacing-global-5xs); }
-.p-4xs { padding: var(--spacing-global-4xs); }
-.p-3xs { padding: var(--spacing-global-3xs); }
-.p-2xs { padding: var(--spacing-global-2xs); }
-.p-xs  { padding: var(--spacing-global-xs); }
-.p-sm  { padding: var(--spacing-global-sm); }
-.p-base { padding: var(--spacing-global-base); }
-.p-md  { padding: var(--spacing-global-md); }
-.p-lg  { padding: var(--spacing-global-lg); }
-.p-xl  { padding: var(--spacing-global-xl); }
-
-/* Layout helpers */
-.flex { display: flex; }
-.flex-col { flex-direction: column; }
-.items-center { align-items: center; }
-.justify-center { justify-content: center; }
-.justify-between { justify-content: space-between; }
-.justify-start { justify-content: flex-start; }
-.justify-end { justify-content: flex-end; }
-.grow { flex-grow: 1; }
-.shrink-0 { flex-shrink: 0; }
-.w-full { width: 100%; }
-.h-full { height: 100%; }
-.relative { position: relative; }
-.absolute { position: absolute; }
-.overflow-hidden { overflow: hidden; }
-.overflow-auto { overflow: auto; }
-.rounded-full { border-radius: 9999px; }
-.rounded-lg { border-radius: 12px; }
-.rounded-md { border-radius: 8px; }
-.rounded-sm { border-radius: 4px; }
-
-/* Transition */
-.transition-all { transition: all 0.2s ease; }
-.transition-colors { transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease; }
-
-/* =============================================================
-   COMPATIBILITY BRIDGE
-   Maps Arcade component token names → DevRev App equivalents
-   so arcade-components.css works with the DevRev App theme.
-   ============================================================= */
-
-:root[data-theme='devrev-app'] {
-  /* --- Text --- */
-  --text-primary: var(--text-color-primary);
-  --text-secondary: var(--text-color-secondary);
-  --text-tertiary: var(--text-color-tertiary);
-  --text-disabled: var(--text-color-muted);
-  --text-on-fill: var(--color-on-fill);
-  --text-action: var(--color-action);
-  --text-intelligence: var(--color-intelligence);
-  --text-interactive-primary: var(--text-interactive-primary-resting);
-  --text-feedback-alert: var(--color-feedback-alert);
-  --text-feedback-warning: var(--color-feedback-warning);
-  --text-feedback-success: var(--color-feedback-success);
-  --text-feedback-info: var(--color-feedback-accent);
-  --text-static-white: 0 0% 100%;
-  --text-static-black: 0 0% 0%;
-
-  /* --- Background: interactive --- */
-  --bg-interactive-primary: var(--bg-interactive-primary-resting);
-  --bg-interactive-secondary: var(--bg-interactive-secondary-resting);
-  --bg-interactive-destructive: var(--bg-interactive-destructive-resting);
-  --bg-action: var(--bg-interactive-primary-resting);
-  --bg-intelligence: var(--bg-interactive-smart-resting);
-
-  /* --- Background: input --- */
-  --bg-input: var(--bg-input-text-resting);
-  --bg-input-active: var(--bg-input-text-pressed);
-  --bg-input-hovered: var(--bg-input-select-hovered);
-  --bg-input-disabled: var(--bg-input-select-disabled);
-
-  /* --- Background: surfaces --- */
-  --bg-overlay: var(--bg-inverted);
-  --bg-popover: var(--color-surface-backdrop);
-  --bg-selected: var(--bg-interactive-stack-resting);
-
-  /* --- Background: feedback --- */
-  --bg-feedback-alert: var(--color-feedback-alert);
-  --bg-feedback-warning: var(--color-feedback-warning);
-  --bg-feedback-success: var(--color-feedback-success);
-  --bg-feedback-info: var(--color-feedback-accent);
-
-  /* --- Background: attribute colors (numbered → named) --- */
-  --bg-attribute-01: var(--bg-attribute-blue);
-  --bg-attribute-02: var(--bg-attribute-green);
-  --bg-attribute-03: var(--bg-attribute-orange);
-  --bg-attribute-04: var(--bg-attribute-purple);
-  --bg-attribute-05: var(--bg-attribute-teal);
-  --bg-attribute-06: var(--bg-attribute-red);
-  --bg-attribute-07: var(--bg-attribute-yellow);
-  --bg-attribute-08: var(--bg-attribute-lilac);
-
-  /* --- Object colors (numbered → typed) --- */
-  --object-01: var(--color-object-issue);
-  --object-02: var(--color-object-ticket);
-  --object-03: var(--color-object-enhancement);
-  --object-04: var(--color-object-feature);
-  --object-05: var(--color-object-capability);
-  --object-06: var(--color-object-product);
-  --object-07: var(--color-object-conversation);
-  --object-08: var(--color-object-opportunity);
-
-  /* --- Stroke / Border --- */
-  --stroke-primary: var(--color-stroke-bold);
-  --stroke-secondary: var(--color-stroke-medium);
-  --stroke-chrome: var(--color-stroke-subtle);
-  --stroke-field-idle: var(--border-input-text-resting);
-  --stroke-field-hovered: var(--border-input-text-hovered);
-  --stroke-field-active: var(--border-input-text-pressed);
-  --stroke-field-disabled: var(--border-input-select-disabled);
-  --stroke-interactive-primary: var(--border-interactive-primary-resting);
-  --stroke-feedback-alert: var(--color-stroke-critical);
-  --stroke-feedback-warning: var(--color-stroke-warning);
-  --stroke-feedback-success: var(--color-stroke-success);
-  --stroke-feedback-info: var(--color-stroke-info);
-
-  /* --- Misc --- */
-  --skeleton: var(--color-skeleton);
-  --persimmon-400: var(--orange-400);
-  --shadow-button: var(--shadow-interactive-resting);
-
-  /* --- Typography (custom properties for arcade-components.css) --- */
-  --fontWeight-regular: 440;
-  --fontWeight-medium: 540;
-  --fontWeight-bold: 660;
-
-  --fontSize-title-3: 1.25rem;
-  --tracking-title-3: -0.01em;
-  --leading-title-3: 1.75rem;
-
-  --fontSize-subtitle-1: 1rem;
-  --tracking-subtitle-1: -0.006em;
-  --leading-subtitle-1: 1.5rem;
-
-  --fontSize-body: 0.875rem;
-  --tracking-body: -0.006em;
-  --leading-body: 1.25rem;
-
-  --fontSize-system: 0.8125rem;
-  --tracking-system: 0em;
-  --leading-system: 1.125rem;
-
-  --fontSize-system-small: 0.75rem;
-  --tracking-system-small: 0.006em;
-  --leading-system-small: 1rem;
-
-  --fontSize-caption: 0.6875rem;
-  --tracking-caption: 0.006em;
-  --leading-caption: 1rem;
-
-  --fontSize-footnote: 0.6875rem;
-  --tracking-footnote: 0.006em;
-  --leading-footnote: 1rem;
+  --shadow-stackbar-b: 0 1px 1px 0 hsla(var(--neutral-100) / 0.05);
+  --shadow-stackbar-l: -1px 0px 1px 0 hsla(var(--neutral-100) / 0.05);
+  --shadow-spotlight-results: 0 0 50px -12px hsla(var(--color-black), 0.25);
+  --shadow-local-top: 0 37px 22px 0 rgba(0, 0, 0, 0.04), 0 17px 17px 0 rgba(0, 0, 0, 0.07),
+    0 4px 9px 0 rgba(0, 0, 0, 0.08), 0 -34px 10px 0 rgba(0, 0, 0, 0), 0 -22px 9px 0 rgba(0, 0, 0, 0),
+    0 -12px 7px 0 rgba(0, 0, 0, 0), 0 -5px 5px 0 rgba(0, 0, 0, 0.01), 0 -1px 3px 0 rgba(0, 0, 0, 0.01);
 }

@@ -6,6 +6,16 @@
  * Naming: .arcade-{component}  with --{variant}, --{size}, --{state} modifiers
  */
 
+:root {
+  /* Component shadows — not in the base token files */
+  --shadow-depth-01: 0 1px 2px hsla(var(--night) / 0.06);
+  --shadow-depth-02: 0 2px 8px hsla(var(--night) / 0.08), 0 1px 2px hsla(var(--night) / 0.06);
+  --shadow-depth-03: 0 8px 24px hsla(var(--night) / 0.12), 0 2px 8px hsla(var(--night) / 0.08);
+  --shadow-depth-04: 0 16px 48px hsla(var(--night) / 0.16), 0 4px 16px hsla(var(--night) / 0.08);
+  --shadow-button: 0 1px 3px hsla(var(--night) / 0.1), 0 1px 2px hsla(var(--night) / 0.06);
+  --shadow-interactive-focused: 0 0 0 3px hsla(var(--action-400) / 0.3);
+}
+
 /* ============================================================
    BUTTON
    ============================================================ */
@@ -18,8 +28,8 @@
   border: none;
   border-radius: 9999px;
   cursor: pointer;
-  font-family: var(--font-family);
-  font-weight: var(--fontWeight-medium);
+  font-family: var(--font-text);
+  font-weight: 540;
   text-decoration: none;
   white-space: nowrap;
   position: relative;
@@ -30,7 +40,7 @@
 
 .arcade-btn:focus-visible {
   box-shadow: var(--shadow-interactive-focused);
-  outline: 1px solid var(--stroke-interactive-primary);
+  outline: 1px solid hsl(var(--border-interactive-primary-resting));
   outline-offset: 1px;
 }
 
@@ -61,53 +71,53 @@
 
 /* Variants */
 .arcade-btn--primary {
-  color: var(--text-on-fill);
-  background: var(--bg-interactive-primary);
+  color: hsl(var(--color-on-fill));
+  background: hsl(var(--bg-interactive-primary-resting));
   min-width: 60px;
   box-shadow: var(--shadow-button);
 }
 .arcade-btn--primary:hover {
-  background: var(--bg-interactive-primary-hovered);
+  background: hsl(var(--bg-interactive-primary-hovered));
   transform: scale(1.05);
 }
 .arcade-btn--primary:active {
-  background: var(--bg-interactive-primary-pressed);
+  background: hsl(var(--bg-interactive-primary-pressed));
   transform: scale(1);
 }
 
 .arcade-btn--secondary {
-  color: var(--text-interactive-primary);
-  background: var(--bg-interactive-secondary);
+  color: hsl(var(--text-interactive-primary-resting));
+  background: hsl(var(--bg-interactive-secondary-resting));
   min-width: 60px;
 }
 .arcade-btn--secondary:hover {
-  background: var(--bg-interactive-secondary-hovered);
+  background: hsl(var(--bg-interactive-secondary-hovered));
 }
 .arcade-btn--secondary:active {
-  background: var(--bg-interactive-secondary-pressed);
+  background: hsl(var(--bg-interactive-secondary-pressed));
 }
 
 .arcade-btn--tertiary {
-  color: var(--text-interactive-primary);
+  color: hsl(var(--text-interactive-primary-resting));
   background: transparent;
   min-width: 60px;
 }
 .arcade-btn--tertiary:hover {
-  background: var(--bg-interactive-tertiary-hovered);
+  background: hsl(var(--bg-interactive-tertiary-hovered));
 }
 .arcade-btn--tertiary:active {
-  background: var(--bg-interactive-tertiary-pressed);
+  background: hsl(var(--bg-interactive-tertiary-pressed));
 }
 
 .arcade-btn--destructive {
-  color: var(--text-static-white);
-  background: var(--bg-interactive-destructive);
+  color: hsl(var(--text-static-white));
+  background: hsl(var(--bg-interactive-destructive-resting));
 }
 .arcade-btn--destructive:hover {
-  background: var(--bg-interactive-destructive-hovered);
+  background: hsl(var(--bg-interactive-destructive-hovered));
 }
 .arcade-btn--destructive:active {
-  background: var(--bg-interactive-destructive-pressed);
+  background: hsl(var(--bg-interactive-destructive-pressed));
 }
 
 /* States */
@@ -140,14 +150,14 @@
   display: flex;
   align-items: center;
   width: 100%;
-  font-family: var(--font-family);
+  font-family: var(--font-text);
   font-size: var(--fontSize-system);
   letter-spacing: var(--tracking-system);
   line-height: var(--leading-system);
-  font-weight: var(--fontWeight-regular);
-  color: var(--text-primary);
-  background: var(--bg-input);
-  border: 1px solid var(--stroke-field-idle);
+  font-weight: 440;
+  color: hsl(var(--text-color-primary));
+  background: hsl(var(--bg-input-text-resting));
+  border: 1px solid hsl(var(--border-field-idle));
   border-radius: 8px;
   padding: var(--spacing-dynamic-xs) var(--spacing-dynamic-sm);
   outline: none;
@@ -155,32 +165,32 @@
 }
 
 .arcade-input::placeholder {
-  color: var(--text-tertiary);
+  color: hsl(var(--text-color-tertiary));
 }
 
 .arcade-input:hover {
-  border-color: var(--stroke-field-hovered);
-  background: var(--bg-input-hovered);
+  border-color: hsl(var(--border-field-hovered));
+  background: hsl(var(--bg-input-text-resting));
 }
 
 .arcade-input:focus {
-  border-color: var(--stroke-field-active);
-  background: var(--bg-input-active);
+  border-color: hsl(var(--border-input-text-pressed));
+  background: hsl(var(--bg-input-text-pressed));
   box-shadow: var(--shadow-interactive-focused);
 }
 
 .arcade-input:disabled {
-  border-color: var(--stroke-field-disabled);
-  background: var(--bg-input-disabled);
-  color: var(--text-disabled);
+  border-color: hsl(var(--border-field-idle));
+  background: hsl(var(--bg-input-text-resting));
+  color: hsl(var(--text-color-muted));
   cursor: not-allowed;
 }
 
 .arcade-input--error {
-  border-color: var(--stroke-feedback-alert);
+  border-color: hsl(var(--color-stroke-destructive));
 }
 .arcade-input--error:focus {
-  border-color: var(--stroke-feedback-alert);
+  border-color: hsl(var(--color-stroke-destructive));
   box-shadow: 0px 0px 0px 4px hsl(var(--persimmon-400) / 0.15);
 }
 
@@ -193,20 +203,20 @@
 
 .arcade-field__label {
   font-size: var(--fontSize-system-small);
-  font-weight: var(--fontWeight-medium);
-  color: var(--text-secondary);
+  font-weight: 540;
+  color: hsl(var(--text-color-secondary));
   letter-spacing: var(--tracking-system-small);
 }
 
 .arcade-field__hint {
   font-size: var(--fontSize-caption);
-  color: var(--text-tertiary);
+  color: hsl(var(--text-color-tertiary));
   letter-spacing: var(--tracking-caption);
 }
 
 .arcade-field__error {
   font-size: var(--fontSize-caption);
-  color: var(--text-feedback-alert);
+  color: hsl(var(--color-feedback-alert));
   letter-spacing: var(--tracking-caption);
 }
 
@@ -218,14 +228,14 @@
   display: block;
   width: 100%;
   min-height: 80px;
-  font-family: var(--font-family);
+  font-family: var(--font-text);
   font-size: var(--fontSize-system);
   letter-spacing: var(--tracking-system);
   line-height: var(--leading-system);
-  font-weight: var(--fontWeight-regular);
-  color: var(--text-primary);
-  background: var(--bg-input);
-  border: 1px solid var(--stroke-field-idle);
+  font-weight: 440;
+  color: hsl(var(--text-color-primary));
+  background: hsl(var(--bg-input-text-resting));
+  border: 1px solid hsl(var(--border-field-idle));
   border-radius: 8px;
   padding: var(--spacing-dynamic-xs) var(--spacing-dynamic-sm);
   outline: none;
@@ -233,9 +243,9 @@
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.arcade-textarea:hover { border-color: var(--stroke-field-hovered); }
+.arcade-textarea:hover { border-color: hsl(var(--border-field-hovered)); }
 .arcade-textarea:focus {
-  border-color: var(--stroke-field-active);
+  border-color: hsl(var(--border-input-text-pressed));
   box-shadow: var(--shadow-interactive-focused);
 }
 
@@ -247,68 +257,68 @@
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-dynamic-5xs);
-  font-family: var(--font-family);
+  font-family: var(--font-text);
   font-size: var(--fontSize-caption);
   letter-spacing: var(--tracking-caption);
   line-height: var(--leading-caption);
-  font-weight: var(--fontWeight-medium);
+  font-weight: 540;
   padding: var(--spacing-dynamic-5xs) var(--spacing-dynamic-3xs);
   border-radius: 9999px;
   white-space: nowrap;
 }
 
 .arcade-badge--default {
-  color: var(--text-secondary);
-  background: var(--bg-layer-03);
+  color: hsl(var(--text-color-secondary));
+  background: hsl(var(--bg-layer-03));
 }
 
 .arcade-badge--info {
-  color: var(--text-feedback-info);
-  background: var(--bg-feedback-info);
+  color: hsl(var(--color-stroke-info));
+  background: hsla(var(--shuiguo-100) / 0.5);
 }
 
 .arcade-badge--success {
-  color: var(--text-feedback-success);
-  background: var(--bg-feedback-success);
+  color: hsl(var(--color-feedback-success));
+  background: hsla(var(--hardy-100) / 0.5);
 }
 
 .arcade-badge--warning {
-  color: var(--text-feedback-warning);
-  background: var(--bg-feedback-warning);
+  color: hsl(var(--color-feedback-warning));
+  background: hsla(var(--banginapalli-100) / 0.5);
 }
 
 .arcade-badge--alert {
-  color: var(--text-feedback-alert);
-  background: var(--bg-feedback-alert);
+  color: hsl(var(--color-feedback-alert));
+  background: hsla(var(--dragonfruit-100) / 0.5);
 }
 
 .arcade-badge--action {
-  color: var(--text-action);
-  background: var(--bg-action);
+  color: hsl(var(--color-action));
+  background: hsla(var(--action-100) / 0.5);
 }
 
 .arcade-badge--intelligence {
-  color: var(--text-intelligence);
-  background: var(--bg-intelligence);
+  color: hsl(var(--color-intelligence));
+  background: hsla(var(--intelligence-100) / 0.5);
 }
 
 /* Attribute colors (1-8) */
-.arcade-badge--attr-1 { color: var(--object-01); background: var(--bg-attribute-01); }
-.arcade-badge--attr-2 { color: var(--object-02); background: var(--bg-attribute-02); }
-.arcade-badge--attr-3 { color: var(--object-03); background: var(--bg-attribute-03); }
-.arcade-badge--attr-4 { color: var(--object-04); background: var(--bg-attribute-04); }
-.arcade-badge--attr-5 { color: var(--object-05); background: var(--bg-attribute-05); }
-.arcade-badge--attr-6 { color: var(--object-06); background: var(--bg-attribute-06); }
-.arcade-badge--attr-7 { color: var(--object-07); background: var(--bg-attribute-07); }
-.arcade-badge--attr-8 { color: var(--object-08); background: var(--bg-attribute-08); }
+.arcade-badge--attr-1 { color: hsl(var(--color-object-developer)); background: hsla(var(--shuiguo-100) / 0.5); }
+.arcade-badge--attr-2 { color: hsl(var(--color-object-customer)); background: hsla(var(--hardy-100) / 0.5); }
+.arcade-badge--attr-3 { color: hsl(var(--color-object-mention)); background: hsla(var(--persimmon-100) / 0.5); }
+.arcade-badge--attr-4 { color: hsl(var(--color-object-engagement)); background: hsla(var(--dragonfruit-100) / 0.5); }
+.arcade-badge--attr-5 { color: hsl(var(--color-object-ticket)); background: hsla(var(--banginapalli-100) / 0.5); }
+.arcade-badge--attr-6 { color: hsl(var(--color-feedback-smart)); background: hsla(var(--jabuticaba-100) / 0.5); }
+.arcade-badge--attr-7 { color: hsl(var(--color-decorative-sky)); background: hsla(var(--maoshigua-100) / 0.5); }
+.arcade-badge--attr-8 { color: hsl(var(--color-decorative-pink)); background: hsla(var(--husk-300) / 0.5); }
 
 /* ============================================================
    CARD / SURFACE
    ============================================================ */
 
 .arcade-card {
-  background: var(--bg-layer-01);
-  border: 1px solid var(--stroke-secondary);
+  background: hsl(var(--bg-layer-01));
+  border: 1px solid hsl(var(--border-outline-01));
   border-radius: 12px;
   padding: var(--spacing-global-md);
   box-shadow: var(--shadow-depth-01);
@@ -328,7 +338,7 @@
 }
 .arcade-card--interactive:hover {
   box-shadow: var(--shadow-depth-02);
-  border-color: var(--stroke-primary);
+  border-color: hsl(var(--border-outline-02));
 }
 
 /* ============================================================
@@ -336,8 +346,8 @@
    ============================================================ */
 
 .arcade-popover {
-  background: var(--bg-popover);
-  border: 1px solid var(--stroke-secondary);
+  background: hsl(var(--bg-layer-02));
+  border: 1px solid hsl(var(--border-outline-01));
   border-radius: 12px;
   padding: var(--spacing-global-3xs);
   box-shadow: var(--shadow-depth-03);
@@ -356,32 +366,32 @@
   font-size: var(--fontSize-system);
   letter-spacing: var(--tracking-system);
   line-height: var(--leading-system);
-  color: var(--text-primary);
+  color: hsl(var(--text-color-primary));
   cursor: pointer;
   transition: background-color 0.1s ease;
   border: none;
   background: transparent;
   width: 100%;
   text-align: left;
-  font-family: var(--font-family);
+  font-family: var(--font-text);
 }
 
 .arcade-menu-item:hover {
-  background: var(--bg-interactive-tertiary-hovered);
+  background: hsl(var(--bg-interactive-tertiary-hovered));
 }
 
 .arcade-menu-item:active,
 .arcade-menu-item--selected {
-  background: var(--bg-selected);
+  background: hsl(var(--bg-interactive-tertiary-hovered));
 }
 
 .arcade-menu-item--disabled {
-  color: var(--text-disabled);
+  color: hsl(var(--text-color-muted));
   pointer-events: none;
 }
 
 .arcade-menu-item__secondary {
-  color: var(--text-secondary);
+  color: hsl(var(--text-color-secondary));
   font-size: var(--fontSize-caption);
   margin-left: auto;
 }
@@ -397,8 +407,8 @@
   border-radius: 9999px;
   overflow: hidden;
   flex-shrink: 0;
-  font-weight: var(--fontWeight-medium);
-  color: var(--text-on-fill);
+  font-weight: 540;
+  color: hsl(var(--color-on-fill));
 }
 
 .arcade-avatar--S  { width: 24px; height: 24px; font-size: var(--fontSize-footnote); }
@@ -413,14 +423,14 @@
 }
 
 /* Color rotation for initials */
-.arcade-avatar--1 { background: var(--object-01); }
-.arcade-avatar--2 { background: var(--object-02); }
-.arcade-avatar--3 { background: var(--object-03); }
-.arcade-avatar--4 { background: var(--object-04); }
-.arcade-avatar--5 { background: var(--object-05); }
-.arcade-avatar--6 { background: var(--object-06); }
-.arcade-avatar--7 { background: var(--object-07); }
-.arcade-avatar--8 { background: var(--object-08); }
+.arcade-avatar--1 { background: hsl(var(--color-object-developer)); }
+.arcade-avatar--2 { background: hsl(var(--color-object-customer)); }
+.arcade-avatar--3 { background: hsl(var(--color-object-mention)); }
+.arcade-avatar--4 { background: hsl(var(--color-object-engagement)); }
+.arcade-avatar--5 { background: hsl(var(--color-object-ticket)); }
+.arcade-avatar--6 { background: hsl(var(--color-feedback-smart)); }
+.arcade-avatar--7 { background: hsl(var(--color-decorative-sky)); }
+.arcade-avatar--8 { background: hsl(var(--color-decorative-pink)); }
 
 /* ============================================================
    TOGGLE / SWITCH
@@ -431,8 +441,8 @@
   width: 36px;
   height: 20px;
   border-radius: 9999px;
-  background: var(--bg-layer-03);
-  border: 1px solid var(--stroke-field-idle);
+  background: hsl(var(--bg-layer-03));
+  border: 1px solid hsl(var(--border-field-idle));
   cursor: pointer;
   transition: background-color 0.2s ease, border-color 0.2s ease;
   flex-shrink: 0;
@@ -446,18 +456,18 @@
   width: 14px;
   height: 14px;
   border-radius: 9999px;
-  background: var(--text-secondary);
+  background: hsl(var(--text-color-secondary));
   transition: transform 0.2s ease, background-color 0.2s ease;
 }
 
 .arcade-toggle--on {
-  background: var(--bg-interactive-primary);
-  border-color: var(--stroke-interactive-primary);
+  background: hsl(var(--bg-interactive-primary-resting));
+  border-color: hsl(var(--border-interactive-primary-resting));
 }
 
 .arcade-toggle--on::after {
   transform: translateX(16px);
-  background: var(--text-on-fill);
+  background: hsl(var(--color-on-fill));
 }
 
 /* ============================================================
@@ -470,29 +480,29 @@
   justify-content: center;
   width: 16px;
   height: 16px;
-  border: 1px solid var(--stroke-field-idle);
+  border: 1px solid hsl(var(--border-field-idle));
   border-radius: 4px;
-  background: var(--bg-input);
+  background: hsl(var(--bg-input-text-resting));
   cursor: pointer;
   flex-shrink: 0;
   transition: all 0.15s ease;
 }
 
 .arcade-checkbox:hover {
-  border-color: var(--stroke-field-hovered);
+  border-color: hsl(var(--border-field-hovered));
 }
 
 .arcade-checkbox--checked {
-  background: var(--bg-interactive-primary);
-  border-color: var(--stroke-interactive-primary);
+  background: hsl(var(--bg-interactive-primary-resting));
+  border-color: hsl(var(--border-interactive-primary-resting));
 }
 
 /* Use a pseudo-element or SVG for the checkmark */
 .arcade-checkbox--checked::after {
-  content: '✓';
-  color: var(--text-on-fill);
+  content: '\2713';
+  color: hsl(var(--color-on-fill));
   font-size: 11px;
-  font-weight: var(--fontWeight-bold);
+  font-weight: 660;
   line-height: 1;
 }
 
@@ -503,13 +513,13 @@
 .arcade-divider {
   width: 100%;
   height: 1px;
-  background: var(--stroke-secondary);
+  background: hsl(var(--border-outline-01));
   border: none;
   margin: var(--spacing-global-xs) 0;
 }
 
 .arcade-divider--subtle {
-  background: var(--stroke-chrome);
+  background: hsl(var(--border-outline-00));
 }
 
 /* ============================================================
@@ -517,8 +527,8 @@
    ============================================================ */
 
 .arcade-tooltip {
-  background: var(--bg-layer-04);
-  color: var(--text-primary);
+  background: hsl(var(--bg-layer-04));
+  color: hsl(var(--text-color-primary));
   font-size: var(--fontSize-caption);
   letter-spacing: var(--tracking-caption);
   line-height: var(--leading-caption);
@@ -544,27 +554,27 @@
 }
 
 .arcade-alert--info {
-  background: var(--bg-feedback-info);
-  color: var(--text-feedback-info);
-  border: 1px solid var(--stroke-feedback-info);
+  background: hsla(var(--shuiguo-100) / 0.5);
+  color: hsl(var(--color-stroke-info));
+  border: 1px solid hsl(var(--color-stroke-info));
 }
 
 .arcade-alert--success {
-  background: var(--bg-feedback-success);
-  color: var(--text-feedback-success);
-  border: 1px solid var(--stroke-feedback-success);
+  background: hsla(var(--hardy-100) / 0.5);
+  color: hsl(var(--color-feedback-success));
+  border: 1px solid hsl(var(--color-stroke-success));
 }
 
 .arcade-alert--warning {
-  background: var(--bg-feedback-warning);
-  color: var(--text-feedback-warning);
-  border: 1px solid var(--stroke-feedback-warning);
+  background: hsla(var(--banginapalli-100) / 0.5);
+  color: hsl(var(--color-feedback-warning));
+  border: 1px solid hsl(var(--color-stroke-warning));
 }
 
 .arcade-alert--error {
-  background: var(--bg-feedback-alert);
-  color: var(--text-feedback-alert);
-  border: 1px solid var(--stroke-feedback-alert);
+  background: hsla(var(--dragonfruit-100) / 0.5);
+  color: hsl(var(--color-feedback-alert));
+  border: 1px solid hsl(var(--color-stroke-destructive));
 }
 
 /* ============================================================
@@ -572,7 +582,7 @@
    ============================================================ */
 
 .arcade-skeleton {
-  background: var(--skeleton);
+  background: hsl(var(--color-skeleton));
   border-radius: 4px;
   animation: arcade-pulse 1.5s ease-in-out infinite;
 }
@@ -599,7 +609,7 @@
 .arcade-tabs {
   display: flex;
   gap: var(--spacing-global-4xs);
-  border-bottom: 1px solid var(--stroke-secondary);
+  border-bottom: 1px solid hsl(var(--border-outline-01));
 }
 
 .arcade-tab {
@@ -607,10 +617,10 @@
   align-items: center;
   gap: var(--spacing-dynamic-4xs);
   padding: var(--spacing-global-xs) var(--spacing-global-sm);
-  font-family: var(--font-family);
+  font-family: var(--font-text);
   font-size: var(--fontSize-system);
-  font-weight: var(--fontWeight-medium);
-  color: var(--text-secondary);
+  font-weight: 540;
+  color: hsl(var(--text-color-secondary));
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
@@ -620,12 +630,12 @@
 }
 
 .arcade-tab:hover {
-  color: var(--text-primary);
+  color: hsl(var(--text-color-primary));
 }
 
 .arcade-tab--active {
-  color: var(--text-interactive-primary);
-  border-bottom-color: var(--stroke-interactive-primary);
+  color: hsl(var(--text-interactive-primary-resting));
+  border-bottom-color: hsl(var(--border-interactive-primary-resting));
 }
 
 /* ============================================================
@@ -641,21 +651,21 @@
 
 .arcade-table th {
   text-align: left;
-  font-weight: var(--fontWeight-medium);
-  color: var(--text-secondary);
+  font-weight: 540;
+  color: hsl(var(--text-color-secondary));
   font-size: var(--fontSize-system-small);
   padding: var(--spacing-global-xs) var(--spacing-global-sm);
-  border-bottom: 1px solid var(--stroke-primary);
+  border-bottom: 1px solid hsl(var(--border-outline-02));
 }
 
 .arcade-table td {
   padding: var(--spacing-global-xs) var(--spacing-global-sm);
-  border-bottom: 1px solid var(--stroke-secondary);
-  color: var(--text-primary);
+  border-bottom: 1px solid hsl(var(--border-outline-01));
+  color: hsl(var(--text-color-primary));
 }
 
 .arcade-table tr:hover td {
-  background: var(--bg-interactive-tertiary-hovered);
+  background: hsl(var(--bg-interactive-tertiary-hovered));
 }
 
 /* ============================================================
@@ -665,7 +675,7 @@
 .arcade-overlay {
   position: fixed;
   inset: 0;
-  background: var(--bg-overlay);
+  background: hsla(var(--night) / 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -677,8 +687,8 @@
    ============================================================ */
 
 .arcade-dialog {
-  background: var(--bg-layer-01);
-  border: 1px solid var(--stroke-secondary);
+  background: hsl(var(--bg-layer-01));
+  border: 1px solid hsl(var(--border-outline-01));
   border-radius: 16px;
   padding: var(--spacing-global-lg);
   box-shadow: var(--shadow-depth-04);
@@ -695,13 +705,13 @@
 
 .arcade-dialog__title {
   font-size: var(--fontSize-title-3);
-  font-weight: var(--fontWeight-bold);
+  font-weight: 660;
   letter-spacing: var(--tracking-title-3);
-  color: var(--text-primary);
+  color: hsl(var(--text-color-primary));
 }
 
 .arcade-dialog__body {
-  color: var(--text-secondary);
+  color: hsl(var(--text-color-secondary));
   font-size: var(--fontSize-system);
   margin-bottom: var(--spacing-global-md);
 }
@@ -721,16 +731,16 @@
   flex-direction: column;
   width: 256px;
   height: 100%;
-  background: var(--bg-layer-00);
-  border-right: 1px solid var(--stroke-chrome);
+  background: hsl(var(--bg-layer-00));
+  border-right: 1px solid hsl(var(--border-outline-00));
   padding: var(--spacing-global-sm);
   gap: var(--spacing-global-4xs);
 }
 
 .arcade-sidebar__section-title {
   font-size: var(--fontSize-caption);
-  font-weight: var(--fontWeight-medium);
-  color: var(--text-tertiary);
+  font-weight: 540;
+  color: hsl(var(--text-color-tertiary));
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: var(--spacing-global-xs) var(--spacing-global-3xs);
@@ -752,17 +762,17 @@
 
 .arcade-empty__icon {
   font-size: 2.5rem;
-  color: var(--text-tertiary);
+  color: hsl(var(--text-color-tertiary));
 }
 
 .arcade-empty__title {
   font-size: var(--fontSize-subtitle-1);
-  font-weight: var(--fontWeight-medium);
-  color: var(--text-primary);
+  font-weight: 540;
+  color: hsl(var(--text-color-primary));
 }
 
 .arcade-empty__description {
   font-size: var(--fontSize-system);
-  color: var(--text-secondary);
+  color: hsl(var(--text-color-secondary));
   max-width: 320px;
 }

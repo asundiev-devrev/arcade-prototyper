@@ -87,11 +87,14 @@ Both themes share the same `arcade-components.css` — component classes referen
 
 | File | Purpose |
 |------|---------|
-| `arcade-tokens.css` | Arcade theme: palette, colors, spacing, typography, semantic tokens (dark + light) |
-| `devrev-app-tokens.css` | DevRev App theme: palette, colors, spacing, typography, semantic tokens (dark + light) |
-| `arcade-components.css` | Ready-made component classes — works with both themes |
+| `arcade-tokens.css` | Arcade theme: fruit-named palette + semantic tokens (dark + light). Verbatim from monorepo. |
+| `devrev-app-tokens.css` | DevRev App theme: HSL primitive system + semantic tokens (dark + light). Verbatim from monorepo. |
+| `typography-spacing.css` | Typography utility classes (25 text styles) + phi-ratio spacing system. Extracted from monorepo. |
+| `arcade-components.css` | Ready-made component classes — works with both themes. References real token names. |
 | `chip-fonts.css` | Chip font family — base64-embedded `@font-face` declarations (fully self-contained) |
 | `SKILL.md` | This file — instructions for Computer |
+
+**Token provenance**: `arcade-tokens.css` and `devrev-app-tokens.css` are verbatim extractions from the DevRev product monorepo (`devrev-web/libs/design-system/shared/themes/`). They are NOT approximations — they are the real production tokens.
 
 ## Chip font family
 
@@ -126,6 +129,7 @@ The `chip-fonts.css` file contains base64-encoded font data, so prototypes rende
   <style>
     /* Paste contents of chip-fonts.css here */
     /* Paste contents of arcade-tokens.css here */
+    /* Paste contents of typography-spacing.css here */
     /* Paste contents of arcade-components.css here */
 
     /* === Prototype-specific styles below === */
@@ -149,6 +153,7 @@ The `chip-fonts.css` file contains base64-encoded font data, so prototypes rende
   <style>
     /* Paste contents of chip-fonts.css here */
     /* Paste contents of devrev-app-tokens.css here */
+    /* Paste contents of typography-spacing.css here */
     /* Paste contents of arcade-components.css here */
 
     /* === Prototype-specific styles below === */
@@ -160,7 +165,7 @@ The `chip-fonts.css` file contains base64-encoded font data, so prototypes rende
 </html>
 ```
 
-**Important**: Read `chip-fonts.css`, the chosen token file, AND `arcade-components.css` from this skill directory and embed their contents inside the `<style>` tag. This makes the file fully self-contained — fonts render without any external requests.
+**Important**: Read `chip-fonts.css`, the chosen token file, `typography-spacing.css`, AND `arcade-components.css` from this skill directory and embed their contents inside the `<style>` tag. This makes the file fully self-contained — fonts render without any external requests. The embed order matters: fonts → tokens → typography/spacing → components.
 
 ### Step 2: Set the mode
 
@@ -444,7 +449,27 @@ Or use CSS variables directly:
 
 ## Color token reference
 
-All colors use HSL triplets. Use `hsl(var(--token))` in CSS, or `hsla(var(--token) / 0.5)` for opacity.
+All color tokens store raw HSL triplets (e.g., `0 0% 100%`). You **must** wrap them with `hsl()` or `hsla()` when using them in CSS properties:
+- `color: hsl(var(--text-color-primary));`
+- `background: hsla(var(--bg-layer-01) / 0.5);`
+
+### Arcade palette colors (direct use)
+
+The Arcade theme includes a fruit-named palette. These are raw HSL triplets — wrap in `hsl()`:
+
+| Scale | Hue family | Usage |
+|-------|-----------|-------|
+| `--husk-100` to `--husk-1300` | Warm achromatic grays | Neutrals, backgrounds, text |
+| `--shuiguo-100` to `--shuiguo-600` | Cyan-blue | Info, links |
+| `--hardy-100` to `--hardy-600` | Green | Success states |
+| `--persimmon-100` to `--persimmon-600` | Orange-red | Warning states |
+| `--dragonfruit-100` to `--dragonfruit-600` | Pink-red | Alert/error states |
+| `--jabuticaba-100` to `--jabuticaba-600` | Purple | Intelligence/AI |
+| `--banginapalli-100` to `--banginapalli-600` | Yellow-gold | Action/brand |
+| `--maoshigua-100` to `--maoshigua-600` | Blue | Decorative |
+| `--day` / `--night` | White / near-black | Base extremes |
+
+Aliases: `--action-100` to `--action-600` maps to banginapalli. `--intelligence-100` to `--intelligence-600` maps to jabuticaba.
 
 ### Semantic tokens (available in both themes)
 
@@ -468,33 +493,46 @@ All colors use HSL triplets. Use `hsl(var(--token))` in CSS, or `hsla(var(--toke
 | `var(--border-outline-00)` | Subtle border |
 | `var(--border-outline-01)` | Standard border |
 | `var(--border-input-text-resting)` | Input border |
+| `var(--border-field-idle)` | Form field border (idle) |
 | `var(--color-feedback-alert)` | Error/destructive |
 | `var(--color-feedback-warning)` | Warning |
 | `var(--color-feedback-success)` | Success |
 | `var(--color-feedback-smart)` | AI/intelligence |
 | `var(--color-action)` | Primary brand action |
 | `var(--color-intelligence)` | AI accent |
+
+### Shadow tokens (defined in arcade-components.css)
+
+Shadow tokens are **complete CSS values** — use them directly without `hsl()` wrapping:
+
+| Token | Purpose |
+|-------|---------|
 | `var(--shadow-depth-01)` | Subtle elevation |
-| `var(--shadow-depth-02)` | Medium elevation |
-| `var(--shadow-depth-03)` | High elevation |
+| `var(--shadow-depth-02)` | Medium elevation (cards) |
+| `var(--shadow-depth-03)` | High elevation (popovers, dialogs) |
+| `var(--shadow-depth-04)` | Highest elevation |
+| `var(--shadow-button)` | Button press shadow |
 | `var(--shadow-interactive-focused)` | Focus ring |
 
 ### Using colors in inline styles
 
 ```html
-<!-- Background -->
+<!-- Background — wrap in hsl() -->
 <div style="background: hsl(var(--bg-layer-01));">...</div>
 
-<!-- Text -->
+<!-- Text — wrap in hsl() -->
 <span style="color: hsl(var(--text-color-secondary));">Secondary text</span>
 
-<!-- Border -->
+<!-- Border — wrap in hsl() -->
 <div style="border: 1px solid hsl(var(--border-outline-01));">...</div>
 
-<!-- With opacity -->
+<!-- With opacity — use hsla() with / syntax -->
 <div style="background: hsla(var(--bg-interactive-primary-resting) / 0.1);">...</div>
 
-<!-- Shadow -->
+<!-- Direct palette color — wrap in hsl() -->
+<div style="background: hsl(var(--banginapalli-200));">...</div>
+
+<!-- Shadow — use directly, no hsl() needed -->
 <div style="box-shadow: var(--shadow-depth-02);">...</div>
 ```
 
@@ -579,13 +617,16 @@ See `$FIGMA_CLI/CLAUDE.md` for quick start and `$FIGMA_CLI/REFERENCE.md` for the
 
 ## Tips
 
-- **Always embed all three CSS files inline** — `chip-fonts.css` + theme tokens + components. This makes prototypes fully self-contained.
+- **Always embed all four CSS files inline** — `chip-fonts.css` + theme tokens + `typography-spacing.css` + `arcade-components.css`. This makes prototypes fully self-contained.
+- **Embed order matters**: fonts → tokens → typography/spacing → components. Components depend on tokens; typography classes are standalone utilities.
 - **Chip fonts are mandatory** — never use Inter, system fonts, or Google Fonts as the primary typeface. Chip is DevRev's design system font.
 - **Default to light mode** (`class="light"`) unless the user asks for dark.
-- **Use `hsl(var(...))` for colors** — token values are HSL triplets, not complete `hsl()` calls.
+- **Always wrap color tokens in `hsl()`** — token values are raw HSL triplets (e.g., `0 0% 100%`), NOT complete `hsl()` calls. Write `color: hsl(var(--text-color-primary))` not `color: var(--text-color-primary)`.
 - **Shadows are different** — shadow tokens are complete values, use them directly: `box-shadow: var(--shadow-depth-02)`.
+- **Arcade sub-themes**: The Arcade theme supports sub-themes via `data-arcade-theme` attribute — `"jabuticaba"` (default) or `"dragonfruit"`. This changes which palette maps to `--action` and `--intelligence` aliases.
 - **Keep it semantic** — use the right component for the job (badges for status, cards for grouping, etc.).
 - **Add hover states** — they make prototypes feel alive. The component CSS includes them by default.
 - **Mobile prototypes**: Set `data-device="mobile"` and add `<meta name="viewport" content="width=device-width, initial-scale=1.0">`.
 - When the user provides a **Figma screenshot**, map visual elements to the closest component class. Don't try to pixel-match — match the intent and feel.
 - **Theme comparison**: To show both themes side by side, create two prototypes with different `data-theme` values. Don't mix themes in one file.
+- **Tokens are real production tokens** — extracted verbatim from the DevRev product monorepo. If something looks wrong, it may be a component CSS mapping issue, not a token issue.

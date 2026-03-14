@@ -1,0 +1,415 @@
+/* Typography & Spacing Utilities — extracted from devrev-web monorepo */
+/*
+ * Source files:
+ *   libs/design-system/shared/themes/typography-tokens.js  (product app variant)
+ *   apps/product/styles/spacing.css                        (phi-ratio spacing)
+ *
+ * These are plain CSS utility classes — no Tailwind build step required.
+ */
+
+
+/* ==========================================================================
+   PART 1: TYPOGRAPHY — Product app tokens (25 text classes + 3 weights)
+   ========================================================================== */
+
+/* --- Title tokens (display font) --- */
+
+.text-title-large {
+  font-size: 2.125rem;
+  line-height: 2.375rem;
+  font-variation-settings: 'wght' 660;
+  font-family: var(--font-display), system-ui, sans-serif;
+}
+
+.text-title-1 {
+  font-size: 1.8125rem;
+  line-height: 2rem;
+  font-variation-settings: 'wght' 660;
+  font-family: var(--font-display), system-ui, sans-serif;
+}
+
+.text-title-2 {
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-variation-settings: 'wght' 660;
+  font-family: var(--font-display), system-ui, sans-serif;
+}
+
+.text-title-3 {
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  font-variation-settings: 'wght' 660;
+  font-family: var(--font-display), system-ui, sans-serif;
+}
+
+/* --- Body tokens (text font) --- */
+
+.text-body {
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-variation-settings: 'wght' 440;
+  font-family: var(--font-text), system-ui, sans-serif;
+}
+
+.text-body-medium {
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-variation-settings: 'wght' 540;
+  font-family: var(--font-text), system-ui, sans-serif;
+}
+
+.text-body-bold {
+  font-size: 1rem;
+  line-height: 1.5rem;
+  --dynamic-line-height: var(--leading-body);
+  letter-spacing: var(--tracking-body);
+  font-variation-settings: 'wght' 660;
+  font-family: var(--font-text), system-ui, sans-serif;
+}
+
+.text-body-large {
+  font-size: 1.125rem;
+  line-height: 1.625rem;
+  --dynamic-line-height: var(--leading-subtitle-1);
+  letter-spacing: var(--tracking-subtitle-1);
+  font-variation-settings: 'wght' 440;
+  font-family: var(--font-text), system-ui, sans-serif;
+}
+
+.text-body-large-medium {
+  font-size: 1.125rem;
+  line-height: 1.625rem;
+  font-variation-settings: 'wght' 540;
+  font-family: var(--font-text), system-ui, sans-serif;
+}
+
+.text-body-large-bold {
+  font-size: 1.125rem;
+  line-height: 1.625rem;
+  font-variation-settings: 'wght' 660;
+  font-family: var(--font-text), system-ui, sans-serif;
+}
+
+.text-body-small {
+  font-size: 0.875rem;
+  line-height: 1.375rem;
+  font-variation-settings: 'wght' 440;
+  font-family: var(--font-text), system-ui, sans-serif;
+}
+
+.text-body-small-medium {
+  font-size: 0.875rem;
+  line-height: 1.375rem;
+  font-variation-settings: 'wght' 540;
+  font-family: var(--font-text), system-ui, sans-serif;
+}
+
+/* --- System tokens (text font) --- */
+
+.text-system {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-variation-settings: 'wght' 440;
+  font-family: var(--font-text), system-ui, sans-serif;
+}
+
+.text-system-medium {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-variation-settings: 'wght' 540;
+  font-family: var(--font-text), system-ui, sans-serif;
+}
+
+.text-system-bold {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-variation-settings: 'wght' 660;
+  font-family: var(--font-text), system-ui, sans-serif;
+}
+
+.text-system-small {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-variation-settings: 'wght' 440;
+  font-family: var(--font-text), system-ui, sans-serif;
+}
+
+.text-system-small-medium {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-variation-settings: 'wght' 540;
+  font-family: var(--font-text), system-ui, sans-serif;
+}
+
+.text-system-small-bold {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-variation-settings: 'wght' 660;
+  font-family: var(--font-text), system-ui, sans-serif;
+}
+
+/* --- Callout tokens (text font) --- */
+
+.text-callout {
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  --dynamic-line-height: var(--leading-callout);
+  letter-spacing: var(--tracking-callout);
+  font-variation-settings: 'wght' 440;
+  font-family: var(--font-text), system-ui, sans-serif;
+}
+
+.text-callout-medium {
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  font-variation-settings: 'wght' 540;
+  font-family: var(--font-text), system-ui, sans-serif;
+}
+
+.text-callout-bold {
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  font-variation-settings: 'wght' 660;
+  font-family: var(--font-text), system-ui, sans-serif;
+}
+
+/* --- Caption tokens (text font) --- */
+
+.text-caption {
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  font-variation-settings: 'wght' 440;
+  font-family: var(--font-text), system-ui, sans-serif;
+}
+
+.text-caption-medium {
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  font-variation-settings: 'wght' 540;
+  font-family: var(--font-text), system-ui, sans-serif;
+}
+
+.text-caption-bold {
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  font-variation-settings: 'wght' 660;
+  font-family: var(--font-text), system-ui, sans-serif;
+}
+
+/* --- Code token (mono font) --- */
+
+.text-code {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-variation-settings: 'wght' 440;
+  font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+/* --- Weight utilities --- */
+
+.font-normal { font-variation-settings: 'wght' 440; }
+.font-medium { font-variation-settings: 'wght' 540; }
+.font-bold   { font-variation-settings: 'wght' 660; }
+
+
+/* ==========================================================================
+   PART 2: SPACING — Phi-ratio spacing system (copied verbatim from source)
+   ========================================================================== */
+
+/* --- Phi ratio constants --- */
+
+:root {
+  --phi: 1.41;
+  --phi2: 2;
+  --phi3: 2.83;
+  --phi4: 4;
+  --phi5: 5.65;
+  --phi6: 8;
+
+  --phi-i: 0.7;
+  --phi-i2: 0.5;
+  --phi-i3: 0.35;
+  --phi-i4: 0.25;
+  --phi-i5: 0.17;
+  --phi-i6: 0.125;
+}
+
+/* --- Dynamic spacing (em-based, scales with local font-size) --- */
+
+:root {
+  --base-space: 1em;
+  --spacing-dynamic-5xs: calc(var(--base-space) * var(--phi-i6));
+  --spacing-dynamic-4xs: calc(var(--base-space) * var(--phi-i5));
+  --spacing-dynamic-3xs: calc(var(--base-space) * var(--phi-i4));
+  --spacing-dynamic-2xs: calc(var(--base-space) * var(--phi-i3));
+  --spacing-dynamic-xs: calc(var(--base-space) * var(--phi-i2));
+  --spacing-dynamic-sm: calc(var(--base-space) * var(--phi-i));
+  --spacing-dynamic-base: var(--base-space);
+  --spacing-dynamic-lg: calc(var(--base-space) * var(--phi));
+  --spacing-dynamic-xl: calc(var(--base-space) * var(--phi2));
+  --spacing-dynamic-2xl: calc(var(--base-space) * var(--phi3));
+  --spacing-dynamic-3xl: calc(var(--base-space) * var(--phi4));
+  --spacing-dynamic-4xl: calc(var(--base-space) * var(--phi5));
+  --spacing-dynamic-5xl: calc(var(--base-space) * var(--phi6));
+}
+
+/* --- Global spacing (rem-based, stable across the page) --- */
+
+:root {
+  --global-space: 1rem;
+  --spacing-global-5xs: calc(var(--global-space) * var(--phi-i6));
+  --spacing-global-4xs: calc(var(--global-space) * var(--phi-i5));
+  --spacing-global-3xs: calc(var(--global-space) * var(--phi-i4));
+  --spacing-global-2xs: calc(var(--global-space) * var(--phi-i3));
+  --spacing-global-xs: calc(var(--global-space) * var(--phi-i2));
+  --spacing-global-sm: calc(var(--global-space) * var(--phi-i));
+  --spacing-global-base: var(--global-space);
+  --spacing-global-lg: calc(var(--global-space) * var(--phi));
+  --spacing-global-xl: calc(var(--global-space) * var(--phi2));
+  --spacing-global-2xl: calc(var(--global-space) * var(--phi3));
+  --spacing-global-3xl: calc(var(--global-space) * var(--phi4));
+  --spacing-global-4xl: calc(var(--global-space) * var(--phi5));
+  --spacing-global-5xl: calc(var(--global-space) * var(--phi6));
+}
+
+/* --- Dynamic spacing overrides for text-context elements --- */
+
+:where(.text-body, .text-title-1, .text-system) {
+  --spacing-dynamic-xs: clamp(2px, calc(var(--dynamic-line-height) * var(--phi-i2)), 48px);
+  --spacing-dynamic-base: clamp(8px, var(--dynamic-line-height), 48px);
+  --spacing-dynamic-lg: clamp(16px, calc(var(--dynamic-line-height) * var(--phi)), 64px);
+}
+
+/* --- Device-specific global-space overrides --- */
+
+:root[data-device='web'] {
+  --base: 16;
+  --global-space: 1rem;
+}
+
+:root[data-device='desktop'] {
+  --base: 15;
+  --global-space: 0.938rem;
+}
+
+:root[data-device='mobile'] {
+  --base: 17;
+  --global-space: 1.063rem;
+}
+
+
+/* ==========================================================================
+   PART 3: SPACING UTILITY CLASSES
+   ========================================================================== */
+
+/* --- Gap utilities (global spacing) --- */
+
+.gap-5xs { gap: var(--spacing-global-5xs); }
+.gap-4xs { gap: var(--spacing-global-4xs); }
+.gap-3xs { gap: var(--spacing-global-3xs); }
+.gap-2xs { gap: var(--spacing-global-2xs); }
+.gap-xs  { gap: var(--spacing-global-xs); }
+.gap-sm  { gap: var(--spacing-global-sm); }
+.gap-base { gap: var(--spacing-global-base); }
+.gap-lg  { gap: var(--spacing-global-lg); }
+.gap-xl  { gap: var(--spacing-global-xl); }
+.gap-2xl { gap: var(--spacing-global-2xl); }
+.gap-3xl { gap: var(--spacing-global-3xl); }
+.gap-4xl { gap: var(--spacing-global-4xl); }
+.gap-5xl { gap: var(--spacing-global-5xl); }
+
+/* --- Padding utilities (global spacing) --- */
+
+.p-5xs { padding: var(--spacing-global-5xs); }
+.p-4xs { padding: var(--spacing-global-4xs); }
+.p-3xs { padding: var(--spacing-global-3xs); }
+.p-2xs { padding: var(--spacing-global-2xs); }
+.p-xs  { padding: var(--spacing-global-xs); }
+.p-sm  { padding: var(--spacing-global-sm); }
+.p-base { padding: var(--spacing-global-base); }
+.p-lg  { padding: var(--spacing-global-lg); }
+.p-xl  { padding: var(--spacing-global-xl); }
+.p-2xl { padding: var(--spacing-global-2xl); }
+.p-3xl { padding: var(--spacing-global-3xl); }
+.p-4xl { padding: var(--spacing-global-4xl); }
+.p-5xl { padding: var(--spacing-global-5xl); }
+
+/* --- Padding-x / Padding-y utilities --- */
+
+.px-5xs { padding-left: var(--spacing-global-5xs); padding-right: var(--spacing-global-5xs); }
+.px-4xs { padding-left: var(--spacing-global-4xs); padding-right: var(--spacing-global-4xs); }
+.px-3xs { padding-left: var(--spacing-global-3xs); padding-right: var(--spacing-global-3xs); }
+.px-2xs { padding-left: var(--spacing-global-2xs); padding-right: var(--spacing-global-2xs); }
+.px-xs  { padding-left: var(--spacing-global-xs); padding-right: var(--spacing-global-xs); }
+.px-sm  { padding-left: var(--spacing-global-sm); padding-right: var(--spacing-global-sm); }
+.px-base { padding-left: var(--spacing-global-base); padding-right: var(--spacing-global-base); }
+.px-lg  { padding-left: var(--spacing-global-lg); padding-right: var(--spacing-global-lg); }
+.px-xl  { padding-left: var(--spacing-global-xl); padding-right: var(--spacing-global-xl); }
+
+.py-5xs { padding-top: var(--spacing-global-5xs); padding-bottom: var(--spacing-global-5xs); }
+.py-4xs { padding-top: var(--spacing-global-4xs); padding-bottom: var(--spacing-global-4xs); }
+.py-3xs { padding-top: var(--spacing-global-3xs); padding-bottom: var(--spacing-global-3xs); }
+.py-2xs { padding-top: var(--spacing-global-2xs); padding-bottom: var(--spacing-global-2xs); }
+.py-xs  { padding-top: var(--spacing-global-xs); padding-bottom: var(--spacing-global-xs); }
+.py-sm  { padding-top: var(--spacing-global-sm); padding-bottom: var(--spacing-global-sm); }
+.py-base { padding-top: var(--spacing-global-base); padding-bottom: var(--spacing-global-base); }
+.py-lg  { padding-top: var(--spacing-global-lg); padding-bottom: var(--spacing-global-lg); }
+.py-xl  { padding-top: var(--spacing-global-xl); padding-bottom: var(--spacing-global-xl); }
+
+/* --- Margin utilities (global spacing) --- */
+
+.m-5xs { margin: var(--spacing-global-5xs); }
+.m-4xs { margin: var(--spacing-global-4xs); }
+.m-3xs { margin: var(--spacing-global-3xs); }
+.m-2xs { margin: var(--spacing-global-2xs); }
+.m-xs  { margin: var(--spacing-global-xs); }
+.m-sm  { margin: var(--spacing-global-sm); }
+.m-base { margin: var(--spacing-global-base); }
+.m-lg  { margin: var(--spacing-global-lg); }
+.m-xl  { margin: var(--spacing-global-xl); }
+.m-2xl { margin: var(--spacing-global-2xl); }
+.m-3xl { margin: var(--spacing-global-3xl); }
+.m-4xl { margin: var(--spacing-global-4xl); }
+.m-5xl { margin: var(--spacing-global-5xl); }
+
+/* --- Margin-bottom utilities (common for vertical rhythm) --- */
+
+.mb-5xs { margin-bottom: var(--spacing-global-5xs); }
+.mb-4xs { margin-bottom: var(--spacing-global-4xs); }
+.mb-3xs { margin-bottom: var(--spacing-global-3xs); }
+.mb-2xs { margin-bottom: var(--spacing-global-2xs); }
+.mb-xs  { margin-bottom: var(--spacing-global-xs); }
+.mb-sm  { margin-bottom: var(--spacing-global-sm); }
+.mb-base { margin-bottom: var(--spacing-global-base); }
+.mb-lg  { margin-bottom: var(--spacing-global-lg); }
+.mb-xl  { margin-bottom: var(--spacing-global-xl); }
+
+/* --- Dynamic spacing utilities (em-based, scale with parent font-size) --- */
+
+.gap-d-5xs { gap: var(--spacing-dynamic-5xs); }
+.gap-d-4xs { gap: var(--spacing-dynamic-4xs); }
+.gap-d-3xs { gap: var(--spacing-dynamic-3xs); }
+.gap-d-2xs { gap: var(--spacing-dynamic-2xs); }
+.gap-d-xs  { gap: var(--spacing-dynamic-xs); }
+.gap-d-sm  { gap: var(--spacing-dynamic-sm); }
+.gap-d-base { gap: var(--spacing-dynamic-base); }
+.gap-d-lg  { gap: var(--spacing-dynamic-lg); }
+.gap-d-xl  { gap: var(--spacing-dynamic-xl); }
+.gap-d-2xl { gap: var(--spacing-dynamic-2xl); }
+.gap-d-3xl { gap: var(--spacing-dynamic-3xl); }
+.gap-d-4xl { gap: var(--spacing-dynamic-4xl); }
+.gap-d-5xl { gap: var(--spacing-dynamic-5xl); }
+
+.p-d-5xs { padding: var(--spacing-dynamic-5xs); }
+.p-d-4xs { padding: var(--spacing-dynamic-4xs); }
+.p-d-3xs { padding: var(--spacing-dynamic-3xs); }
+.p-d-2xs { padding: var(--spacing-dynamic-2xs); }
+.p-d-xs  { padding: var(--spacing-dynamic-xs); }
+.p-d-sm  { padding: var(--spacing-dynamic-sm); }
+.p-d-base { padding: var(--spacing-dynamic-base); }
+.p-d-lg  { padding: var(--spacing-dynamic-lg); }
+.p-d-xl  { padding: var(--spacing-dynamic-xl); }
+.p-d-2xl { padding: var(--spacing-dynamic-2xl); }
+.p-d-3xl { padding: var(--spacing-dynamic-3xl); }
+.p-d-4xl { padding: var(--spacing-dynamic-4xl); }
+.p-d-5xl { padding: var(--spacing-dynamic-5xl); }
