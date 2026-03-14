@@ -1,0 +1,768 @@
+/*
+ * Arcade Design System — Component Patterns
+ * Pure CSS component classes matching the Arcade theme config.
+ * Requires arcade-tokens.css to be loaded first.
+ *
+ * Naming: .arcade-{component}  with --{variant}, --{size}, --{state} modifiers
+ */
+
+/* ============================================================
+   BUTTON
+   ============================================================ */
+
+.arcade-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-dynamic-3xs);
+  border: none;
+  border-radius: 9999px;
+  cursor: pointer;
+  font-family: var(--font-family);
+  font-weight: var(--fontWeight-medium);
+  text-decoration: none;
+  white-space: nowrap;
+  position: relative;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.arcade-btn:focus-visible {
+  box-shadow: var(--shadow-interactive-focused);
+  outline: 1px solid var(--stroke-interactive-primary);
+  outline-offset: 1px;
+}
+
+/* Sizes */
+.arcade-btn--L {
+  font-size: var(--fontSize-body);
+  letter-spacing: var(--tracking-body);
+  line-height: var(--leading-body);
+  padding: var(--spacing-dynamic-xs) var(--spacing-dynamic-base);
+  gap: var(--spacing-dynamic-5xs);
+}
+
+.arcade-btn--M, .arcade-btn {
+  font-size: var(--fontSize-system);
+  letter-spacing: var(--tracking-system);
+  line-height: var(--leading-system);
+  padding: var(--spacing-dynamic-xs) var(--spacing-dynamic-base);
+  gap: var(--spacing-dynamic-3xs);
+}
+
+.arcade-btn--S {
+  font-size: var(--fontSize-system-small);
+  letter-spacing: var(--tracking-system-small);
+  line-height: var(--leading-system-small);
+  padding: var(--spacing-dynamic-3xs) var(--spacing-dynamic-sm);
+  gap: var(--spacing-dynamic-4xs);
+}
+
+/* Variants */
+.arcade-btn--primary {
+  color: var(--text-on-fill);
+  background: var(--bg-interactive-primary);
+  min-width: 60px;
+  box-shadow: var(--shadow-button);
+}
+.arcade-btn--primary:hover {
+  background: var(--bg-interactive-primary-hovered);
+  transform: scale(1.05);
+}
+.arcade-btn--primary:active {
+  background: var(--bg-interactive-primary-pressed);
+  transform: scale(1);
+}
+
+.arcade-btn--secondary {
+  color: var(--text-interactive-primary);
+  background: var(--bg-interactive-secondary);
+  min-width: 60px;
+}
+.arcade-btn--secondary:hover {
+  background: var(--bg-interactive-secondary-hovered);
+}
+.arcade-btn--secondary:active {
+  background: var(--bg-interactive-secondary-pressed);
+}
+
+.arcade-btn--tertiary {
+  color: var(--text-interactive-primary);
+  background: transparent;
+  min-width: 60px;
+}
+.arcade-btn--tertiary:hover {
+  background: var(--bg-interactive-tertiary-hovered);
+}
+.arcade-btn--tertiary:active {
+  background: var(--bg-interactive-tertiary-pressed);
+}
+
+.arcade-btn--destructive {
+  color: var(--text-static-white);
+  background: var(--bg-interactive-destructive);
+}
+.arcade-btn--destructive:hover {
+  background: var(--bg-interactive-destructive-hovered);
+}
+.arcade-btn--destructive:active {
+  background: var(--bg-interactive-destructive-pressed);
+}
+
+/* States */
+.arcade-btn[disabled],
+.arcade-btn--disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+  opacity: 0.4;
+}
+
+.arcade-btn--loading {
+  pointer-events: none;
+}
+
+/* Icon inside button */
+.arcade-btn .icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1em;
+  height: 1em;
+}
+
+/* ============================================================
+   INPUT / TEXT FIELD
+   ============================================================ */
+
+.arcade-input {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  font-family: var(--font-family);
+  font-size: var(--fontSize-system);
+  letter-spacing: var(--tracking-system);
+  line-height: var(--leading-system);
+  font-weight: var(--fontWeight-regular);
+  color: var(--text-primary);
+  background: var(--bg-input);
+  border: 1px solid var(--stroke-field-idle);
+  border-radius: 8px;
+  padding: var(--spacing-dynamic-xs) var(--spacing-dynamic-sm);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.arcade-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.arcade-input:hover {
+  border-color: var(--stroke-field-hovered);
+  background: var(--bg-input-hovered);
+}
+
+.arcade-input:focus {
+  border-color: var(--stroke-field-active);
+  background: var(--bg-input-active);
+  box-shadow: var(--shadow-interactive-focused);
+}
+
+.arcade-input:disabled {
+  border-color: var(--stroke-field-disabled);
+  background: var(--bg-input-disabled);
+  color: var(--text-disabled);
+  cursor: not-allowed;
+}
+
+.arcade-input--error {
+  border-color: var(--stroke-feedback-alert);
+}
+.arcade-input--error:focus {
+  border-color: var(--stroke-feedback-alert);
+  box-shadow: 0px 0px 0px 4px hsl(var(--persimmon-400) / 0.15);
+}
+
+/* Input with label wrapper */
+.arcade-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-global-4xs);
+}
+
+.arcade-field__label {
+  font-size: var(--fontSize-system-small);
+  font-weight: var(--fontWeight-medium);
+  color: var(--text-secondary);
+  letter-spacing: var(--tracking-system-small);
+}
+
+.arcade-field__hint {
+  font-size: var(--fontSize-caption);
+  color: var(--text-tertiary);
+  letter-spacing: var(--tracking-caption);
+}
+
+.arcade-field__error {
+  font-size: var(--fontSize-caption);
+  color: var(--text-feedback-alert);
+  letter-spacing: var(--tracking-caption);
+}
+
+/* ============================================================
+   TEXTAREA
+   ============================================================ */
+
+.arcade-textarea {
+  display: block;
+  width: 100%;
+  min-height: 80px;
+  font-family: var(--font-family);
+  font-size: var(--fontSize-system);
+  letter-spacing: var(--tracking-system);
+  line-height: var(--leading-system);
+  font-weight: var(--fontWeight-regular);
+  color: var(--text-primary);
+  background: var(--bg-input);
+  border: 1px solid var(--stroke-field-idle);
+  border-radius: 8px;
+  padding: var(--spacing-dynamic-xs) var(--spacing-dynamic-sm);
+  outline: none;
+  resize: vertical;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.arcade-textarea:hover { border-color: var(--stroke-field-hovered); }
+.arcade-textarea:focus {
+  border-color: var(--stroke-field-active);
+  box-shadow: var(--shadow-interactive-focused);
+}
+
+/* ============================================================
+   BADGE / TAG
+   ============================================================ */
+
+.arcade-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-dynamic-5xs);
+  font-family: var(--font-family);
+  font-size: var(--fontSize-caption);
+  letter-spacing: var(--tracking-caption);
+  line-height: var(--leading-caption);
+  font-weight: var(--fontWeight-medium);
+  padding: var(--spacing-dynamic-5xs) var(--spacing-dynamic-3xs);
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+
+.arcade-badge--default {
+  color: var(--text-secondary);
+  background: var(--bg-layer-03);
+}
+
+.arcade-badge--info {
+  color: var(--text-feedback-info);
+  background: var(--bg-feedback-info);
+}
+
+.arcade-badge--success {
+  color: var(--text-feedback-success);
+  background: var(--bg-feedback-success);
+}
+
+.arcade-badge--warning {
+  color: var(--text-feedback-warning);
+  background: var(--bg-feedback-warning);
+}
+
+.arcade-badge--alert {
+  color: var(--text-feedback-alert);
+  background: var(--bg-feedback-alert);
+}
+
+.arcade-badge--action {
+  color: var(--text-action);
+  background: var(--bg-action);
+}
+
+.arcade-badge--intelligence {
+  color: var(--text-intelligence);
+  background: var(--bg-intelligence);
+}
+
+/* Attribute colors (1-8) */
+.arcade-badge--attr-1 { color: var(--object-01); background: var(--bg-attribute-01); }
+.arcade-badge--attr-2 { color: var(--object-02); background: var(--bg-attribute-02); }
+.arcade-badge--attr-3 { color: var(--object-03); background: var(--bg-attribute-03); }
+.arcade-badge--attr-4 { color: var(--object-04); background: var(--bg-attribute-04); }
+.arcade-badge--attr-5 { color: var(--object-05); background: var(--bg-attribute-05); }
+.arcade-badge--attr-6 { color: var(--object-06); background: var(--bg-attribute-06); }
+.arcade-badge--attr-7 { color: var(--object-07); background: var(--bg-attribute-07); }
+.arcade-badge--attr-8 { color: var(--object-08); background: var(--bg-attribute-08); }
+
+/* ============================================================
+   CARD / SURFACE
+   ============================================================ */
+
+.arcade-card {
+  background: var(--bg-layer-01);
+  border: 1px solid var(--stroke-secondary);
+  border-radius: 12px;
+  padding: var(--spacing-global-md);
+  box-shadow: var(--shadow-depth-01);
+}
+
+.arcade-card--elevated {
+  box-shadow: var(--shadow-depth-02);
+}
+
+.arcade-card--prominent {
+  box-shadow: var(--shadow-depth-03);
+}
+
+.arcade-card--interactive {
+  cursor: pointer;
+  transition: box-shadow 0.2s ease, border-color 0.15s ease;
+}
+.arcade-card--interactive:hover {
+  box-shadow: var(--shadow-depth-02);
+  border-color: var(--stroke-primary);
+}
+
+/* ============================================================
+   POPOVER / DROPDOWN
+   ============================================================ */
+
+.arcade-popover {
+  background: var(--bg-popover);
+  border: 1px solid var(--stroke-secondary);
+  border-radius: 12px;
+  padding: var(--spacing-global-3xs);
+  box-shadow: var(--shadow-depth-03);
+}
+
+/* ============================================================
+   MENU ITEM (for dropdowns, lists, nav)
+   ============================================================ */
+
+.arcade-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-dynamic-3xs);
+  padding: var(--spacing-dynamic-3xs) var(--spacing-dynamic-sm);
+  border-radius: 8px;
+  font-size: var(--fontSize-system);
+  letter-spacing: var(--tracking-system);
+  line-height: var(--leading-system);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-family);
+}
+
+.arcade-menu-item:hover {
+  background: var(--bg-interactive-tertiary-hovered);
+}
+
+.arcade-menu-item:active,
+.arcade-menu-item--selected {
+  background: var(--bg-selected);
+}
+
+.arcade-menu-item--disabled {
+  color: var(--text-disabled);
+  pointer-events: none;
+}
+
+.arcade-menu-item__secondary {
+  color: var(--text-secondary);
+  font-size: var(--fontSize-caption);
+  margin-left: auto;
+}
+
+/* ============================================================
+   AVATAR
+   ============================================================ */
+
+.arcade-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  overflow: hidden;
+  flex-shrink: 0;
+  font-weight: var(--fontWeight-medium);
+  color: var(--text-on-fill);
+}
+
+.arcade-avatar--S  { width: 24px; height: 24px; font-size: var(--fontSize-footnote); }
+.arcade-avatar--M  { width: 32px; height: 32px; font-size: var(--fontSize-caption); }
+.arcade-avatar--L  { width: 40px; height: 40px; font-size: var(--fontSize-system-small); }
+.arcade-avatar--XL { width: 56px; height: 56px; font-size: var(--fontSize-body); }
+
+.arcade-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Color rotation for initials */
+.arcade-avatar--1 { background: var(--object-01); }
+.arcade-avatar--2 { background: var(--object-02); }
+.arcade-avatar--3 { background: var(--object-03); }
+.arcade-avatar--4 { background: var(--object-04); }
+.arcade-avatar--5 { background: var(--object-05); }
+.arcade-avatar--6 { background: var(--object-06); }
+.arcade-avatar--7 { background: var(--object-07); }
+.arcade-avatar--8 { background: var(--object-08); }
+
+/* ============================================================
+   TOGGLE / SWITCH
+   ============================================================ */
+
+.arcade-toggle {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 9999px;
+  background: var(--bg-layer-03);
+  border: 1px solid var(--stroke-field-idle);
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.arcade-toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: var(--text-secondary);
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.arcade-toggle--on {
+  background: var(--bg-interactive-primary);
+  border-color: var(--stroke-interactive-primary);
+}
+
+.arcade-toggle--on::after {
+  transform: translateX(16px);
+  background: var(--text-on-fill);
+}
+
+/* ============================================================
+   CHECKBOX
+   ============================================================ */
+
+.arcade-checkbox {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--stroke-field-idle);
+  border-radius: 4px;
+  background: var(--bg-input);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.arcade-checkbox:hover {
+  border-color: var(--stroke-field-hovered);
+}
+
+.arcade-checkbox--checked {
+  background: var(--bg-interactive-primary);
+  border-color: var(--stroke-interactive-primary);
+}
+
+/* Use a pseudo-element or SVG for the checkmark */
+.arcade-checkbox--checked::after {
+  content: '✓';
+  color: var(--text-on-fill);
+  font-size: 11px;
+  font-weight: var(--fontWeight-bold);
+  line-height: 1;
+}
+
+/* ============================================================
+   DIVIDER
+   ============================================================ */
+
+.arcade-divider {
+  width: 100%;
+  height: 1px;
+  background: var(--stroke-secondary);
+  border: none;
+  margin: var(--spacing-global-xs) 0;
+}
+
+.arcade-divider--subtle {
+  background: var(--stroke-chrome);
+}
+
+/* ============================================================
+   TOOLTIP
+   ============================================================ */
+
+.arcade-tooltip {
+  background: var(--bg-layer-04);
+  color: var(--text-primary);
+  font-size: var(--fontSize-caption);
+  letter-spacing: var(--tracking-caption);
+  line-height: var(--leading-caption);
+  padding: var(--spacing-global-4xs) var(--spacing-global-3xs);
+  border-radius: 6px;
+  box-shadow: var(--shadow-depth-02);
+  max-width: 240px;
+}
+
+/* ============================================================
+   FEEDBACK / ALERT BANNER
+   ============================================================ */
+
+.arcade-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-global-xs);
+  padding: var(--spacing-global-sm) var(--spacing-global-base);
+  border-radius: 8px;
+  font-size: var(--fontSize-system);
+  letter-spacing: var(--tracking-system);
+  line-height: var(--leading-system);
+}
+
+.arcade-alert--info {
+  background: var(--bg-feedback-info);
+  color: var(--text-feedback-info);
+  border: 1px solid var(--stroke-feedback-info);
+}
+
+.arcade-alert--success {
+  background: var(--bg-feedback-success);
+  color: var(--text-feedback-success);
+  border: 1px solid var(--stroke-feedback-success);
+}
+
+.arcade-alert--warning {
+  background: var(--bg-feedback-warning);
+  color: var(--text-feedback-warning);
+  border: 1px solid var(--stroke-feedback-warning);
+}
+
+.arcade-alert--error {
+  background: var(--bg-feedback-alert);
+  color: var(--text-feedback-alert);
+  border: 1px solid var(--stroke-feedback-alert);
+}
+
+/* ============================================================
+   SKELETON / PLACEHOLDER
+   ============================================================ */
+
+.arcade-skeleton {
+  background: var(--skeleton);
+  border-radius: 4px;
+  animation: arcade-pulse 1.5s ease-in-out infinite;
+}
+
+.arcade-skeleton--text {
+  height: 1em;
+  width: 80%;
+  border-radius: 4px;
+}
+
+.arcade-skeleton--circle {
+  border-radius: 9999px;
+}
+
+@keyframes arcade-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ============================================================
+   TAB BAR
+   ============================================================ */
+
+.arcade-tabs {
+  display: flex;
+  gap: var(--spacing-global-4xs);
+  border-bottom: 1px solid var(--stroke-secondary);
+}
+
+.arcade-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-dynamic-4xs);
+  padding: var(--spacing-global-xs) var(--spacing-global-sm);
+  font-family: var(--font-family);
+  font-size: var(--fontSize-system);
+  font-weight: var(--fontWeight-medium);
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+  margin-bottom: -1px;
+}
+
+.arcade-tab:hover {
+  color: var(--text-primary);
+}
+
+.arcade-tab--active {
+  color: var(--text-interactive-primary);
+  border-bottom-color: var(--stroke-interactive-primary);
+}
+
+/* ============================================================
+   TABLE
+   ============================================================ */
+
+.arcade-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fontSize-system);
+  letter-spacing: var(--tracking-system);
+}
+
+.arcade-table th {
+  text-align: left;
+  font-weight: var(--fontWeight-medium);
+  color: var(--text-secondary);
+  font-size: var(--fontSize-system-small);
+  padding: var(--spacing-global-xs) var(--spacing-global-sm);
+  border-bottom: 1px solid var(--stroke-primary);
+}
+
+.arcade-table td {
+  padding: var(--spacing-global-xs) var(--spacing-global-sm);
+  border-bottom: 1px solid var(--stroke-secondary);
+  color: var(--text-primary);
+}
+
+.arcade-table tr:hover td {
+  background: var(--bg-interactive-tertiary-hovered);
+}
+
+/* ============================================================
+   OVERLAY
+   ============================================================ */
+
+.arcade-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+/* ============================================================
+   DIALOG / MODAL
+   ============================================================ */
+
+.arcade-dialog {
+  background: var(--bg-layer-01);
+  border: 1px solid var(--stroke-secondary);
+  border-radius: 16px;
+  padding: var(--spacing-global-lg);
+  box-shadow: var(--shadow-depth-04);
+  max-width: 480px;
+  width: 100%;
+}
+
+.arcade-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-global-base);
+}
+
+.arcade-dialog__title {
+  font-size: var(--fontSize-title-3);
+  font-weight: var(--fontWeight-bold);
+  letter-spacing: var(--tracking-title-3);
+  color: var(--text-primary);
+}
+
+.arcade-dialog__body {
+  color: var(--text-secondary);
+  font-size: var(--fontSize-system);
+  margin-bottom: var(--spacing-global-md);
+}
+
+.arcade-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-global-xs);
+}
+
+/* ============================================================
+   SIDEBAR / NAV PANEL
+   ============================================================ */
+
+.arcade-sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 256px;
+  height: 100%;
+  background: var(--bg-layer-00);
+  border-right: 1px solid var(--stroke-chrome);
+  padding: var(--spacing-global-sm);
+  gap: var(--spacing-global-4xs);
+}
+
+.arcade-sidebar__section-title {
+  font-size: var(--fontSize-caption);
+  font-weight: var(--fontWeight-medium);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: var(--spacing-global-xs) var(--spacing-global-3xs);
+}
+
+/* ============================================================
+   EMPTY STATE
+   ============================================================ */
+
+.arcade-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-global-3xl) var(--spacing-global-lg);
+  text-align: center;
+  gap: var(--spacing-global-sm);
+}
+
+.arcade-empty__icon {
+  font-size: 2.5rem;
+  color: var(--text-tertiary);
+}
+
+.arcade-empty__title {
+  font-size: var(--fontSize-subtitle-1);
+  font-weight: var(--fontWeight-medium);
+  color: var(--text-primary);
+}
+
+.arcade-empty__description {
+  font-size: var(--fontSize-system);
+  color: var(--text-secondary);
+  max-width: 320px;
+}
