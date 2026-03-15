@@ -1,0 +1,654 @@
+<!--
+  Template: Object Detail View
+  Theme: DevRev App (System of Record)
+
+  A focused detail page for viewing a single work item (issue, ticket, etc.) with:
+  - Full viewport, no sidebar — focused detail view
+  - Sticky top bar with back navigation, breadcrumb, status badge, and actions
+  - Two-column layout: main content (left) and metadata panel (right)
+  - Title, description with code block, tabbed activity/links/history
+  - Activity feed with avatars, timestamps, and mixed entry types
+  - Metadata panel with labeled field rows, badges, and tags
+
+  To use: Replace {{FONTS}}, {{TOKENS}}, {{TYPOGRAPHY}}, {{COMPONENTS}}
+  placeholders with the contents of the corresponding CSS files.
+-->
+<!DOCTYPE html>
+<html lang="en" data-theme="devrev-app" class="light" data-device="web">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ISS-1842 — DevRev</title>
+  <style>
+/* {{FONTS}} */
+/* {{TOKENS}} */
+/* {{TYPOGRAPHY}} */
+/* {{COMPONENTS}} */
+
+/* ── Reset ── */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-text), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-variation-settings: 'wght' 440;
+  -webkit-font-smoothing: antialiased;
+  background: hsl(var(--bg-layer-00));
+  color: hsl(var(--text-color-primary));
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── App Shell ── */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* ── Top Bar ── */
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-global-xs) var(--spacing-global-lg);
+  border-bottom: 1px solid hsl(var(--border-outline-01));
+  background: hsl(var(--bg-layer-01));
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.top-bar__left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-global-xs);
+}
+
+.top-bar__back {
+  min-width: auto;
+  padding: var(--spacing-dynamic-3xs) var(--spacing-dynamic-xs);
+}
+
+.top-bar__breadcrumb {
+  font-size: var(--fontSize-system);
+  font-variation-settings: 'wght' 440;
+  letter-spacing: var(--tracking-system);
+  color: hsl(var(--text-color-secondary));
+}
+
+.top-bar__breadcrumb strong {
+  color: hsl(var(--text-color-primary));
+  font-variation-settings: 'wght' 540;
+}
+
+.top-bar__right {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-global-xs);
+}
+
+.top-bar__action-btn {
+  min-width: auto;
+  padding: var(--spacing-dynamic-3xs) var(--spacing-dynamic-xs);
+}
+
+/* ── Content Area ── */
+.content-area {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── Left Column ── */
+.left-column {
+  flex: 3;
+  min-width: 0;
+  overflow-y: auto;
+  padding: var(--spacing-global-lg) var(--spacing-global-xl);
+  background: hsl(var(--bg-layer-01));
+}
+
+/* ── Right Column (Metadata Panel) ── */
+.right-column {
+  flex: 2;
+  min-width: 280px;
+  max-width: 400px;
+  overflow-y: auto;
+  padding: var(--spacing-global-lg) var(--spacing-global-md);
+  background: hsl(var(--bg-layer-02));
+  border-left: 1px solid hsl(var(--border-outline-01));
+}
+
+/* ── Issue Title ── */
+.issue-title {
+  font-size: var(--fontSize-title-3);
+  font-variation-settings: 'wght' 660;
+  letter-spacing: var(--tracking-title-3);
+  line-height: var(--leading-title-3);
+  color: hsl(var(--text-color-primary));
+  margin-bottom: var(--spacing-global-base);
+  padding: var(--spacing-global-4xs) 0;
+  border-radius: 6px;
+  cursor: text;
+  transition: background 0.15s ease;
+}
+
+.issue-title:hover {
+  background: hsl(var(--bg-interactive-tertiary-hovered));
+}
+
+/* ── Description ── */
+.description {
+  margin-bottom: var(--spacing-global-lg);
+}
+
+.description p {
+  font-size: var(--fontSize-body);
+  letter-spacing: var(--tracking-body);
+  line-height: var(--leading-body);
+  color: hsl(var(--text-color-secondary));
+  margin-bottom: var(--spacing-global-sm);
+}
+
+.description .code-block {
+  font-family: var(--font-code);
+  font-size: var(--fontSize-code);
+  letter-spacing: var(--tracking-code);
+  line-height: var(--leading-code);
+  background: hsl(var(--bg-layer-00));
+  border: 1px solid hsl(var(--border-outline-00));
+  border-radius: 8px;
+  padding: var(--spacing-global-sm) var(--spacing-global-base);
+  overflow-x: auto;
+  color: hsl(var(--text-color-primary));
+  margin-bottom: var(--spacing-global-sm);
+  white-space: pre;
+}
+
+/* ── Tabs Section ── */
+.tabs-section {
+  margin-bottom: var(--spacing-global-base);
+}
+
+/* ── Tab Content ── */
+.tab-content {
+  display: none;
+}
+
+.tab-content--active {
+  display: block;
+}
+
+.tab-placeholder {
+  padding: var(--spacing-global-xl) 0;
+  text-align: center;
+  color: hsl(var(--text-color-tertiary));
+  font-size: var(--fontSize-system);
+  letter-spacing: var(--tracking-system);
+}
+
+/* ── Activity Feed ── */
+.activity-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding-top: var(--spacing-global-base);
+}
+
+.activity-entry {
+  display: flex;
+  gap: var(--spacing-global-sm);
+  padding: var(--spacing-global-sm) 0;
+  position: relative;
+}
+
+/* Timeline connector line */
+.activity-entry::before {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: hsl(var(--border-outline-00));
+}
+
+.activity-entry:first-child::before {
+  top: 50%;
+}
+
+.activity-entry:last-child::before {
+  bottom: 50%;
+}
+
+.activity-entry__avatar {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+}
+
+.activity-entry__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.activity-entry__header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-global-3xs);
+  margin-bottom: var(--spacing-global-4xs);
+}
+
+.activity-entry__name {
+  font-size: var(--fontSize-system-small);
+  font-variation-settings: 'wght' 540;
+  letter-spacing: var(--tracking-system-small);
+  color: hsl(var(--text-color-primary));
+}
+
+.activity-entry__time {
+  font-size: var(--fontSize-caption);
+  letter-spacing: var(--tracking-caption);
+  color: hsl(var(--text-color-tertiary));
+}
+
+.activity-entry__content {
+  font-size: var(--fontSize-system);
+  letter-spacing: var(--tracking-system);
+  line-height: var(--leading-system);
+  color: hsl(var(--text-color-secondary));
+}
+
+.activity-entry__content--system {
+  font-size: var(--fontSize-system-small);
+  color: hsl(var(--text-color-tertiary));
+  font-style: italic;
+}
+
+.activity-entry__content a {
+  color: hsl(var(--text-interactive-primary-resting));
+  text-decoration: none;
+  font-variation-settings: 'wght' 540;
+}
+
+.activity-entry__content a:hover {
+  text-decoration: underline;
+}
+
+.activity-entry__comment {
+  background: hsl(var(--bg-layer-00));
+  border: 1px solid hsl(var(--border-outline-00));
+  border-radius: 8px;
+  padding: var(--spacing-global-sm) var(--spacing-global-base);
+  margin-top: var(--spacing-global-4xs);
+  font-size: var(--fontSize-system);
+  letter-spacing: var(--tracking-system);
+  line-height: var(--leading-system);
+  color: hsl(var(--text-color-primary));
+}
+
+/* ── Metadata Panel ── */
+.meta-section-title {
+  font-size: var(--fontSize-caption);
+  font-variation-settings: 'wght' 540;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: hsl(var(--text-color-tertiary));
+  margin-bottom: var(--spacing-global-sm);
+}
+
+.field-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-global-xs);
+}
+
+.field-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-global-sm);
+  padding: var(--spacing-global-4xs) 0;
+}
+
+.field-row__label {
+  flex-shrink: 0;
+  width: 100px;
+  font-size: var(--fontSize-system-small);
+  font-variation-settings: 'wght' 440;
+  letter-spacing: var(--tracking-system-small);
+  color: hsl(var(--text-color-secondary));
+  padding-top: 2px;
+}
+
+.field-row__value {
+  flex: 1;
+  font-size: var(--fontSize-system);
+  letter-spacing: var(--tracking-system);
+  color: hsl(var(--text-color-primary));
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-global-4xs);
+  flex-wrap: wrap;
+}
+
+.field-row__value--secondary {
+  color: hsl(var(--text-color-secondary));
+}
+
+.field-row .owner-display {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-global-4xs);
+}
+
+/* Tags row */
+.tags-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-global-4xs);
+}
+
+/* ── Divider in metadata ── */
+.meta-divider {
+  margin: var(--spacing-global-sm) 0;
+}
+  </style>
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- ════════════════════════════════════════════════════════
+       TOP BAR
+       ════════════════════════════════════════════════════════ -->
+  <header class="top-bar">
+    <div class="top-bar__left">
+      <button class="arcade-btn arcade-btn--tertiary arcade-btn--S top-bar__back" aria-label="Go back">
+        <span class="icon">&larr;</span>
+      </button>
+      <span class="top-bar__breadcrumb">Issues / <strong>ISS-1842</strong></span>
+    </div>
+    <div class="top-bar__right">
+      <span class="arcade-badge arcade-badge--info">In Progress</span>
+      <button class="arcade-btn arcade-btn--tertiary arcade-btn--S top-bar__action-btn">
+        <span class="icon">&#128279;</span>
+        <span>Link</span>
+      </button>
+      <button class="arcade-btn arcade-btn--tertiary arcade-btn--S top-bar__action-btn">
+        <span class="icon">&ctdot;</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ════════════════════════════════════════════════════════
+       CONTENT AREA — TWO COLUMNS
+       ════════════════════════════════════════════════════════ -->
+  <div class="content-area">
+
+    <!-- ── Left Column: Main Content ── -->
+    <div class="left-column">
+
+      <!-- Title -->
+      <h1 class="issue-title">Webhook delivery fails silently for custom endpoints</h1>
+
+      <!-- Description -->
+      <div class="description">
+        <p>
+          When a webhook is configured to deliver to a customer-provided HTTPS endpoint,
+          payloads that exceed the internal size threshold are silently dropped without
+          any error surfaced to the user. The webhook delivery log shows a
+          <strong>200 OK</strong> status even though the payload was never transmitted to
+          the external endpoint.
+        </p>
+        <p>
+          This affects all custom webhook integrations where the event payload exceeds
+          approximately 256 KB, particularly common with audit log events and bulk
+          operation results. Customers relying on webhooks for downstream automation
+          are missing critical events.
+        </p>
+        <div class="code-block">ERROR 2026-03-10T14:22:08Z webhook/deliver.go:187
+  context deadline exceeded (Client.Timeout)
+  endpoint: https://hooks.acme.io/devrev/events
+  payload_size: 312847 bytes
+  status: silently_dropped
+  retry_count: 0</div>
+        <p>
+          Expected behavior: delivery should fail with a visible error and trigger the
+          configured retry policy (up to 5 attempts with exponential backoff). The
+          webhook delivery log should reflect the actual failure status.
+        </p>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs-section">
+        <div class="arcade-tabs">
+          <button class="arcade-tab arcade-tab--active" data-tab="activity">Activity</button>
+          <button class="arcade-tab" data-tab="linked">Linked items</button>
+          <button class="arcade-tab" data-tab="history">History</button>
+        </div>
+      </div>
+
+      <!-- Tab: Activity (default visible) -->
+      <div class="tab-content tab-content--active" id="tab-activity">
+        <div class="activity-feed">
+
+          <!-- Activity 1: Comment -->
+          <div class="activity-entry">
+            <div class="activity-entry__avatar">
+              <div class="arcade-avatar arcade-avatar--M arcade-avatar--3">SC</div>
+            </div>
+            <div class="activity-entry__body">
+              <div class="activity-entry__header">
+                <span class="activity-entry__name">Sam Chen</span>
+                <span class="activity-entry__time">2 hours ago</span>
+              </div>
+              <div class="activity-entry__content">
+                <div class="activity-entry__comment">
+                  Reproduced this on staging with a payload of 290 KB. The delivery handler
+                  silently swallows the context deadline error instead of propagating it to
+                  the retry queue. The fix should be in <code>webhook/deliver.go</code> around
+                  line 185 where the timeout error is caught but not re-raised.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Activity 2: Status change -->
+          <div class="activity-entry">
+            <div class="activity-entry__avatar">
+              <div class="arcade-avatar arcade-avatar--M arcade-avatar--3">SC</div>
+            </div>
+            <div class="activity-entry__body">
+              <div class="activity-entry__header">
+                <span class="activity-entry__name">Sam Chen</span>
+                <span class="activity-entry__time">3 hours ago</span>
+              </div>
+              <div class="activity-entry__content activity-entry__content--system">
+                changed status from <strong>Open</strong> to <strong>In Progress</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Activity 3: Link added -->
+          <div class="activity-entry">
+            <div class="activity-entry__avatar">
+              <div class="arcade-avatar arcade-avatar--M arcade-avatar--5">MK</div>
+            </div>
+            <div class="activity-entry__body">
+              <div class="activity-entry__header">
+                <span class="activity-entry__name">Maya Kumar</span>
+                <span class="activity-entry__time">5 hours ago</span>
+              </div>
+              <div class="activity-entry__content activity-entry__content--system">
+                linked ticket <a href="#">TKT-892</a> &mdash; "Acme Corp reports missing webhook events"
+              </div>
+            </div>
+          </div>
+
+          <!-- Activity 4: Comment / report -->
+          <div class="activity-entry">
+            <div class="activity-entry__avatar">
+              <div class="arcade-avatar arcade-avatar--M arcade-avatar--1">RG</div>
+            </div>
+            <div class="activity-entry__body">
+              <div class="activity-entry__header">
+                <span class="activity-entry__name">Ravi Gupta</span>
+                <span class="activity-entry__time">Mar 10, 2026</span>
+              </div>
+              <div class="activity-entry__content">
+                <div class="activity-entry__comment">
+                  Flagged by Acme Corp during their integration audit. They noticed a gap
+                  in events received vs. events expected over the past 48 hours. Confirmed
+                  on our side that ~12% of their webhook payloads exceeded the threshold.
+                  Raising priority to P1.
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Tab: Linked items (hidden) -->
+      <div class="tab-content" id="tab-linked">
+        <div class="tab-placeholder">
+          <p>2 linked items would appear here.</p>
+        </div>
+      </div>
+
+      <!-- Tab: History (hidden) -->
+      <div class="tab-content" id="tab-history">
+        <div class="tab-placeholder">
+          <p>Change history would appear here.</p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── Right Column: Metadata Panel ── -->
+    <div class="right-column">
+
+      <span class="meta-section-title">Details</span>
+
+      <div class="field-rows">
+
+        <!-- Status -->
+        <div class="field-row">
+          <span class="field-row__label">Status</span>
+          <span class="field-row__value">
+            <span class="arcade-badge arcade-badge--info">In Progress</span>
+          </span>
+        </div>
+
+        <!-- Priority -->
+        <div class="field-row">
+          <span class="field-row__label">Priority</span>
+          <span class="field-row__value">
+            <span class="arcade-badge arcade-badge--warning">P1</span>
+          </span>
+        </div>
+
+        <!-- Owner -->
+        <div class="field-row">
+          <span class="field-row__label">Owner</span>
+          <span class="field-row__value">
+            <span class="owner-display">
+              <span class="arcade-avatar arcade-avatar--S arcade-avatar--3">SC</span>
+              <span>Sam Chen</span>
+            </span>
+          </span>
+        </div>
+
+        <!-- Part -->
+        <div class="field-row">
+          <span class="field-row__label">Part</span>
+          <span class="field-row__value">Backend Services</span>
+        </div>
+
+        <!-- Sprint -->
+        <div class="field-row">
+          <span class="field-row__label">Sprint</span>
+          <span class="field-row__value">Sprint 24-W11</span>
+        </div>
+
+        <hr class="arcade-divider arcade-divider--subtle meta-divider">
+
+        <!-- Created -->
+        <div class="field-row">
+          <span class="field-row__label">Created</span>
+          <span class="field-row__value field-row__value--secondary">Mar 10, 2026</span>
+        </div>
+
+        <!-- Updated -->
+        <div class="field-row">
+          <span class="field-row__label">Updated</span>
+          <span class="field-row__value field-row__value--secondary">2 hours ago</span>
+        </div>
+
+        <!-- Target close -->
+        <div class="field-row">
+          <span class="field-row__label">Target close</span>
+          <span class="field-row__value field-row__value--secondary">Mar 21, 2026</span>
+        </div>
+
+        <hr class="arcade-divider arcade-divider--subtle meta-divider">
+
+        <!-- Tags -->
+        <div class="field-row">
+          <span class="field-row__label">Tags</span>
+          <span class="field-row__value">
+            <span class="tags-row">
+              <span class="arcade-badge arcade-badge--attr-1">webhook</span>
+              <span class="arcade-badge arcade-badge--attr-4">reliability</span>
+              <span class="arcade-badge arcade-badge--attr-5">customer-reported</span>
+            </span>
+          </span>
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     INTERACTIVITY
+     ════════════════════════════════════════════════════════ -->
+<script>
+(function() {
+  'use strict';
+
+  // ── Tab switching ──
+  var tabs = document.querySelectorAll('.arcade-tab[data-tab]');
+  var tabContents = document.querySelectorAll('.tab-content');
+
+  tabs.forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      var targetId = 'tab-' + tab.getAttribute('data-tab');
+
+      // Update active tab
+      tabs.forEach(function(t) { t.classList.remove('arcade-tab--active'); });
+      tab.classList.add('arcade-tab--active');
+
+      // Show corresponding content
+      tabContents.forEach(function(content) {
+        if (content.id === targetId) {
+          content.classList.add('tab-content--active');
+        } else {
+          content.classList.remove('tab-content--active');
+        }
+      });
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

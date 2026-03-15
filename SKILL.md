@@ -72,6 +72,47 @@ Use when a designer asks you to:
 
 Every prototype is a **single HTML file** that includes the token CSS and component CSS inline. The file opens directly in any browser.
 
+## Templates
+
+Pre-built, production-quality templates are available in the `templates/` directory. **Use these as starting points instead of building from scratch** — they follow real DevRev designs and include correct spacing, icons, interactions, and token usage.
+
+| Template | File | Use when |
+|----------|------|----------|
+| **Chat** | `templates/chat.html` | AI chat interfaces, Computer UI, conversational flows, agent interactions |
+| **List** | `templates/list.html` | Data tables, item lists, dashboards with rows |
+| **Detail** | `templates/detail.html` | Object detail views, profiles, settings panels |
+
+### When to use which template
+
+- **User mentions "Computer", "chat", "conversation", "agent", "AI assistant", or "messaging"** → Start from `templates/chat.html`. This is the Computer / Agent Studio chat interface with sidebar, message bubbles, thinking state, progressive blur input, and purple focus glow.
+- **User mentions "list", "table", "dashboard", "items", or "overview"** → Start from `templates/list.html`.
+- **User mentions "detail", "profile", "settings", "object view", or "single item"** → Start from `templates/detail.html`.
+
+### How to use templates
+
+Templates use `/* {{FONTS}} */`, `/* {{TOKENS}} */`, `/* {{TYPOGRAPHY}} */`, `/* {{COMPONENTS}} */` placeholders in their `<style>` tag. To produce a working prototype:
+
+1. Read the template file from `templates/`
+2. Read each CSS file (`chip-fonts.css`, theme tokens, `typography-spacing.css`, `arcade-components.css`)
+3. Replace each placeholder with the corresponding CSS file contents
+4. Save the hydrated file to the user's Desktop
+
+```python
+# Hydration — replace placeholders with real CSS
+replacements = {
+    '/* {{FONTS}} */': 'chip-fonts.css',
+    '/* {{TOKENS}} */': 'arcade-tokens.css',       # or devrev-app-tokens.css
+    '/* {{TYPOGRAPHY}} */': 'typography-spacing.css',
+    '/* {{COMPONENTS}} */': 'arcade-components.css',
+}
+for placeholder, css_file in replacements.items():
+    html = html.replace(placeholder, read(css_file))
+```
+
+### Customizing templates
+
+After hydrating, modify the HTML to match the user's specific needs — change text, add/remove sections, adjust layout. The templates are starting points, not rigid structures.
+
 ## Themes
 
 DevRev has two active themes. Ask the user which one to use if unclear.
@@ -92,6 +133,9 @@ Both themes share the same `arcade-components.css` — component classes referen
 | `typography-spacing.css` | Typography utility classes (25 text styles) + phi-ratio spacing system. Extracted from monorepo. |
 | `arcade-components.css` | Ready-made component classes — works with both themes. References real token names. |
 | `chip-fonts.css` | Chip font family — base64-embedded `@font-face` declarations (fully self-contained) |
+| `templates/chat.html` | Computer-style AI chat interface — sidebar, messages, thinking state, progressive blur, focus glow |
+| `templates/list.html` | Data list / table view with filters and actions |
+| `templates/detail.html` | Object detail / settings panel layout |
 | `SKILL.md` | This file — instructions for Computer |
 
 **Token provenance**: `arcade-tokens.css` and `devrev-app-tokens.css` are verbatim extractions from the DevRev product monorepo (`devrev-web/libs/design-system/shared/themes/`). They are NOT approximations — they are the real production tokens.

@@ -1,0 +1,568 @@
+<!--
+  Template: List / Table View
+  Theme: DevRev App (System of Record)
+
+  A classic SoR list page with:
+  - Sidebar navigation with nav items and filter shortcuts
+  - Header bar with page title, search, and primary action
+  - Filter chip toolbar for quick status filtering
+  - Data table with checkboxes, IDs, status/priority badges, avatars
+  - Pagination controls
+
+  To use: Replace {{FONTS}}, {{TOKENS}}, {{TYPOGRAPHY}}, {{COMPONENTS}}
+  placeholders with the contents of the corresponding CSS files.
+-->
+<!DOCTYPE html>
+<html lang="en" data-theme="devrev-app" class="light" data-device="web">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Issues — DevRev</title>
+  <style>
+/* {{FONTS}} */
+/* {{TOKENS}} */
+/* {{TYPOGRAPHY}} */
+/* {{COMPONENTS}} */
+
+/* ── Reset ── */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-text), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-variation-settings: 'wght' 440;
+  -webkit-font-smoothing: antialiased;
+  background: hsl(var(--bg-layer-00));
+  color: hsl(var(--text-color-primary));
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── App Shell ── */
+.app-shell {
+  display: flex;
+  height: 100vh;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 240px;
+  flex-shrink: 0;
+}
+
+/* ── Main Content ── */
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: hsl(var(--bg-layer-01));
+}
+
+/* ── Header Bar ── */
+.header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-global-sm) var(--spacing-global-lg);
+  border-bottom: 1px solid hsl(var(--border-outline-01));
+  background: hsl(var(--bg-layer-01));
+  flex-shrink: 0;
+}
+
+.header-bar__title {
+  font-size: var(--fontSize-title-3);
+  font-variation-settings: 'wght' 660;
+  letter-spacing: var(--tracking-title-3);
+  color: hsl(var(--text-color-primary));
+}
+
+.header-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-global-xs);
+}
+
+.header-bar__search {
+  width: 240px;
+}
+
+/* ── Toolbar / Filter Row ── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-global-xs) var(--spacing-global-lg);
+  border-bottom: 1px solid hsl(var(--border-outline-00));
+  background: hsl(var(--bg-layer-01));
+  flex-shrink: 0;
+}
+
+.filter-chips {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-global-4xs);
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--spacing-dynamic-5xs) var(--spacing-dynamic-xs);
+  border-radius: 9999px;
+  font-family: var(--font-text);
+  font-size: var(--fontSize-system-small);
+  font-variation-settings: 'wght' 540;
+  letter-spacing: var(--tracking-system-small);
+  color: hsl(var(--text-color-secondary));
+  background: transparent;
+  border: 1px solid hsl(var(--border-outline-01));
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.filter-chip:hover {
+  background: hsl(var(--bg-interactive-tertiary-hovered));
+  border-color: hsl(var(--border-outline-02));
+}
+
+.filter-chip--active {
+  color: hsl(var(--text-interactive-primary-resting));
+  background: hsla(var(--bg-interactive-primary-resting) / 0.1);
+  border-color: hsl(var(--border-interactive-primary-resting));
+}
+
+.sort-control {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-global-4xs);
+  font-size: var(--fontSize-system-small);
+  color: hsl(var(--text-color-secondary));
+  cursor: pointer;
+  padding: var(--spacing-dynamic-5xs) var(--spacing-dynamic-xs);
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+
+.sort-control:hover {
+  background: hsl(var(--bg-interactive-tertiary-hovered));
+}
+
+/* ── Table Container ── */
+.table-container {
+  flex: 1;
+  overflow: auto;
+  padding: 0 var(--spacing-global-lg);
+}
+
+/* Table tweaks beyond the component class */
+.arcade-table th.col-checkbox,
+.arcade-table td.col-checkbox {
+  width: 40px;
+  text-align: center;
+}
+
+.arcade-table th.col-id,
+.arcade-table td.col-id {
+  width: 100px;
+  font-variation-settings: 'wght' 540;
+}
+
+.arcade-table td.col-id {
+  color: hsl(var(--text-interactive-primary-resting));
+  cursor: pointer;
+}
+
+.arcade-table td.col-id:hover {
+  text-decoration: underline;
+}
+
+.arcade-table td.col-title {
+  font-variation-settings: 'wght' 440;
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.arcade-table td.col-status,
+.arcade-table td.col-priority {
+  width: 120px;
+}
+
+.arcade-table td.col-owner {
+  width: 160px;
+}
+
+.arcade-table td.col-updated {
+  width: 110px;
+  color: hsl(var(--text-color-tertiary));
+  font-size: var(--fontSize-system-small);
+}
+
+/* Owner cell layout */
+.owner-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-global-4xs);
+}
+
+.owner-cell__name {
+  font-size: var(--fontSize-system-small);
+  color: hsl(var(--text-color-primary));
+  white-space: nowrap;
+}
+
+/* ── Pagination ── */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-global-sm) var(--spacing-global-lg);
+  border-top: 1px solid hsl(var(--border-outline-01));
+  background: hsl(var(--bg-layer-01));
+  flex-shrink: 0;
+}
+
+.pagination__info {
+  font-size: var(--fontSize-system-small);
+  color: hsl(var(--text-color-tertiary));
+  letter-spacing: var(--tracking-system-small);
+}
+
+.pagination__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-global-xs);
+}
+
+/* ── Sidebar section spacing ── */
+.sidebar__nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-global-5xs);
+}
+  </style>
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- ════════════════════════════════════════════════════════
+       SIDEBAR
+       ════════════════════════════════════════════════════════ -->
+  <aside class="arcade-sidebar sidebar">
+    <span class="arcade-sidebar__section-title">Navigation</span>
+    <div class="sidebar__nav-group">
+      <button class="arcade-menu-item" data-nav="dashboard">
+        <span>Dashboard</span>
+      </button>
+      <button class="arcade-menu-item arcade-menu-item--selected" data-nav="issues">
+        <span>Issues</span>
+      </button>
+      <button class="arcade-menu-item" data-nav="tickets">
+        <span>Tickets</span>
+      </button>
+      <button class="arcade-menu-item" data-nav="conversations">
+        <span>Conversations</span>
+      </button>
+      <button class="arcade-menu-item" data-nav="enhancements">
+        <span>Enhancements</span>
+      </button>
+      <button class="arcade-menu-item" data-nav="settings">
+        <span>Settings</span>
+      </button>
+    </div>
+
+    <hr class="arcade-divider">
+
+    <span class="arcade-sidebar__section-title">Filters</span>
+    <div class="sidebar__nav-group">
+      <button class="arcade-menu-item" data-filter="my-issues">
+        <span>My issues</span>
+      </button>
+      <button class="arcade-menu-item" data-filter="unresolved">
+        <span>Unresolved</span>
+      </button>
+      <button class="arcade-menu-item" data-filter="high-priority">
+        <span>High priority</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ════════════════════════════════════════════════════════
+       MAIN CONTENT
+       ════════════════════════════════════════════════════════ -->
+  <main class="main-content">
+
+    <!-- Header Bar -->
+    <header class="header-bar">
+      <h1 class="header-bar__title">Issues</h1>
+      <div class="header-bar__actions">
+        <input
+          type="text"
+          class="arcade-input header-bar__search"
+          placeholder="Search issues..."
+        >
+        <button class="arcade-btn arcade-btn--primary arcade-btn--S">
+          Create issue
+        </button>
+      </div>
+    </header>
+
+    <!-- Filter Toolbar -->
+    <div class="toolbar">
+      <div class="filter-chips">
+        <button class="filter-chip filter-chip--active" data-status="all">All</button>
+        <button class="filter-chip" data-status="open">Open</button>
+        <button class="filter-chip" data-status="in_progress">In progress</button>
+        <button class="filter-chip" data-status="closed">Closed</button>
+      </div>
+      <div class="sort-control">
+        <span>Sort: Updated</span>
+        <span style="font-size: 10px;">&#9660;</span>
+      </div>
+    </div>
+
+    <!-- Data Table -->
+    <div class="table-container">
+      <table class="arcade-table">
+        <thead>
+          <tr>
+            <th class="col-checkbox">
+              <div class="arcade-checkbox" id="select-all"></div>
+            </th>
+            <th class="col-id">ID</th>
+            <th>Title</th>
+            <th class="col-status">Status</th>
+            <th class="col-priority">Priority</th>
+            <th class="col-owner">Owner</th>
+            <th class="col-updated">Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Row 1 -->
+          <tr>
+            <td class="col-checkbox"><div class="arcade-checkbox"></div></td>
+            <td class="col-id">ISS-1847</td>
+            <td class="col-title">API rate limiting not enforced on batch endpoints</td>
+            <td class="col-status"><span class="arcade-badge arcade-badge--default">Open</span></td>
+            <td class="col-priority"><span class="arcade-badge arcade-badge--alert">P0</span></td>
+            <td class="col-owner">
+              <div class="owner-cell">
+                <div class="arcade-avatar arcade-avatar--S arcade-avatar--1">MK</div>
+                <span class="owner-cell__name">Maya Kumar</span>
+              </div>
+            </td>
+            <td class="col-updated">2h ago</td>
+          </tr>
+          <!-- Row 2 -->
+          <tr>
+            <td class="col-checkbox"><div class="arcade-checkbox"></div></td>
+            <td class="col-id">ISS-1842</td>
+            <td class="col-title">Webhook delivery fails silently when payload exceeds 256KB</td>
+            <td class="col-status"><span class="arcade-badge arcade-badge--info">In Progress</span></td>
+            <td class="col-priority"><span class="arcade-badge arcade-badge--alert">P0</span></td>
+            <td class="col-owner">
+              <div class="owner-cell">
+                <div class="arcade-avatar arcade-avatar--S arcade-avatar--3">JC</div>
+                <span class="owner-cell__name">James Chen</span>
+              </div>
+            </td>
+            <td class="col-updated">4h ago</td>
+          </tr>
+          <!-- Row 3 -->
+          <tr>
+            <td class="col-checkbox"><div class="arcade-checkbox"></div></td>
+            <td class="col-id">ISS-1838</td>
+            <td class="col-title">Dashboard widget fails to render when date range spans DST transition</td>
+            <td class="col-status"><span class="arcade-badge arcade-badge--default">Open</span></td>
+            <td class="col-priority"><span class="arcade-badge arcade-badge--warning">P1</span></td>
+            <td class="col-owner">
+              <div class="owner-cell">
+                <div class="arcade-avatar arcade-avatar--S arcade-avatar--5">SP</div>
+                <span class="owner-cell__name">Sara Patel</span>
+              </div>
+            </td>
+            <td class="col-updated">5h ago</td>
+          </tr>
+          <!-- Row 4 -->
+          <tr>
+            <td class="col-checkbox"><div class="arcade-checkbox"></div></td>
+            <td class="col-id">ISS-1835</td>
+            <td class="col-title">Custom field values lost during bulk ticket migration</td>
+            <td class="col-status"><span class="arcade-badge arcade-badge--info">In Progress</span></td>
+            <td class="col-priority"><span class="arcade-badge arcade-badge--warning">P1</span></td>
+            <td class="col-owner">
+              <div class="owner-cell">
+                <div class="arcade-avatar arcade-avatar--S arcade-avatar--2">AL</div>
+                <span class="owner-cell__name">Alex Liu</span>
+              </div>
+            </td>
+            <td class="col-updated">yesterday</td>
+          </tr>
+          <!-- Row 5 -->
+          <tr>
+            <td class="col-checkbox"><div class="arcade-checkbox"></div></td>
+            <td class="col-id">ISS-1831</td>
+            <td class="col-title">Search indexing delay exceeds SLA for large account imports</td>
+            <td class="col-status"><span class="arcade-badge arcade-badge--info">In Progress</span></td>
+            <td class="col-priority"><span class="arcade-badge arcade-badge--default">P2</span></td>
+            <td class="col-owner">
+              <div class="owner-cell">
+                <div class="arcade-avatar arcade-avatar--S arcade-avatar--4">RG</div>
+                <span class="owner-cell__name">Ravi Gupta</span>
+              </div>
+            </td>
+            <td class="col-updated">yesterday</td>
+          </tr>
+          <!-- Row 6 -->
+          <tr>
+            <td class="col-checkbox"><div class="arcade-checkbox"></div></td>
+            <td class="col-id">ISS-1827</td>
+            <td class="col-title">OAuth token refresh race condition in concurrent sessions</td>
+            <td class="col-status"><span class="arcade-badge arcade-badge--default">Open</span></td>
+            <td class="col-priority"><span class="arcade-badge arcade-badge--default">P2</span></td>
+            <td class="col-owner">
+              <div class="owner-cell">
+                <div class="arcade-avatar arcade-avatar--S arcade-avatar--6">NN</div>
+                <span class="owner-cell__name">Nina Novak</span>
+              </div>
+            </td>
+            <td class="col-updated">2 days ago</td>
+          </tr>
+          <!-- Row 7 -->
+          <tr>
+            <td class="col-checkbox"><div class="arcade-checkbox"></div></td>
+            <td class="col-id">ISS-1823</td>
+            <td class="col-title">Snap-in execution timeout not configurable per workspace</td>
+            <td class="col-status"><span class="arcade-badge arcade-badge--success">Closed</span></td>
+            <td class="col-priority"><span class="arcade-badge arcade-badge--warning">P1</span></td>
+            <td class="col-owner">
+              <div class="owner-cell">
+                <div class="arcade-avatar arcade-avatar--S arcade-avatar--7">DW</div>
+                <span class="owner-cell__name">Derek Walsh</span>
+              </div>
+            </td>
+            <td class="col-updated">3 days ago</td>
+          </tr>
+          <!-- Row 8 -->
+          <tr>
+            <td class="col-checkbox"><div class="arcade-checkbox"></div></td>
+            <td class="col-id">ISS-1819</td>
+            <td class="col-title">Email notification templates ignore workspace-level branding</td>
+            <td class="col-status"><span class="arcade-badge arcade-badge--success">Closed</span></td>
+            <td class="col-priority"><span class="arcade-badge arcade-badge--default">P3</span></td>
+            <td class="col-owner">
+              <div class="owner-cell">
+                <div class="arcade-avatar arcade-avatar--S arcade-avatar--8">TM</div>
+                <span class="owner-cell__name">Tara Miller</span>
+              </div>
+            </td>
+            <td class="col-updated">3 days ago</td>
+          </tr>
+          <!-- Row 9 -->
+          <tr>
+            <td class="col-checkbox"><div class="arcade-checkbox"></div></td>
+            <td class="col-id">ISS-1814</td>
+            <td class="col-title">Vista column sort order resets after page navigation</td>
+            <td class="col-status"><span class="arcade-badge arcade-badge--default">Open</span></td>
+            <td class="col-priority"><span class="arcade-badge arcade-badge--default">P3</span></td>
+            <td class="col-owner">
+              <div class="owner-cell">
+                <div class="arcade-avatar arcade-avatar--S arcade-avatar--2">KR</div>
+                <span class="owner-cell__name">Kira Rao</span>
+              </div>
+            </td>
+            <td class="col-updated">5 days ago</td>
+          </tr>
+          <!-- Row 10 -->
+          <tr>
+            <td class="col-checkbox"><div class="arcade-checkbox"></div></td>
+            <td class="col-id">ISS-1810</td>
+            <td class="col-title">Audit log missing entries for bulk permission changes</td>
+            <td class="col-status"><span class="arcade-badge arcade-badge--success">Closed</span></td>
+            <td class="col-priority"><span class="arcade-badge arcade-badge--default">P2</span></td>
+            <td class="col-owner">
+              <div class="owner-cell">
+                <div class="arcade-avatar arcade-avatar--S arcade-avatar--1">MK</div>
+                <span class="owner-cell__name">Maya Kumar</span>
+              </div>
+            </td>
+            <td class="col-updated">1 week ago</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination">
+      <span class="pagination__info">Showing 1&ndash;10 of 142</span>
+      <div class="pagination__controls">
+        <button class="arcade-btn arcade-btn--secondary arcade-btn--S" disabled>Previous</button>
+        <button class="arcade-btn arcade-btn--secondary arcade-btn--S">Next</button>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     INTERACTIVITY
+     ════════════════════════════════════════════════════════ -->
+<script>
+(function() {
+  'use strict';
+
+  // ── Filter chips ──
+  const filterChips = document.querySelectorAll('.filter-chip');
+  filterChips.forEach(function(chip) {
+    chip.addEventListener('click', function() {
+      filterChips.forEach(function(c) { c.classList.remove('filter-chip--active'); });
+      chip.classList.add('filter-chip--active');
+    });
+  });
+
+  // ── Sidebar nav items ──
+  const navItems = document.querySelectorAll('.arcade-menu-item[data-nav]');
+  navItems.forEach(function(item) {
+    item.addEventListener('click', function() {
+      navItems.forEach(function(n) { n.classList.remove('arcade-menu-item--selected'); });
+      item.classList.add('arcade-menu-item--selected');
+    });
+  });
+
+  // ── Sidebar filter items ──
+  const filterItems = document.querySelectorAll('.arcade-menu-item[data-filter]');
+  filterItems.forEach(function(item) {
+    item.addEventListener('click', function() {
+      filterItems.forEach(function(f) { f.classList.remove('arcade-menu-item--selected'); });
+      item.classList.add('arcade-menu-item--selected');
+    });
+  });
+
+  // ── Checkbox toggling ──
+  document.querySelectorAll('.arcade-checkbox').forEach(function(cb) {
+    cb.addEventListener('click', function() {
+      cb.classList.toggle('arcade-checkbox--checked');
+
+      // Select-all logic
+      if (cb.id === 'select-all') {
+        var checked = cb.classList.contains('arcade-checkbox--checked');
+        document.querySelectorAll('tbody .arcade-checkbox').forEach(function(rowCb) {
+          if (checked) {
+            rowCb.classList.add('arcade-checkbox--checked');
+          } else {
+            rowCb.classList.remove('arcade-checkbox--checked');
+          }
+        });
+      }
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

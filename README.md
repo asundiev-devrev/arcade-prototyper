@@ -14,6 +14,18 @@ When a user asks to prototype a screen, layout, component, or flow, the agent re
 
 Everything the agent needs is in `SKILL.md`. This README covers the essentials to get started quickly.
 
+## Templates
+
+Pre-built templates for common DevRev UI patterns. Use these as starting points — they're built from real Figma designs with correct tokens, spacing, and interactions.
+
+| Template | Description |
+|----------|-------------|
+| `templates/chat.html` | **Computer / Agent Studio chat** — sidebar with navigation, message bubbles, AI thinking state, progressive backdrop blur on input, purple focus glow. Use when prototyping anything related to Computer, chat, agents, or conversational UI. |
+| `templates/list.html` | **List / table view** — data rows with filters and actions. Use for dashboards, item overviews, ticket lists. |
+| `templates/detail.html` | **Detail / settings panel** — object detail view with sections. Use for profiles, settings, single-item views. |
+
+Templates use `/* {{FONTS}} */`, `/* {{TOKENS}} */`, `/* {{TYPOGRAPHY}} */`, `/* {{COMPONENTS}} */` placeholders. The agent reads each CSS file and replaces the placeholder to produce a self-contained HTML file.
+
 ## Quick start
 
 ### 1. Pick a theme
@@ -117,14 +129,17 @@ Users of this skill are **designers, not engineers**. The agent must:
 
 | File | Size | Contents |
 |------|------|----------|
-| `SKILL.md` | 26 KB | Complete agent instructions — themes, components, tokens, Figma, layout patterns |
+| `SKILL.md` | 28 KB | Complete agent instructions — themes, templates, components, tokens, Figma, layout patterns |
 | `arcade-tokens.css` | 26 KB | Arcade theme tokens (verbatim from production monorepo) |
 | `devrev-app-tokens.css` | 38 KB | DevRev App theme tokens (verbatim from production monorepo) |
 | `typography-spacing.css` | 14 KB | 25 text utility classes + phi-ratio spacing system |
 | `arcade-components.css` | 22 KB | Component patterns — buttons, inputs, cards, tables, dialogs, etc. |
 | `chip-fonts.css` | 325 KB | Base64-embedded Chip Text, Display, and Mono fonts |
+| `templates/chat.html` | 8 KB | Computer-style AI chat interface (template) |
+| `templates/list.html` | 5 KB | Data list / table view (template) |
+| `templates/detail.html` | 5 KB | Object detail / settings panel (template) |
 
-Total skill size: ~450 KB. All CSS is embedded inline — prototypes have zero external dependencies.
+Total skill size: ~470 KB. All CSS is embedded inline — prototypes have zero external dependencies.
 
 ## Figma integration
 

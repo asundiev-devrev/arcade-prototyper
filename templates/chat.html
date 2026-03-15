@@ -1,0 +1,893 @@
+<!--
+  Template: Chat / Conversation
+  Theme: Arcade (Computer / Agent Studio)
+
+  A Computer-style AI chat interface with:
+  - Collapsible sidebar with teams, chats, and navigation
+  - macOS-style window chrome
+  - Chat area with user bubbles and AI responses
+  - Thinking pill for AI processing state
+  - Input bar with cursor animation
+
+  To use: Replace {{FONTS}}, {{TOKENS}}, {{TYPOGRAPHY}}, {{COMPONENTS}}
+  placeholders with the contents of the corresponding CSS files.
+-->
+<!DOCTYPE html>
+<html lang="en" data-theme="arcade" class="light" data-device="web">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat — Computer</title>
+  <style>
+/* {{FONTS}} */
+/* {{TOKENS}} */
+/* {{TYPOGRAPHY}} */
+/* {{COMPONENTS}} */
+
+body {
+  font-family: 'Chip Text Variable', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-variation-settings: 'wght' 440;
+  -webkit-font-smoothing: antialiased;
+  background: hsl(var(--bg-layer-00));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+/* ── App Shell ── */
+.app {
+  width: 870px;
+  height: 870px;
+  background: hsl(var(--day));
+  border-radius: 10px;
+  display: flex;
+  overflow: hidden;
+  box-shadow: var(--shadow-depth-04);
+  position: relative;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 240px;
+  height: 100%;
+  background: linear-gradient(180deg, hsl(var(--bg-layer-02)) 0%, hsl(var(--bg-layer-00)) 100%);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  position: relative;
+  opacity: 0.9;
+}
+
+.sidebar::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 1px;
+  height: 100%;
+  background: hsla(var(--night) / 0.06);
+  pointer-events: none;
+  z-index: 1;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.04);
+}
+
+/* ── Sidebar: Titlebar ── */
+.sidebar-titlebar {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.window-controls {
+  display: flex;
+  gap: 9px;
+  padding: 0 8px;
+  align-items: center;
+}
+
+.window-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+.window-dot--close { background: #FF5F57; }
+.window-dot--minimize { background: #FEBC2E; }
+.window-dot--maximize { background: #28C840; }
+
+.titlebar-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: hsl(var(--text-color-primary));
+}
+.titlebar-btn:hover { background: hsla(var(--night) / 0.06); }
+
+/* ── Sidebar: Header (New Chat) ── */
+.sidebar-header {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.btn-new-chat {
+  height: 40px;
+  flex: 1;
+  background: hsl(var(--night));
+  color: hsl(var(--day));
+  border: none;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 15px;
+  font-variation-settings: 'wght' 440;
+  padding: 0 16px;
+  transition: background 0.15s;
+}
+.btn-new-chat:hover { background: hsl(var(--husk-1100)); }
+.btn-new-chat svg { flex-shrink: 0; }
+
+.btn-history {
+  width: 40px;
+  height: 40px;
+  background: hsla(var(--night) / 0.06);
+  border: none;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: hsl(var(--text-color-primary));
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.btn-history:hover { background: hsla(var(--night) / 0.1); }
+
+/* ── Sidebar: Sections ── */
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.section-label {
+  font-size: 11px;
+  font-variation-settings: 'wght' 440;
+  color: hsl(var(--text-color-primary));
+  opacity: 0.6;
+  padding: 4px 18px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+}
+
+.nav-item {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px;
+  border-radius: 6px;
+  margin: 1px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  font-variation-settings: 'wght' 440;
+  color: hsl(var(--night));
+  text-decoration: none;
+  transition: background 0.12s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nav-item:hover { background: hsla(var(--night) / 0.05); }
+.nav-item--selected { background: hsla(var(--night) / 0.07); }
+.nav-item--muted { color: hsl(var(--text-color-tertiary)); }
+
+/* Team avatar pills */
+.team-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  color: hsl(var(--night));
+  border: 0.5px solid hsla(var(--night) / 0.15);
+}
+
+/* User avatar */
+.user-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: hsl(var(--bg-layer-03));
+  overflow: hidden;
+  position: relative;
+}
+.user-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.nav-item-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.online-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: hsl(var(--night));
+  flex-shrink: 0;
+}
+
+/* ── Sidebar: Bottom Nav ── */
+.sidebar-bottom-nav {
+  flex-shrink: 0;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-bottom-nav .nav-item {
+  height: 32px;
+  padding: 0 6px;
+  margin: 0;
+}
+
+/* ── Sidebar: Footer ── */
+.sidebar-footer {
+  height: 60px;
+  display: flex;
+  align-items: center;
+  padding: 0 18px;
+  flex-shrink: 0;
+}
+
+.sidebar-footer-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: hsl(var(--bg-layer-03));
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sidebar-footer-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sidebar-footer-spacer { flex: 1; }
+
+.btn-notifications {
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: transparent;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: hsl(var(--text-color-primary));
+  transition: background 0.15s;
+}
+.btn-notifications:hover { background: hsla(var(--night) / 0.06); }
+
+/* ── Main Area ── */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: hsl(var(--day));
+  position: relative;
+}
+
+/* ── Main: Topbar ── */
+.topbar {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 10px;
+  flex-shrink: 0;
+  border-bottom: 1px solid hsl(var(--border-outline-00));
+}
+
+.topbar-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: hsl(var(--text-color-primary));
+}
+.topbar-btn:hover { background: hsla(var(--night) / 0.05); }
+
+.topbar-title {
+  flex: 1;
+  font-size: 13px;
+  font-variation-settings: 'wght' 440;
+  color: hsl(var(--text-color-primary));
+  text-align: center;
+}
+
+/* ── Main: Chat Content ── */
+.chat-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 24px 24px 24px;
+  position: relative;
+}
+
+/* User message bubble */
+.user-bubble {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.user-bubble-text {
+  background: hsl(var(--night));
+  color: hsl(var(--day));
+  padding: 10px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-variation-settings: 'wght' 540;
+  line-height: 20px;
+}
+
+/* AI response */
+.ai-response {
+  margin-bottom: 24px;
+}
+
+.thinking-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  position: relative;
+}
+
+.thinking-pill-bubble {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px 0 6px;
+  background: hsl(var(--day));
+  border: 1px solid #E5E4E5;
+  border-radius: 17px;
+  font-size: 11px;
+  font-variation-settings: 'wght' 440;
+  color: hsl(var(--text-color-tertiary));
+  position: relative;
+}
+
+.thinking-pill-tail {
+  position: absolute;
+  bottom: -4px;
+  left: 6px;
+  width: 11px;
+  height: 8px;
+}
+
+.thinking-pill-tail::before {
+  content: '';
+  position: absolute;
+  width: 11px;
+  height: 10px;
+  background: hsl(var(--day));
+  border-radius: 0 0 0 8px;
+  clip-path: polygon(100% 0, 0 0, 0 100%);
+}
+
+.ai-text {
+  font-size: 15px;
+  font-variation-settings: 'wght' 440;
+  color: hsl(var(--text-color-primary));
+  line-height: 1.55;
+  margin-bottom: 12px;
+}
+
+.ai-heading-large {
+  font-size: 33px;
+  font-variation-settings: 'wght' 660;
+  color: hsl(var(--text-color-primary));
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  margin-bottom: 16px;
+}
+
+.ai-heading-medium {
+  font-size: 27px;
+  font-variation-settings: 'wght' 660;
+  color: hsl(var(--text-color-primary));
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  margin-bottom: 12px;
+}
+
+.ai-list {
+  font-size: 15px;
+  font-variation-settings: 'wght' 440;
+  color: hsl(var(--night));
+  line-height: 1.55;
+  margin-bottom: 16px;
+  padding-left: 20px;
+}
+
+.ai-list li {
+  margin-bottom: 8px;
+}
+
+.ai-list li strong {
+  font-variation-settings: 'wght' 660;
+}
+
+/* Progressive blur — stacked layers with increasing blur + gradient masks */
+.progressive-blur {
+  position: absolute;
+  bottom: 0; /* covers input bar area too */
+  left: 0;
+  right: 0;
+  height: 120px; /* 48px blur zone + 72px input bar */
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Each blur layer covers the full area but is revealed only in its gradient band.
+   This creates a smooth progression from no blur (top) to heavy blur (bottom). */
+.progressive-blur-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.progressive-blur-layer:nth-child(1) {
+  backdrop-filter: blur(0.5px);
+  -webkit-backdrop-filter: blur(0.5px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,1) 12.5%, rgba(0,0,0,1) 25%, transparent 25%);
+  mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,1) 12.5%, rgba(0,0,0,1) 25%, transparent 25%);
+}
+
+.progressive-blur-layer:nth-child(2) {
+  backdrop-filter: blur(1px);
+  -webkit-backdrop-filter: blur(1px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 12.5%, rgba(0,0,0,1) 25%, rgba(0,0,0,1) 37.5%, transparent 37.5%);
+  mask-image: linear-gradient(to bottom, transparent 12.5%, rgba(0,0,0,1) 25%, rgba(0,0,0,1) 37.5%, transparent 37.5%);
+}
+
+.progressive-blur-layer:nth-child(3) {
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 25%, rgba(0,0,0,1) 37.5%, rgba(0,0,0,1) 50%, transparent 50%);
+  mask-image: linear-gradient(to bottom, transparent 25%, rgba(0,0,0,1) 37.5%, rgba(0,0,0,1) 50%, transparent 50%);
+}
+
+.progressive-blur-layer:nth-child(4) {
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 37.5%, rgba(0,0,0,1) 50%, rgba(0,0,0,1) 62.5%, transparent 62.5%);
+  mask-image: linear-gradient(to bottom, transparent 37.5%, rgba(0,0,0,1) 50%, rgba(0,0,0,1) 62.5%, transparent 62.5%);
+}
+
+.progressive-blur-layer:nth-child(5) {
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 50%, rgba(0,0,0,1) 62.5%, rgba(0,0,0,1) 75%, transparent 75%);
+  mask-image: linear-gradient(to bottom, transparent 50%, rgba(0,0,0,1) 62.5%, rgba(0,0,0,1) 75%, transparent 75%);
+}
+
+.progressive-blur-layer:nth-child(6) {
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 62.5%, rgba(0,0,0,1) 75%, rgba(0,0,0,1) 87.5%, transparent 87.5%);
+  mask-image: linear-gradient(to bottom, transparent 62.5%, rgba(0,0,0,1) 75%, rgba(0,0,0,1) 87.5%, transparent 87.5%);
+}
+
+.progressive-blur-layer:nth-child(7) {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 75%, rgba(0,0,0,1) 87.5%, rgba(0,0,0,1) 100%);
+  mask-image: linear-gradient(to bottom, transparent 75%, rgba(0,0,0,1) 87.5%, rgba(0,0,0,1) 100%);
+}
+
+/* Very subtle white fade — content stays visible */
+.progressive-blur-fade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, hsla(var(--day) / 0.15), transparent 60%);
+}
+
+/* ── Main: Input Bar ── */
+.input-bar {
+  height: 72px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 4px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+  /* No background fill — the progressive blur layer handles the visual separation */
+  border-top: 1px solid rgba(34, 34, 34, 0.08);
+}
+
+/* Purple glow on focus */
+.input-bar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(2deg, rgba(112, 35, 255, 0.12) 1.84%, rgba(191, 146, 255, 0.12) 17.22%, rgba(255, 255, 255, 0) 60%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+  z-index: -1;
+}
+.input-bar.focused::before {
+  opacity: 1;
+}
+
+.input-leading-icon {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: hsl(var(--text-color-primary));
+  flex-shrink: 0;
+}
+
+.input-field {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  position: relative;
+  padding: 0 4px;
+}
+
+.input-cursor {
+  width: 2px;
+  height: 26px;
+  background: #A46FFF;
+  border-radius: 8px;
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.input-placeholder {
+  font-size: 15px;
+  font-variation-settings: 'wght' 440;
+  color: hsl(var(--text-color-tertiary));
+  margin-left: 4px;
+}
+
+.btn-plus {
+  width: 40px;
+  height: 40px;
+  background: hsla(var(--night) / 0.06);
+  border: none;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: hsl(var(--text-color-primary));
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.btn-plus:hover { background: hsla(var(--night) / 0.1); }
+
+.btn-send {
+  width: 40px;
+  height: 40px;
+  background: #FFE000;
+  border: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+  outline: 2.857px solid #FFE000;
+  outline-offset: -2.857px;
+  box-shadow:
+    2px 2px 4px rgba(0, 0, 0, 0.12),
+    5px 6px 7px rgba(0, 0, 0, 0.05),
+    7px 8px 10px rgba(0, 0, 0, 0.04),
+    inset 1.5px 1.5px 2.5px 1px rgba(255, 255, 255, 0.20),
+    inset -0.4px -0.4px 1.5px 0px rgba(0, 0, 0, 0.30);
+  position: relative;
+  overflow: hidden;
+}
+/* Noise texture overlay */
+.btn-send::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 128px 128px;
+  opacity: 0.06;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+.btn-send:hover { background: #f0d400; outline-color: #f0d400; }
+
+/* ── Icon helpers ── */
+.icon-sm { width: 16px; height: 16px; }
+.icon-md { width: 20px; height: 20px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+
+    <!-- ═══ SIDEBAR ═══ -->
+    <div class="sidebar">
+
+      <!-- Titlebar -->
+      <div class="sidebar-titlebar">
+        <div class="window-controls">
+          <div class="window-dot window-dot--close"></div>
+          <div class="window-dot window-dot--minimize"></div>
+          <div class="window-dot window-dot--maximize"></div>
+        </div>
+        <button class="titlebar-btn" aria-label="Toggle sidebar">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><line x1="6" y1="2.5" x2="6" y2="13.5"/></svg>
+        </button>
+        <button class="titlebar-btn" aria-label="Search">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><line x1="10.5" y1="10.5" x2="13.5" y2="13.5"/></svg>
+        </button>
+      </div>
+
+      <!-- New Chat -->
+      <div class="sidebar-header">
+        <button class="btn-new-chat">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3a2 2 0 012-2h8a2 2 0 012 2v6a2 2 0 01-2 2H6l-3 2.5V11H4a2 2 0 01-2-2V3z"/><line x1="8" y1="4" x2="8" y2="8"/><line x1="6" y1="6" x2="10" y2="6"/></svg>
+          New chat
+        </button>
+        <button class="btn-history" aria-label="History">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="10" cy="10" r="7" stroke-dasharray="3 3"/><polyline points="10,6 10,10 13,12"/></svg>
+        </button>
+      </div>
+
+      <!-- Scrollable content -->
+      <div class="sidebar-content">
+
+        <!-- Teams -->
+        <div class="section-label">Teams</div>
+        <a class="nav-item">
+          <div class="team-avatar" style="background: #A0ED1A;">⚡</div>
+          <span class="nav-item-text">Design</span>
+        </a>
+        <a class="nav-item">
+          <div class="team-avatar" style="background: #3DF2B9;">⚡</div>
+          <span class="nav-item-text">Engineering</span>
+        </a>
+        <a class="nav-item">
+          <div class="team-avatar" style="background: #95DFFF;">▶</div>
+          <span class="nav-item-text">Product</span>
+        </a>
+        <a class="nav-item nav-item--muted">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="3" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="13" cy="8" r="1.5"/></svg>
+          <span class="nav-item-text">More</span>
+        </a>
+
+        <!-- Chats -->
+        <div class="section-label" style="margin-top: 4px;">Chats</div>
+        <a class="nav-item">
+          <div class="user-avatar"><img src="https://i.pravatar.cc/40?u=alex" alt=""></div>
+          <span class="nav-item-text">Alex, Sam, Jordan, Riley</span>
+          <span class="online-dot"></span>
+        </a>
+        <a class="nav-item">
+          <div class="user-avatar"><img src="https://i.pravatar.cc/40?u=sam" alt=""></div>
+          <span class="nav-item-text">Sam</span>
+          <span class="online-dot"></span>
+        </a>
+        <a class="nav-item">
+          <div class="user-avatar"><img src="https://i.pravatar.cc/40?u=jordan" alt=""></div>
+          <span class="nav-item-text">Jordan</span>
+          <span class="online-dot"></span>
+        </a>
+        <a class="nav-item">
+          <div class="user-avatar"><img src="https://i.pravatar.cc/40?u=riley" alt=""></div>
+          <span class="nav-item-text">Riley</span>
+          <span class="online-dot"></span>
+        </a>
+        <a class="nav-item">
+          <div class="user-avatar"><img src="https://i.pravatar.cc/40?u=morgan" alt=""></div>
+          <span class="nav-item-text">Morgan</span>
+          <span class="online-dot"></span>
+        </a>
+        <a class="nav-item">
+          <div class="user-avatar"><img src="https://i.pravatar.cc/40?u=casey" alt=""></div>
+          <span class="nav-item-text">Casey</span>
+        </a>
+        <a class="nav-item">
+          <div class="user-avatar"><img src="https://i.pravatar.cc/40?u=taylor" alt=""></div>
+          <span class="nav-item-text">Taylor</span>
+        </a>
+        <a class="nav-item nav-item--muted">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="3" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="13" cy="8" r="1.5"/></svg>
+          <span class="nav-item-text">More</span>
+        </a>
+      </div>
+
+      <!-- Bottom nav -->
+      <div class="sidebar-bottom-nav">
+        <a class="nav-item">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="2" y="4" width="16" height="12" rx="2"/><path d="M2 7h16"/><path d="M6 10h4"/></svg>
+          <span class="nav-item-text">Inbox</span>
+        </a>
+        <a class="nav-item">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="10" cy="10" r="7"/><circle cx="10" cy="10" r="2"/><path d="M10 3v2M10 15v2M3 10h2M15 10h2"/></svg>
+          <span class="nav-item-text">Agent Studio</span>
+        </a>
+        <a class="nav-item">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="5" cy="5" r="2"/><circle cx="15" cy="5" r="2"/><circle cx="5" cy="15" r="2"/><circle cx="15" cy="15" r="2"/><line x1="7" y1="5" x2="13" y2="5"/><line x1="5" y1="7" x2="5" y2="13"/></svg>
+          <span class="nav-item-text">Discover</span>
+        </a>
+      </div>
+
+      <!-- Footer -->
+      <div class="sidebar-footer">
+        <div class="sidebar-footer-avatar">
+          <img src="https://i.pravatar.cc/72?u=me" alt="">
+        </div>
+        <div class="sidebar-footer-spacer"></div>
+        <button class="btn-notifications" aria-label="Notifications">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M5 8a5 5 0 0 1 10 0c0 4 2 5.5 2 5.5H3S5 12 5 8z"/><path d="M8 15.5a2 2 0 0 0 4 0"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══ MAIN AREA ═══ -->
+    <div class="main">
+
+      <!-- Topbar -->
+      <div class="topbar">
+        <span class="topbar-title">Project status update</span>
+        <button class="topbar-btn" aria-label="New chat">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path d="M8.5 10.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7zm0-1.5a2 2 0 110-4 2 2 0 010 4zm-5.25 8.5c0-2.75 2.25-5 5.25-5 .83 0 1.62.18 2.33.52a.75.75 0 10.64-1.36A6.72 6.72 0 008.5 11c-3.58 0-6.75 2.83-6.75 6.5a.75.75 0 001.5 0zm12.25-3a.75.75 0 00-1.5 0v1.25H12.75a.75.75 0 000 1.5H14v1.25a.75.75 0 001.5 0v-1.25h1.25a.75.75 0 000-1.5H15.5V14.5z"/></svg>
+        </button>
+      </div>
+
+      <!-- Chat content -->
+      <div class="chat-content">
+
+        <!-- User bubble -->
+        <div class="user-bubble">
+          <div class="user-bubble-text">Summarize the key updates from this week</div>
+        </div>
+
+        <!-- AI response -->
+        <div class="ai-response">
+
+          <!-- Thinking pill -->
+          <div class="thinking-pill">
+            <svg class="computer-logo" width="18" height="18" viewBox="0 0 18 18" fill="hsl(var(--text-color-primary))">
+              <path d="M5.5 3C6.33 3 7 3.45 7 4v10c0 .55-.67 1-1.5 1S4 14.55 4 14V4c0-.55.67-1 1.5-1z"/>
+              <path d="M12.5 3c.83 0 1.5.45 1.5 1v10c0 .55-.67 1-1.5 1S11 14.55 11 14V4c0-.55.67-1 1.5-1z"/>
+            </svg>
+            <span class="thinking-pill-bubble">
+              Thought for 2s
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span class="thinking-pill-tail"></span>
+            </span>
+          </div>
+
+          <p class="ai-text">Here's a summary of the key project updates from this week:</p>
+
+          <h1 class="ai-heading-large">Weekly project update — 10 Mar to 14 Mar</h1>
+
+          <h2 class="ai-heading-medium">Progress highlights</h2>
+
+          <ul class="ai-list">
+            <li><strong>Design system rollout on track</strong> — The component library migration is 85% complete, with the remaining elements scheduled for next sprint. No blockers identified.</li>
+            <li><strong>API v2 integration complete</strong> — Backend team finished the new endpoints ahead of schedule. Load testing showed a 40% improvement in response times over v1.</li>
+            <li><strong>User onboarding flow shipped</strong> — The redesigned onboarding sequence went live on Wednesday. Early metrics show a 15% increase in activation rate.</li>
+            <li><strong>Mobile build stabilized</strong> — Crash rate dropped from 2.1% to 0.4% after the hotfix deployed on Monday. Monitoring continues through the weekend.</li>
+          </ul>
+
+          <h2 class="ai-heading-medium">Next steps</h2>
+
+          <p class="ai-text">The team will focus on completing the remaining design system components and begin QA for the next release cycle. A cross-team sync is scheduled for Monday to align on priorities for the upcoming sprint.</p>
+
+        </div>
+      </div>
+
+      <!-- Progressive blur — 7 stacked layers with increasing blur -->
+      <div class="progressive-blur">
+        <div class="progressive-blur-layer"></div>
+        <div class="progressive-blur-layer"></div>
+        <div class="progressive-blur-layer"></div>
+        <div class="progressive-blur-layer"></div>
+        <div class="progressive-blur-layer"></div>
+        <div class="progressive-blur-layer"></div>
+        <div class="progressive-blur-layer"></div>
+        <div class="progressive-blur-fade"></div>
+      </div>
+
+      <!-- Input bar -->
+      <div class="input-bar focused">
+        <div class="input-leading-icon">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="hsl(var(--night))">
+            <path d="M5.5 3C6.33 3 7 3.45 7 4v10c0 .55-.67 1-1.5 1S4 14.55 4 14V4c0-.55.67-1 1.5-1z"/>
+            <path d="M12.5 3c.83 0 1.5.45 1.5 1v10c0 .55-.67 1-1.5 1S11 14.55 11 14V4c0-.55.67-1 1.5-1z"/>
+          </svg>
+        </div>
+        <div class="input-field">
+          <div class="input-cursor"></div>
+          <span class="input-text" style="font-size: 15px; color: hsl(var(--night));">Tell me more about it</span>
+        </div>
+        <button class="btn-plus" aria-label="Add">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="10" y1="4" x2="10" y2="16"/><line x1="4" y1="10" x2="16" y2="10"/></svg>
+        </button>
+        <button class="btn-send" aria-label="Send">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M11.3397 4.49988H12.6597L17.9097 9.74988L16.5897 11.0699C15.4876 9.9127 14.4255 8.71548 13.4033 7.48645L12.7471 7.73065C12.8444 11.6538 12.9096 15.5768 12.9371 19.4998H11.0621C11.0895 15.5707 11.1548 11.6479 11.2578 7.71985L10.6022 7.47558C9.57845 8.70865 8.5115 9.9067 7.4096 11.0699L6.0896 9.74988L11.3397 4.49988Z" fill="#211E20"/></svg>
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Nav item hover selection
+    document.querySelectorAll('.nav-item').forEach(item => {
+      item.addEventListener('click', () => {
+        document.querySelectorAll('.nav-item--selected').forEach(el => el.classList.remove('nav-item--selected'));
+        item.classList.add('nav-item--selected');
+      });
+    });
+
+    // Input bar focus glow
+    const inputBar = document.querySelector('.input-bar');
+    const inputField = document.querySelector('.input-field');
+    if (inputBar && inputField) {
+      inputField.addEventListener('click', () => inputBar.classList.add('focused'));
+      document.addEventListener('click', (e) => {
+        if (!inputBar.contains(e.target)) inputBar.classList.remove('focused');
+      });
+    }
+  </script>
+</body>
+</html>
