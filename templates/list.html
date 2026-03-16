@@ -2,12 +2,17 @@
   Template: List / Table View
   Theme: DevRev App (System of Record)
 
-  A classic SoR list page with:
-  - Sidebar navigation with nav items and filter shortcuts
-  - Header bar with page title, search, and primary action
-  - Filter chip toolbar for quick status filtering
-  - Data table with checkboxes, IDs, status/priority badges, avatars
-  - Pagination controls
+  A DevRev Issues list page matched pixel-for-pixel against the
+  real running DevRev SoR app (March 2026). Reference data extracted
+  via Playwright CDP from a live browser session.
+
+  Layout:
+  - Left nav (256px) with avatar header, search, section groups
+  - Page header with title + count, toolbar icons, Save & + Issue buttons
+  - Filter pills row (split-button style)
+  - ag-grid-style data table (Items, Priority, Stage, Part, Owner)
+  - Bottom pagination bar
+  - "Ask me anything" bar in nav footer
 
   To use: Replace {{FONTS}}, {{TOKENS}}, {{TYPOGRAPHY}}, {{COMPONENTS}}
   placeholders with the contents of the corresponding CSS files.
@@ -32,13 +37,15 @@
 }
 
 body {
-  font-family: var(--font-text), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-text, 'Chip Text Variable'), -apple-system, system-ui, Inter, sans-serif;
   font-variation-settings: 'wght' 440;
   -webkit-font-smoothing: antialiased;
-  background: hsl(var(--bg-layer-00));
-  color: hsl(var(--text-color-primary));
+  background: hsl(var(--bg-layer-01, 0 0% 100%));
+  color: hsl(var(--text-color-primary, 228 10% 12%));
   height: 100vh;
   overflow: hidden;
+  font-size: 16px;
+  line-height: 24px;
 }
 
 /* ── App Shell ── */
@@ -47,451 +54,1135 @@ body {
   height: 100vh;
 }
 
-/* ── Sidebar ── */
-.sidebar {
-  width: 240px;
+/* ══════════════════════════════════════
+   LEFT NAV — 256px, no right border
+   Real: bg rgb(249,250,250), w=256
+   ══════════════════════════════════════ */
+.left-nav {
+  width: 256px;
+  height: 100%;
+  background: hsl(var(--bg-layer-00, 228 10% 98%));
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+/* Nav header — avatar + icons + plus */
+.nav-header {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  gap: 4px;
   flex-shrink: 0;
 }
 
-/* ── Main Content ── */
+.nav-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: hsl(var(--bg-layer-02, 228 10% 94%));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.nav-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: grayscale(1);
+}
+.nav-avatar-fallback {
+  font-size: 14px;
+  font-variation-settings: 'wght' 660;
+  color: hsl(var(--text-color-secondary, 228 10% 36%));
+}
+
+.nav-header-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: hsl(var(--text-color-secondary, 228 10% 36%));
+  transition: background 0.12s;
+  outline: 1px solid transparent;
+  -outline-offset: -1px;
+}
+.nav-header-btn:hover { background: hsla(var(--text-color-primary) / 0.04); }
+
+.nav-header-spacer { flex: 1; }
+
+.nav-header-btn--plus {
+  margin-left: auto;
+}
+
+/* Search bar — 240×40, border-radius 10, box-shadow */
+.nav-search {
+  margin: 4px 8px;
+  height: 40px;
+  background: hsl(var(--bg-layer-01, 0 0% 100%));
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  cursor: pointer;
+  transition: box-shadow 0.12s;
+  outline: 1px solid hsl(var(--border-outline-00, 228 10% 92%));
+  -outline-offset: -1px;
+  box-shadow: 0 1px 2px rgba(28, 29, 34, 0.05);
+}
+.nav-search:hover {
+  outline-color: hsl(var(--border-outline-01, 228 10% 88%));
+}
+
+.nav-search-icon {
+  width: 16px;
+  height: 16px;
+  color: hsl(var(--text-color-tertiary, 228 10% 48%));
+  flex-shrink: 0;
+}
+
+.nav-search-text {
+  font-size: 16px;
+  color: hsl(var(--text-color-tertiary, 228 10% 48%));
+  flex: 1;
+}
+
+.nav-search-shortcut {
+  font-size: 12px;
+  font-variation-settings: 'wght' 540;
+  color: hsl(var(--text-color-tertiary, 228 10% 48%));
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Nav scrollable body */
+.nav-body {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.nav-body::-webkit-scrollbar { display: none; }
+
+/* Nav sections */
+.nav-section {
+  display: flex;
+  flex-direction: column;
+}
+.nav-section + .nav-section {
+  border-top: 1px solid hsl(var(--border-outline-00, 228 10% 92%));
+  margin-top: 4px;
+  padding-top: 4px;
+}
+
+/* Section label — matches real app: not uppercase, colored text */
+.nav-section-label {
+  font-size: 12px;
+  font-variation-settings: 'wght' 440;
+  color: hsl(var(--text-color-tertiary, 228 10% 48%));
+  padding: 12px 16px 4px;
+  line-height: 16px;
+}
+
+.nav-section-items {
+  display: flex;
+  flex-direction: column;
+  padding: 0 8px;
+}
+
+/* Nav items — 240×32, border-radius 6, font-size 16, color #535665 */
+.nav-item {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: hsl(var(--text-color-secondary, 228 10% 36%));
+  font-size: 16px;
+  font-variation-settings: 'wght' 440;
+  line-height: 24px;
+  transition: background 0.1s;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-family: inherit;
+  width: 100%;
+  position: relative;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.nav-item:hover {
+  background: hsla(var(--text-color-primary) / 0.04);
+}
+
+/* Selected nav item — bg #343DEA, white text */
+.nav-item--selected {
+  background: hsl(var(--bg-interactive-primary-resting, 237 81% 56%));
+  color: hsl(var(--color-on-fill, 0 0% 100%));
+}
+.nav-item--selected:hover {
+  background: hsl(var(--bg-interactive-primary-hovered, 237 81% 50%));
+}
+.nav-item--selected .nav-item-icon { color: hsl(var(--color-on-fill, 0 0% 100%)); }
+
+.nav-item-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: hsl(var(--text-color-secondary, 228 10% 36%));
+  flex-shrink: 0;
+}
+
+.nav-item-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Notification badge (Updates count) — purple circle */
+.nav-item-badge {
+  min-width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  background: hsl(var(--bg-interactive-primary-resting, 237 81% 56%));
+  color: white;
+  font-size: 12px;
+  font-variation-settings: 'wght' 540;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  flex-shrink: 0;
+}
+
+/* Nav bottom bar — "Ask me anything" */
+.nav-bottom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 12px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.nav-bottom:hover { background: hsla(var(--text-color-primary) / 0.02); }
+
+.nav-bottom-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: hsl(var(--bg-interactive-primary-resting, 237 81% 56%));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.nav-bottom-icon svg { color: white; }
+
+.nav-bottom-text {
+  font-size: 16px;
+  color: hsl(var(--text-color-secondary, 228 10% 36%));
+  flex: 1;
+}
+
+/* "New" badge — pill, bg #4B53EC */
+.badge-new {
+  font-size: 11px;
+  font-variation-settings: 'wght' 540;
+  background: hsl(var(--bg-interactive-primary-resting, 237 81% 56%));
+  color: white;
+  border-radius: 9999px;
+  padding: 4px 6px;
+  line-height: 16px;
+}
+
+/* ══════════════════════════════════════
+   MAIN CONTENT
+   ══════════════════════════════════════ */
 .main-content {
   flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: hsl(var(--bg-layer-01));
+  background: hsl(var(--bg-layer-01, 0 0% 100%));
+  min-width: 0;
+  border-left: 1px solid hsl(var(--border-outline-00, 228 10% 92%));
 }
 
-/* ── Header Bar ── */
-.header-bar {
+/* ── Page header ── */
+.page-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-global-sm) var(--spacing-global-lg);
-  border-bottom: 1px solid hsl(var(--border-outline-01));
-  background: hsl(var(--bg-layer-01));
+  flex-direction: column;
   flex-shrink: 0;
 }
 
-.header-bar__title {
-  font-size: var(--fontSize-title-3);
+/* Title row */
+.title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  padding: 0 16px;
+}
+
+.title-left {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.page-title {
+  font-size: 20px;
   font-variation-settings: 'wght' 660;
-  letter-spacing: var(--tracking-title-3);
-  color: hsl(var(--text-color-primary));
+  color: hsl(var(--text-color-primary, 228 10% 12%));
+  line-height: 28px;
 }
 
-.header-bar__actions {
+.page-count {
+  font-size: 14px;
+  font-variation-settings: 'wght' 440;
+  color: hsl(var(--text-color-tertiary, 228 10% 48%));
+  line-height: 20px;
+}
+
+.title-right {
   display: flex;
   align-items: center;
-  gap: var(--spacing-global-xs);
+  gap: 4px;
 }
 
-.header-bar__search {
-  width: 240px;
-}
-
-/* ── Toolbar / Filter Row ── */
-.toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-global-xs) var(--spacing-global-lg);
-  border-bottom: 1px solid hsl(var(--border-outline-00));
-  background: hsl(var(--bg-layer-01));
-  flex-shrink: 0;
-}
-
-.filter-chips {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-global-4xs);
-}
-
-.filter-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: var(--spacing-dynamic-5xs) var(--spacing-dynamic-xs);
-  border-radius: 9999px;
-  font-family: var(--font-text);
-  font-size: var(--fontSize-system-small);
-  font-variation-settings: 'wght' 540;
-  letter-spacing: var(--tracking-system-small);
-  color: hsl(var(--text-color-secondary));
+/* Header icon buttons — 32×32, outline style */
+.header-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
   background: transparent;
-  border: 1px solid hsl(var(--border-outline-01));
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.filter-chip:hover {
-  background: hsl(var(--bg-interactive-tertiary-hovered));
-  border-color: hsl(var(--border-outline-02));
-}
-
-.filter-chip--active {
-  color: hsl(var(--text-interactive-primary-resting));
-  background: hsla(var(--bg-interactive-primary-resting) / 0.1);
-  border-color: hsl(var(--border-interactive-primary-resting));
-}
-
-.sort-control {
   display: flex;
   align-items: center;
-  gap: var(--spacing-global-4xs);
-  font-size: var(--fontSize-system-small);
-  color: hsl(var(--text-color-secondary));
+  justify-content: center;
   cursor: pointer;
-  padding: var(--spacing-dynamic-5xs) var(--spacing-dynamic-xs);
+  color: hsl(var(--text-color-secondary, 228 10% 36%));
+  transition: background 0.12s;
+  outline: 1px solid hsl(var(--border-outline-00, 228 10% 92%));
+  -outline-offset: -1px;
+}
+.header-icon-btn:hover {
+  background: hsla(var(--text-color-primary) / 0.04);
+}
+
+.title-divider {
+  width: 1px;
+  height: 20px;
+  background: hsl(var(--border-outline-00, 228 10% 92%));
+  margin: 0 4px;
+}
+
+/* Save button — outline style, 32px */
+.btn-save {
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: none;
+  background: hsl(var(--bg-layer-01, 0 0% 100%));
+  font-size: 14px;
+  font-family: inherit;
+  font-variation-settings: 'wght' 540;
+  color: hsl(var(--text-color-primary, 228 10% 12%));
+  cursor: pointer;
+  transition: background 0.12s;
+  outline: 1px solid hsl(var(--border-outline-00, 228 10% 92%));
+  -outline-offset: -1px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.btn-save:hover { background: hsla(var(--text-color-primary) / 0.04); }
+
+/* + Issue button — primary fill */
+.btn-create {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: none;
+  background: hsl(var(--bg-interactive-primary-resting, 237 81% 56%));
+  font-size: 14px;
+  font-family: inherit;
+  font-variation-settings: 'wght' 540;
+  color: hsl(var(--color-on-fill, 0 0% 100%));
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: background 0.12s;
+}
+.btn-create:hover { background: hsl(var(--bg-interactive-primary-hovered, 237 81% 50%)); }
+
+/* ── Toolbar row (chart/sort/filter icons) ── */
+.toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 16px;
+  height: 32px;
+}
+
+.toolbar-btn {
+  height: 24px;
+  min-width: 24px;
+  padding: 0 4px;
+  border: none;
+  background: transparent;
   border-radius: 6px;
-  transition: background 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: hsl(var(--text-color-secondary, 228 10% 36%));
+  font-size: 12px;
+  font-family: inherit;
+  gap: 4px;
+  transition: background 0.12s;
+}
+.toolbar-btn:hover { background: hsla(var(--text-color-primary) / 0.04); }
+
+.toolbar-btn--active {
+  color: hsl(var(--text-color-primary, 228 10% 12%));
 }
 
-.sort-control:hover {
-  background: hsl(var(--bg-interactive-tertiary-hovered));
+/* ── Filter row ── */
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 16px 8px;
+  flex-wrap: wrap;
 }
 
-/* ── Table Container ── */
-.table-container {
+/* Filter pill — split-button style */
+.filter-pill {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+  border: 1px solid hsl(var(--border-outline-00, 228 10% 92%));
+  background: transparent;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: border-color 0.12s;
+}
+.filter-pill:hover { border-color: hsl(var(--border-outline-01, 228 10% 88%)); }
+
+.filter-pill-label {
+  padding: 0 8px;
+  color: hsl(var(--text-color-primary, 228 10% 12%));
+  font-variation-settings: 'wght' 440;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  border-right: 1px solid hsl(var(--border-outline-00, 228 10% 92%));
+}
+
+.filter-pill-value {
+  padding: 0 8px;
+  color: hsl(var(--text-color-primary, 228 10% 12%));
+  font-variation-settings: 'wght' 540;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  gap: 4px;
+}
+
+.filter-pill--disabled .filter-pill-label {
+  color: hsl(var(--text-color-muted, 228 10% 74%));
+}
+.filter-pill--disabled .filter-pill-value {
+  color: hsl(var(--text-color-muted, 228 10% 74%));
+}
+
+.filter-pill--active {
+  background: hsla(var(--bg-interactive-primary-resting) / 0.08);
+  border-color: hsla(var(--bg-interactive-primary-resting) / 0.3);
+}
+
+.filter-add {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px dashed hsl(var(--border-outline-00, 228 10% 92%));
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: hsl(var(--text-color-tertiary, 228 10% 48%));
+  transition: all 0.12s;
+}
+.filter-add:hover {
+  border-color: hsl(var(--text-color-tertiary, 228 10% 48%));
+  background: hsla(var(--text-color-primary) / 0.02);
+}
+
+.filter-clear {
+  font-size: 12px;
+  font-family: inherit;
+  font-variation-settings: 'wght' 540;
+  color: hsl(var(--text-color-secondary, 228 10% 36%));
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 6px;
+  height: 24px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  transition: all 0.12s;
+}
+.filter-clear:hover {
+  color: hsl(var(--text-color-primary, 228 10% 12%));
+  background: hsla(var(--text-color-primary) / 0.04);
+}
+
+/* ══════════════════════════════════════
+   DATA TABLE — ag-grid style
+   Real: header 48px, rows 45px, font-size 12-14px
+   ══════════════════════════════════════ */
+.table-scroll {
   flex: 1;
   overflow: auto;
-  padding: 0 var(--spacing-global-lg);
 }
 
-/* Table tweaks beyond the component class */
-.arcade-table th.col-checkbox,
-.arcade-table td.col-checkbox {
-  width: 40px;
-  text-align: center;
+table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
 }
 
-.arcade-table th.col-id,
-.arcade-table td.col-id {
-  width: 100px;
-  font-variation-settings: 'wght' 540;
+/* Column widths — proportional to real app */
+.col-items    { width: auto; min-width: 400px; }
+.col-priority { width: 116px; }
+.col-stage    { width: 116px; }
+.col-part     { width: 160px; }
+.col-owner    { width: 120px; }
+
+/* Table header — 48px, bold 14px */
+thead th {
+  height: 48px;
+  padding: 0 12px;
+  font-size: 14px;
+  font-variation-settings: 'wght' 700;
+  color: hsl(var(--text-color-primary, 228 10% 12%));
+  text-align: left;
+  border-bottom: 1px solid hsl(var(--border-outline-00, 228 10% 92%));
+  background: hsl(var(--bg-layer-01, 0 0% 100%));
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  white-space: nowrap;
+  line-height: normal;
 }
 
-.arcade-table td.col-id {
-  color: hsl(var(--text-interactive-primary-resting));
-  cursor: pointer;
+.th-content {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
-.arcade-table td.col-id:hover {
-  text-decoration: underline;
-}
-
-.arcade-table td.col-title {
-  font-variation-settings: 'wght' 440;
-  max-width: 360px;
+/* Table body — rows 45px, border rgb(227,227,232) */
+tbody td {
+  height: 45px;
+  padding: 0 12px;
+  border-bottom: 1px solid hsl(228 4% 90%);
+  vertical-align: middle;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+tbody tr {
+  transition: background 0.08s;
+}
+tbody tr:hover { background: hsla(var(--text-color-primary) / 0.02); }
+
+/* ── Items cell (checkbox + ID + title) ── */
+.items-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.row-checkbox {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1.5px solid hsl(var(--border-outline-00, 228 10% 92%));
+  background: transparent;
+  flex-shrink: 0;
+  cursor: pointer;
+  display: none; /* show on row hover */
+}
+tbody tr:hover .row-checkbox { display: block; }
+
+.issue-id {
+  font-size: 12px;
+  font-variation-settings: 'wght' 440;
+  color: hsl(var(--text-color-primary, 228 10% 12%));
+  cursor: pointer;
+  flex-shrink: 0;
   white-space: nowrap;
+  min-width: 80px;
+  line-height: 16px;
+}
+.issue-id:hover { text-decoration: underline; }
+
+.issue-title {
+  font-size: 12px;
+  color: hsl(var(--text-color-primary, 228 10% 12%));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
-.arcade-table td.col-status,
-.arcade-table td.col-priority {
-  width: 120px;
+/* ── Priority cell ── */
+.priority-cell {
+  font-size: 12px;
+  font-variation-settings: 'wght' 440;
+  color: hsl(var(--text-color-primary, 228 10% 12%));
 }
 
-.arcade-table td.col-owner {
-  width: 160px;
+/* ── Stage cell ── */
+.stage-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
 }
 
-.arcade-table td.col-updated {
-  width: 110px;
-  color: hsl(var(--text-color-tertiary));
-  font-size: var(--fontSize-system-small);
+.stage-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.stage-dot--backlog  { background: #D1D1D6; }
+.stage-dot--triage   { background: #F59E0B; }
+.stage-dot--in-dev   { background: #3B82F6; }
+.stage-dot--in-review { background: #8B5CF6; }
+.stage-dot--done     { background: #10B981; }
+
+.stage-label {
+  color: hsl(var(--text-color-primary, 228 10% 12%));
+  font-size: 12px;
 }
 
-/* Owner cell layout */
+/* ── Part cell ── */
+.part-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.part-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.part-dot--blue   { background: #3B82F6; }
+.part-dot--purple { background: #8B5CF6; }
+.part-dot--orange { background: #F97316; }
+.part-dot--green  { background: #10B981; }
+.part-dot--red    { background: #EF4444; }
+.part-dot--yellow { background: #EAB308; }
+.part-dot--teal   { background: #14B8A6; }
+.part-dot--indigo { background: #6366F1; }
+
+.part-name {
+  color: hsl(var(--text-color-primary, 228 10% 12%));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Owner cell ── */
 .owner-cell {
   display: flex;
   align-items: center;
-  gap: var(--spacing-global-4xs);
+  gap: 6px;
+  min-width: 0;
 }
 
-.owner-cell__name {
-  font-size: var(--fontSize-system-small);
-  color: hsl(var(--text-color-primary));
+.owner-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-variation-settings: 'wght' 660;
+  color: white;
+  flex-shrink: 0;
+}
+.owner-avatar--blue   { background: #3B82F6; }
+.owner-avatar--purple { background: #8B5CF6; }
+.owner-avatar--green  { background: #10B981; }
+.owner-avatar--orange { background: #F97316; }
+.owner-avatar--red    { background: #EF4444; }
+.owner-avatar--teal   { background: #14B8A6; }
+.owner-avatar--indigo { background: #6366F1; }
+.owner-avatar--yellow { background: #EAB308; }
+
+.owner-name {
+  font-size: 12px;
+  color: hsl(var(--text-color-primary, 228 10% 12%));
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ── Pagination ── */
 .pagination {
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--spacing-global-sm) var(--spacing-global-lg);
-  border-top: 1px solid hsl(var(--border-outline-01));
-  background: hsl(var(--bg-layer-01));
+  padding: 0 16px;
+  border-top: 1px solid hsl(var(--border-outline-00, 228 10% 92%));
   flex-shrink: 0;
+  font-size: 12px;
+  color: hsl(var(--text-color-secondary, 228 10% 36%));
 }
 
-.pagination__info {
-  font-size: var(--fontSize-system-small);
-  color: hsl(var(--text-color-tertiary));
-  letter-spacing: var(--tracking-system-small);
-}
-
-.pagination__controls {
+.pagination-left {
   display: flex;
   align-items: center;
-  gap: var(--spacing-global-xs);
+  gap: 6px;
 }
 
-/* ── Sidebar section spacing ── */
-.sidebar__nav-group {
+.pagination-select {
   display: flex;
-  flex-direction: column;
-  gap: var(--spacing-global-5xs);
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
 }
+
+.pagination-select-value {
+  font-variation-settings: 'wght' 540;
+  color: hsl(var(--text-color-primary, 228 10% 12%));
+}
+
+.pagination-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pagination-info {
+  color: hsl(var(--text-color-secondary, 228 10% 36%));
+}
+
+.pagination-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: hsl(var(--text-color-secondary, 228 10% 36%));
+  transition: background 0.12s;
+}
+.pagination-btn:hover { background: hsla(var(--text-color-primary) / 0.04); }
+.pagination-btn:disabled { opacity: 0.3; cursor: default; }
   </style>
 </head>
 <body>
 
+<!-- ═══ APP SHELL ═══ -->
 <div class="app-shell">
 
-  <!-- ════════════════════════════════════════════════════════
-       SIDEBAR
-       ════════════════════════════════════════════════════════ -->
-  <aside class="arcade-sidebar sidebar">
-    <span class="arcade-sidebar__section-title">Navigation</span>
-    <div class="sidebar__nav-group">
-      <button class="arcade-menu-item" data-nav="dashboard">
-        <span>Dashboard</span>
+  <!-- ─── LEFT NAV ─── -->
+  <nav class="left-nav">
+
+    <!-- Header — avatar, settings, layout, + -->
+    <div class="nav-header">
+      <div class="nav-avatar">
+        <span class="nav-avatar-fallback">AS</span>
+      </div>
+      <button class="nav-header-btn" title="Settings">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="2.5"/><path d="M8 2.5v2M8 11.5v2M13.5 8h-2M4.5 8h-2M11.9 4.1l-1.4 1.4M5.5 10.5l-1.4 1.4M11.9 11.9l-1.4-1.4M5.5 5.5L4.1 4.1"/></svg>
       </button>
-      <button class="arcade-menu-item arcade-menu-item--selected" data-nav="issues">
-        <span>Issues</span>
+      <button class="nav-header-btn" title="Layout">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M2 6h12"/><path d="M6 6v7"/></svg>
       </button>
-      <button class="arcade-menu-item" data-nav="tickets">
-        <span>Tickets</span>
-      </button>
-      <button class="arcade-menu-item" data-nav="conversations">
-        <span>Conversations</span>
-      </button>
-      <button class="arcade-menu-item" data-nav="enhancements">
-        <span>Enhancements</span>
-      </button>
-      <button class="arcade-menu-item" data-nav="settings">
-        <span>Settings</span>
+      <span class="nav-header-spacer"></span>
+      <button class="nav-header-btn nav-header-btn--plus" title="Create">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="8" y1="4" x2="8" y2="12"/><line x1="4" y1="8" x2="12" y2="8"/></svg>
       </button>
     </div>
 
-    <hr class="arcade-divider">
-
-    <span class="arcade-sidebar__section-title">Filters</span>
-    <div class="sidebar__nav-group">
-      <button class="arcade-menu-item" data-filter="my-issues">
-        <span>My issues</span>
-      </button>
-      <button class="arcade-menu-item" data-filter="unresolved">
-        <span>Unresolved</span>
-      </button>
-      <button class="arcade-menu-item" data-filter="high-priority">
-        <span>High priority</span>
-      </button>
+    <!-- Search -->
+    <div class="nav-search">
+      <svg class="nav-search-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L13.5 13.5"/></svg>
+      <span class="nav-search-text">Search</span>
+      <span class="nav-search-shortcut">⌘ K</span>
     </div>
-  </aside>
 
-  <!-- ════════════════════════════════════════════════════════
-       MAIN CONTENT
-       ════════════════════════════════════════════════════════ -->
+    <!-- Nav body -->
+    <div class="nav-body">
+
+      <!-- Top nav items (no section label) -->
+      <div class="nav-section">
+        <div class="nav-section-items">
+          <button class="nav-item">
+            <span class="nav-item-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M4 5h12M4 10h8M4 15h10"/></svg></span>
+            <span class="nav-item-label">Updates</span>
+            <span class="nav-item-badge">2</span>
+          </button>
+          <button class="nav-item">
+            <span class="nav-item-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 16V6a3 3 0 013-3h8a3 3 0 013 3v10"/><path d="M3 16h14"/><path d="M7 16v-4h6v4"/></svg></span>
+            <span class="nav-item-label">Lobby</span>
+          </button>
+          <button class="nav-item">
+            <span class="nav-item-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M7 10l2 2 4-4"/></svg></span>
+            <span class="nav-item-label">My Tasks</span>
+          </button>
+          <button class="nav-item">
+            <span class="nav-item-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 3"/></svg></span>
+            <span class="nav-item-label">Explore</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- CUSTOMISE: Foundations section -->
+      <div class="nav-section">
+        <div class="nav-section-label">Foundations</div>
+        <div class="nav-section-items">
+          <button class="nav-item">
+            <span class="nav-item-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M8 7l3 3-3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <span class="nav-item-label">UI Platform</span>
+          </button>
+          <button class="nav-item">
+            <span class="nav-item-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M8 7l3 3-3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <span class="nav-item-label">Teams</span>
+          </button>
+          <button class="nav-item">
+            <span class="nav-item-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M8 7l3 3-3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <span class="nav-item-label">My goals</span>
+          </button>
+          <button class="nav-item">
+            <span class="nav-item-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M8 7l3 3-3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <span class="nav-item-label">Design System</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- CUSTOMISE: Work section -->
+      <div class="nav-section">
+        <div class="nav-section-label">Work</div>
+        <div class="nav-section-items">
+          <button class="nav-item nav-item--selected">
+            <span class="nav-item-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M3 8h14"/><path d="M8 3v14"/></svg></span>
+            <span class="nav-item-label">Issues</span>
+          </button>
+          <button class="nav-item">
+            <span class="nav-item-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M3 8h14"/><path d="M8 3v14"/></svg></span>
+            <span class="nav-item-label">Triage</span>
+          </button>
+          <button class="nav-item">
+            <span class="nav-item-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M3 8h14"/><path d="M8 3v14"/></svg></span>
+            <span class="nav-item-label">Now, Next, Later</span>
+          </button>
+          <button class="nav-item">
+            <span class="nav-item-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M3 8h14"/><path d="M8 3v14"/></svg></span>
+            <span class="nav-item-label">Sprint Boards</span>
+          </button>
+          <button class="nav-item">
+            <span class="nav-item-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="3" y="6" width="3" height="8" rx="0.5"/><rect x="8.5" y="3" width="3" height="11" rx="0.5"/><rect x="14" y="5" width="3" height="9" rx="0.5"/></svg></span>
+            <span class="nav-item-label">Computer Metrics Dashboard</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- CUSTOMISE: Product section -->
+      <div class="nav-section">
+        <div class="nav-section-label">Product</div>
+        <div class="nav-section-items">
+          <button class="nav-item">
+            <span class="nav-item-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M3 8h14"/><path d="M8 3v14"/></svg></span>
+            <span class="nav-item-label">Trails</span>
+          </button>
+          <button class="nav-item">
+            <span class="nav-item-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M3 8h14"/><path d="M8 3v14"/></svg></span>
+            <span class="nav-item-label">Parts</span>
+          </button>
+          <button class="nav-item">
+            <span class="nav-item-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M3 8h14"/><path d="M8 3v14"/></svg></span>
+            <span class="nav-item-label">Roadmap</span>
+          </button>
+          <button class="nav-item">
+            <span class="nav-item-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M3 8h14"/><path d="M8 3v14"/></svg></span>
+            <span class="nav-item-label">Release Tracker</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- CUSTOMISE: Customer section -->
+      <div class="nav-section">
+        <div class="nav-section-label">Customer</div>
+        <div class="nav-section-items">
+          <button class="nav-item">
+            <span class="nav-item-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M3 8h14"/><path d="M8 3v14"/></svg></span>
+            <span class="nav-item-label">Product Assist Tracker</span>
+          </button>
+          <button class="nav-item">
+            <span class="nav-item-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M3 8h14"/><path d="M8 3v14"/></svg></span>
+            <span class="nav-item-label">Accepted Ticket Tracker</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Bottom bar — "Ask me anything" -->
+    <div class="nav-bottom">
+      <div class="nav-bottom-icon">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="white" stroke-width="1.6" stroke-linecap="round"><path d="M3 12V5a2 2 0 012-2h6a2 2 0 012 2v4a2 2 0 01-2 2H6l-3 3"/></svg>
+      </div>
+      <span class="nav-bottom-text">Ask me anything</span>
+      <span class="badge-new">New</span>
+    </div>
+
+  </nav>
+
+  <!-- ─── MAIN CONTENT ─── -->
   <main class="main-content">
 
-    <!-- Header Bar -->
-    <header class="header-bar">
-      <h1 class="header-bar__title">Issues</h1>
-      <div class="header-bar__actions">
-        <input
-          type="text"
-          class="arcade-input header-bar__search"
-          placeholder="Search issues..."
-        >
-        <button class="arcade-btn arcade-btn--primary arcade-btn--S">
-          Create issue
-        </button>
+    <!-- Page header -->
+    <div class="page-header">
+      <div class="title-row">
+        <div class="title-left">
+          <h1 class="page-title">Issues</h1>
+          <span class="page-count">11592</span>
+        </div>
+        <div class="title-right">
+          <!-- Chart -->
+          <button class="header-icon-btn" title="Analytics">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><rect x="2" y="8" width="3" height="5" rx="0.5"/><rect x="6.5" y="4" width="3" height="9" rx="0.5"/><rect x="11" y="6" width="3" height="7" rx="0.5"/></svg>
+          </button>
+          <!-- Sort -->
+          <button class="header-icon-btn" title="Sort">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M4 5l4-3 4 3"/><path d="M4 11l4 3 4-3"/></svg>
+          </button>
+          <!-- Filter -->
+          <button class="header-icon-btn" title="Filter">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M2 4h12M4 8h8M6 12h4"/></svg>
+          </button>
+          <!-- Group -->
+          <button class="header-icon-btn" title="Group">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M3 4h10M3 8h10M3 12h10"/><circle cx="13" cy="4" r="1" fill="currentColor"/></svg>
+          </button>
+          <span class="title-divider"></span>
+          <button class="btn-save">Save</button>
+          <button class="btn-create">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="7" y1="3" x2="7" y2="11"/><line x1="3" y1="7" x2="11" y2="7"/></svg>
+            Issue
+          </button>
+        </div>
       </div>
-    </header>
 
-    <!-- Filter Toolbar -->
-    <div class="toolbar">
-      <div class="filter-chips">
-        <button class="filter-chip filter-chip--active" data-status="all">All</button>
-        <button class="filter-chip" data-status="open">Open</button>
-        <button class="filter-chip" data-status="in_progress">In progress</button>
-        <button class="filter-chip" data-status="closed">Closed</button>
-      </div>
-      <div class="sort-control">
-        <span>Sort: Updated</span>
-        <span style="font-size: 10px;">&#9660;</span>
+      <!-- Filter pills -->
+      <div class="filter-row">
+        <div class="filter-pill filter-pill--disabled">
+          <span class="filter-pill-label">Work type</span>
+          <span class="filter-pill-value">Issue</span>
+        </div>
+        <div class="filter-pill">
+          <span class="filter-pill-label">Created date</span>
+          <span class="filter-pill-value">Last 90 days</span>
+        </div>
+        <div class="filter-pill">
+          <span class="filter-pill-label">Stage</span>
+          <span class="filter-pill-value">Any of</span>
+        </div>
+        <div class="filter-pill filter-pill--active">
+          <span class="filter-pill-label">Re-Planned</span>
+          <span class="filter-pill-value">>28</span>
+        </div>
+        <button class="filter-add">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><line x1="6" y1="2" x2="6" y2="10"/><line x1="2" y1="6" x2="10" y2="6"/></svg>
+        </button>
+        <button class="filter-clear">Clear</button>
       </div>
     </div>
 
-    <!-- Data Table -->
-    <div class="table-container">
-      <table class="arcade-table">
+    <!-- CUSTOMISE: Data table -->
+    <div class="table-scroll">
+      <table>
         <thead>
           <tr>
-            <th class="col-checkbox">
-              <div class="arcade-checkbox" id="select-all"></div>
-            </th>
-            <th class="col-id">ID</th>
-            <th>Title</th>
-            <th class="col-status">Status</th>
-            <th class="col-priority">Priority</th>
-            <th class="col-owner">Owner</th>
-            <th class="col-updated">Updated</th>
+            <th class="col-items"><div class="th-content">Items</div></th>
+            <th class="col-priority"><div class="th-content">Priority</div></th>
+            <th class="col-stage"><div class="th-content">Stage</div></th>
+            <th class="col-part"><div class="th-content">Part</div></th>
+            <th class="col-owner"><div class="th-content">Owner</div></th>
           </tr>
         </thead>
         <tbody>
-          <!-- Row 1 -->
           <tr>
-            <td class="col-checkbox"><div class="arcade-checkbox"></div></td>
-            <td class="col-id">ISS-1847</td>
-            <td class="col-title">API rate limiting not enforced on batch endpoints</td>
-            <td class="col-status"><span class="arcade-badge arcade-badge--default">Open</span></td>
-            <td class="col-priority"><span class="arcade-badge arcade-badge--alert">P0</span></td>
-            <td class="col-owner">
-              <div class="owner-cell">
-                <div class="arcade-avatar arcade-avatar--S arcade-avatar--1">MK</div>
-                <span class="owner-cell__name">Maya Kumar</span>
-              </div>
-            </td>
-            <td class="col-updated">2h ago</td>
+            <td class="col-items"><div class="items-cell"><span class="issue-id">APPS-22</span><span class="issue-title">[Record view] URL bug on clicking avatar on the linked cards</span></div></td>
+            <td><span class="priority-cell">P2</span></td>
+            <td><div class="stage-cell"><span class="stage-dot stage-dot--backlog"></span><span class="stage-label">Backlog</span></div></td>
+            <td><div class="part-cell"><span class="part-dot part-dot--blue"></span><span class="part-name">Record View</span></div></td>
+            <td><div class="owner-cell"><span class="owner-avatar owner-avatar--purple">P</span><span class="owner-name">Priya...</span></div></td>
           </tr>
-          <!-- Row 2 -->
           <tr>
-            <td class="col-checkbox"><div class="arcade-checkbox"></div></td>
-            <td class="col-id">ISS-1842</td>
-            <td class="col-title">Webhook delivery fails silently when payload exceeds 256KB</td>
-            <td class="col-status"><span class="arcade-badge arcade-badge--info">In Progress</span></td>
-            <td class="col-priority"><span class="arcade-badge arcade-badge--alert">P0</span></td>
-            <td class="col-owner">
-              <div class="owner-cell">
-                <div class="arcade-avatar arcade-avatar--S arcade-avatar--3">JC</div>
-                <span class="owner-cell__name">James Chen</span>
-              </div>
-            </td>
-            <td class="col-updated">4h ago</td>
+            <td class="col-items"><div class="items-cell"><span class="issue-id">ISS-271049</span><span class="issue-title">Implement audit and drift detection for GitHub org configurations</span></div></td>
+            <td><span class="priority-cell">P2</span></td>
+            <td><div class="stage-cell"><span class="stage-dot stage-dot--triage"></span><span class="stage-label">Triage</span></div></td>
+            <td><div class="part-cell"><span class="part-dot part-dot--indigo"></span><span class="part-name">devrev-labs. Appl...</span></div></td>
+            <td><div class="owner-cell"><span class="owner-avatar owner-avatar--blue">M</span><span class="owner-name">Mlad...</span></div></td>
           </tr>
-          <!-- Row 3 -->
           <tr>
-            <td class="col-checkbox"><div class="arcade-checkbox"></div></td>
-            <td class="col-id">ISS-1838</td>
-            <td class="col-title">Dashboard widget fails to render when date range spans DST transition</td>
-            <td class="col-status"><span class="arcade-badge arcade-badge--default">Open</span></td>
-            <td class="col-priority"><span class="arcade-badge arcade-badge--warning">P1</span></td>
-            <td class="col-owner">
-              <div class="owner-cell">
-                <div class="arcade-avatar arcade-avatar--S arcade-avatar--5">SP</div>
-                <span class="owner-cell__name">Sara Patel</span>
-              </div>
-            </td>
-            <td class="col-updated">5h ago</td>
+            <td class="col-items"><div class="items-cell"><span class="issue-id">ISS-271048</span><span class="issue-title">Align owner membership and access controls across all DevRev GitHub orgs</span></div></td>
+            <td><span class="priority-cell">P2</span></td>
+            <td><div class="stage-cell"><span class="stage-dot stage-dot--triage"></span><span class="stage-label">Triage</span></div></td>
+            <td><div class="part-cell"><span class="part-dot part-dot--indigo"></span><span class="part-name">devrev-labs. Appl...</span></div></td>
+            <td><div class="owner-cell"><span class="owner-avatar owner-avatar--blue">M</span><span class="owner-name">Mlad...</span></div></td>
           </tr>
-          <!-- Row 4 -->
           <tr>
-            <td class="col-checkbox"><div class="arcade-checkbox"></div></td>
-            <td class="col-id">ISS-1835</td>
-            <td class="col-title">Custom field values lost during bulk ticket migration</td>
-            <td class="col-status"><span class="arcade-badge arcade-badge--info">In Progress</span></td>
-            <td class="col-priority"><span class="arcade-badge arcade-badge--warning">P1</span></td>
-            <td class="col-owner">
-              <div class="owner-cell">
-                <div class="arcade-avatar arcade-avatar--S arcade-avatar--2">AL</div>
-                <span class="owner-cell__name">Alex Liu</span>
-              </div>
-            </td>
-            <td class="col-updated">yesterday</td>
+            <td class="col-items"><div class="items-cell"><span class="issue-id">ISS-271047</span><span class="issue-title">Enforce uniform admin policies across all DevRev GitHub orgs</span></div></td>
+            <td><span class="priority-cell">P2</span></td>
+            <td><div class="stage-cell"><span class="stage-dot stage-dot--triage"></span><span class="stage-label">Triage</span></div></td>
+            <td><div class="part-cell"><span class="part-dot part-dot--indigo"></span><span class="part-name">devrev-labs. Appl...</span></div></td>
+            <td><div class="owner-cell"><span class="owner-avatar owner-avatar--blue">M</span><span class="owner-name">Mlad...</span></div></td>
           </tr>
-          <!-- Row 5 -->
           <tr>
-            <td class="col-checkbox"><div class="arcade-checkbox"></div></td>
-            <td class="col-id">ISS-1831</td>
-            <td class="col-title">Search indexing delay exceeds SLA for large account imports</td>
-            <td class="col-status"><span class="arcade-badge arcade-badge--info">In Progress</span></td>
-            <td class="col-priority"><span class="arcade-badge arcade-badge--default">P2</span></td>
-            <td class="col-owner">
-              <div class="owner-cell">
-                <div class="arcade-avatar arcade-avatar--S arcade-avatar--4">RG</div>
-                <span class="owner-cell__name">Ravi Gupta</span>
-              </div>
-            </td>
-            <td class="col-updated">yesterday</td>
+            <td class="col-items"><div class="items-cell"><span class="issue-id">ISS-271046</span><span class="issue-title">Apply unified branch protection rulesets across all DevRev GitHub orgs</span></div></td>
+            <td><span class="priority-cell">P2</span></td>
+            <td><div class="stage-cell"><span class="stage-dot stage-dot--triage"></span><span class="stage-label">Triage</span></div></td>
+            <td><div class="part-cell"><span class="part-dot part-dot--indigo"></span><span class="part-name">devrev-labs. Appl...</span></div></td>
+            <td><div class="owner-cell"><span class="owner-avatar owner-avatar--blue">M</span><span class="owner-name">Mlad...</span></div></td>
           </tr>
-          <!-- Row 6 -->
           <tr>
-            <td class="col-checkbox"><div class="arcade-checkbox"></div></td>
-            <td class="col-id">ISS-1827</td>
-            <td class="col-title">OAuth token refresh race condition in concurrent sessions</td>
-            <td class="col-status"><span class="arcade-badge arcade-badge--default">Open</span></td>
-            <td class="col-priority"><span class="arcade-badge arcade-badge--default">P2</span></td>
-            <td class="col-owner">
-              <div class="owner-cell">
-                <div class="arcade-avatar arcade-avatar--S arcade-avatar--6">NN</div>
-                <span class="owner-cell__name">Nina Novak</span>
-              </div>
-            </td>
-            <td class="col-updated">2 days ago</td>
+            <td class="col-items"><div class="items-cell"><span class="issue-id">ISS-271045</span><span class="issue-title">Update PageTopLevelItems function from common</span></div></td>
+            <td><span class="priority-cell">P2</span></td>
+            <td><div class="stage-cell"><span class="stage-dot stage-dot--in-dev"></span><span class="stage-label">In Dev...</span></div></td>
+            <td><div class="part-cell"><span class="part-dot part-dot--orange"></span><span class="part-name">airdrop-common</span></div></td>
+            <td><div class="owner-cell"><span class="owner-avatar owner-avatar--teal">T</span><span class="owner-name">Tikei...</span></div></td>
           </tr>
-          <!-- Row 7 -->
           <tr>
-            <td class="col-checkbox"><div class="arcade-checkbox"></div></td>
-            <td class="col-id">ISS-1823</td>
-            <td class="col-title">Snap-in execution timeout not configurable per workspace</td>
-            <td class="col-status"><span class="arcade-badge arcade-badge--success">Closed</span></td>
-            <td class="col-priority"><span class="arcade-badge arcade-badge--warning">P1</span></td>
-            <td class="col-owner">
-              <div class="owner-cell">
-                <div class="arcade-avatar arcade-avatar--S arcade-avatar--7">DW</div>
-                <span class="owner-cell__name">Derek Walsh</span>
-              </div>
-            </td>
-            <td class="col-updated">3 days ago</td>
+            <td class="col-items"><div class="items-cell"><span class="issue-id">ISS-271044</span><span class="issue-title">Remove native ml4 ZeRank endpoint | Check status</span></div></td>
+            <td><span class="priority-cell">P2</span></td>
+            <td><div class="stage-cell"><span class="stage-dot stage-dot--triage"></span><span class="stage-label">Triage</span></div></td>
+            <td><div class="part-cell"><span class="part-dot part-dot--green"></span><span class="part-name">Instruction Based...</span></div></td>
+            <td><div class="owner-cell"><span class="owner-avatar owner-avatar--orange">P</span><span class="owner-name">Prate...</span></div></td>
           </tr>
-          <!-- Row 8 -->
           <tr>
-            <td class="col-checkbox"><div class="arcade-checkbox"></div></td>
-            <td class="col-id">ISS-1819</td>
-            <td class="col-title">Email notification templates ignore workspace-level branding</td>
-            <td class="col-status"><span class="arcade-badge arcade-badge--success">Closed</span></td>
-            <td class="col-priority"><span class="arcade-badge arcade-badge--default">P3</span></td>
-            <td class="col-owner">
-              <div class="owner-cell">
-                <div class="arcade-avatar arcade-avatar--S arcade-avatar--8">TM</div>
-                <span class="owner-cell__name">Tara Miller</span>
-              </div>
-            </td>
-            <td class="col-updated">3 days ago</td>
+            <td class="col-items"><div class="items-cell"><span class="issue-id">ISS-271042</span><span class="issue-title">Variable Referencing and UI Validation Issues in Workflow Editor</span></div></td>
+            <td><span class="priority-cell">P1</span></td>
+            <td><div class="stage-cell"><span class="stage-dot stage-dot--triage"></span><span class="stage-label">Triage</span></div></td>
+            <td><div class="part-cell"><span class="part-dot part-dot--purple"></span><span class="part-name">Variable Manage...</span></div></td>
+            <td><div class="owner-cell"><span class="owner-avatar owner-avatar--green">A</span><span class="owner-name">Avnis...</span></div></td>
           </tr>
-          <!-- Row 9 -->
           <tr>
-            <td class="col-checkbox"><div class="arcade-checkbox"></div></td>
-            <td class="col-id">ISS-1814</td>
-            <td class="col-title">Vista column sort order resets after page navigation</td>
-            <td class="col-status"><span class="arcade-badge arcade-badge--default">Open</span></td>
-            <td class="col-priority"><span class="arcade-badge arcade-badge--default">P3</span></td>
-            <td class="col-owner">
-              <div class="owner-cell">
-                <div class="arcade-avatar arcade-avatar--S arcade-avatar--2">KR</div>
-                <span class="owner-cell__name">Kira Rao</span>
-              </div>
-            </td>
-            <td class="col-updated">5 days ago</td>
+            <td class="col-items"><div class="items-cell"><span class="issue-id">ISS-271041</span><span class="issue-title">agent playground chat &lt;&gt; plug setting dependency</span></div></td>
+            <td><span class="priority-cell">P2</span></td>
+            <td><div class="stage-cell"><span class="stage-dot stage-dot--triage"></span><span class="stage-label">Triage</span></div></td>
+            <td><div class="part-cell"><span class="part-dot part-dot--blue"></span><span class="part-name">[GA] Agent Studi...</span></div></td>
+            <td><div class="owner-cell"><span class="owner-avatar owner-avatar--indigo">A</span><span class="owner-name">Ayus...</span></div></td>
           </tr>
-          <!-- Row 10 -->
           <tr>
-            <td class="col-checkbox"><div class="arcade-checkbox"></div></td>
-            <td class="col-id">ISS-1810</td>
-            <td class="col-title">Audit log missing entries for bulk permission changes</td>
-            <td class="col-status"><span class="arcade-badge arcade-badge--success">Closed</span></td>
-            <td class="col-priority"><span class="arcade-badge arcade-badge--default">P2</span></td>
-            <td class="col-owner">
-              <div class="owner-cell">
-                <div class="arcade-avatar arcade-avatar--S arcade-avatar--1">MK</div>
-                <span class="owner-cell__name">Maya Kumar</span>
-              </div>
-            </td>
-            <td class="col-updated">1 week ago</td>
+            <td class="col-items"><div class="items-cell"><span class="issue-id">ISS-271040</span><span class="issue-title">run agent playwright tests with slack channel alerts on QA/DEV</span></div></td>
+            <td><span class="priority-cell">P2</span></td>
+            <td><div class="stage-cell"><span class="stage-dot stage-dot--triage"></span><span class="stage-label">Triage</span></div></td>
+            <td><div class="part-cell"><span class="part-dot part-dot--blue"></span><span class="part-name">[GA] Agent Studi...</span></div></td>
+            <td><div class="owner-cell"><span class="owner-avatar owner-avatar--purple">P</span><span class="owner-name">Pran...</span></div></td>
+          </tr>
+          <tr>
+            <td class="col-items"><div class="items-cell"><span class="issue-id">ISS-271039</span><span class="issue-title">Remove dependency on customization engine from the FDL code base</span></div></td>
+            <td><span class="priority-cell">P2</span></td>
+            <td><div class="stage-cell"><span class="stage-dot stage-dot--in-dev"></span><span class="stage-label">In Dev...</span></div></td>
+            <td><div class="part-cell"><span class="part-dot part-dot--teal"></span><span class="part-name">Vistas on edge fu...</span></div></td>
+            <td><div class="owner-cell"><span class="owner-avatar owner-avatar--red">Z</span><span class="owner-name">Zaid...</span></div></td>
+          </tr>
+          <tr>
+            <td class="col-items"><div class="items-cell"><span class="issue-id">ISS-271038</span><span class="issue-title">Add seperate deploy priveleges for agent object - mfz</span></div></td>
+            <td><span class="priority-cell">P1</span></td>
+            <td><div class="stage-cell"><span class="stage-dot stage-dot--triage"></span><span class="stage-label">Triage</span></div></td>
+            <td><div class="part-cell"><span class="part-dot part-dot--blue"></span><span class="part-name">[GA] Agent Studi...</span></div></td>
+            <td><div class="owner-cell"><span class="owner-avatar owner-avatar--teal">T</span><span class="owner-name">Taaru...</span></div></td>
+          </tr>
+          <tr>
+            <td class="col-items"><div class="items-cell"><span class="issue-id">ISS-271037</span><span class="issue-title">Issue Label Case Sensitivity in Filters</span></div></td>
+            <td><span class="priority-cell">P2</span></td>
+            <td><div class="stage-cell"><span class="stage-dot stage-dot--triage"></span><span class="stage-label">Triage</span></div></td>
+            <td><div class="part-cell"><span class="part-dot part-dot--green"></span><span class="part-name">Issue Management</span></div></td>
+            <td><div class="owner-cell"><span class="owner-avatar owner-avatar--blue">A</span><span class="owner-name">Ali S...</span></div></td>
+          </tr>
+          <tr>
+            <td class="col-items"><div class="items-cell"><span class="issue-id">ISS-271036</span><span class="issue-title">AirBuddy ai agent for observability V1</span></div></td>
+            <td><span class="priority-cell" style="color: hsl(0 72% 51%);">P0</span></td>
+            <td><div class="stage-cell"><span class="stage-dot stage-dot--in-dev"></span><span class="stage-label">In Dev...</span></div></td>
+            <td><div class="part-cell"><span class="part-dot part-dot--orange"></span><span class="part-name">AirSync integratio...</span></div></td>
+            <td><div class="owner-cell"><span class="owner-avatar owner-avatar--indigo">A</span><span class="owner-name">Abhis...</span></div></td>
+          </tr>
+          <tr>
+            <td class="col-items"><div class="items-cell"><span class="issue-id">ISS-271035</span><span class="issue-title">Snapin Update for News Room Urls</span></div></td>
+            <td><span class="priority-cell">P1</span></td>
+            <td><div class="stage-cell"><span class="stage-dot stage-dot--triage"></span><span class="stage-label">Triage</span></div></td>
+            <td><div class="part-cell"><span class="part-dot part-dot--purple"></span><span class="part-name">Implementation P...</span></div></td>
+            <td><div class="owner-cell"><span class="owner-avatar owner-avatar--orange">S</span><span class="owner-name">Sure...</span></div></td>
+          </tr>
+          <tr>
+            <td class="col-items"><div class="items-cell"><span class="issue-id">ISS-271034</span><span class="issue-title">Peer review for ISS-271033</span></div></td>
+            <td><span class="priority-cell">P2</span></td>
+            <td><div class="stage-cell"><span class="stage-dot stage-dot--triage"></span><span class="stage-label">Triage</span></div></td>
+            <td><div class="part-cell"><span class="part-dot part-dot--red"></span><span class="part-name">Customer Implem...</span></div></td>
+            <td><div class="owner-cell"><span class="owner-avatar owner-avatar--green">R</span><span class="owner-name">Rahu...</span></div></td>
+          </tr>
+          <tr>
+            <td class="col-items"><div class="items-cell"><span class="issue-id">ISS-271033</span><span class="issue-title">PeopleStrong | ISG | Dependent Fields for All Subtypes</span></div></td>
+            <td><span class="priority-cell">P2</span></td>
+            <td><div class="stage-cell"><span class="stage-dot stage-dot--triage"></span><span class="stage-label">Triage</span></div></td>
+            <td><div class="part-cell"><span class="part-dot part-dot--red"></span><span class="part-name">Customer Implem...</span></div></td>
+            <td><div class="owner-cell"><span class="owner-avatar owner-avatar--orange">N</span><span class="owner-name">Nanc...</span></div></td>
+          </tr>
+          <tr>
+            <td class="col-items"><div class="items-cell"><span class="issue-id">APPS-21</span><span class="issue-title">[UI] dql_filter_ops in widget surface</span></div></td>
+            <td><span class="priority-cell">P2</span></td>
+            <td><div class="stage-cell"><span class="stage-dot stage-dot--triage"></span><span class="stage-label">Triage</span></div></td>
+            <td><div class="part-cell"><span class="part-dot part-dot--blue"></span><span class="part-name">Build App</span></div></td>
+            <td><div class="owner-cell"><span class="owner-avatar owner-avatar--teal">D</span><span class="owner-name">Dom...</span></div></td>
           </tr>
         </tbody>
       </table>
@@ -499,70 +1190,45 @@ body {
 
     <!-- Pagination -->
     <div class="pagination">
-      <span class="pagination__info">Showing 1&ndash;10 of 142</span>
-      <div class="pagination__controls">
-        <button class="arcade-btn arcade-btn--secondary arcade-btn--S" disabled>Previous</button>
-        <button class="arcade-btn arcade-btn--secondary arcade-btn--S">Next</button>
+      <div class="pagination-left">
+        <span>Rows per page</span>
+        <div class="pagination-select">
+          <span class="pagination-select-value">50</span>
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 5l3 3 3-3"/></svg>
+        </div>
+      </div>
+      <div class="pagination-right">
+        <span class="pagination-info">1-50 of 11592</span>
+        <button class="pagination-btn" disabled>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M9 3L5 7l4 4"/></svg>
+        </button>
+        <button class="pagination-btn">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M5 3l4 4-4 4"/></svg>
+        </button>
       </div>
     </div>
 
   </main>
-</div>
 
-<!-- ════════════════════════════════════════════════════════
-     INTERACTIVITY
-     ════════════════════════════════════════════════════════ -->
+</div><!-- /.app-shell -->
+
 <script>
 (function() {
-  'use strict';
-
-  // ── Filter chips ──
-  const filterChips = document.querySelectorAll('.filter-chip');
-  filterChips.forEach(function(chip) {
-    chip.addEventListener('click', function() {
-      filterChips.forEach(function(c) { c.classList.remove('filter-chip--active'); });
-      chip.classList.add('filter-chip--active');
+  // Nav item selection
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+      document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('nav-item--selected'));
+      item.classList.add('nav-item--selected');
     });
   });
 
-  // ── Sidebar nav items ──
-  const navItems = document.querySelectorAll('.arcade-menu-item[data-nav]');
-  navItems.forEach(function(item) {
-    item.addEventListener('click', function() {
-      navItems.forEach(function(n) { n.classList.remove('arcade-menu-item--selected'); });
-      item.classList.add('arcade-menu-item--selected');
-    });
-  });
-
-  // ── Sidebar filter items ──
-  const filterItems = document.querySelectorAll('.arcade-menu-item[data-filter]');
-  filterItems.forEach(function(item) {
-    item.addEventListener('click', function() {
-      filterItems.forEach(function(f) { f.classList.remove('arcade-menu-item--selected'); });
-      item.classList.add('arcade-menu-item--selected');
-    });
-  });
-
-  // ── Checkbox toggling ──
-  document.querySelectorAll('.arcade-checkbox').forEach(function(cb) {
-    cb.addEventListener('click', function() {
-      cb.classList.toggle('arcade-checkbox--checked');
-
-      // Select-all logic
-      if (cb.id === 'select-all') {
-        var checked = cb.classList.contains('arcade-checkbox--checked');
-        document.querySelectorAll('tbody .arcade-checkbox').forEach(function(rowCb) {
-          if (checked) {
-            rowCb.classList.add('arcade-checkbox--checked');
-          } else {
-            rowCb.classList.remove('arcade-checkbox--checked');
-          }
-        });
-      }
+  // Issue ID click
+  document.querySelectorAll('.issue-id').forEach(id => {
+    id.addEventListener('click', (e) => {
+      e.stopPropagation();
     });
   });
 })();
 </script>
-
 </body>
 </html>
