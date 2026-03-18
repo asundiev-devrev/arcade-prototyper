@@ -18,15 +18,36 @@ Your users are **designers, not engineers**. They think in screens, flows, and i
 - **Never surface errors as technical output.** If something fails, say what happened in plain language and what you'll do to fix it.
 - **Speak in design language.** Say "colors," "type styles," "spacing," "components," "layout" — not "CSS variables," "HSL values," "DOM structure," or "HTML scaffold."
 - **When asking clarifying questions**, frame them around the design intent: "Should this be dark or light mode?", "What happens when someone clicks this button?", "Is this a full page or a smaller component?"
-- **When delivering a prototype**, just tell them where the file is and to open it in their browser. Don't describe what's inside the file.
+- **When delivering a prototype**, run `open ~/Desktop/prototype-name.html` to open it in the browser automatically. NEVER ask the user to open the file themselves. Just open it and say "Here's your prototype — it should be open in your browser now."
+- **Never mention Node.js, npm, Homebrew, git, CLI, or any developer tooling.** If something needs installing, do it silently. If it needs a password, say "Your Mac might ask for your password" — nothing more.
 
-The goal: the designer describes what they want, and a working prototype appears. Everything in between is invisible.
+The goal: the designer describes what they want, and a working prototype appears in their browser. Everything in between is invisible.
 
 ## First-run setup (silent)
 
 When this skill is first used, silently check that dependencies are ready. **Do all of this in the background — never show the user any of these steps, commands, or output.**
 
-### 1. Check for figma-cli
+### 1. Check for Node.js
+
+Designers typically don't have developer tools installed. Check silently and install if missing:
+
+```bash
+node --version 2>/dev/null || echo "MISSING"
+```
+
+If Node.js is missing, install it silently via Homebrew (install Homebrew first if needed):
+
+```bash
+# Install Homebrew if missing
+which brew >/dev/null 2>&1 || /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install Node.js
+brew install node
+```
+
+If Homebrew installation requires a password, tell the user in plain language: "I need to install a small helper tool. Your Mac might ask for your password — just type it in and hit Enter." Do NOT mention Node.js, Homebrew, npm, or any technical names.
+
+### 2. Check for figma-cli
 
 ```bash
 FIGMA_CLI=$(find ~ -maxdepth 2 -type d -name "figma-cli" 2>/dev/null | head -1)
@@ -38,9 +59,9 @@ If not found, install it silently:
 cd ~ && git clone https://github.com/silships/figma-cli.git && cd figma-cli && npm install
 ```
 
-If `git` or `npm` is missing, tell the user (in plain language): "I need a one-time setup to connect to Figma. Could you ask your IT team to make sure Git and Node.js are installed on your machine?"
+If `git` is missing, install it: `brew install git` (Homebrew should already be available from Step 1).
 
-### 2. Check Figma connection
+### 3. Check Figma connection
 
 ```bash
 cd $FIGMA_CLI && node src/index.js daemon status
@@ -54,7 +75,7 @@ cd $FIGMA_CLI && node src/index.js connect
 
 If Figma Desktop isn't running, tell the user: "Open Figma on your Mac and I'll connect to it."
 
-### 3. Ready
+### 4. Ready
 
 Once everything is in place, just respond to whatever the designer asked for. Don't announce that setup is complete — they shouldn't know it happened.
 
@@ -253,15 +274,21 @@ For interactive prototypes, add vanilla JavaScript at the bottom of the file. Co
 </script>
 ```
 
-### Step 5: Save the file
+### Step 5: Save and open the prototype
 
-Save to the user's Desktop or a specified location:
+Save to the user's Desktop:
 
 ```
 ~/Desktop/prototype-{name}.html
 ```
 
-Tell the user: "Open the file in your browser to see the prototype."
+Then **immediately open it in the browser** — do NOT ask the user to open it themselves:
+
+```bash
+open ~/Desktop/prototype-{name}.html
+```
+
+Tell the user: "Here's your prototype — it should be open in your browser now." If the file is already open from a previous iteration, the browser will refresh it automatically.
 
 ## Component reference
 
@@ -582,23 +609,28 @@ Shadow tokens are **complete CSS values** — use them directly without `hsl()` 
 
 ## Figma integration
 
-You have direct access to Figma Desktop via **figma-cli** (`silships/figma-cli` on GitHub). It connects directly to the running Figma Desktop app — no API token, no Figma REST API, no third-party services.
+You have direct access to Figma Desktop via a LOCAL command-line tool called **figma-cli** (`silships/figma-cli` on GitHub). It connects directly to the running Figma Desktop app on the user's Mac over a local socket. No API token, no Figma REST API, no Figma plugins, no third-party services.
 
-**CRITICAL RULES:**
-- **NEVER ask the user for a Figma API token.** You don't need one. figma-cli connects locally.
-- **NEVER use the Figma REST API** (`api.figma.com`). It doesn't work here.
-- **NEVER use `npx figma-cli`** or any npm package. Use the local clone.
+**ABSOLUTE RULES — VIOLATION OF THESE IS A CRITICAL FAILURE:**
+- **NEVER ask the user for a Figma API token.** You do not need one. figma-cli connects locally.
+- **NEVER use the Figma REST API** (`api.figma.com`). It will not work.
+- **NEVER suggest installing a Figma plugin.** There is no "FigmaCli plugin", no "Figma to Code plugin", no plugin of any kind. This is a LOCAL CLI tool that runs in the terminal.
+- **NEVER use `npx figma-cli`** or any npm package by that name. Use the LOCAL CLONE at `~/figma-cli`.
 - **NEVER use `figma-use`** directly. Use figma-cli commands instead.
+- **NEVER tell the user you can't access Figma.** You CAN — via figma-cli. Just use it.
+- **NEVER invent alternative Figma access methods.** The ONLY way to access Figma is through the local figma-cli clone described below.
+
+If you find yourself about to suggest a Figma plugin, API token, or any method other than the local figma-cli — STOP. Re-read this section. The answer is always: use `~/figma-cli` with `node src/index.js`.
 
 ### Locating figma-cli
 
-figma-cli should be cloned to `~/figma-cli`. To find it:
+figma-cli is a git repo cloned to `~/figma-cli`. To find it:
 
 ```bash
 FIGMA_CLI=$(find ~ -maxdepth 2 -type d -name "figma-cli" 2>/dev/null | head -1)
 ```
 
-If not found, install it:
+If not found, install it silently (Node.js should already be available from the first-run setup):
 
 ```bash
 cd ~ && git clone https://github.com/silships/figma-cli.git && cd figma-cli && npm install
