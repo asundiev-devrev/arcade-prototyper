@@ -668,6 +668,67 @@ All commands run from the figma-cli directory.
 
 **Node ID format**: Use colon format (`1038:14518`), not dash format (`1038-14518`). Figma URLs show dashes in `node-id=` params — convert them to colons.
 
+### Reading Figma annotations
+
+Designers use Figma annotations (Dev Mode notes) to document behavior, specifications, and design intent on frames and components. **You MUST read annotations when they exist** — they contain critical context for building accurate prototypes.
+
+figma-cli does not have a built-in annotations command, but the `eval` command gives full access to the Figma Plugin API, which exposes `node.annotations`.
+
+**Read annotations on a specific node:**
+
+```bash
+cd $FIGMA_CLI && node src/index.js eval "(function() {
+  var node = figma.getNodeById('NODE_ID');
+  if (!node) return 'Node not found';
+  if (!node.annotations || node.annotations.length === 0) return 'No annotations';
+  return JSON.stringify(node.annotations.map(function(a) {
+    return { label: a.label || '', labelMarkdown: a.labelMarkdown || '', properties: a.properties || [] };
+  }), null, 2);
+})()"
+```
+
+**Read annotations on the current selection:**
+
+```bash
+cd $FIGMA_CLI && node src/index.js eval "(function() {
+  var node = figma.currentPage.selection[0];
+  if (!node) return 'Nothing selected';
+  if (!node.annotations || node.annotations.length === 0) return 'No annotations';
+  return JSON.stringify(node.annotations.map(function(a) {
+    return { label: a.label || '', labelMarkdown: a.labelMarkdown || '', properties: a.properties || [] };
+  }), null, 2);
+})()"
+```
+
+**Find ALL annotated nodes on the current page:**
+
+```bash
+cd $FIGMA_CLI && node src/index.js eval "(function() {
+  var results = [];
+  function walk(n) {
+    if (n.annotations && n.annotations.length > 0) {
+      results.push({ id: n.id, name: n.name, type: n.type, annotations: n.annotations.map(function(a) {
+        return { label: a.label || '', labelMarkdown: a.labelMarkdown || '', properties: a.properties || [] };
+      })});
+    }
+    if (n.children) n.children.forEach(walk);
+  }
+  walk(figma.currentPage);
+  return JSON.stringify(results, null, 2);
+})()"
+```
+
+**What annotations contain:**
+- `label` — plain text note from the designer
+- `labelMarkdown` — rich text note (Markdown format)
+- `properties` — pinned style properties (fills, strokes, spacing, etc.)
+
+**When to read annotations:**
+- **Always** when prototyping a Figma frame — check for annotations as part of the standard workflow (Step 3 below).
+- If annotations describe behavior (e.g., "opens a modal on click", "shows loading state for 2 seconds"), implement that behavior in the prototype.
+- If annotations describe content (e.g., "this text comes from the ticket title"), use realistic sample data that matches.
+- If annotations specify states (e.g., "hover state", "error state", "empty state"), include those states in the prototype with appropriate interactivity.
+
 ### Figma-to-prototype workflow
 
 When the user shares a Figma URL or asks to prototype a frame:
@@ -677,15 +738,33 @@ When the user shares a Figma URL or asks to prototype a frame:
    ```bash
    node src/index.js export node "1038:14518" -o /tmp/figma-ref.png -s 2
    ```
-3. **Get the node tree** to understand structure:
+3. **Read annotations** on the node and its children — this is critical context from the designer:
+   ```bash
+   node src/index.js eval "(function() {
+     var results = [];
+     var root = figma.getNodeById('1038:14518');
+     if (!root) return 'Node not found';
+     function walk(n) {
+       if (n.annotations && n.annotations.length > 0) {
+         results.push({ id: n.id, name: n.name, annotations: n.annotations.map(function(a) {
+           return { label: a.label || '', labelMarkdown: a.labelMarkdown || '' };
+         })});
+       }
+       if (n.children) n.children.forEach(walk);
+     }
+     walk(root);
+     return results.length ? JSON.stringify(results, null, 2) : 'No annotations found';
+   })()"
+   ```
+4. **Get the node tree** to understand structure:
    ```bash
    node src/index.js node tree "1038:14518" -d 4
    ```
-4. **Get node properties** for colors, sizes, spacing:
+5. **Get node properties** for colors, sizes, spacing:
    ```bash
    node src/index.js get "1038:14518"
    ```
-5. **Build the HTML prototype** using the component classes and tokens from this skill. Match the intent and structure — don't try to pixel-match every value.
+6. **Build the HTML prototype** using the component classes and tokens from this skill. Incorporate any behavior, content, or state information from annotations. Match the intent and structure — don't try to pixel-match every value.
 
 ### Full reference
 
