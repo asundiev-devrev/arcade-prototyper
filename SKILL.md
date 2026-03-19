@@ -731,14 +731,18 @@ cd $FIGMA_CLI && node src/index.js eval "(function() {
 
 ### Figma-to-prototype workflow
 
-When the user shares a Figma URL or asks to prototype a frame:
+When the user shares a Figma URL or asks to prototype a frame, follow ALL of these steps. Steps 1-6 gather data from Figma. Steps 7-8 build the prototype. Step 9 validates accuracy. Do not skip any step.
+
+#### Phase 1: Extract everything from Figma
 
 1. **Extract the node ID** from the URL. Convert `node-id=1038-14518` → `1038:14518`.
-2. **Export a screenshot** for visual reference:
+
+2. **Export the full frame as a reference image** (2x for clarity):
    ```bash
    node src/index.js export node "1038:14518" -o /tmp/figma-ref.png -s 2
    ```
-3. **Read annotations** on the node and its children — this is critical context from the designer:
+
+3. **Read annotations** on the node and its children — these contain behavioral specs from the designer:
    ```bash
    node src/index.js eval "(function() {
      var results = [];
@@ -756,15 +760,153 @@ When the user shares a Figma URL or asks to prototype a frame:
      return results.length ? JSON.stringify(results, null, 2) : 'No annotations found';
    })()"
    ```
-4. **Get the node tree** to understand structure:
+
+4. **Get the full node tree** to understand the design's layer structure and hierarchy:
    ```bash
-   node src/index.js node tree "1038:14518" -d 4
+   node src/index.js node tree "1038:14518" -d 5
    ```
-5. **Get node properties** for colors, sizes, spacing:
+   Use depth 5+ to capture nested icon groups and small components. Read this tree carefully — every named layer is intentional.
+
+5. **Export icons and small components as SVGs.** Walk the node tree and identify all VECTOR, BOOLEAN_OPERATION, and small FRAME/GROUP nodes that represent icons, logos, or illustrations. Export each one as SVG using the Figma Plugin API:
+
    ```bash
-   node src/index.js get "1038:14518"
+   # Export a single icon node as SVG
+   node src/index.js eval "(function() {
+     var node = figma.getNodeById('NODE_ID');
+     if (!node) return 'Node not found';
+     return node.exportAsync({ format: 'SVG' }).then(function(data) {
+       return String.fromCharCode.apply(null, data);
+     });
+   })()"
    ```
-6. **Build the HTML prototype** using the component classes and tokens from this skill. Incorporate any behavior, content, or state information from annotations. Match the intent and structure — don't try to pixel-match every value.
+
+   Save each SVG to `/tmp/figma-icons/` with a descriptive filename based on the layer name (e.g., `search-icon.svg`, `clock-icon.svg`, `home-icon.svg`).
+
+   **Rules for icon export:**
+   - Export every icon, logo mark, and illustration — never hand-draw SVGs or approximate them.
+   - If a node has `type: 'INSTANCE'`, it's a component instance — export the whole instance as one SVG.
+   - If an icon is inside a wrapper frame, export the inner vector/group, not the padding frame.
+   - After export, inspect each SVG briefly: remove unnecessary wrapping `<g>` tags, and ensure `fill="currentColor"` is set (or the correct fill) so the icon inherits text color in HTML.
+
+   **Batch export** — when there are many icons, export them all at once:
+   ```bash
+   node src/index.js eval "(function() {
+     var root = figma.getNodeById('ROOT_NODE_ID');
+     var icons = [];
+     function walk(n) {
+       var isIcon = (n.type === 'VECTOR' || n.type === 'BOOLEAN_OPERATION' || n.type === 'INSTANCE')
+         && n.width <= 32 && n.height <= 32;
+       var isSmallGroup = (n.type === 'FRAME' || n.type === 'GROUP')
+         && n.width <= 32 && n.height <= 32
+         && n.children && n.children.some(function(c) { return c.type === 'VECTOR' || c.type === 'BOOLEAN_OPERATION'; });
+       if (isIcon || isSmallGroup) {
+         icons.push({ id: n.id, name: n.name, type: n.type, width: n.width, height: n.height });
+       }
+       if (n.children && !isIcon && !isSmallGroup) n.children.forEach(walk);
+     }
+     walk(root);
+     return JSON.stringify(icons, null, 2);
+   })()"
+   ```
+   Then export each identified icon node individually using the SVG export snippet above.
+
+6. **Extract color and style values from key nodes** and map them to design system tokens.
+
+   For each visually distinct element (backgrounds, text layers, borders, shadows), get its fill/stroke values:
+   ```bash
+   node src/index.js eval "(function() {
+     var node = figma.getNodeById('NODE_ID');
+     if (!node) return 'Node not found';
+     var result = { name: node.name, type: node.type };
+     if (node.fills) result.fills = node.fills.filter(function(f) { return f.visible !== false; });
+     if (node.strokes) result.strokes = node.strokes;
+     if (node.effects) result.effects = node.effects;
+     if (node.opacity !== undefined) result.opacity = node.opacity;
+     if (node.cornerRadius !== undefined) result.cornerRadius = node.cornerRadius;
+     if (node.paddingLeft !== undefined) result.padding = { left: node.paddingLeft, right: node.paddingRight, top: node.paddingTop, bottom: node.paddingBottom };
+     if (node.itemSpacing !== undefined) result.itemSpacing = node.itemSpacing;
+     if (node.fontSize !== undefined) { result.fontSize = node.fontSize; result.fontWeight = node.fontWeight; result.lineHeight = node.lineHeight; result.letterSpacing = node.letterSpacing; }
+     return JSON.stringify(result, null, 2);
+   })()"
+   ```
+
+   **Then map every extracted value to a design system token.** This is critical — never hardcode hex or RGB values in the prototype.
+
+#### Phase 2: Map Figma values to design system tokens
+
+This is the most important accuracy step. Every color in the prototype MUST come from the token files (`arcade-tokens.css` or `devrev-app-tokens.css`), never from hardcoded hex values.
+
+**How to map a Figma color to a token:**
+
+1. Figma gives you fills as `{ r, g, b, a }` in 0-1 range. Convert to HSL:
+   - Multiply r, g, b by 255 to get 0-255 range
+   - Convert RGB to HSL using standard conversion
+   - Round to the nearest integer values
+
+2. Look up the resulting HSL values in the token file. Token values are stored as `H S% L%` triplets (e.g., `0 0% 100%` for white, `330 2% 18%` for `--husk-1000`).
+
+3. Find the closest match. The palette tokens in `arcade-tokens.css` cover the full range:
+   - Grays/neutrals → `--husk-*` scale (100-1300)
+   - Extremes → `--day` (white) and `--night` (near-black)
+   - Blues → `--shuiguo-*` or `--maoshigua-*`
+   - Greens → `--hardy-*`
+   - Reds/pinks → `--dragonfruit-*`
+   - Orange → `--persimmon-*`
+   - Purple → `--jabuticaba-*`
+   - Yellow/gold → `--banginapalli-*`
+
+4. Prefer semantic tokens over palette tokens when available. If a color maps to `--husk-1000`, but the element is a surface background, use `--bg-layer-01` (which resolves to `--husk-1000` in dark mode). Semantic tokens adapt correctly across light/dark modes. Key semantic tokens:
+   - Text: `--text-color-primary`, `--text-color-secondary`, `--text-color-tertiary`, `--text-color-muted`
+   - Surfaces: `--bg-layer-00` through `--bg-layer-04`
+   - Borders: `--border-outline-00`, `--border-outline-01`
+   - Interactive: `--bg-interactive-*-resting`, `--bg-interactive-*-hovered`
+
+5. For typography, extract `fontSize`, `fontWeight`, `lineHeight`, and `letterSpacing` from Figma nodes and match them to the typography utility classes in `typography-spacing.css` (e.g., `.text-body`, `.text-subtitle-1`, `.text-system`). Don't hardcode font sizes — use the closest matching class.
+
+**Build a token mapping table** before writing any HTML. For example:
+
+| Element | Figma fill (RGB) | HSL | Token | CSS usage |
+|---------|-----------------|-----|-------|-----------|
+| Sidebar bg | rgb(22,22,22) | 0 0% 9% | `--husk-1300` / `--bg-layer-00` | `background: hsl(var(--bg-layer-00))` |
+| Card bg | rgb(46,44,44) | 330 2% 18% | `--husk-1000` / `--bg-layer-01` | `background: hsl(var(--bg-layer-01))` |
+| Primary text | rgb(244,244,246) | 240 14% 96% | `--husk-300` / `--text-color-primary` | `color: hsl(var(--text-color-primary))` |
+| Muted text | rgb(123,123,123) | 0 0% 48% | `--husk-700` / `--text-color-tertiary` | `color: hsl(var(--text-color-tertiary))` |
+
+Every color in the prototype must trace back to this table.
+
+#### Phase 3: Build the prototype
+
+7. **Build the HTML prototype.** Use the token mapping table from Phase 2 to write all styles. Use the exported SVGs from Step 5 for all icons — inline them directly in the HTML. Follow these rules:
+   - Every `color`, `background`, `border-color`, and `fill` property MUST use a `hsl(var(--token-name))` value. Zero exceptions.
+   - Every icon and illustration MUST come from the Figma SVG exports. Never draw SVGs by hand or approximate icon shapes.
+   - Use typography utility classes (`.text-body`, `.text-subtitle-1`, etc.) for text styling. Don't hardcode `font-size` or `font-weight`.
+   - Use spacing variables (`var(--spacing-global-*)`) for padding and gaps where possible.
+   - Match the Figma layout structure: use the node tree from Step 4 as a blueprint for your HTML hierarchy.
+
+8. **Save and open the prototype:**
+   ```bash
+   open ~/Desktop/prototype-name.html
+   ```
+
+#### Phase 4: Validate accuracy
+
+9. **Visual validation — compare prototype against Figma reference.** This step is mandatory. After opening the prototype:
+
+   a. **Take a screenshot of the prototype** in the browser at the same dimensions as the Figma export. Use the browser's screenshot capabilities or a tool.
+
+   b. **View the Figma reference** (`/tmp/figma-ref.png`) and the prototype screenshot side by side. Compare:
+      - Layout and spacing — are elements positioned correctly relative to each other?
+      - Colors — do backgrounds, text, and borders match? (They should, since you used tokens.)
+      - Icons — do they match the originals exactly? (They should, since you exported SVGs.)
+      - Typography — are sizes, weights, and line heights correct?
+      - Corner radii, shadows, borders — are they present and correct?
+
+   c. **Fix any deviations** before showing the result to the user. If you spot differences:
+      - Check your token mapping table — did you pick the wrong token?
+      - Check your SVG exports — did you export the right node?
+      - Check spacing — did you use the right spacing variable?
+
+   d. **Only deliver the prototype to the user after validation passes.** The goal is that the user sees no visible differences between the Figma design and the prototype.
 
 ### Full reference
 
@@ -772,16 +914,33 @@ See `$FIGMA_CLI/CLAUDE.md` for quick start and `$FIGMA_CLI/REFERENCE.md` for the
 
 ## Tips
 
+### Accuracy principles
+
+- **Never hardcode colors.** Every `color`, `background`, `border-color`, `fill`, and `box-shadow` in the prototype MUST use a design system token (`hsl(var(--token-name))`). If you find yourself typing a hex code like `#615E5F` or an rgb value, stop — find the matching token instead.
+- **Never hand-draw icons.** Always export SVGs from Figma using the Plugin API (`node.exportAsync({ format: 'SVG' })`). Even simple shapes like a search icon or a chevron should come from Figma, not from your imagination. The designer chose specific icons for a reason.
+- **Always validate before delivery.** After building the prototype, compare it against the Figma reference image. Fix any visible deviations before showing it to the user.
+- **Map values systematically.** Build a token mapping table (element → Figma fill → HSL → token → CSS) before writing HTML. This prevents drift and makes it easy to verify every color choice.
+
+### CSS and tokens
+
 - **Always embed all four CSS files inline** — `chip-fonts.css` + theme tokens + `typography-spacing.css` + `arcade-components.css`. This makes prototypes fully self-contained.
 - **Embed order matters**: fonts → tokens → typography/spacing → components. Components depend on tokens; typography classes are standalone utilities.
-- **Chip fonts are mandatory** — never use Inter, system fonts, or Google Fonts as the primary typeface. Chip is DevRev's design system font.
-- **Default to light mode** (`class="light"`) unless the user asks for dark.
 - **Always wrap color tokens in `hsl()`** — token values are raw HSL triplets (e.g., `0 0% 100%`), NOT complete `hsl()` calls. Write `color: hsl(var(--text-color-primary))` not `color: var(--text-color-primary)`.
 - **Shadows are different** — shadow tokens are complete values, use them directly: `box-shadow: var(--shadow-depth-02)`.
+- **Prefer semantic tokens over palette tokens** — use `--bg-layer-01` instead of `--husk-1000` when the element is a surface. Semantic tokens adapt across light/dark modes.
+- **Tokens are real production tokens** — extracted verbatim from the DevRev product monorepo. If something looks wrong, it may be a component CSS mapping issue, not a token issue.
+
+### Typography and fonts
+
+- **Chip fonts are mandatory** — never use Inter, system fonts, or Google Fonts as the primary typeface. Chip is DevRev's design system font.
+- **Use typography utility classes** (`.text-body`, `.text-subtitle-1`, `.text-system`, etc.) instead of hardcoding `font-size` and `font-weight`. Match the Figma text node's size and weight to the closest class.
+
+### General
+
+- **Default to light mode** (`class="light"`) unless the user asks for dark.
 - **Arcade sub-themes**: The Arcade theme supports sub-themes via `data-arcade-theme` attribute — `"jabuticaba"` (default) or `"dragonfruit"`. This changes which palette maps to `--action` and `--intelligence` aliases.
 - **Keep it semantic** — use the right component for the job (badges for status, cards for grouping, etc.).
 - **Add hover states** — they make prototypes feel alive. The component CSS includes them by default.
 - **Mobile prototypes**: Set `data-device="mobile"` and add `<meta name="viewport" content="width=device-width, initial-scale=1.0">`.
-- When the user provides a **Figma screenshot**, map visual elements to the closest component class. Don't try to pixel-match — match the intent and feel.
+- When the user provides a **Figma screenshot** (not a Figma file link), map visual elements to the closest component class and tokens. You won't have direct Figma node access, so do your best to match — but flag to the user that accuracy is higher when working from a Figma file link.
 - **Theme comparison**: To show both themes side by side, create two prototypes with different `data-theme` values. Don't mix themes in one file.
-- **Tokens are real production tokens** — extracted verbatim from the DevRev product monorepo. If something looks wrong, it may be a component CSS mapping issue, not a token issue.
