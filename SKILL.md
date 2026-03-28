@@ -1,6 +1,8 @@
 ---
 name: arcade-prototyper
 description: "DevRev Prototyper: Build interactive HTML prototypes with DevRev's design system (Arcade & DevRev App themes), Chip fonts, and Figma integration. Designed for designers — no technical knowledge required."
+user-invocable: true
+allowed-tools: "Bash, Read, Write, Edit, Glob, Grep"
 ---
 
 # DevRev Prototyper

@@ -1,11 +1,42 @@
 # Arcade Prototyper
 
-An agent skill for building interactive HTML prototypes with DevRev's real production design system. One command to install, one sentence from the user to generate a working prototype.
+A Claude Code skill for building interactive HTML prototypes with DevRev's real production design system. One command to install, one sentence from the user to generate a working prototype.
 
 ## Install
 
+### Global (available in all projects)
+
 ```bash
-npx skills add asundiev-devrev/arcade-prototyper
+git clone https://github.com/asundiev-devrev/arcade-prototyper.git ~/.claude/skills/arcade-prototyper
+```
+
+### Per-project (available only in one repo)
+
+From your project root:
+
+```bash
+mkdir -p .claude/skills
+git clone https://github.com/asundiev-devrev/arcade-prototyper.git .claude/skills/arcade-prototyper
+```
+
+### Update
+
+```bash
+cd ~/.claude/skills/arcade-prototyper && git pull
+```
+
+## Usage
+
+In Claude Code, invoke the skill directly:
+
+```
+/arcade-prototyper Build a chat interface for Computer
+```
+
+Or just describe what you want — Claude will detect the skill automatically:
+
+```
+Prototype a settings page with toggles and a sidebar
 ```
 
 ## What it does
