@@ -19,6 +19,7 @@ export const projectSchema = z.object({
   theme: z.enum(["arcade", "devrev-app"]),
   mode: z.enum(["light", "dark"]).default("light"),
   sessionId: z.string().optional(),
+  computerConversationId: z.string().optional(),
   frames: z.array(frameSchema).default([]),
   coverThumbnail: z.string().optional(),
   deployments: z.array(z.object({

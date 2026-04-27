@@ -8,11 +8,33 @@ import {
 } from "react";
 import { ChatInput } from "../../../prototype-kit/composites/ChatInput";
 import { extractFigmaUrl } from "../../lib/figmaUrl";
+import {
+  MentionPopover,
+  filterMentions,
+  type MentionOption,
+} from "./MentionPopover";
 
 interface PromptInputProps {
   busy: boolean;
   projectSlug: string;
   onSend: (prompt: string, images: string[]) => void;
+}
+
+/**
+ * Looks backward from the caret for an active "@word" token. Returns the
+ * token (without @) and the index of the @ if one is open, else null.
+ * Active means: @ is at start or preceded by whitespace, and the text
+ * between @ and the caret contains no whitespace.
+ */
+function detectMentionAtCaret(value: string, caret: number): { query: string; atIdx: number } | null {
+  const slice = value.slice(0, caret);
+  const atIdx = slice.lastIndexOf("@");
+  if (atIdx === -1) return null;
+  const before = atIdx === 0 ? "" : slice[atIdx - 1];
+  if (before && !/\s/.test(before)) return null;
+  const query = slice.slice(atIdx + 1);
+  if (/\s/.test(query)) return null;
+  return { query, atIdx };
 }
 
 export function PromptInput({ busy, projectSlug, onSend }: PromptInputProps) {
@@ -21,7 +43,14 @@ export function PromptInput({ busy, projectSlug, onSend }: PromptInputProps) {
   const [imagePaths, setImagePaths] = useState<string[]>([]);
   const [detectedFigmaUrl, setDetectedFigmaUrl] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [mention, setMention] = useState<{
+    query: string;
+    atIdx: number;
+    anchor: { left: number; bottom: number };
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const mountedRef = useRef(true);
   const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -125,10 +154,48 @@ export function PromptInput({ busy, projectSlug, onSend }: PromptInputProps) {
     setImages([]);
     setImagePaths([]);
     setDetectedFigmaUrl(null);
+    setMention(null);
   };
 
+  function updateMentionFromCaret(next: string, el: HTMLInputElement | HTMLTextAreaElement | null) {
+    if (!el) { setMention(null); return; }
+    const caret = el.selectionStart ?? next.length;
+    const detected = detectMentionAtCaret(next, caret);
+    if (!detected || filterMentions(detected.query).length === 0) {
+      setMention(null);
+      return;
+    }
+    const container = containerRef.current;
+    const rect = container?.getBoundingClientRect();
+    const left = rect ? rect.left + 24 : 24;
+    const bottom = rect ? window.innerHeight - rect.top + 8 : 80;
+    setMention({ query: detected.query, atIdx: detected.atIdx, anchor: { left, bottom } });
+  }
+
+  function insertMention(option: MentionOption) {
+    if (!mention) return;
+    const before = text.slice(0, mention.atIdx);
+    // Replace from @ through current caret (which is mention.atIdx + query length)
+    const afterStart = mention.atIdx + 1 + mention.query.length;
+    const after = text.slice(afterStart);
+    const insertion = `@${option.token} `;
+    const next = `${before}${insertion}${after}`;
+    setText(next);
+    setMention(null);
+    const el = inputRef.current;
+    if (el) {
+      const caret = before.length + insertion.length;
+      requestAnimationFrame(() => {
+        el.focus();
+        try { el.setSelectionRange(caret, caret); } catch { /* input types without selection support */ }
+      });
+    }
+  }
+
+  const hasComputerMention = /^@Computer\b/i.test(text);
+
   return (
-    <div onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
+    <div ref={containerRef} onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
       <input
         ref={fileInputRef}
         type="file"
@@ -179,27 +246,42 @@ export function PromptInput({ busy, projectSlug, onSend }: PromptInputProps) {
         multiline
         maxRows={8}
         value={text}
+        inputRef={inputRef}
         onChange={(e) => {
-          const next = (e.target as HTMLInputElement | HTMLTextAreaElement).value;
+          const el = e.target as HTMLInputElement | HTMLTextAreaElement;
+          const next = el.value;
           setText(next);
           // Check for Figma URL as user types
           const url = extractFigmaUrl(next);
           setDetectedFigmaUrl(url);
+          updateMentionFromCaret(next, el);
         }}
-        onSubmit={submit}
+        onSubmit={() => {
+          // If the mention popover is open and has results, let it handle Enter.
+          if (mention) return;
+          submit();
+        }}
         placeholder="Ask me anything"
         attachments={
-          <>
-            {images.map((url, i) => (
-              <ChatInput.FileAttachment key={i} kind="IMG" name={`image-${i}`} />
-            ))}
-            {detectedFigmaUrl && (
-              <ChatInput.ContextAttachment
-                title="Figma frame"
-                subtitle={detectedFigmaUrl.slice(0, 20) + "..."}
-              />
-            )}
-          </>
+          (images.length > 0 || detectedFigmaUrl || hasComputerMention) ? (
+            <>
+              {hasComputerMention && (
+                <ChatInput.ContextAttachment
+                  title="Computer"
+                  subtitle="DevRev agent"
+                />
+              )}
+              {images.map((url, i) => (
+                <ChatInput.FileAttachment key={i} kind="IMG" name={`image-${i}`} />
+              ))}
+              {detectedFigmaUrl && (
+                <ChatInput.ContextAttachment
+                  title="Figma frame"
+                  subtitle={detectedFigmaUrl.slice(0, 20) + "..."}
+                />
+              )}
+            </>
+          ) : undefined
         }
         trailing={
           <>
@@ -208,6 +290,14 @@ export function PromptInput({ busy, projectSlug, onSend }: PromptInputProps) {
           </>
         }
       />
+      {mention && (
+        <MentionPopover
+          query={mention.query}
+          anchor={mention.anchor}
+          onSelect={insertMention}
+          onDismiss={() => setMention(null)}
+        />
+      )}
     </div>
   );
 }
