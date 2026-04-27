@@ -64,6 +64,10 @@ type RootProps = {
   agentStudioLink?: ReactNode;
   user?: ReactNode;
   footerAction?: ReactNode;
+  /** Optional pinned row rendered above the first group — e.g. a "Today's
+   *  Daily Digest" banner on the Computer web surface. Pass a
+   *  `<ComputerSidebar.Banner />` here. */
+  banner?: ReactNode;
   children?: ReactNode;
 };
 
@@ -77,6 +81,7 @@ function Root({
   agentStudioLink = ACTION_ROW_UNSET as unknown as ReactNode,
   user,
   footerAction,
+  banner,
   children,
 }: RootProps) {
   // The primary action row (New Chat + history) is Computer's defining feature.
@@ -103,7 +108,10 @@ function Root({
         </div>
       ) : null}
 
-      <nav className="flex-1 min-h-0 overflow-auto">{children}</nav>
+      <nav className="flex-1 min-h-0 overflow-auto">
+        {banner ? <div className="px-2 pt-2">{banner}</div> : null}
+        {children}
+      </nav>
 
       {agentStudio ? <div className="px-2 pb-1 shrink-0">{agentStudio}</div> : null}
 
@@ -330,6 +338,46 @@ function User({ avatar, name, subtitle }: UserProps) {
   );
 }
 
+/* ─── Banner (pinned row above the first group) ─────────────────────────── */
+/**
+ * A distinct "pinned" row rendered via the Root `banner` slot. Used on the
+ * Computer web surface for the "Today's Daily Digest by …" card that sits
+ * above the saved-chats list. Two lines: a bold label (primary) and an
+ * optional muted subtitle, inside a soft-surface pill with no leading icon.
+ */
+type BannerProps = {
+  children: ReactNode;
+  subtitle?: ReactNode;
+  active?: boolean;
+  onClick?: () => void;
+};
+
+function Banner({ children, subtitle, active, onClick }: BannerProps) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      data-active={active ? "true" : undefined}
+      onClick={onClick}
+      className={[
+        "flex flex-col gap-0.5 px-3 py-2 rounded-square cursor-pointer select-none",
+        active
+          ? "bg-(--control-bg-neutral-subtle-active)"
+          : "bg-(--bg-neutral-soft) hover:bg-(--control-bg-neutral-subtle-hover)",
+      ].join(" ")}
+    >
+      <span className="text-system text-(--fg-neutral-prominent) truncate">
+        {children}
+      </span>
+      {subtitle ? (
+        <span className="text-caption text-(--fg-neutral-subtle) truncate">
+          {subtitle}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 /* ─── Compound export ───────────────────────────────────────────────────── */
 
-export const ComputerSidebar = Object.assign(Root, { Group, Item, User });
+export const ComputerSidebar = Object.assign(Root, { Group, Item, User, Banner });

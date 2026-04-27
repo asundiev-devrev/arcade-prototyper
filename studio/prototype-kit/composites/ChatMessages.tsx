@@ -38,7 +38,14 @@
  *   </ChatMessages>
  */
 import { useState, type ReactNode } from "react";
-import { ChevronDownSmall, ChevronRightSmall } from "@xorkavi/arcade-gen";
+import {
+  ChevronDownSmall,
+  ChevronRightSmall,
+  ThumbsUp,
+  ThumbsDown,
+  TwoSquaresOverlapping,
+  IconButton,
+} from "@xorkavi/arcade-gen";
 
 /* ─── Root ──────────────────────────────────────────────────────────────── */
 
@@ -294,10 +301,76 @@ function ThoughtItem({ subtitle, status = "done", children }: ThoughtItemProps) 
   );
 }
 
+/* ─── Actions row (feedback affordances under an assistant response) ────── */
+/**
+ * Copy / thumbs-up / thumbs-down cluster rendered under an assistant turn
+ * on surfaces that surface feedback (Computer web). Render inside or under
+ * a `<ChatMessages.Agent>` block as the last child. Each button fires an
+ * optional `onCopy|onThumbUp|onThumbDown` handler; the caller owns state.
+ */
+type ActionsProps = {
+  onCopy?: () => void;
+  onThumbUp?: () => void;
+  onThumbDown?: () => void;
+  /** Show a filled/"selected" appearance on one of the two thumbs. */
+  rating?: "up" | "down" | null;
+};
+
+function Actions({ onCopy, onThumbUp, onThumbDown, rating = null }: ActionsProps) {
+  return (
+    <div className="flex items-center gap-1 mt-1 text-(--fg-neutral-subtle)">
+      <IconButton aria-label="Copy" variant="tertiary" size="sm" onClick={onCopy}>
+        <TwoSquaresOverlapping />
+      </IconButton>
+      <IconButton
+        aria-label="Good response"
+        variant="tertiary"
+        size="sm"
+        onClick={onThumbUp}
+        data-active={rating === "up" ? "true" : undefined}
+      >
+        <ThumbsUp />
+      </IconButton>
+      <IconButton
+        aria-label="Bad response"
+        variant="tertiary"
+        size="sm"
+        onClick={onThumbDown}
+        data-active={rating === "down" ? "true" : undefined}
+      >
+        <ThumbsDown />
+      </IconButton>
+    </div>
+  );
+}
+
+/* ─── Sender label (name above a third-party user's message cluster) ────── */
+/**
+ * A small label rendered above a message bubble cluster when it's from a
+ * *different* user in a multiplayer Computer chat — e.g. "Arthur Nurse"
+ * above Arthur's bubble when he @-mentions Computer in the same thread.
+ * Omit for the current user's own bubbles and for the Computer agent.
+ */
+type SenderProps = {
+  avatar?: ReactNode;
+  children: ReactNode;
+};
+
+function Sender({ avatar, children }: SenderProps) {
+  return (
+    <div className="flex items-center gap-2 pt-2 text-caption text-(--fg-neutral-subtle)">
+      {avatar ? <span className="shrink-0 w-5 h-5 inline-flex items-center justify-center">{avatar}</span> : null}
+      <span className="truncate">{children}</span>
+    </div>
+  );
+}
+
 /* ─── Compound export ───────────────────────────────────────────────────── */
 
 export const ChatMessages = Object.assign(Root, {
   Agent,
   Thoughts,
   ThoughtItem,
+  Actions,
+  Sender,
 });
