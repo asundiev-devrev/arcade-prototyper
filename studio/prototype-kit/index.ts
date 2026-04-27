@@ -17,6 +17,10 @@ export { ChatEmptyState } from "./composites/ChatEmptyState.js";
 export { ChatMessages } from "./composites/ChatMessages.js";
 export { SettingsCard } from "./composites/SettingsCard.js";
 export { SettingsRow } from "./composites/SettingsRow.js";
+export { VistaHeader } from "./composites/VistaHeader.js";
+export { VistaToolbar } from "./composites/VistaToolbar.js";
+export { VistaGroupRail } from "./composites/VistaGroupRail.js";
 
 // Templates
 export { SettingsPage } from "./templates/SettingsPage.js";
+export { VistaPage } from "./templates/VistaPage.js";
