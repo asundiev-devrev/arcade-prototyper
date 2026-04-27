@@ -1,0 +1,31 @@
+{
+  "name": "arcade-prototyper",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "studio": "vite --config studio/vite.config.ts",
+    "studio:test": "vitest run --config studio/vitest.config.ts"
+  },
+  "dependencies": {
+    "@xorkavi/arcade-gen": "^1.0.0",
+    "chokidar": "^4.0.0",
+    "esbuild": "^0.25.0",
+    "react": "^19.0.0",
+    "react-day-picker": "^9.14.0",
+    "react-dom": "^19.0.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
+    "@testing-library/react": "^16.0.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^6.0.1",
+    "jsdom": "^26.0.0",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.8",
+    "vitest": "^4.0.18"
+  }
+}
