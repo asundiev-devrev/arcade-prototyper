@@ -8,8 +8,9 @@ intentionally too opinionated for the production `arcade` design system.
 ## Layout
 
 - `composites/` — opinionated multi-part building blocks (AppShell, TitleBar,
-  NavSidebar, BreadcrumbBar, PageBody, SettingsCard, SettingsRow, …). Each
-  wraps one named compound frame in the DevRev Figma library.
+  NavSidebar, BreadcrumbBar, PageBody, SettingsCard, SettingsRow, VistaHeader,
+  VistaToolbar, VistaGroupRail, …). Each wraps one named compound frame in the
+  DevRev Figma library.
 - `templates/` — full-page slot-based templates (SettingsPage, ChatPage,
   VistaPage, …). Each maps to one page type that appears repeatedly in DevRev
   Figma frames.
