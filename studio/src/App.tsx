@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { DevRevThemeProvider, Toaster } from "@xorkavi/arcade-gen";
+import { FrameFontProxy } from "./frame/FrameFontProxy";
 import { ProjectList } from "./routes/ProjectList";
 import { ProjectDetail } from "./routes/ProjectDetail";
 
@@ -70,6 +71,7 @@ export function App() {
 
   return (
     <DevRevThemeProvider mode={studioMode}>
+      <FrameFontProxy />
       {openSlug === null ? (
         <ProjectList onOpen={openProject} />
       ) : (
