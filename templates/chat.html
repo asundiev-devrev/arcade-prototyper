@@ -2,12 +2,21 @@
   Template: Chat / Conversation
   Theme: Arcade (Computer / Agent Studio)
 
-  A Computer-style AI chat interface with:
-  - Collapsible sidebar with teams, chats, and navigation
-  - macOS-style window chrome
-  - Chat area with user bubbles and AI responses
-  - Thinking pill for AI processing state
-  - Input bar with cursor animation
+  A Computer-style chat interface with two variants:
+  - data-mode="computer" (default): conversation with the Computer agent.
+    Uses the Computer input bar (progressive blur, Computer-logo leading
+    icon, yellow send button).
+  - data-mode="dm": conversation with another person (DM). Uses the
+    people-DM input bar (flat pill field, emoji leading icon, circular +
+    trailing button — no blur, no send button).
+
+  Sidebar shows only the "Chat" section (matches production), a numeric
+  unread badge on group chats, online dot on the avatar corner, and a
+  "DevRev" role subtitle under the user name in the footer.
+
+  Shared-Computer-chat link bubble (.shared-chat-link) — a local reusable
+  message variant used in DM threads to reference a Computer conversation
+  that was shared with another person.
 
   To use: Replace {{FONTS}}, {{TOKENS}}, {{TYPOGRAPHY}}, {{COMPONENTS}}
   placeholders with the contents of the corresponding CSS files.
@@ -122,42 +131,13 @@ body {
   flex-shrink: 0;
 }
 
-.btn-new-chat {
-  height: 40px;
-  flex: 1;
-  background: hsl(var(--night));
-  color: hsl(var(--day));
-  border: none;
-  border-radius: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 15px;
-  font-variation-settings: 'wght' 440;
-  padding: 0 16px;
-  transition: background 0.15s;
-}
-.btn-new-chat:hover { background: hsl(var(--husk-1100)); }
-.btn-new-chat svg { flex-shrink: 0; }
-
-.btn-history {
+.sidebar-header .arcade-btn { height: 40px; }
+.sidebar-header .arcade-btn--new-chat { flex: 1; justify-content: flex-start; gap: 6px; }
+.sidebar-header .arcade-btn--icon-only {
   width: 40px;
-  height: 40px;
-  background: hsla(var(--night) / 0.06);
-  border: none;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: hsl(var(--text-color-primary));
-  flex-shrink: 0;
-  transition: background 0.15s;
+  min-width: 0;
+  padding: 0;
 }
-.btn-history:hover { background: hsla(var(--night) / 0.1); }
 
 /* ── Sidebar: Sections ── */
 .sidebar-content {
@@ -177,6 +157,46 @@ body {
   display: flex;
   align-items: center;
 }
+
+/* Section header row: icon + label + trailing action (e.g. "Chat" with + button) */
+.section-header {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px 0 18px;
+  color: hsl(var(--text-color-secondary, var(--text-color-primary)));
+}
+.section-header-icon {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: hsl(var(--text-color-tertiary));
+  flex-shrink: 0;
+}
+.section-header-label {
+  flex: 1;
+  font-size: 13px;
+  font-variation-settings: 'wght' 540;
+  color: hsl(var(--text-color-primary));
+}
+.section-header-action {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: hsl(var(--text-color-tertiary));
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.section-header-action:hover { background: hsla(var(--night) / 0.06); color: hsl(var(--text-color-primary)); }
 
 .nav-item {
   height: 28px;
@@ -221,13 +241,43 @@ body {
   border-radius: 50%;
   flex-shrink: 0;
   background: hsl(var(--bg-layer-03));
-  overflow: hidden;
+  overflow: visible;
   position: relative;
 }
 .user-avatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+
+/* Corner online indicator that sits on the avatar itself */
+.user-avatar--online::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #2CC26B;
+  box-shadow: 0 0 0 1.5px hsl(var(--bg-layer-02));
+}
+
+/* Group chat unread-count badge — replaces the avatar */
+.group-badge {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: hsla(var(--night) / 0.08);
+  color: hsl(var(--text-color-primary));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-variation-settings: 'wght' 540;
 }
 
 .nav-item-text {
@@ -235,14 +285,6 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.online-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: hsl(var(--night));
-  flex-shrink: 0;
 }
 
 /* ── Sidebar: Bottom Nav ── */
@@ -273,15 +315,50 @@ body {
   height: 36px;
   border-radius: 50%;
   background: hsl(var(--bg-layer-03));
-  overflow: hidden;
+  overflow: visible;
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  flex-shrink: 0;
 }
 .sidebar-footer-avatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+.sidebar-footer-avatar.user-avatar--online::after {
+  width: 10px;
+  height: 10px;
+  right: 0;
+  bottom: 0;
+  box-shadow: 0 0 0 2px hsl(var(--bg-layer-02));
+}
+
+.sidebar-footer-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 0 10px;
+  min-width: 0;
+}
+.sidebar-footer-name {
+  font-size: 13px;
+  font-variation-settings: 'wght' 540;
+  color: hsl(var(--text-color-primary));
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar-footer-role {
+  font-size: 11px;
+  font-variation-settings: 'wght' 440;
+  color: hsl(var(--text-color-tertiary));
+  line-height: 1.2;
+  margin-top: 2px;
 }
 
 .sidebar-footer-spacer { flex: 1; }
@@ -366,6 +443,66 @@ body {
   font-size: 13px;
   font-variation-settings: 'wght' 540;
   line-height: 20px;
+  max-width: 66%;
+}
+
+/* Incoming bubble (other participant in a DM) */
+.peer-bubble {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 16px;
+}
+.peer-bubble-text {
+  background: hsla(var(--night) / 0.06);
+  color: hsl(var(--text-color-primary));
+  padding: 10px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-variation-settings: 'wght' 540;
+  line-height: 20px;
+  max-width: 66%;
+}
+
+/* Centred date / status separator */
+.date-separator {
+  display: flex;
+  justify-content: center;
+  font-size: 11px;
+  font-variation-settings: 'wght' 440;
+  color: hsl(var(--text-color-tertiary));
+  margin: 16px 0 10px;
+}
+
+/* Shared Computer chat link bubble (DM variant).
+   Renders the brand wordmark "computer" + the chat title as a pastel
+   link card; clicking it would open the referenced Computer conversation. */
+.shared-chat-link {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  background: hsl(var(--bg-object-mention, var(--maoshigua-100, 210 92% 92%)) / 0.55);
+  color: hsl(var(--text-color-primary));
+  padding: 10px 14px;
+  border-radius: 18px;
+  max-width: 66%;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+.shared-chat-link:hover { filter: brightness(0.98); }
+.shared-chat-link-brand {
+  font-family: 'Chip Display Variable', var(--font-display, serif);
+  font-style: italic;
+  font-size: 13px;
+  font-variation-settings: 'wght' 440;
+  color: hsl(var(--text-color-tertiary));
+  line-height: 1.2;
+}
+.shared-chat-link-title {
+  font-size: 14px;
+  font-variation-settings: 'wght' 660;
+  color: hsl(var(--color-object-mention, var(--persimmon-600, 18 90% 50%)));
+  line-height: 1.3;
 }
 
 /* AI response */
@@ -655,10 +792,106 @@ body {
 /* ── Icon helpers ── */
 .icon-sm { width: 16px; height: 16px; }
 .icon-md { width: 20px; height: 20px; }
+
+/* ── Mode toggles (data-mode on .app) ── */
+.app[data-mode="dm"] .topbar--computer,
+.app[data-mode="dm"] .input-bar--computer,
+.app[data-mode="dm"] .progressive-blur,
+.app[data-mode="dm"] .chat-content--computer {
+  display: none;
+}
+.app[data-mode="computer"] .topbar--dm,
+.app[data-mode="computer"] .input-bar--dm,
+.app[data-mode="computer"] .chat-content--dm {
+  display: none;
+}
+
+/* ── DM: Top header ── */
+.topbar--dm {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.topbar-title-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 4px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.topbar-title-pill:hover { background: hsla(var(--night) / 0.05); }
+.topbar-title-pill .user-avatar { width: 24px; height: 24px; }
+.topbar-title-pill-name {
+  font-size: 14px;
+  font-variation-settings: 'wght' 660;
+  color: hsl(var(--text-color-primary));
+}
+
+/* ── DM: Input bar ── */
+.input-bar--dm {
+  height: 72px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 8px;
+  flex-shrink: 0;
+  border-top: 1px solid hsla(var(--night) / 0.06);
+  background: hsl(var(--day));
+}
+.input-bar--dm .emoji-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: hsl(var(--text-color-tertiary));
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.input-bar--dm .emoji-btn:hover { background: hsla(var(--night) / 0.06); }
+
+.input-bar--dm .dm-input {
+  flex: 1;
+  height: 40px;
+  border-radius: 20px;
+  background: hsla(var(--night) / 0.04);
+  border: 1px solid hsla(var(--night) / 0.06);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  font-size: 14px;
+  font-variation-settings: 'wght' 440;
+  color: hsl(var(--text-color-tertiary));
+}
+
+.input-bar--dm .dm-plus {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: hsla(var(--night) / 0.06);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: hsl(var(--text-color-primary));
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.input-bar--dm .dm-plus:hover { background: hsla(var(--night) / 0.1); }
   </style>
 </head>
 <body>
-  <div class="app">
+  <div class="app" data-mode="computer">
 
     <!-- ═══ SIDEBAR ═══ -->
     <div class="sidebar">
@@ -680,11 +913,11 @@ body {
 
       <!-- New Chat -->
       <div class="sidebar-header">
-        <button class="btn-new-chat">
+        <button class="arcade-btn arcade-btn--secondary arcade-btn--L arcade-btn--new-chat">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3a2 2 0 012-2h8a2 2 0 012 2v6a2 2 0 01-2 2H6l-3 2.5V11H4a2 2 0 01-2-2V3z"/><line x1="8" y1="4" x2="8" y2="8"/><line x1="6" y1="6" x2="10" y2="6"/></svg>
-          New chat
+          New Chat
         </button>
-        <button class="btn-history" aria-label="History">
+        <button class="arcade-btn arcade-btn--secondary arcade-btn--L arcade-btn--icon-only" aria-label="History">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="10" cy="10" r="7" stroke-dasharray="3 3"/><polyline points="10,6 10,10 13,12"/></svg>
         </button>
       </div>
@@ -692,88 +925,64 @@ body {
       <!-- Scrollable content -->
       <div class="sidebar-content">
 
-        <!-- Teams -->
-        <div class="section-label">Teams</div>
-        <a class="nav-item">
-          <div class="team-avatar" style="background: #A0ED1A;">⚡</div>
-          <span class="nav-item-text">Design</span>
-        </a>
-        <a class="nav-item">
-          <div class="team-avatar" style="background: #3DF2B9;">⚡</div>
-          <span class="nav-item-text">Engineering</span>
-        </a>
-        <a class="nav-item">
-          <div class="team-avatar" style="background: #95DFFF;">▶</div>
-          <span class="nav-item-text">Product</span>
-        </a>
-        <a class="nav-item nav-item--muted">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="3" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="13" cy="8" r="1.5"/></svg>
-          <span class="nav-item-text">More</span>
-        </a>
+        <!-- Chat section header -->
+        <div class="section-header">
+          <span class="section-header-icon">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4a2 2 0 012-2h8a2 2 0 012 2v6a2 2 0 01-2 2H6l-3 2.5V12H4a2 2 0 01-2-2V4z"/></svg>
+          </span>
+          <span class="section-header-label">Chat</span>
+          <button class="section-header-action" aria-label="New chat">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/></svg>
+          </button>
+        </div>
 
-        <!-- Chats -->
-        <div class="section-label" style="margin-top: 4px;">Chats</div>
         <a class="nav-item">
-          <div class="user-avatar"><img src="https://i.pravatar.cc/40?u=alex" alt=""></div>
-          <span class="nav-item-text">Alex, Sam, Jordan, Riley</span>
-          <span class="online-dot"></span>
+          <div class="user-avatar user-avatar--online"><img src="https://i.pravatar.cc/40?u=arthur" alt=""></div>
+          <span class="nav-item-text">Arthur Nurse</span>
         </a>
         <a class="nav-item">
-          <div class="user-avatar"><img src="https://i.pravatar.cc/40?u=sam" alt=""></div>
-          <span class="nav-item-text">Sam</span>
-          <span class="online-dot"></span>
+          <div class="user-avatar user-avatar--online"><img src="https://i.pravatar.cc/40?u=tom" alt=""></div>
+          <span class="nav-item-text">Tom Shurrock</span>
         </a>
         <a class="nav-item">
-          <div class="user-avatar"><img src="https://i.pravatar.cc/40?u=jordan" alt=""></div>
-          <span class="nav-item-text">Jordan</span>
-          <span class="online-dot"></span>
+          <div class="user-avatar"><img src="https://i.pravatar.cc/40?u=puja" alt=""></div>
+          <span class="nav-item-text">puja</span>
         </a>
         <a class="nav-item">
-          <div class="user-avatar"><img src="https://i.pravatar.cc/40?u=riley" alt=""></div>
-          <span class="nav-item-text">Riley</span>
-          <span class="online-dot"></span>
+          <div class="group-badge">5</div>
+          <span class="nav-item-text">Tom Shurrock, Anton Bon…</span>
         </a>
         <a class="nav-item">
-          <div class="user-avatar"><img src="https://i.pravatar.cc/40?u=morgan" alt=""></div>
-          <span class="nav-item-text">Morgan</span>
-          <span class="online-dot"></span>
+          <div class="user-avatar"><img src="https://i.pravatar.cc/40?u=beni" alt=""></div>
+          <span class="nav-item-text">Beni</span>
         </a>
         <a class="nav-item">
-          <div class="user-avatar"><img src="https://i.pravatar.cc/40?u=casey" alt=""></div>
-          <span class="nav-item-text">Casey</span>
+          <div class="group-badge">7</div>
+          <span class="nav-item-text">Polina Khokhonova, Gil, S…</span>
         </a>
         <a class="nav-item">
-          <div class="user-avatar"><img src="https://i.pravatar.cc/40?u=taylor" alt=""></div>
-          <span class="nav-item-text">Taylor</span>
-        </a>
-        <a class="nav-item nav-item--muted">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="3" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="13" cy="8" r="1.5"/></svg>
-          <span class="nav-item-text">More</span>
-        </a>
-      </div>
-
-      <!-- Bottom nav -->
-      <div class="sidebar-bottom-nav">
-        <a class="nav-item">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="2" y="4" width="16" height="12" rx="2"/><path d="M2 7h16"/><path d="M6 10h4"/></svg>
-          <span class="nav-item-text">Inbox</span>
+          <div class="user-avatar user-avatar--online"><img src="https://i.pravatar.cc/40?u=andrey" alt=""></div>
+          <span class="nav-item-text">Andrey Sundiev (Me)</span>
         </a>
         <a class="nav-item">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="10" cy="10" r="7"/><circle cx="10" cy="10" r="2"/><path d="M10 3v2M10 15v2M3 10h2M15 10h2"/></svg>
-          <span class="nav-item-text">Agent Studio</span>
+          <div class="group-badge">4</div>
+          <span class="nav-item-text">Tim Cherny, Miha Cuden, …</span>
         </a>
         <a class="nav-item">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="5" cy="5" r="2"/><circle cx="15" cy="5" r="2"/><circle cx="5" cy="15" r="2"/><circle cx="15" cy="15" r="2"/><line x1="7" y1="5" x2="13" y2="5"/><line x1="5" y1="7" x2="5" y2="13"/></svg>
-          <span class="nav-item-text">Discover</span>
+          <div class="user-avatar"><img src="https://i.pravatar.cc/40?u=athila" alt=""></div>
+          <span class="nav-item-text">Athila Armstrong</span>
         </a>
       </div>
 
       <!-- Footer -->
       <div class="sidebar-footer">
-        <div class="sidebar-footer-avatar">
+        <div class="sidebar-footer-avatar user-avatar--online">
           <img src="https://i.pravatar.cc/72?u=me" alt="">
         </div>
-        <div class="sidebar-footer-spacer"></div>
+        <div class="sidebar-footer-info">
+          <span class="sidebar-footer-name">Andrey Sundiev</span>
+          <span class="sidebar-footer-role">DevRev</span>
+        </div>
         <button class="btn-notifications" aria-label="Notifications">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M5 8a5 5 0 0 1 10 0c0 4 2 5.5 2 5.5H3S5 12 5 8z"/><path d="M8 15.5a2 2 0 0 0 4 0"/></svg>
         </button>
@@ -783,16 +992,25 @@ body {
     <!-- ═══ MAIN AREA ═══ -->
     <div class="main">
 
-      <!-- Topbar -->
-      <div class="topbar">
+      <!-- Topbar (Computer variant) -->
+      <div class="topbar topbar--computer">
         <span class="topbar-title">Project status update</span>
         <button class="topbar-btn" aria-label="New chat">
           <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path d="M8.5 10.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7zm0-1.5a2 2 0 110-4 2 2 0 010 4zm-5.25 8.5c0-2.75 2.25-5 5.25-5 .83 0 1.62.18 2.33.52a.75.75 0 10.64-1.36A6.72 6.72 0 008.5 11c-3.58 0-6.75 2.83-6.75 6.5a.75.75 0 001.5 0zm12.25-3a.75.75 0 00-1.5 0v1.25H12.75a.75.75 0 000 1.5H14v1.25a.75.75 0 001.5 0v-1.25h1.25a.75.75 0 000-1.5H15.5V14.5z"/></svg>
         </button>
       </div>
 
-      <!-- Chat content -->
-      <div class="chat-content">
+      <!-- Topbar (DM variant) -->
+      <div class="topbar topbar--dm">
+        <span class="topbar-title-pill">
+          <span class="user-avatar"><img src="https://i.pravatar.cc/40?u=arthur" alt=""></span>
+          <span class="topbar-title-pill-name">Arthur Nurse</span>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4,6 8,10 12,6"/></svg>
+        </span>
+      </div>
+
+      <!-- Chat content (Computer variant) -->
+      <div class="chat-content chat-content--computer">
 
         <!-- User bubble -->
         <div class="user-bubble">
@@ -847,8 +1065,46 @@ body {
         <div class="progressive-blur-fade"></div>
       </div>
 
-      <!-- Input bar -->
-      <div class="input-bar focused">
+      <!-- Chat content (DM variant) -->
+      <div class="chat-content chat-content--dm">
+
+        <div class="date-separator">Apr 16 at 4:10 PM</div>
+
+        <!-- Shared Computer chat link (from Arthur to me) -->
+        <div class="peer-bubble">
+          <a class="shared-chat-link">
+            <span class="shared-chat-link-brand">computer</span>
+            <span class="shared-chat-link-title">Creating enhancement for Design System</span>
+          </a>
+        </div>
+
+        <div class="user-bubble">
+          <div class="user-bubble-text">Hey, checkout my chat with computer</div>
+        </div>
+
+        <div class="date-separator">Monday at 1:24 PM</div>
+
+        <div class="peer-bubble">
+          <a class="shared-chat-link">
+            <span class="shared-chat-link-brand">computer</span>
+            <span class="shared-chat-link-title">Create article for design system feedback</span>
+          </a>
+        </div>
+
+        <div class="user-bubble">
+          <div class="user-bubble-text">Hey, checkout my chat with computer</div>
+        </div>
+
+        <div class="date-separator">Monday at 1:30 PM</div>
+
+        <div class="peer-bubble">
+          <div class="peer-bubble-text">I'm following :)</div>
+        </div>
+
+      </div>
+
+      <!-- Input bar (Computer variant) -->
+      <div class="input-bar input-bar--computer focused">
         <div class="input-leading-icon">
           <svg width="18" height="18" viewBox="0 0 18 18" fill="hsl(var(--night))">
             <path d="M5.5 3C6.33 3 7 3.45 7 4v10c0 .55-.67 1-1.5 1S4 14.55 4 14V4c0-.55.67-1 1.5-1z"/>
@@ -864,6 +1120,17 @@ body {
         </button>
         <button class="btn-send" aria-label="Send">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M11.3397 4.49988H12.6597L17.9097 9.74988L16.5897 11.0699C15.4876 9.9127 14.4255 8.71548 13.4033 7.48645L12.7471 7.73065C12.8444 11.6538 12.9096 15.5768 12.9371 19.4998H11.0621C11.0895 15.5707 11.1548 11.6479 11.2578 7.71985L10.6022 7.47558C9.57845 8.70865 8.5115 9.9067 7.4096 11.0699L6.0896 9.74988L11.3397 4.49988Z" fill="#211E20"/></svg>
+        </button>
+      </div>
+
+      <!-- Input bar (DM variant) -->
+      <div class="input-bar input-bar--dm">
+        <button class="emoji-btn" aria-label="Emoji">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="10" cy="10" r="7.5"/><path d="M7 12c.7 1 1.8 1.5 3 1.5S12.3 13 13 12"/><circle cx="7.25" cy="8.25" r="0.75" fill="currentColor" stroke="none"/><circle cx="12.75" cy="8.25" r="0.75" fill="currentColor" stroke="none"/></svg>
+        </button>
+        <div class="dm-input">Send a message</div>
+        <button class="dm-plus" aria-label="Attach">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/></svg>
         </button>
       </div>
     </div>
