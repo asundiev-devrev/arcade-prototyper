@@ -41,6 +41,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { DevRevThemeProvider } from "@xorkavi/arcade-gen";
 import "@xorkavi/arcade-gen/styles.css";
+import "${path.join(studioRoot(), "src/styles/arcade-gen-patches.css").replace(/\\/g, "/")}";
 import Frame from "${ctx.framePath}/index.tsx";
 
 const root = document.getElementById("root");

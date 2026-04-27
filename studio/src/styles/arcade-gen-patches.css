@@ -1,0 +1,21 @@
+/*
+ * Consumer-side patches for @xorkavi/arcade-gen@1.0.0 ChatBubble.
+ *
+ * Upstream references dimension tokens that the current ADS token export
+ * does not emit, and its tail SVG path is authored top-down so it renders
+ * upside-down when absolute-positioned at the bubble's bottom. Fix both
+ * here without forking arcade-gen.
+ */
+
+:root {
+  --component-bubble-padding-x: 14px;
+  --component-bubble-padding-y: 10px;
+  --component-bubble-radius: 16px;
+  --component-bubble-max-width: 400px;
+}
+
+.rounded-br-none > svg[class*="-right-"],
+.rounded-bl-none > svg[class*="-left-"] {
+  bottom: 0;
+  transform: scaleY(-1);
+}

@@ -110,6 +110,7 @@ export function frameMountPlugin(): Plugin {
         import ReactDOM from "react-dom/client";
         import { DevRevThemeProvider } from "@xorkavi/arcade-gen";
         import "@xorkavi/arcade-gen/styles.css";
+        import "arcade-studio/styles/arcade-gen-patches.css";
         import { FrameErrorBoundary } from "arcade-studio/frame/FrameErrorBoundary";
         import { FrameFontProxy } from "arcade-studio/frame/FrameFontProxy";
         import Frame from "${absFrame}";
