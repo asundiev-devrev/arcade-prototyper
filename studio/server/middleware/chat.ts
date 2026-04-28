@@ -1,20 +1,12 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import path from "node:path";
 import fs from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { runClaudeTurn } from "../claudeCode";
+import { resolveClaudeBin } from "../claudeBin";
 import { ssoIsValid } from "../awsPreflight";
 import { getProject, updateProject } from "../projects";
 import { chatHistoryPath, projectDir } from "../paths";
 import { ensureFigmaFileSelected } from "../figmaTabSelector";
 import type { ChatMessage } from "../types";
-
-const ARCADE_GEN_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
-
-function claudeBin(): string {
-  return process.env.ARCADE_STUDIO_CLAUDE_BIN
-    ?? path.resolve(ARCADE_GEN_ROOT, "node_modules", ".bin", "claude");
-}
 
 async function appendHistory(slug: string, msg: ChatMessage) {
   const file = chatHistoryPath(slug);
@@ -95,7 +87,7 @@ export function chatMiddleware() {
         cwd: projectDir(slug),
         prompt,
         sessionId: project.sessionId,
-        bin: claudeBin(),
+        bin: resolveClaudeBin(),
         images,
         onEvent: (ev) => {
           if (ev.kind === "session") capturedSessionId = ev.sessionId;

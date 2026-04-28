@@ -1,18 +1,9 @@
 import type { ViteDevServer } from "vite";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { projectsRoot } from "./paths";
 import { runClaudeTurn } from "./claudeCode";
+import { resolveClaudeBin } from "./claudeBin";
 import { getProject } from "./projects";
-
-const ARCADE_GEN_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-
-// NOTE: duplicated with studio/server/middleware/chat.ts::claudeBin().
-// If a shared helper is introduced, consolidate both callers.
-function resolveClaudeBin(): string {
-  return process.env.ARCADE_STUDIO_CLAUDE_BIN
-    ?? path.resolve(ARCADE_GEN_ROOT, "node_modules", ".bin", "claude");
-}
 
 /**
  * Maps `${slug}/${frameName}` to the last time we auto-prompted the agent
