@@ -17,21 +17,27 @@
  *   Sort control area: px-2 pt-4 pb-2
  *   Item list: role="list", flex-col, px-2
  *   Item: role="listitem", h=32, rounded-md (6px), px-2 gap-2, text-body-small
- *   Selected item: rgba(75,83,236,0.2) bg with rgba(75,83,236,0.1) outline
- *     → token-mapped to --bg-interactive-primary with /20 and /10 alpha
- *   Non-selected hover: --surface-overlay-hovered
+ *   Selected item: solid --bg-info-prominent (blue) with --fg-info-on-prominent
+ *   Non-selected hover: --control-bg-neutral-subtle-hover
+ *
+ * Why solid blue for selected: arcade-gen's token vocabulary does not
+ * include `--bg-interactive-primary-resting` or `--surface-overlay-hovered`
+ * — those are invented names from an earlier draft of this file. The real
+ * active-nav color in DevRev is `--bg-info-prominent` (solid) with
+ * `--fg-info-on-prominent` on top, which is what production uses for the
+ * selected priority group.
  *
  * The `Item` subcomponent encodes the selected-state token mapping so
- * callers can't drift on the alpha values.
+ * callers can't drift on alpha values.
  *
  * Slots:
  * - `sortControl` (optional) — sort button shown above the item list.
  * - `children` — a list of <VistaGroupRail.Item/>.
  *
  * VistaGroupRail.Item props:
- * - `selected` — highlights the row with the interactive-primary tokens.
+ * - `selected` — highlights the row with the solid info-prominent background.
  * - `label` — left-aligned main text.
- * - `count` (optional) — right-aligned count; uses --fg-neutral-subtle.
+ * - `count` (optional) — right-aligned count.
  * - `onClick` (optional) — click handler.
  */
 import type { MouseEventHandler, ReactNode } from "react";
@@ -71,13 +77,21 @@ function Item({ selected, label, count, onClick }: ItemProps) {
         "h-8 rounded-md px-2 flex items-center gap-2 w-full text-left",
         "text-body-small cursor-pointer",
         selected
-          ? "bg-(--bg-interactive-primary-resting)/20 outline outline-1 outline-(--bg-interactive-primary-resting)/10"
-          : "hover:bg-(--surface-overlay-hovered)",
+          ? "bg-(--bg-info-prominent) text-(--fg-info-on-prominent)"
+          : "text-(--fg-neutral-prominent) hover:bg-(--control-bg-neutral-subtle-hover)",
       ].join(" ")}
     >
       <span className="flex-1 truncate">{label}</span>
       {count != null ? (
-        <span className="text-(--fg-neutral-subtle)">{count}</span>
+        <span
+          className={
+            selected
+              ? "text-(--fg-info-on-prominent) opacity-80"
+              : "text-(--fg-neutral-subtle)"
+          }
+        >
+          {count}
+        </span>
       ) : null}
     </button>
   );

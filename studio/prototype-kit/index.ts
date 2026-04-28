@@ -20,6 +20,8 @@ export { SettingsRow } from "./composites/SettingsRow.js";
 export { VistaHeader } from "./composites/VistaHeader.js";
 export { VistaToolbar } from "./composites/VistaToolbar.js";
 export { VistaGroupRail } from "./composites/VistaGroupRail.js";
+export { VistaRow } from "./composites/VistaRow.js";
+export type { StageTone, PriorityValue } from "./composites/VistaRow.js";
 
 // Templates
 export { SettingsPage } from "./templates/SettingsPage.js";

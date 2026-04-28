@@ -13,6 +13,11 @@
  *   the body's --surface-overlay.
  * - Nav body accepts NavSidebar.Section and NavSidebar.Item children —
  *   same compound pattern as arcade.Sidebar for familiarity.
+ * - Active item is solid --bg-info-prominent with --fg-info-on-prominent,
+ *   matching the DevRev production app (not a muted gray pill).
+ * - Section titles render at text-system-medium with --fg-neutral-prominent
+ *   — NOT uppercase/caption. Uppercase was a carry-over from an older
+ *   design and doesn't match the current sidebar spec.
  *
  * Slots:
  * - `workspace` (optional) — label in the brand header (e.g. "DevRev").
@@ -21,6 +26,10 @@
  * - `showFooter` (optional, default true) — when false, the Computer footer
  *   is not rendered. Use this when Figma shows a different footer pattern.
  * - `children` — NavSidebar.Section / NavSidebar.Item tree.
+ *
+ * @counterexample When Figma shows a chat-style sidebar (with "New Chat" and chat history), use `ComputerSidebar` instead. That composite owns its own window chrome; do NOT also render a `TitleBar` alongside it.
+ * @counterexample Never use `arcade.Sidebar` directly for the main app sidebar — it's the bare primitive. `NavSidebar` adds the workspace dropdown, Computer footer, and correct tokens.
+ * @counterexample Do not pass `workspace=""` to hide the brand header. Composites check truthiness; the empty string counts as "present but empty". Omit the prop entirely.
  */
 import { forwardRef, type ReactNode } from "react";
 import { ChevronDownSmall } from "@xorkavi/arcade-gen";
@@ -71,7 +80,7 @@ function Section({ title, children }: SectionProps) {
   return (
     <div className="py-2">
       {title && (
-        <div className="px-3 pb-1 text-caption text-(--fg-neutral-subtle) uppercase tracking-wider">
+        <div className="px-3 pb-1 text-system-medium text-(--fg-neutral-prominent)">
           {title}
         </div>
       )}
@@ -100,7 +109,7 @@ const Item = forwardRef<HTMLDivElement, ItemProps>(function Item(
       className={[
         "flex items-center gap-2 px-2 py-1 rounded-square text-system cursor-pointer select-none",
         active
-          ? "bg-(--control-bg-neutral-subtle-active) text-(--fg-neutral-prominent)"
+          ? "bg-(--bg-info-prominent) text-(--fg-info-on-prominent)"
           : "text-(--fg-neutral-subtle) hover:bg-(--control-bg-neutral-subtle-hover) hover:text-(--fg-neutral-prominent)",
       ].join(" ")}
     >

@@ -14,10 +14,16 @@
  * The title and count sit on a shared baseline (matches the live
  * `flex items-baseline space-x-1.5`), NOT centered.
  *
+ * Typography is owned by this composite so callers can't drift:
+ *   - Title renders at `text-title-3` with `--fg-neutral-prominent`.
+ *   - Count renders at `text-body` with `--fg-neutral-subtle`.
+ * Pass plain text / numbers as children — do NOT wrap in your own
+ * `<span className="text-…">`, it will be overridden.
+ *
  * Slots:
- * - `title` — the vista title. Typically an inline-edit button; a plain
- *   span also works.
- * - `count` (optional) — item count, rendered with fg-neutral-subtle.
+ * - `title` — the vista title. A string or inline node; wrapped in the
+ *   composite's title-3 h1 automatically.
+ * - `count` (optional) — item count; rendered with text-body + fg-neutral-subtle.
  * - `actions` (optional) — IconButton cluster (search/sort/filter/…).
  * - `primaryAction` (optional) — primary call-to-action button (e.g. + Issue).
  */
@@ -38,10 +44,10 @@ export function VistaHeader({
 }: VistaHeaderProps) {
   return (
     <header className="flex items-center justify-between px-9 py-5 h-[72px] shrink-0">
-      <div className="flex items-baseline gap-1.5 h-8">
-        {title}
+      <div className="flex items-baseline gap-1.5">
+        <h1 className="text-title-3 text-(--fg-neutral-prominent)">{title}</h1>
         {count != null ? (
-          <span className="text-(--fg-neutral-subtle)">{count}</span>
+          <span className="text-body text-(--fg-neutral-subtle)">{count}</span>
         ) : null}
       </div>
       <div className="flex items-center gap-2">
