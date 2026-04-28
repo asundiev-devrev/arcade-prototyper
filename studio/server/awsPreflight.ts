@@ -100,3 +100,22 @@ export async function ssoIsValid(opts: ProbeOptions = {}): Promise<boolean> {
 export function resetPreflightCache(): void {
   lastOk = 0;
 }
+
+/**
+ * True when the spawn environment has *some* form of Bedrock auth that the
+ * claude CLI can use. Two supported paths:
+ *   1. `AWS_BEARER_TOKEN_BEDROCK` — token-based auth (common when the user
+ *      reads a key from Apple Keychain in their shell rc). `aws sts
+ *      get-caller-identity` returns non-zero in this case because SigV4
+ *      creds are absent, so the legacy `ssoIsValid` preflight produces a
+ *      false negative and we'd block the turn unnecessarily.
+ *   2. SigV4 credentials (env vars, `~/.aws/credentials`, or SSO cache) —
+ *      the legacy path, validated by `ssoIsValid`.
+ *
+ * When neither is available we block the turn with an actionable error
+ * instead of spawning claude into a long silent hang.
+ */
+export async function hasBedrockAuth(opts: ProbeOptions = {}): Promise<boolean> {
+  if (process.env.AWS_BEARER_TOKEN_BEDROCK?.trim()) return true;
+  return ssoIsValid(opts);
+}

@@ -41,3 +41,11 @@ export function projectJsonPath(projectSlug: string): string {
 export function frameThumbnailPath(projectSlug: string, frameSlug: string): string {
   return path.join(projectDir(projectSlug), "thumbnails", `${requireSlug(frameSlug)}.png`);
 }
+
+export function lastErrorLogPath(projectSlug: string): string {
+  return path.join(projectDir(projectSlug), "last-error.log");
+}
+
+export function lastStdoutLogPath(projectSlug: string): string {
+  return path.join(projectDir(projectSlug), "last-stdout.log");
+}

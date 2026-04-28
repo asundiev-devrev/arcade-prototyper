@@ -95,7 +95,7 @@ describe("runClaudeTurn", () => {
       expect(events[events.length - 1]).toMatchObject({
         kind: "end",
         ok: false,
-        error: expect.stringMatching(/^Turn timed out after \d+ minutes?$/),
+        error: expect.stringMatching(/^Turn timed out after \d+s — claude stopped responding/),
       });
     } finally {
       fs.rmSync(spy, { force: true });

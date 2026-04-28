@@ -1,11 +1,12 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
 import fs from "node:fs/promises";
-import { runClaudeTurn } from "../claudeCode";
+import { runClaudeTurnWithRetry } from "../claudeCode";
 import { resolveClaudeBin } from "../claudeBin";
-import { ssoIsValid } from "../awsPreflight";
+import { hasBedrockAuth } from "../awsPreflight";
 import { getProject, updateProject } from "../projects";
-import { chatHistoryPath, projectDir } from "../paths";
+import { readGlobalSettings } from "./settings";
+import { chatHistoryPath, lastErrorLogPath, lastStdoutLogPath, projectDir } from "../paths";
 import { ensureFigmaFileSelected } from "../figmaTabSelector";
 import { runComputerTurn } from "../devrev/computerAgent";
 import type { ChatMessage } from "../types";
@@ -86,9 +87,12 @@ export function chatMiddleware() {
 
     const isComputerTurn = COMPUTER_MENTION.test(prompt);
 
-    // AWS SSO pre-check applies only to Claude (Bedrock) turns; Computer uses
-    // the DevRev PAT.
-    if (!isComputerTurn && !(await ssoIsValid())) {
+    // Bedrock-auth pre-check applies only to Claude (Bedrock) turns; the
+    // Computer agent uses the DevRev PAT. We pass when either (a) a bearer
+    // token is exported for claude CLI to use, or (b) SigV4 credentials
+    // resolve via `aws sts get-caller-identity`. Otherwise we fail fast
+    // instead of spawning claude into a silent hang.
+    if (!isComputerTurn && !(await hasBedrockAuth())) {
       res.writeHead(200, {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
@@ -98,7 +102,8 @@ export function chatMiddleware() {
         `event: end\ndata: ${JSON.stringify({
           kind: "end",
           ok: false,
-          error: "AWS SSO credentials expired. Run aws sso login --profile dev.",
+          error:
+            "No Bedrock auth detected. Export AWS_BEARER_TOKEN_BEDROCK (keychain) or run `aws sso login` in the shell that launched studio, then reload.",
         })}\n\n`
       );
       res.end();
@@ -153,13 +158,22 @@ async function runClaudeBranch(ctx: {
   const toolLabels: string[] = [];
   let pendingEndEvent: { kind: "end"; ok: boolean; error?: string } | null = null;
 
+  // Look up the user's model selection (global settings.json). Silently
+  // ignores any read/parse failure — an unset value is fine; claude CLI
+  // will pick its default.
+  let model: string | undefined;
   try {
-    await runClaudeTurn({
+    model = (await readGlobalSettings()).studio?.model;
+  } catch {}
+
+  try {
+    await runClaudeTurnWithRetry({
       cwd: projectDir(slug),
       prompt,
       sessionId: project.sessionId,
       bin: resolveClaudeBin(),
       images,
+      model,
       onEvent: (ev) => {
         if (ev.kind === "session") capturedSessionId = ev.sessionId;
         if (ev.kind === "narration") narrationTexts.push(ev.text);
@@ -171,9 +185,40 @@ async function runClaudeBranch(ctx: {
         res.write(`event: ${ev.kind}\n`);
         res.write(`data: ${JSON.stringify(ev)}\n\n`);
       },
+      onCrash: async (info) => {
+        const body = [
+          `timestamp: ${new Date().toISOString()}`,
+          `slug: ${slug}`,
+          `exitCode: ${info.exitCode}`,
+          `timedOut: ${info.timedOut}`,
+          `narrationCount: ${narrationTexts.length}`,
+          `toolCallCount: ${toolLabels.length}`,
+          `lastTool: ${toolLabels[toolLabels.length - 1] ?? "(none)"}`,
+          `rawStdoutBytes: ${info.rawStdout.length}`,
+          "",
+          "--- stderr ---",
+          info.stderr || "(empty)",
+        ].join("\n");
+        try {
+          await fs.writeFile(lastErrorLogPath(slug), body);
+          await fs.writeFile(lastStdoutLogPath(slug), info.rawStdout);
+          console.warn(
+            `[studio] claude turn failed for ${slug}; error log at ${lastErrorLogPath(slug)}, stdout at ${lastStdoutLogPath(slug)}`,
+          );
+        } catch (writeErr) {
+          console.error("[studio] failed to persist crash log:", writeErr);
+        }
+      },
     });
   } catch (err: any) {
-    pendingEndEvent = { kind: "end", ok: false, error: err.message };
+    const msg = err?.message || err?.stack || String(err) || "claude turn threw an unknown error";
+    pendingEndEvent = { kind: "end", ok: false, error: msg };
+    try {
+      await fs.writeFile(
+        lastErrorLogPath(slug),
+        `timestamp: ${new Date().toISOString()}\nslug: ${slug}\n\n--- thrown error ---\n${err?.stack ?? msg}\n`,
+      );
+    } catch {}
   }
 
   const endEvent = pendingEndEvent as { kind: "end"; ok: boolean; error?: string } | null;
