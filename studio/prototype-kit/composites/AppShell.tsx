@@ -31,6 +31,19 @@
  * - `sidebarWidth` (optional, default "240") — "240" for Figma Desktop App
  *   frames, "256" for DevRev vista/production parity.
  * - `children` — page body content (typically a <PageBody/> or a vista body).
+ *
+ * @counterexample Do NOT add your own `border-r` between sidebar and body. The color change (`--surface-shallow` vs `--surface-overlay`) is the separator.
+ * @counterexample Do NOT add a divider between `titleBar` and `breadcrumbBar`. There isn't one in the spec; the breadcrumb bar sits flush under the title bar.
+ * @counterexample For a vista list-view frame, don't compose `AppShell` directly — use the `VistaPage` template. It wires sidebar width, chromelessness, and the toolbar band for you.
+ *
+ * @tokens Canvas tokens most likely to be referenced inside `children`:
+ *
+ * | Intent                      | Token                           |
+ * |---|---|
+ * | Body surface                | `--surface-overlay` (already applied by AppShell) |
+ * | Sidebar surface             | `--surface-shallow` (already applied via NavSidebar) |
+ * | Window backdrop             | `--surface-backdrop`            |
+ * | Divider / border            | `--stroke-neutral-subtle`       |
  */
 import type { ReactNode } from "react";
 

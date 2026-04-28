@@ -21,6 +21,10 @@
  * - `title` — the section heading (string or node).
  * - `children` — SettingsRow instances (or any nodes). Separators are
  *   inserted automatically between each pair.
+ *
+ * @counterexample Do NOT manually add `<Separator />` between rows. The composite interleaves them for you. Manual separators will cause doubled dividers.
+ * @counterexample Do NOT wrap `title` in your own `<h2>` or apply `text-title-*` classes to it. Pass the string as-is; the composite renders it at `text-title-3`.
+ * @counterexample Do NOT add your own `border` or `rounded-*` classes around the card — it's a bordered, rounded container already.
  */
 import { Children, Fragment, type ReactNode, isValidElement } from "react";
 import { Separator } from "@xorkavi/arcade-gen";

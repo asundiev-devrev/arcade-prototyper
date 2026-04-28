@@ -34,6 +34,11 @@
  * - `filters` (optional) — VistaToolbar filter pills + add + clear.
  * - `children` — body content; typically a <VistaGroupRail/> followed by
  *   a flex-1 table container.
+ *
+ * @counterexample Never re-implement `VistaPage` locally in the frame (`function VistaPage(…) { return <AppShell …/> }`). Import it from `arcade-prototypes`. Same for `VistaGroupRail` and `VistaRow`.
+ * @counterexample Do NOT also pass a `TitleBar` via `AppShell` — vista pages are deliberately chromeless above the sidebar; the sidebar starts at y=0.
+ * @counterexample Do NOT pre-wrap `title` or `count` in your own `<span className="text-…">`. `VistaHeader` applies `text-title-3` to the title and `text-body` + `--fg-neutral-subtle` to the count; any wrapper classes you add will just fight it.
+ * @counterexample For the table body inside `children`, use `<VistaRow>` + the column vocabulary. Do NOT hand-roll `<div className="flex items-center h-11 …">` rows — they drift on tokens and hover states.
  */
 import type { ReactNode } from "react";
 import { AppShell } from "../composites/AppShell.js";

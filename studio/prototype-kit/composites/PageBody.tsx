@@ -18,6 +18,20 @@
  * - `title` (optional) — hero page title (string, or any node).
  * - `subtitle` (optional) — description under the title.
  * - `children` — the page body sections (typically a stack of SettingsCards).
+ *
+ * @counterexample Do NOT invent `title` / `subtitle` when Figma doesn't show them. Omit the props — the hero block is suppressed automatically.
+ * @counterexample If Figma shows a freeform center canvas (e.g. a chat empty state, a dashboard grid), do not wrap in `PageBody`. Use a plain `<div className="mx-auto max-w-…">` so you control the width and padding.
+ * @counterexample Do NOT substitute `text-title-1/2/3` for the hero title. Those are section-level, not page-level. PageBody applies `text-title-large` intentionally.
+ *
+ * @tokens When you author content inside the `children` slot, prefer these tokens:
+ *
+ * | Intent                  | Token                              |
+ * |---|---|
+ * | Body text               | `--fg-neutral-prominent`           |
+ * | Muted / secondary text  | `--fg-neutral-subtle`              |
+ * | Subtle borders          | `--stroke-neutral-subtle`          |
+ * | Card surface (rare — usually a SettingsCard) | `--surface-overlay`   |
+ * | Inline code background  | `--bg-neutral-subtle`              |
  */
 import type { ReactNode } from "react";
 

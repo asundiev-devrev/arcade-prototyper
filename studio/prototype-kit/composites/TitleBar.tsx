@@ -32,6 +32,10 @@
  *   traffic-light dots when Figma does not show them.
  * - `showCollapseButton` (optional, default true) — suppress the sidebar
  *   collapse icon when Figma does not show it.
+ *
+ * @counterexample Do NOT render `TitleBar` when you're using `VistaPage` or `ComputerSidebar` — both compose their own window chrome. Doubling up stacks two title bars.
+ * @counterexample Do NOT pass `nav={<></>}` to hide the back/forward arrows. Pass `nav={null}` — React treats empty fragments as present, `null` as absent.
+ * @counterexample Do NOT inline your own `<svg>` traffic lights or collapse icon. They're baked in and will be duplicated.
  */
 import type { ReactNode } from "react";
 import { IconButton } from "@xorkavi/arcade-gen";

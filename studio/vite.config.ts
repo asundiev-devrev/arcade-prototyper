@@ -17,6 +17,7 @@ import { runtimeErrorMiddleware } from "./server/middleware/runtimeError";
 import { frameMountPlugin } from "./server/plugins/frameMountPlugin";
 import { projectWatchPlugin } from "./server/plugins/projectWatchPlugin";
 import { injectStudioSourcePlugin } from "./server/plugins/injectStudioSourcePlugin";
+import { kitManifestPlugin } from "./server/plugins/kitManifestPlugin";
 import { attachBuildErrorReporter } from "./server/buildErrorReporter";
 import { refreshStaleClaudeMd } from "./server/projects";
 
@@ -48,7 +49,7 @@ function apiPlugin(): import("vite").Plugin {
 // stay readable. Studio's own source imports @xorkavi/arcade-gen directly.
 export default defineConfig({
   root: path.resolve(__dirname),
-  plugins: [injectStudioSourcePlugin(), react(), tailwindcss(), frameMountPlugin(), projectWatchPlugin(), apiPlugin()],
+  plugins: [injectStudioSourcePlugin(), kitManifestPlugin(), react(), tailwindcss(), frameMountPlugin(), projectWatchPlugin(), apiPlugin()],
   resolve: {
     alias: [
       { find: /^arcade\/components$/, replacement: "@xorkavi/arcade-gen" },
