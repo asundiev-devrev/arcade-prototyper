@@ -44,7 +44,6 @@ export function VistaHeader({
           <span className="text-(--fg-neutral-subtle)">{count}</span>
         ) : null}
       </div>
-      <div className="flex-1" />
       <div className="flex items-center gap-2">
         {actions}
         {primaryAction}

@@ -32,7 +32,7 @@ export function VistaToolbar({
   filters,
 }: VistaToolbarProps) {
   return (
-    <div className="flex items-start justify-between px-9 mb-4 shrink-0">
+    <div className="flex items-start px-9 mb-4 shrink-0">
       <div className="flex gap-2 items-center flex-wrap">
         {toolbarIcons != null ? (
           <div className="flex items-center">
