@@ -51,10 +51,15 @@ export function MentionPopover({ query, anchor, onSelect, onDismiss }: MentionPo
         e.preventDefault();
         setActiveIdx((i) => (i - 1 + options.length) % options.length);
       } else if (e.key === "Enter" || e.key === "Tab") {
+        // Prevent the same Enter from also reaching the textarea's submit
+        // handler (which would send the half-written message).
         e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
         onSelect(options[activeIdx]);
       } else if (e.key === "Escape") {
         e.preventDefault();
+        e.stopPropagation();
         onDismiss();
       }
     }

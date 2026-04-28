@@ -147,6 +147,9 @@ export function PromptInput({ busy, projectSlug, onSend }: PromptInputProps) {
   };
 
   const submit = () => {
+    // Never fire a turn while the mention popover is open — Enter belongs to
+    // the popover in that state.
+    if (mention) return;
     const p = text.trim();
     if (!p || busy) return;
     onSend(p, imagePaths);
@@ -192,7 +195,8 @@ export function PromptInput({ busy, projectSlug, onSend }: PromptInputProps) {
     }
   }
 
-  const hasComputerMention = /^@Computer\b/i.test(text);
+  const hasComputerMention = /@Computer\b/i.test(text);
+  const hasFrameTrigger = /#frame\b/i.test(text);
 
   return (
     <div ref={containerRef} onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
@@ -263,12 +267,18 @@ export function PromptInput({ busy, projectSlug, onSend }: PromptInputProps) {
         }}
         placeholder="Ask me anything"
         attachments={
-          (images.length > 0 || detectedFigmaUrl || hasComputerMention) ? (
+          (images.length > 0 || detectedFigmaUrl || hasComputerMention || hasFrameTrigger) ? (
             <>
               {hasComputerMention && (
                 <ChatInput.ContextAttachment
                   title="Computer"
                   subtitle="DevRev agent"
+                />
+              )}
+              {hasFrameTrigger && (
+                <ChatInput.ContextAttachment
+                  title="Frame source"
+                  subtitle="#frame"
                 />
               )}
               {images.map((url, i) => (

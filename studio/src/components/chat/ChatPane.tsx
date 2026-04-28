@@ -52,6 +52,7 @@ export function ChatPane({ projectSlug }: { projectSlug: string }) {
           pendingPrompt={pendingPrompt}
           currentItems={state.items}
           busy={state.busy}
+          source={state.source}
         />
       )}
       {state.error && state.errorKind === "auth" && <AuthExpiredNotice />}

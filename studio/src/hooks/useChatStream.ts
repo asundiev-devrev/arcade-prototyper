@@ -15,6 +15,8 @@ export interface StreamState {
   items: ChatTurnItem[];
   lastEvent: StudioEvent | null;
   lastPrompt: string;
+  /** Which agent is producing the current/last turn. Defaults to claude. */
+  source: "claude" | "computer";
 }
 
 const AUTH_EXPIRED = /sso|credential|expired|unauthorized/i;
@@ -58,6 +60,7 @@ export function useChatStream(slug: string) {
     items: [],
     lastEvent: null,
     lastPrompt: "",
+    source: "claude",
   });
   const abortRef = useRef<AbortController | null>(null);
   const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
@@ -92,6 +95,7 @@ export function useChatStream(slug: string) {
       items: [],
       lastEvent: null,
       lastPrompt: prompt,
+      source: "claude",
     }));
 
     try {
@@ -123,6 +127,9 @@ export function useChatStream(slug: string) {
           try { ev = JSON.parse(dataLine.slice(6)) as StudioEvent; }
           catch { continue; }
           safeSetState((s) => {
+            if (ev.kind === "origin") {
+              return { ...s, lastEvent: ev, source: ev.source };
+            }
             if (ev.kind === "narration") {
               return {
                 ...s,

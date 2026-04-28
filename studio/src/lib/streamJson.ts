@@ -1,5 +1,6 @@
 export type StudioEvent =
   | { kind: "session"; sessionId: string }
+  | { kind: "origin"; source: "claude" | "computer" }
   | { kind: "narration"; text: string }
   | { kind: "tool_call"; tool: string; pretty: string }
   | { kind: "tool_result"; tool: string; ok: boolean; snippet?: string }

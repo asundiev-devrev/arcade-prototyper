@@ -84,7 +84,6 @@ export async function runComputerTurn(
       headers: {
         "Content-Type": "application/json",
         Authorization: pat,
-        Accept: "text/event-stream",
       },
       body: JSON.stringify(body),
       signal: controller.signal,
@@ -92,11 +91,12 @@ export async function runComputerTurn(
 
     if (!res.ok || !res.body) {
       const raw = await res.text();
-      const msg = extractHttpError(raw) || raw || `HTTP ${res.status}`;
+      const extracted = extractHttpError(raw);
+      const shown = extracted ? `${extracted} | raw=${raw.slice(0, 300)}` : (raw.slice(0, 400) || res.statusText);
       opts.onEvent({
         kind: "end",
         ok: false,
-        error: `DevRev ai-agents.events.execute-sync ${res.status}: ${msg}`,
+        error: `DevRev ai-agents.events.execute-sync ${res.status}: ${shown}`,
       });
       return { conversationId: sessionObject, assistantText: "" };
     }
@@ -141,6 +141,13 @@ export async function runComputerTurn(
         }
         if (ev.response === "error") {
           errorMsg = ev.error?.error || ev.error?.message || "agent error";
+          continue;
+        }
+        // Some error responses arrive without a `response` field, e.g.
+        // `{"message":"route not found"}`. Treat missing `response` as a
+        // protocol-level error and surface the message verbatim.
+        if (!ev.response && typeof ev.message === "string") {
+          errorMsg = ev.message;
           continue;
         }
       }

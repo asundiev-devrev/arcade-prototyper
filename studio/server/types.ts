@@ -35,6 +35,9 @@ export const chatMessageSchema = z.object({
   role: z.enum(["user", "assistant", "system"]),
   content: z.string(),
   images: z.array(z.string()).optional(),
+  // Which agent produced the message. Absent on older entries and on user
+  // messages; defaults to "claude" at render time.
+  source: z.enum(["claude", "computer"]).optional(),
   createdAt: z.string(),
 });
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
