@@ -24,7 +24,7 @@ If the designer gave you a Figma URL, Figma overrides any opinion baked into a c
 Before writing a single JSX element, produce a mental inventory of every Figma node in the target subtree. No JSX until every node has been named in your read. Any unenumerated node is a blind spot, and blind spots become inventions.
 
 **P3. Slot inventory is a mandatory step — not a guideline.**
-The FIRST file you open after reading Figma, before writing any JSX, is the source of every composite you intend to use. For each composite (`AppShell`, `NavSidebar`, `TitleBar`, `SettingsPage`, `BreadcrumbBar`, `PageBody`, `SettingsCard`, `SettingsRow`) you call in the frame, `Read` its `.tsx` file at `{{PROTOTYPER}}/studio/prototype-kit/composites/<Name>.tsx` — no exceptions, every frame, every time. Then state to yourself what the composite renders automatically and what each prop controls. Skipping this step is the single biggest source of generation errors. "I've used this composite before" is not a valid reason to skip — the props may have changed.
+The FIRST file you open after reading Figma, before writing any JSX, is the source of every composite you intend to use. For each composite (`AppShell`, `NavSidebar`, `TitleBar`, `SettingsPage`, `BreadcrumbBar`, `PageBody`, `SettingsCard`, `SettingsRow`, `VistaPage`, `VistaHeader`, `VistaToolbar`, `VistaGroupRail`) you call in the frame, `Read` its `.tsx` file at `{{PROTOTYPER}}/studio/prototype-kit/composites/<Name>.tsx` — no exceptions, every frame, every time. Then state to yourself what the composite renders automatically and what each prop controls. Skipping this step is the single biggest source of generation errors. "I've used this composite before" is not a valid reason to skip — the props may have changed.
 
 **P4. Named gaps over silent gaps.**
 If a Figma region cannot be resolved to a composite slot or an arcade primitive, write `{/* TODO: Figma node "<name>" (<nodeId>) unresolved */}` and continue. Never fill a read failure with plausible-looking chrome. A named gap is recoverable; invention is not.
@@ -82,7 +82,7 @@ Hand-rolled `<div>` + Tailwind is a LAST resort. Every time you are about to wri
 - `arcade-prototypes` is for prototyping only. It is **not** a production package and exists purely inside this studio.
 - `arcade` is the production design system. Use its components as the atomic building blocks.
 - Import paths:
-  - `import { SettingsPage, AppShell, TitleBar, BreadcrumbBar, PageBody, NavSidebar, ComputerSidebar, ComputerHeader, CanvasPanel, ChatInput, ChatEmptyState, ChatMessages, SettingsCard, SettingsRow } from "arcade-prototypes";`
+  - `import { SettingsPage, AppShell, TitleBar, BreadcrumbBar, PageBody, NavSidebar, ComputerSidebar, ComputerHeader, CanvasPanel, ChatInput, ChatEmptyState, ChatMessages, SettingsCard, SettingsRow, VistaPage, VistaHeader, VistaToolbar, VistaGroupRail } from "arcade-prototypes";`
   - `import { Button, Switch, Breadcrumb, Avatar, IconButton, Separator } from "arcade/components";`
 - Never write relative paths (`../...`) or filesystem paths. Only these two aliases.
 
@@ -157,6 +157,72 @@ export default function AgentSettings() {
 
 If the Figma frame has a title bar + sidebar + breadcrumb + centered body with grouped rows, **this template fits** — do not hand-roll it.
 
+### `VistaPage`
+
+For any DevRev vista list view (Issues, Tickets, Tasks grouped by priority / stage / owner / etc.). Composes `AppShell` (no title bar, 256px sidebar) + `VistaHeader` + `VistaToolbar` in the canonical layout, with a single body slot that holds the group rail + table:
+
+```tsx
+import {
+  VistaPage,
+  VistaHeader,
+  VistaToolbar,
+  VistaGroupRail,
+  NavSidebar,
+} from "arcade-prototypes";
+import {
+  Button,
+  IconButton,
+  MagnifyingGlass,
+  Bell,
+  ThreeDotsVertical,
+  PlusSmall,
+} from "arcade/components";
+
+export default function AdsVista() {
+  return (
+    <VistaPage
+      sidebar={<NavSidebar workspace="DevRev" />}
+      title={<span className="text-body-small-medium">ADS Components work</span>}
+      count={<span>46</span>}
+      actions={
+        <>
+          <IconButton aria-label="Search" variant="tertiary" size="sm"><MagnifyingGlass /></IconButton>
+          <IconButton aria-label="Notifications" variant="tertiary" size="sm"><Bell /></IconButton>
+          <IconButton aria-label="More" variant="tertiary" size="sm"><ThreeDotsVertical /></IconButton>
+        </>
+      }
+      primaryAction={<Button variant="primary" size="sm">+ Issue</Button>}
+      toolbarIcons={
+        <>
+          {/* Group-by / sort / timeline icon buttons — only when Figma shows them */}
+        </>
+      }
+      filters={
+        <>
+          {/* Filter pills (Work type / Subtype / Tags / Part), + add, Clear —
+             author per Figma frame; VistaToolbar owns only the row layout. */}
+        </>
+      }
+    >
+      <VistaGroupRail
+        sortControl={<Button variant="tertiary" size="sm">Sort by Default</Button>}
+      >
+        <VistaGroupRail.Item selected label="P0" count="1" />
+        <VistaGroupRail.Item label="P1" count="15" />
+        <VistaGroupRail.Item label="P2" count="13" />
+        <VistaGroupRail.Item label="P3" count="17" />
+      </VistaGroupRail>
+      <div className="flex-1 min-w-0 overflow-auto">
+        {/* Grouped ag-grid-style table — hand-roll per Figma frame.
+           VistaPage owns chrome; the table body is free-form. */}
+      </div>
+    </VistaPage>
+  );
+}
+```
+
+If the Figma frame has a sidebar + a title-with-count header + a filter pill row + a two-column body (group rail + grouped table), **this template fits** — do not hand-roll it. Vista pages do NOT use a `TitleBar` — that's deliberate; the sidebar starts at y=0.
+
 More templates may be added over time. Check `{{PROTOTYPER}}/studio/prototype-kit/templates/` (read-only) for the current list.
 
 ## Composites (use when no template fits)
@@ -189,6 +255,9 @@ The DevRev desktop chrome is built out of FOUR composites arranged like this:
 - **`CanvasPanel`** — the right-hand side panel showing artefacts of the current conversation (created files, connected sources, local folders). Fixed 272px wide, scrolls vertically. Slots: `step` (optional progress header — use `<CanvasPanel.Step current={2} total={4} title="…" />`), `children` (`<CanvasPanel.Group>` tree). Compound: `CanvasPanel.Step` (progress ring + title), `CanvasPanel.Group` (title + optional `trailing` + children — pass `<CanvasPanel.GroupAddButton />` for a "+" affordance), `CanvasPanel.Item` (single row — slots: `leading`, `trailing`, `children`, `onClick`), `CanvasPanel.FileIcon`, `CanvasPanel.FolderIcon`, `CanvasPanel.StatusDot` (for "new/unread" indicator), `CanvasPanel.CountBadge` (pill for counts like `12`, `20`). Lives as a sibling of the chat column, typically to the RIGHT of the main body; does NOT own window chrome.
 - **`ChatEmptyState`** — centered faded Computer logomark for a brand-new conversation. No slots — render as the sole child of the scrolling chat body when there are no messages yet.
 - **`ChatMessages`** — the chat transcript. Owns vertical spacing between blocks. For user / receiver messages, render `<ChatBubble variant="user">…</ChatBubble>` / `<ChatBubble variant="assistant">…</ChatBubble>` directly as children (imported from `arcade/components`). The composite supplies `ChatMessages.Agent` for agent turns — a pause glyph + optional expandable thoughts block + follow-up text. For the thoughts block use `<ChatMessages.Thoughts label="Thought for 4s" />` (collapsed chip) or `<ChatMessages.Thoughts label="Working" expanded>...<ChatMessages.ThoughtItem>step name</ChatMessages.ThoughtItem>...</ChatMessages.Thoughts>` (expanded with a list of running steps). Pass `<ChatMessages.ThoughtItem subtitle="npm ci">Running bash command</ChatMessages.ThoughtItem>` to render a step with a trailing muted detail.
+- **`VistaHeader`** — the 72px vista page header band. Slots: `title` (usually a title button or `<span>`), `count` (optional, rendered in `--fg-neutral-subtle`), `actions` (right-side IconButton cluster), `primaryAction` (a single primary Button, e.g. "+ Issue"). `items-baseline` between title and count — **not** centered.
+- **`VistaToolbar`** — the filter/toolbar row below the header. Slots: `toolbarIcons` (optional icon cluster on the left — when present, the composite auto-renders a 1×14px token-driven vertical separator between icons and filters), `filters` (filter pill group + add-filter + clear). Owns `px-9 mb-4` gutter.
+- **`VistaGroupRail`** — the 256px-wide left rail inside the vista body (sibling of the table). Slots: `sortControl` (optional "Sort by …" button rendered above the list), `children` (a list of `<VistaGroupRail.Item>`). Compound: `VistaGroupRail.Item` with props `selected`, `label`, `count`, `onClick`. The composite encodes the selected-state tokens so callers can't drift on alpha values.
 
 (The old `PageHeader` composite is deprecated — its functionality is now split across TitleBar + BreadcrumbBar. Do not use it.)
 
@@ -362,6 +431,7 @@ Figma → prototype-kit hints:
 | Breadcrumb Bar / Page Header (breadcrumb row above body) | `BreadcrumbBar` |
 | Page Body | `PageBody` |
 | Desktop App / Content Area | `AppShell` |
+| Vista / List view / grouped table with priority/stage/owner columns (or any DevRev vista-view-type=list frame) | `VistaPage` (template) + `VistaGroupRail` for the left rail |
 | Form / Section, Contained Group of settings | `SettingsCard` |
 | Contained Row / … (settings row) | `SettingsRow` |
 
