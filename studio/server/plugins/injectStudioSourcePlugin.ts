@@ -3,21 +3,20 @@ import path from "node:path";
 import { projectsRoot } from "../paths";
 
 /**
- * Arcade-gen's globals.css hard-codes `@source` paths relative to the
- * repo, but studio projects live in the OS app-support dir (outside the
- * repo). Tailwind won't see their utility classes unless we also scan
- * that path. This plugin rewrites globals.css on load to append an
- * absolute `@source` pointing at the real studio projects root.
+ * Studio projects live in `~/Library/Application Support/arcade-studio/projects/`
+ * — outside the repo, path varies per user. Tailwind v4's relative `@source`
+ * globs in `studio/src/styles/tailwind.css` cannot reach there. This plugin
+ * appends an absolute `@source` pointing at the real projects root so
+ * generated frame code is scanned for utility classes.
  */
 export function injectStudioSourcePlugin(): Plugin {
   const target = path.resolve(
     path.dirname(new URL(import.meta.url).pathname),
     "..",
     "..",
-    "..",
     "src",
     "styles",
-    "globals.css",
+    "tailwind.css",
   );
   return {
     name: "arcade-studio-inject-source",

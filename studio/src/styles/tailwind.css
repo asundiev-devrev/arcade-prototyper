@@ -1,0 +1,183 @@
+/*
+ * Studio-side Tailwind v4 entry.
+ *
+ * Why this file exists: @xorkavi/arcade-gen ships a PRE-COMPILED styles.css
+ * in its dist. It contains only the utilities arcade-gen itself used at
+ * build time — not the utilities referenced by studio/src, studio/prototype-kit,
+ * or generated frames. Importing dist/styles.css alone silently drops
+ * `pt-12`, `mb-10`, `h-13`, `text-title-3`, `max-w-[832px]`, etc.
+ *
+ * This file runs Tailwind v4 inside studio with explicit @source globs so
+ * every consumer directory is scanned:
+ *   - studio/src                             (studio shell UI)
+ *   - studio/prototype-kit                   (composites + templates)
+ *   - ~/Library/Application Support/arcade-studio/projects/**\/frames
+ *     (generated frame code, injected at dev time by the Vite plugin)
+ *
+ * Typography @utility declarations are mirrored from arcade-gen/src/styles/
+ * typography.css so classes like text-title-3 compile here even though the
+ * npm package only ships minified output. Keep in sync with arcade-gen.
+ */
+
+@import "tailwindcss";
+
+/* Studio source roots. Absolute paths to the studio project dirs are
+ * resolved via Tailwind's auto-detection from this file's package.json
+ * location, so relative globs suffice. The external projects root is
+ * appended at dev time by `injectTailwindSourcePlugin`. */
+@source "../../../studio/src/**/*.{ts,tsx}";
+@source "../../../studio/prototype-kit/**/*.{ts,tsx}";
+
+@theme {
+  /* Control sizes */
+  --height-control-sm: var(--control-size-small);
+  --height-control-md: var(--control-size-default);
+  --height-control-lg: var(--control-size-large);
+
+  /* Corner radii */
+  --radius-square: var(--corner-square);
+  --radius-square-x2: var(--corner-square-x2);
+  --radius-circle: var(--corner-circle);
+  --radius-circle-x2: var(--corner-circle-x2);
+  --radius-bubble: var(--corner-bubble);
+
+  /* Elevations */
+  --shadow-elevation-01: var(--elevation-01);
+  --shadow-elevation-02: var(--elevation-02);
+  --shadow-elevation-03: var(--elevation-03);
+  --shadow-elevation-04: var(--elevation-04);
+
+  /* Spacing: gutter and control gaps */
+  --spacing-gutter: var(--bubble-padding-x);
+  --spacing-gutter-sm: var(--bubble-padding-y);
+  --spacing-control-gap-sm: var(--control-gap-small);
+  --spacing-control-gap-md: var(--control-gap-medium);
+  --spacing-control-gap-lg: var(--control-gap-large);
+
+  /* Fonts */
+  --font-display: var(--font-display, "Chip Display Variable"), sans-serif;
+  --font-text: var(--font-text, "Chip Text Variable"), sans-serif;
+  --font-mono: "Chip Mono", monospace;
+}
+
+/* ─── Typography utilities (mirror of arcade-gen/src/styles/typography.css) ── */
+
+@utility text-title-large {
+  font-family: var(--core-font-display), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: var(--typography-title-large-font-size, 40px);
+  line-height: var(--typography-title-large-line-height, 46px);
+  letter-spacing: var(--typography-title-large-letter-spacing, 0);
+  font-variation-settings: "wght" var(--font-weight-bold, 650);
+}
+
+@utility text-title-1 {
+  font-family: var(--core-font-display), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: var(--typography-title1-font-size, 33px);
+  line-height: var(--typography-title1-line-height, 40px);
+  letter-spacing: var(--typography-title1-letter-spacing, 0);
+  font-variation-settings: "wght" var(--font-weight-bold, 650);
+}
+
+@utility text-title-2 {
+  font-family: var(--core-font-display), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: var(--typography-title2-font-size, 27px);
+  line-height: var(--typography-title2-line-height, 36px);
+  letter-spacing: var(--typography-title2-letter-spacing, 0);
+  font-variation-settings: "wght" var(--font-weight-bold, 650);
+}
+
+@utility text-title-3 {
+  font-family: var(--core-font-display), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: var(--typography-title3-font-size, 22px);
+  line-height: var(--typography-title3-line-height, 28px);
+  letter-spacing: var(--typography-title3-letter-spacing, 0);
+  font-variation-settings: "wght" var(--font-weight-bold, 650);
+}
+
+@utility text-body-large {
+  font-family: var(--core-font-text), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: var(--typography-body-large-font-size, 19px);
+  line-height: var(--typography-body-large-line-height, 26px);
+  letter-spacing: var(--typography-body-large-letter-spacing, -0.19px);
+  font-variation-settings: "wght" var(--font-weight-regular, 460);
+}
+
+@utility text-body {
+  font-family: var(--core-font-text), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: var(--typography-body-font-size, 15px);
+  line-height: var(--typography-body-line-height, 24px);
+  letter-spacing: var(--typography-body-letter-spacing, -0.15px);
+  font-variation-settings: "wght" var(--font-weight-regular, 460);
+}
+
+@utility text-body-medium {
+  font-family: var(--core-font-text), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: var(--typography-body-font-size, 15px);
+  line-height: var(--typography-body-line-height, 24px);
+  letter-spacing: var(--typography-body-letter-spacing, -0.15px);
+  font-variation-settings: "wght" var(--font-weight-medium, 520);
+}
+
+@utility text-body-bold {
+  font-family: var(--core-font-text), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: var(--typography-body-bold-font-size, 15px);
+  line-height: var(--typography-body-bold-line-height, 24px);
+  letter-spacing: var(--typography-body-letter-spacing, -0.15px);
+  font-variation-settings: "wght" var(--font-weight-bold, 650);
+}
+
+@utility text-body-small {
+  font-family: var(--core-font-text), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: var(--typography-body-small-font-size, 13px);
+  line-height: var(--typography-body-small-line-height, 20px);
+  letter-spacing: var(--typography-body-small-letter-spacing, -0.13px);
+  font-variation-settings: "wght" var(--font-weight-regular, 460);
+}
+
+@utility text-system-large {
+  font-family: var(--core-font-text), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: var(--typography-system-large-font-size, 15px);
+  line-height: var(--typography-system-large-line-height, 20px);
+  letter-spacing: var(--typography-system-large-letter-spacing, -0.15px);
+  font-variation-settings: "wght" var(--font-weight-regular, 460);
+}
+
+@utility text-system {
+  font-family: var(--core-font-text), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: var(--typography-system-font-size, 13px);
+  line-height: var(--typography-system-line-height, 16px);
+  letter-spacing: var(--typography-system-letter-spacing, -0.13px);
+  font-variation-settings: "wght" var(--font-weight-regular, 460);
+}
+
+@utility text-system-medium {
+  font-family: var(--core-font-text), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: var(--typography-system-medium-font-size, 13px);
+  line-height: var(--typography-system-medium-line-height, 16px);
+  letter-spacing: var(--typography-system-medium-letter-spacing, -0.13px);
+  font-variation-settings: "wght" var(--font-weight-medium, 520);
+}
+
+@utility text-system-small {
+  font-family: var(--core-font-text), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: var(--typography-system-small-font-size, 11px);
+  line-height: var(--typography-system-small-line-height, 16px);
+  letter-spacing: var(--typography-system-small-letter-spacing, -0.11px);
+  font-variation-settings: "wght" var(--font-weight-regular, 460);
+}
+
+@utility text-callout {
+  font-family: var(--core-font-text), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: var(--typography-callout-font-size, 12px);
+  line-height: var(--typography-callout-line-height, 18px);
+  letter-spacing: var(--typography-callout-letter-spacing, -0.12px);
+  font-variation-settings: "wght" var(--font-weight-regular, 460);
+}
+
+@utility text-caption {
+  font-family: var(--core-font-text), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: var(--typography-caption-font-size, 10px);
+  line-height: var(--typography-caption-line-height, 16px);
+  letter-spacing: var(--typography-caption-letter-spacing, 0.15px);
+  font-variation-settings: "wght" var(--font-weight-regular, 460);
+}
