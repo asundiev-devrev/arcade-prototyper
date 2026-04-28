@@ -24,7 +24,7 @@ If the designer gave you a Figma URL, Figma overrides any opinion baked into a c
 Before writing a single JSX element, produce a mental inventory of every Figma node in the target subtree. No JSX until every node has been named in your read. Any unenumerated node is a blind spot, and blind spots become inventions.
 
 **P3. Slot inventory is a mandatory step — not a guideline.**
-The FIRST file you open after reading Figma, before writing any JSX, is the source of every composite you intend to use. For each composite (`AppShell`, `NavSidebar`, `TitleBar`, `SettingsPage`, `BreadcrumbBar`, `PageBody`, `SettingsCard`, `SettingsRow`, `VistaPage`, `VistaHeader`, `VistaToolbar`, `VistaGroupRail`) you call in the frame, `Read` its `.tsx` file at `{{PROTOTYPER}}/studio/prototype-kit/composites/<Name>.tsx` — no exceptions, every frame, every time. Then state to yourself what the composite renders automatically and what each prop controls. Skipping this step is the single biggest source of generation errors. "I've used this composite before" is not a valid reason to skip — the props may have changed.
+The FIRST file you open after reading Figma, before writing any JSX, is the source of every composite and template you intend to use. For each **composite** (`AppShell`, `NavSidebar`, `TitleBar`, `BreadcrumbBar`, `PageBody`, `SettingsCard`, `SettingsRow`, `VistaHeader`, `VistaToolbar`, `VistaGroupRail`, …) you call in the frame, `Read` its `.tsx` file at `{{PROTOTYPER}}/studio/prototype-kit/composites/<Name>.tsx`. For each **template** (`SettingsPage`, `VistaPage`, …) you use, `Read` `{{PROTOTYPER}}/studio/prototype-kit/templates/<Name>.tsx`. No exceptions, every frame, every time. Then state to yourself what each renders automatically and what each prop controls. Skipping this step is the single biggest source of generation errors. "I've used this before" is not a valid reason to skip — the props may have changed.
 
 **P4. Named gaps over silent gaps.**
 If a Figma region cannot be resolved to a composite slot or an arcade primitive, write `{/* TODO: Figma node "<name>" (<nodeId>) unresolved */}` and continue. Never fill a read failure with plausible-looking chrome. A named gap is recoverable; invention is not.
@@ -49,7 +49,7 @@ For every new frame, in this order, with no skipping:
 
 1. **Read Figma** — `figmanage reading get-nodes --depth 4 --json <FILE_KEY> <NODE_ID>` on the outer frame. No parallel calls, no deeper than 4 on the outer frame.
 2. **Enumerate nodes** — list every major section and its leaves. If a section is unclear, do ONE focused deeper read on that subtree.
-3. **Read composite source** — for every composite you intend to use, `Read {{PROTOTYPER}}/studio/prototype-kit/composites/<Name>.tsx`. You cannot pick slots and suppress defaults without knowing what's there.
+3. **Read composite + template source** — for every composite you intend to use, `Read {{PROTOTYPER}}/studio/prototype-kit/composites/<Name>.tsx`; for every template, `Read {{PROTOTYPER}}/studio/prototype-kit/templates/<Name>.tsx`. You cannot pick slots and suppress defaults without knowing what's there.
 4. **Map nodes → resolutions** — for each Figma node, pick composite slot, arcade primitive, or TODO gap. Now you can write JSX.
 
 ### Concrete anti-patterns (these are build-breakers, not warnings)
