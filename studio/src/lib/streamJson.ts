@@ -2,25 +2,95 @@ export type StudioEvent =
   | { kind: "session"; sessionId: string }
   | { kind: "origin"; source: "claude" | "computer" }
   | { kind: "narration"; text: string }
-  | { kind: "tool_call"; tool: string; pretty: string }
-  | { kind: "tool_result"; tool: string; ok: boolean; snippet?: string }
+  | {
+      kind: "tool_call";
+      tool: string;
+      pretty: string;
+      /** Raw call detail for the expanded view (full path, full command, full
+       *  Glob/Grep pattern, etc.). Absent for tools we don't have a detailed
+       *  renderer for yet. */
+      details?: string;
+    }
+  | {
+      kind: "tool_result";
+      tool: string;
+      ok: boolean;
+      /** Full result content (not truncated). UI decides how much to show. */
+      snippet?: string;
+    }
   | { kind: "end"; ok: true }
   | { kind: "end"; ok: false; error: string };
 
-function prettyTool(name: string, input: any): { tool: string; pretty: string } {
-  if (name === "Read") return { tool: "Read", pretty: `Reading ${basename(input?.file_path)}` };
-  if (name === "Write") return { tool: "Write", pretty: `Writing ${basename(input?.file_path)}` };
-  if (name === "Edit") return { tool: "Edit", pretty: `Editing ${basename(input?.file_path)}` };
-  if (name === "Glob") return { tool: "Glob", pretty: `Looking for files matching "${input?.pattern}"` };
-  if (name === "Grep") return { tool: "Grep", pretty: `Searching for "${input?.pattern}"` };
+function prettyTool(
+  name: string,
+  input: any,
+): { tool: string; pretty: string; details?: string } {
+  if (name === "Read") {
+    return {
+      tool: "Read",
+      pretty: `Reading ${basename(input?.file_path)}`,
+      details: input?.file_path ? String(input.file_path) : undefined,
+    };
+  }
+  if (name === "Write") {
+    return {
+      tool: "Write",
+      pretty: `Writing ${basename(input?.file_path)}`,
+      details: input?.file_path ? String(input.file_path) : undefined,
+    };
+  }
+  if (name === "Edit") {
+    return {
+      tool: "Edit",
+      pretty: `Editing ${basename(input?.file_path)}`,
+      details: input?.file_path ? String(input.file_path) : undefined,
+    };
+  }
+  if (name === "Glob") {
+    return {
+      tool: "Glob",
+      pretty: `Looking for files matching "${input?.pattern}"`,
+      details: input?.pattern ? String(input.pattern) : undefined,
+    };
+  }
+  if (name === "Grep") {
+    return {
+      tool: "Grep",
+      pretty: `Searching for "${input?.pattern}"`,
+      details: input?.pattern ? String(input.pattern) : undefined,
+    };
+  }
   if (name === "Bash") {
     const cmd = String(input?.command ?? "");
     if (cmd.includes("figmanage") || cmd.includes("figma-cli")) {
-      return { tool: "Figma", pretty: figmaPretty(cmd) };
+      return { tool: "Figma", pretty: figmaPretty(cmd), details: cmd };
     }
-    return { tool: "Bash", pretty: "Running a command" };
+    return {
+      tool: "Bash",
+      pretty: firstLineTruncated(cmd) || "Running a command",
+      details: cmd || undefined,
+    };
   }
-  return { tool: name, pretty: `Using ${name}` };
+  return {
+    tool: name,
+    pretty: `Using ${name}`,
+    details: input ? safeStringify(input) : undefined,
+  };
+}
+
+function firstLineTruncated(s: string, max = 72): string {
+  const line = (s.split("\n")[0] ?? "").trim();
+  if (!line) return "";
+  if (line.length <= max) return line;
+  return `${line.slice(0, max - 1)}…`;
+}
+
+function safeStringify(v: unknown): string {
+  try {
+    return JSON.stringify(v, null, 2);
+  } catch {
+    return String(v);
+  }
 }
 
 function figmaPretty(cmd: string): string {
@@ -71,7 +141,15 @@ export function parseStreamLineAll(line: string): StudioEvent[] {
   if (ev.type === "user" && ev.message?.content) {
     for (const c of ev.message.content) {
       if (c.type === "tool_result") {
-        const snippet = typeof c.content === "string" ? c.content.slice(0, 140) : undefined;
+        const snippet =
+          typeof c.content === "string"
+            ? c.content
+            : Array.isArray(c.content)
+            ? c.content
+                .map((part: any) => (typeof part?.text === "string" ? part.text : ""))
+                .filter(Boolean)
+                .join("\n")
+            : undefined;
         return [{ kind: "tool_result", tool: "unknown", ok: !c.is_error, snippet }];
       }
     }

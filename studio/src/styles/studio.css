@@ -1,3 +1,8 @@
 /* Studio-only overrides. Frames do NOT load this file. */
 :root { color-scheme: light dark; }
 html, body, #root { height: 100%; margin: 0; }
+
+/* Expandable tool-call rows use <details>; hide the default disclosure
+ * triangle so our custom ▸ chevron is the only marker. */
+summary::-webkit-details-marker { display: none; }
+summary { list-style: none; }

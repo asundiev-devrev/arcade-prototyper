@@ -5,7 +5,20 @@ export type ErrorKind = "auth" | "generic";
 
 export type ChatTurnItem =
   | { kind: "narration"; text: string }
-  | { kind: "tool"; tool: string; pretty: string; ok?: boolean; snippet?: string };
+  | {
+      kind: "tool";
+      tool: string;
+      pretty: string;
+      /** Raw call input (full path / full command / full pattern). */
+      details?: string;
+      /** Full tool result once it arrives. `undefined` while call is in-flight. */
+      ok?: boolean;
+      snippet?: string;
+      /** Wall-clock time the tool call was dispatched, for elapsed display. */
+      startedAt: number;
+      /** Wall-clock time the tool result arrived. */
+      endedAt?: number;
+    };
 
 export interface StreamState {
   busy: boolean;
@@ -28,7 +41,13 @@ export function classifyError(message: string): ErrorKind {
 function appendItem(items: ChatTurnItem[], next: ChatTurnItem): ChatTurnItem[] {
   if (next.kind === "tool") {
     const last = items[items.length - 1];
-    if (last && last.kind === "tool" && last.tool === next.tool && last.pretty === next.pretty) {
+    if (
+      last &&
+      last.kind === "tool" &&
+      last.tool === next.tool &&
+      last.pretty === next.pretty &&
+      last.details === next.details
+    ) {
       return items;
     }
   }
@@ -44,7 +63,7 @@ function attachResultToLastTool(
     const entry = items[i];
     if (entry.kind === "tool" && entry.ok === undefined) {
       const updated = [...items];
-      updated[i] = { ...entry, ok, snippet };
+      updated[i] = { ...entry, ok, snippet, endedAt: Date.now() };
       return updated;
     }
   }
@@ -143,7 +162,13 @@ export function useChatStream(slug: string) {
                 ...s,
                 lastEvent: ev,
                 narrations: [...s.narrations, ev.pretty],
-                items: appendItem(s.items, { kind: "tool", tool: ev.tool, pretty: ev.pretty }),
+                items: appendItem(s.items, {
+                  kind: "tool",
+                  tool: ev.tool,
+                  pretty: ev.pretty,
+                  details: ev.details,
+                  startedAt: Date.now(),
+                }),
               };
             }
             if (ev.kind === "tool_result") {

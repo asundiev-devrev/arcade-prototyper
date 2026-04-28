@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Modal, Button, Input, Badge, Switch } from "@xorkavi/arcade-gen";
+import { Modal, Button, Input, Badge, Switch, Select } from "@xorkavi/arcade-gen";
 import { savePat, getPatStatus, clearPat, type DevRevPatStatus } from "../../lib/devrev";
 
 interface AppSettings {
@@ -10,8 +10,18 @@ interface AppSettings {
   };
   studio?: {
     mode?: "light" | "dark";
+    model?: string;
   };
 }
+
+// Keep in sync with claude CLI aliases. An explicit "" option lets the
+// user revert to the CLI default without having to `rm` the settings key.
+const MODEL_OPTIONS: Array<{ value: string; label: string; hint?: string }> = [
+  { value: "", label: "Default (Sonnet)", hint: "CLI default — fast, cheap" },
+  { value: "sonnet", label: "Sonnet", hint: "balanced default" },
+  { value: "opus", label: "Opus", hint: "smarter, slower, more expensive" },
+  { value: "haiku", label: "Haiku", hint: "fastest, cheapest, less nuanced" },
+];
 
 export function AppSettingsModal({
   open,
@@ -32,6 +42,7 @@ export function AppSettingsModal({
   const [vercelProjectName, setVercelProjectName] = useState("");
   const [hasVercelToken, setHasVercelToken] = useState(false);
   const [studioMode, setStudioMode] = useState<"light" | "dark">("light");
+  const [studioModel, setStudioModel] = useState<string>("");
   const [vercelSaving, setVercelSaving] = useState(false);
   const [vercelError, setVercelError] = useState<string | null>(null);
 
@@ -44,6 +55,7 @@ export function AppSettingsModal({
         if (data.studio?.mode === "dark" || data.studio?.mode === "light") {
           setStudioMode(data.studio.mode);
         }
+        setStudioModel(data.studio?.model ?? "");
         setVercelTeamId(data.vercel?.teamId || "");
         setVercelProjectName(data.vercel?.projectName || "");
       }
@@ -154,6 +166,63 @@ export function AppSettingsModal({
                 <span style={{ fontSize: 13, color: "var(--fg-neutral-prominent)" }}>
                   Dark mode
                 </span>
+              </div>
+            </section>
+
+            {/* Generation model */}
+            <section
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+                paddingTop: 16,
+                borderTop: "1px solid var(--stroke-neutral-subtle)",
+              }}
+            >
+              <div>
+                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 540 }}>Generation model</h3>
+                <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--fg-neutral-subtle)" }}>
+                  Which Claude model the generator agent uses. Sonnet is the CLI
+                  default — fast and usually sufficient. Switch to Opus for
+                  trickier frames (slower and more expensive).
+                </p>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <label htmlFor="studio-model" style={{ fontSize: 12, fontWeight: 540 }}>
+                  Model
+                </label>
+                <Select.Root
+                  value={studioModel}
+                  onValueChange={async (next: string) => {
+                    const prev = studioModel;
+                    setStudioModel(next);
+                    try {
+                      await fetch("/api/settings", {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          studio: { model: next || undefined },
+                        }),
+                      });
+                    } catch {
+                      setStudioModel(prev);
+                    }
+                  }}
+                >
+                  <Select.Trigger id="studio-model" />
+                  <Select.Content>
+                    {MODEL_OPTIONS.map((opt) => (
+                      <Select.Item key={opt.value || "__default__"} value={opt.value}>
+                        {opt.label}
+                        {opt.hint ? (
+                          <span style={{ marginLeft: 8, color: "var(--fg-neutral-subtle)", fontSize: 12 }}>
+                            — {opt.hint}
+                          </span>
+                        ) : null}
+                      </Select.Item>
+                    ))}
+                  </Select.Content>
+                </Select.Root>
               </div>
             </section>
 

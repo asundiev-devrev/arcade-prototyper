@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ChatBubble } from "@xorkavi/arcade-gen";
 import type { ChatMessage } from "../../../server/types";
 import type { ChatTurnItem } from "../../hooks/useChatStream";
@@ -15,6 +15,24 @@ function toolIcon(tool: string): string {
   if (tool === "Bash") return "›";
   if (tool === "Figma") return "▣";
   return "•";
+}
+
+/** Render elapsed ms/s compactly. Re-renders itself on an interval while
+ *  the call is still in-flight so the "N seconds" counter stays fresh. */
+function Elapsed({ startedAt, endedAt }: { startedAt: number; endedAt?: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (endedAt) return;
+    const id = window.setInterval(() => setNow(Date.now()), 500);
+    return () => window.clearInterval(id);
+  }, [endedAt]);
+  const ms = (endedAt ?? now) - startedAt;
+  if (ms < 1000) return <>{`${ms}ms`}</>;
+  const s = ms / 1000;
+  if (s < 60) return <>{`${s.toFixed(s < 10 ? 1 : 0)}s`}</>;
+  const m = Math.floor(s / 60);
+  const rem = Math.round(s - m * 60);
+  return <>{`${m}m ${rem}s`}</>;
 }
 
 function ActivityRow({ item }: { item: ChatTurnItem }) {
@@ -40,7 +58,11 @@ function ActivityRow({ item }: { item: ChatTurnItem }) {
       : item.ok === true
       ? "var(--fg-neutral-subtle)"
       : "var(--fg-neutral-medium)";
-  return (
+  const hasExpandable =
+    (item.details && item.details.trim().length > 0) ||
+    (item.snippet && item.snippet.trim().length > 0);
+
+  const summary = (
     <div
       style={{
         display: "flex",
@@ -51,6 +73,7 @@ function ActivityRow({ item }: { item: ChatTurnItem }) {
         fontSize: 12,
         fontFamily: "var(--font-family-mono, ui-monospace, monospace)",
         minWidth: 0,
+        cursor: hasExpandable ? "pointer" : "default",
       }}
     >
       <span aria-hidden style={{ opacity: 0.7, flexShrink: 0 }}>
@@ -67,12 +90,79 @@ function ActivityRow({ item }: { item: ChatTurnItem }) {
       >
         {item.pretty}
       </span>
-      {item.ok === undefined && (
+      <span
+        aria-hidden
+        style={{
+          opacity: 0.55,
+          flexShrink: 0,
+          fontSize: 11,
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        <Elapsed startedAt={item.startedAt} endedAt={item.endedAt} />
+      </span>
+      {item.ok === undefined ? (
         <span aria-hidden style={{ opacity: 0.5, flexShrink: 0 }}>
           …
         </span>
-      )}
+      ) : hasExpandable ? (
+        <span aria-hidden style={{ opacity: 0.5, flexShrink: 0 }}>
+          ▸
+        </span>
+      ) : null}
     </div>
+  );
+
+  if (!hasExpandable) {
+    return summary;
+  }
+
+  return (
+    <details style={{ minWidth: 0 }}>
+      <summary
+        style={{
+          listStyle: "none",
+          cursor: "pointer",
+          // Hide the default marker in all engines.
+          // WebKit: ::-webkit-details-marker handled globally; here we just
+          // make the summary render flat.
+        }}
+      >
+        {summary}
+      </summary>
+      <div
+        style={{
+          margin: "2px 12px 8px 36px",
+          padding: "8px 10px",
+          borderLeft: "2px solid var(--stroke-neutral-subtle)",
+          color: "var(--fg-neutral-subtle)",
+          fontSize: 11.5,
+          fontFamily: "var(--font-family-mono, ui-monospace, monospace)",
+          lineHeight: 1.5,
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
+          maxHeight: 320,
+          overflowY: "auto",
+          background: "var(--surface-shallow)",
+          borderRadius: 4,
+        }}
+      >
+        {item.details ? (
+          <div>
+            <div style={{ opacity: 0.6, marginBottom: 2 }}>call</div>
+            <div style={{ color: "var(--fg-neutral-prominent)" }}>{item.details}</div>
+          </div>
+        ) : null}
+        {item.snippet ? (
+          <div style={{ marginTop: item.details ? 10 : 0 }}>
+            <div style={{ opacity: 0.6, marginBottom: 2 }}>
+              result{item.ok === false ? " (error)" : ""}
+            </div>
+            <div style={{ color: "var(--fg-neutral-prominent)" }}>{item.snippet}</div>
+          </div>
+        ) : null}
+      </div>
+    </details>
   );
 }
 

@@ -33,8 +33,19 @@ interface GlobalSettings {
   };
   studio?: {
     mode?: "light" | "dark";
+    /** Claude model alias (`sonnet`, `opus`, `haiku`) or pinned id
+     *  (e.g. `claude-opus-4-7`). Unset → claude CLI default. Threaded
+     *  through to `runClaudeTurn` via the chat middleware. */
+    model?: string;
   };
   [key: string]: unknown;
+}
+
+/** Exported so other middleware (chat) can read the model selection
+ *  without re-implementing the JSON-file read. Keeps one source of truth
+ *  for "what's in settings.json". */
+export async function readGlobalSettings(): Promise<GlobalSettings> {
+  return readSettings();
 }
 
 async function readSettings(): Promise<GlobalSettings> {
