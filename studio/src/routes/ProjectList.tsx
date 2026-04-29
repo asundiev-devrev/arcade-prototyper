@@ -6,6 +6,7 @@ import { ProjectSearch } from "../components/projects/ProjectSearch";
 import { api } from "../lib/api";
 import { StudioHeader } from "../components/shell/StudioHeader";
 import { AppSettingsButton } from "../components/shell/SettingsButton";
+import { FigmaConnectButton } from "../components/shell/FigmaConnectButton";
 
 export function ProjectList({ onOpen }: { onOpen: (slug: string) => void }) {
   const { projects, loading, error, refresh } = useProjects();
@@ -43,6 +44,7 @@ export function ProjectList({ onOpen }: { onOpen: (slug: string) => void }) {
         title="Studio"
         right={
           <>
+            <FigmaConnectButton />
             <AppSettingsButton />
             <Button variant="primary" onClick={() => void createProject()} disabled={creating}>
               + New project
