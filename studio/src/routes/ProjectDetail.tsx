@@ -9,8 +9,11 @@ import { StudioHeader } from "../components/shell/StudioHeader";
 import { ThemeToggle } from "../components/shell/ThemeToggle";
 import { ShareButton } from "../components/shell/ShareButton";
 import { CanvasToggle } from "../components/shell/CanvasToggle";
+import { ChatToggle } from "../components/shell/ChatToggle";
 import { ProjectPicker } from "../components/shell/ProjectPicker";
 import { AppSettingsButton } from "../components/shell/SettingsButton";
+
+const CHAT_OPEN_STORAGE_KEY = "studio:chatPaneOpen";
 
 export function ProjectDetail({
   slug,
@@ -25,6 +28,15 @@ export function ProjectDetail({
   const [devOpen, setDevOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [devicePreset, setDevicePreset] = useState<DevicePreset>("desktop");
+  const [chatOpen, setChatOpen] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const stored = window.localStorage.getItem(CHAT_OPEN_STORAGE_KEY);
+    return stored === null ? true : stored === "true";
+  });
+
+  useEffect(() => {
+    window.localStorage.setItem(CHAT_OPEN_STORAGE_KEY, String(chatOpen));
+  }, [chatOpen]);
 
   const refreshProject = useCallback(async () => {
     const res = await fetch(`/api/projects/${slug}`);
@@ -83,6 +95,7 @@ export function ProjectDetail({
         center={<DeviceToggle value={devicePreset} onValueChange={setDevicePreset} />}
         right={
           <>
+            <ChatToggle active={chatOpen} onToggle={() => setChatOpen((o) => !o)} />
             <ThemeToggle mode={project.mode} onToggle={toggleProjectMode} />
             <ShareButton project={project} />
             <AppSettingsButton />
@@ -93,19 +106,20 @@ export function ProjectDetail({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: devOpen ? "400px 1fr auto" : "400px 1fr",
+          gridTemplateColumns: `${chatOpen ? "400px" : "0px"} 1fr${devOpen ? " auto" : ""}`,
           minHeight: 0,
           transition: "grid-template-columns 0.2s ease",
         }}
       >
         <aside
+          aria-hidden={!chatOpen}
           style={{
             display: "flex",
             flexDirection: "column",
             minHeight: 0,
             minWidth: 0,
             overflow: "hidden",
-            borderRight: "1px solid var(--stroke-neutral-subtle)",
+            borderRight: chatOpen ? "1px solid var(--stroke-neutral-subtle)" : "none",
           }}
         >
           <ChatPane projectSlug={project.slug} />
