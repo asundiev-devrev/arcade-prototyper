@@ -10,4 +10,18 @@ describe("packaging scaffold", () => {
     expect(existsSync(readme)).toBe(true);
     expect(readFileSync(readme, "utf-8")).toMatch(/Arcade Studio/);
   });
+
+  it("has an Info.plist declaring bundle identifier", () => {
+    const plist = path.join(packagingDir, "Info.plist");
+    expect(existsSync(plist)).toBe(true);
+    const contents = readFileSync(plist, "utf-8");
+    expect(contents).toContain("CFBundleIdentifier");
+    expect(contents).toContain("com.devrev.arcade-studio");
+    expect(contents).toContain("CFBundleExecutable");
+    expect(contents).toContain("Arcade Studio");
+  });
+
+  it("has an icon file", () => {
+    expect(existsSync(path.join(packagingDir, "icon.icns"))).toBe(true);
+  });
 });
