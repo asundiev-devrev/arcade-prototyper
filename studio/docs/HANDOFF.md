@@ -17,7 +17,6 @@ Arcade-studio is a Claude-Code–backed tool that takes a Figma URL and generate
 - `/Users/andrey.sundiev/arcade-gen` — the design-system + studio repo. All code changes land here.
   - `arcade-gen/studio/templates/CLAUDE.md.tpl` — system prompt template rendered into every project's CLAUDE.md
   - `arcade-gen/studio/server/middleware/chat.ts` — chat API entry point
-  - `arcade-gen/studio/server/figmaTabSelector.ts` — closes non-matching Figma tabs before figma-cli reads
   - `arcade-gen/studio/server/plugins/frameMountPlugin.ts` — mounts generated frames
   - `arcade-gen/studio/src/frame/FrameErrorBoundary.tsx` — surfaces runtime errors to the iframe
   - `arcade-gen/src/components/index.ts` — arcade component barrel

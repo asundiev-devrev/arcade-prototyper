@@ -36,7 +36,6 @@ Vite's file watcher, a Chokidar watcher, and its websocket HMR loop tie these to
 │                                                                            │
 │  Subprocess orchestration:                                                 │
 │    runClaudeTurn → spawn node_modules/.bin/claude --output-format stream-json
-│    ensureFigmaFileSelected → CDP on localhost:9222                         │
 │    ssoIsValid → `aws sts get-caller-identity`                              │
 │    attachBuildErrorReporter → listens to `vite:error`, dispatches auto-fix │
 └──────────────┬─────────────────────────────────────────────────┬───────────┘
@@ -68,7 +67,6 @@ Response: the new `Project` object; the frontend opens `ProjectDetail`.
 2. `POST /api/chat {slug, prompt, images}` opens an SSE stream.
 3. `chatMiddleware`:
    - Calls `ssoIsValid()` (30 s cache). If expired, sends a synthetic `end ok:false error:"AWS SSO credentials expired..."` event and closes.
-   - `ensureFigmaFileSelected(prompt)` — if the prompt contains a Figma URL, uses CDP on `localhost:9222` to close other `/design` tabs in Figma Desktop.
    - Appends the user message to `chat-history.json`.
    - `runClaudeTurn()` spawns the Claude CLI with the project's `CLAUDE.md` as its working context:
      ```
@@ -115,7 +113,7 @@ Two paths:
 - **Screenshot for prompt** — `FigmaUrlModal` → `POST /api/figma/export` → `figmaCli.exportNodePng()` shells out to `node ~/figma-cli/src/index.js export node <id> -o <path> -s 2`. The PNG goes into `_uploads/` and is attached to the next prompt as `@<path>`.
 - **Structure reads** — `GET /api/figma/node/:id` and `GET /api/figma/tree/:id?d=<depth>` proxy to figma-cli; the agent also calls `figmanage` directly via its `Bash` tool from inside the subprocess (it has the allowlist).
 
-`figma-cli` talks to Figma Desktop via CDP on `localhost:9222`. The optional `figmaTabSelector` helper ensures the right file is the focused tab before the agent reads.
+`figma-cli` talks to Figma Desktop via CDP on `localhost:9222`.
 
 ## Boundaries and layering
 
@@ -154,7 +152,6 @@ Frontend stream events (in `src/lib/streamJson.ts`): `session | narration | tool
 | `projects.ts`           | Project CRUD, `reconcileFrames`, file-tree reader, `refreshStaleClaudeMd` (rewrites on template change)         |
 | `claudeCode.ts`         | `runClaudeTurn()` — spawn + stream-json parse + `onEvent` callback + abort/timeout                              |
 | `figmaCli.ts`           | `parseFigmaUrl`, `daemonStatus`, `getNode`, `nodeTree`, `exportNodePng` — all shell out to figma-cli            |
-| `figmaTabSelector.ts`   | `ensureFigmaFileSelected(prompt)` — CDP tab management on `localhost:9222`                                      |
 | `awsPreflight.ts`       | `ssoIsValid()` — cached `aws sts get-caller-identity`; env escape hatch `ARCADE_STUDIO_SKIP_SSO_CHECK=1`        |
 | `firstRun.ts`           | `ensureDeps()` — checks `brew` (macOS), `node`, `pnpm`, `figmanage`                                             |
 | `buildErrorReporter.ts` | `attachBuildErrorReporter`, `parseBuildError`, `handleViteError` — rate-limited auto-fix dispatcher             |

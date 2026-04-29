@@ -7,7 +7,6 @@ import { hasBedrockAuth } from "../awsPreflight";
 import { getProject, updateProject } from "../projects";
 import { readGlobalSettings } from "./settings";
 import { chatHistoryPath, lastErrorLogPath, lastStdoutLogPath, projectDir } from "../paths";
-import { ensureFigmaFileSelected } from "../figmaTabSelector";
 import { runComputerTurn } from "../devrev/computerAgent";
 import type { ChatMessage } from "../types";
 
@@ -141,18 +140,6 @@ async function runClaudeBranch(ctx: {
   project: { sessionId?: string };
 }) {
   const { res, slug, prompt, images, project } = ctx;
-
-  try {
-    const sel = await ensureFigmaFileSelected(prompt);
-    if (sel.action === "closed-others") {
-      console.log(`[studio] figma: closed ${sel.closed.length} other design tab(s) to isolate ${sel.fileKey}`);
-    } else if (sel.action === "file-not-open") {
-      console.log(`[studio] figma: file ${sel.fileKey} is NOT open in Figma desktop; reads will fail`);
-    }
-  } catch (err) {
-    console.warn("[studio] figma tab selection failed:", err);
-  }
-
   let capturedSessionId: string | undefined;
   const narrationTexts: string[] = [];
   const toolLabels: string[] = [];
