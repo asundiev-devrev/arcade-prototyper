@@ -12,7 +12,7 @@ Studio is currently a proof of concept — see [STATUS.md](./STATUS.md) for what
 
 Prerequisites (see [DEVELOPMENT.md](./DEVELOPMENT.md) for details):
 - Node.js + pnpm
-- [figma-cli](https://github.com/devrev/figma-cli) at `~/figma-cli`, Figma Desktop running
+- `figmanage` CLI installed globally (`npm install -g figmanage`, then `figmanage login`) — the packaged `.app` bundles it, but local dev needs it on PATH
 - AWS SSO (`aws sso login --profile dev`) for Bedrock-backed Claude
 
 From the repo root:
@@ -58,6 +58,7 @@ Runtime project storage lives outside the repo:
 
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** — how the frontend, server middleware, and Claude subprocess fit together
 - **[DEVELOPMENT.md](./DEVELOPMENT.md)** — prerequisites, environment variables, common workflows, troubleshooting
+- **[packaging/README.md](./packaging/README.md)** — building Arcade Studio as a distributable `.app` / `.dmg` for internal users
 - **[prototype-kit/README.md](./prototype-kit/README.md)** — boundary rules between studio composites and the production library
 - **[templates/CLAUDE.md.tpl](./templates/CLAUDE.md.tpl)** — the system prompt the agent runs under inside each generated project
 

@@ -12,8 +12,7 @@ Studio is currently macOS-first. `server/firstRun.ts` will check for these on st
 | pnpm           | Package manager the repo expects                       | `brew install pnpm`                                   |
 | Homebrew       | Used by `firstRun.ts` to bootstrap the rest (macOS)    | https://brew.sh                                       |
 | AWS CLI + SSO  | Claude CLI runs against Bedrock in this setup          | `brew install awscli`; then `aws configure sso`       |
-| figmanage      | REST-backed Figma bridge used by `figmaCli.ts`         | Install the `figmanage` CLI (see its own README)      |
-| Figma Desktop  | figma-cli talks to it via CDP on `localhost:9222`      | Download Figma Desktop                                |
+| figmanage      | REST-backed Figma CLI used by `figmaCli.ts`            | `npm install -g figmanage`, then `figmanage login`    |
 | Claude CLI     | Agent runtime                                          | Installed as a dep: `@anthropic-ai/claude-code`       |
 
 ### AWS SSO
@@ -28,12 +27,12 @@ aws sso login --profile dev
 
 Local testing that shouldn't hit Bedrock: `export ARCADE_STUDIO_SKIP_SSO_CHECK=1`.
 
-### Figma Desktop + figma-cli
+### Figmanage
 
-1. Install Figma Desktop and open the file(s) you want to prototype from.
-2. Clone figma-cli to `~/figma-cli` (or set `ARCADE_STUDIO_FIGMA_CLI_DIR`).
-3. Start its daemon per its own README. The daemon talks to Figma Desktop via CDP (`localhost:9222`).
-4. `GET /api/figma/status` confirms the daemon is reachable; the studio UI's "From Figma" button depends on this.
+1. `npm install -g figmanage` (or use the bundled copy inside the packaged `.app`).
+2. `figmanage login` to authenticate — opens a browser for OAuth and stores the token in the OS keychain.
+3. `GET /api/figma/status` returns `{ authenticated: true, user: {...} }` when auth succeeded.
+4. The "Connect Figma" button in the studio shell drives step 2 from the UI via `POST /api/figma/auth/login`.
 
 ## Running studio
 
@@ -46,6 +45,21 @@ pnpm studio:test  # runs vitest with jsdom environment
 ```
 
 There is no production build target for studio — it is a dev-only tool.
+
+## Building a distributable `.app`
+
+For internal DevRev distribution, studio can be packaged as a double-clickable macOS app.
+
+```bash
+pnpm studio:pack
+```
+
+This produces:
+
+- `studio/packaging/dist/Arcade Studio.app` — drag to `/Applications`
+- `studio/packaging/dist/Arcade Studio.dmg` — hand to non-technical users
+
+See [studio/packaging/README.md](./packaging/README.md) for the first-launch Gatekeeper workaround (right-click → Open) and for caveats about the bundle being unsigned.
 
 ### What happens on startup
 
@@ -87,7 +101,6 @@ open "$HOME/Library/Application Support/arcade-studio/projects"
 |--------------------------------|----------------------------------------------------------|------------------------------------------------|
 | `ARCADE_STUDIO_ROOT`           | `~/Library/Application Support/arcade-studio`            | Root for all project storage                   |
 | `ARCADE_STUDIO_CLAUDE_BIN`     | `<repo>/node_modules/.bin/claude`                        | Path to the Claude CLI                         |
-| `ARCADE_STUDIO_FIGMA_CLI_DIR`  | `~/figma-cli`                                            | figma-cli checkout location                    |
 | `ARCADE_STUDIO_SKIP_SSO_CHECK` | unset                                                    | `"1"` skips the SSO preflight                  |
 | `AWS_REGION`                   | `us-east-1`                                              | Passed to the Claude subprocess for Bedrock    |
 
@@ -153,7 +166,7 @@ Run `aws sso login --profile dev`. The preflight cache is 30 s, so give it a mom
 
 ### "Missing dependencies: figmanage" on first run
 
-Install figma-cli to `~/figma-cli` (or set `ARCADE_STUDIO_FIGMA_CLI_DIR`) and make sure its daemon can start. `GET /api/preflight` is the endpoint the banner reads.
+Run `npm install -g figmanage` then `figmanage login`. Bundle users have figmanage vendored inside the `.app` — they only need to complete `figmanage login` the first time, which the in-app "Connect Figma" button handles. `GET /api/preflight` is the endpoint the banner reads.
 
 ### Frame appears but is blank
 
