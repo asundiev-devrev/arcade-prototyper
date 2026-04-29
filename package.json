@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "studio": "vite --config studio/vite.config.ts",
-    "studio:test": "vitest run --config studio/vitest.config.ts"
+    "studio:test": "vitest run --config studio/vitest.config.ts",
+    "studio:pack": "bash studio/packaging/build.sh && bash studio/packaging/dmg.sh"
   },
   "dependencies": {
     "@xorkavi/arcade-gen": "^1.0.0",
