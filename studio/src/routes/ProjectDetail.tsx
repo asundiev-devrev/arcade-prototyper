@@ -90,6 +90,7 @@ export function ProjectDetail({
             project={project}
             onHome={onBack}
             onOpenProject={onOpenProject}
+            onRenamed={() => void refreshProject()}
           />
         }
         center={<DeviceToggle value={devicePreset} onValueChange={setDevicePreset} />}

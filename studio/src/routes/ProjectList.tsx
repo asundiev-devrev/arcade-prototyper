@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { Button, useToast } from "@xorkavi/arcade-gen";
 import { useProjects } from "../hooks/useProjects";
 import { ProjectCard } from "../components/projects/ProjectCard";
-import { NewProjectModal } from "../components/projects/NewProjectModal";
 import { ProjectSearch } from "../components/projects/ProjectSearch";
 import { api } from "../lib/api";
 import { StudioHeader } from "../components/shell/StudioHeader";
@@ -12,7 +11,26 @@ export function ProjectList({ onOpen }: { onOpen: (slug: string) => void }) {
   const { projects, loading, error, refresh } = useProjects();
   const { toast } = useToast();
   const [query, setQuery] = useState("");
-  const [showNew, setShowNew] = useState(false);
+  const [creating, setCreating] = useState(false);
+
+  async function createProject() {
+    if (creating) return;
+    setCreating(true);
+    try {
+      const p = await api.createProject({ name: "Untitled project", theme: "arcade", mode: "light" });
+      void refresh();
+      toast({ title: "Project created", intent: "success" });
+      onOpen(p.slug);
+    } catch (e) {
+      toast({
+        title: "Failed to create project",
+        description: e instanceof Error ? e.message : String(e),
+        intent: "alert",
+      });
+    } finally {
+      setCreating(false);
+    }
+  }
 
   const filtered = useMemo(
     () => projects.filter((p) => p.name.toLowerCase().includes(query.toLowerCase())),
@@ -26,7 +44,7 @@ export function ProjectList({ onOpen }: { onOpen: (slug: string) => void }) {
         right={
           <>
             <AppSettingsButton />
-            <Button variant="primary" onClick={() => setShowNew(true)}>
+            <Button variant="primary" onClick={() => void createProject()} disabled={creating}>
               + New project
             </Button>
           </>
@@ -111,16 +129,6 @@ export function ProjectList({ onOpen }: { onOpen: (slug: string) => void }) {
 
         </div>
       </div>
-      <NewProjectModal
-        open={showNew}
-        onClose={() => setShowNew(false)}
-        onCreated={(slug) => {
-          setShowNew(false);
-          void refresh();
-          toast({ title: "Project created", intent: "success" });
-          onOpen(slug);
-        }}
-      />
     </div>
   );
 }

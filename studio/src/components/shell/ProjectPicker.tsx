@@ -6,14 +6,28 @@ export function ProjectPicker({
   project,
   onHome,
   onOpenProject,
+  onRenamed,
 }: {
   project: Project;
   onHome?: () => void;
   onOpenProject?: (slug: string) => void;
+  onRenamed?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [projects, setProjects] = useState<Project[] | null>(null);
   const rootRef = useRef<HTMLSpanElement>(null);
+
+  async function handleRename() {
+    const next = prompt("Rename project", project.name);
+    setOpen(false);
+    if (!next || !next.trim() || next.trim() === project.name) return;
+    try {
+      await api.renameProject(project.slug, next.trim());
+      if (onRenamed) onRenamed();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Rename failed");
+    }
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -135,6 +149,38 @@ export function ProjectPicker({
             zIndex: 50,
           }}
         >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => void handleRename()}
+            style={{
+              display: "block",
+              width: "100%",
+              textAlign: "left",
+              padding: "6px 10px",
+              fontSize: 13,
+              background: "transparent",
+              border: "none",
+              borderRadius: 4,
+              color: "var(--fg-neutral-prominent)",
+              cursor: "pointer",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = "var(--surface-shallow)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+            }}
+          >
+            Rename project…
+          </button>
+          <div
+            style={{
+              height: 1,
+              background: "var(--stroke-neutral-subtle)",
+              margin: "4px 0",
+            }}
+          />
           {recent.length === 0 && projects !== null && (
             <div
               style={{

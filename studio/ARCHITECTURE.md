@@ -50,7 +50,7 @@ Vite's file watcher, a Chokidar watcher, and its websocket HMR loop tie these to
 
 ### 1. Create project
 
-`NewProjectModal` → `POST /api/projects` → `server/projects.ts:createProject()`:
+`ProjectList` "+ New project" button → `POST /api/projects` → `server/projects.ts:createProject()`:
 
 1. Slugify the name, ensure unique.
 2. `mkdir` `{projectDir}/{frames,shared,thumbnails}`.
@@ -197,7 +197,7 @@ Frontend stream events (in `src/lib/streamJson.ts`): `session | narration | tool
 | `chat/`     | `ChatPane`, `MessageList`, `MessageBubble`, `AgentNarration`, `PromptInput`, `FigmaUrlModal`, `EmptyStatePrompts` |
 | `devmode/`  | `DevModePanel` — file tree + file viewer for the open project                                          |
 | `feedback/` | Error/info banners                                                                                     |
-| `projects/` | `NewProjectModal`, `ProjectCard`, `ProjectSearch`                                                      |
+| `projects/` | `ProjectCard`, `ProjectSearch`                                                                         |
 | `viewport/` | `Viewport`, `FrameCard`, `FrameCornerMenu`, `EmptyViewport`                                            |
 | `Header.tsx`| Top bar (project name, mode toggle, dev panel toggle, back)                                            |
 
