@@ -39,6 +39,9 @@
  * - `label` — left-aligned main text.
  * - `count` (optional) — right-aligned count.
  * - `onClick` (optional) — click handler.
+ *
+ * @counterexample Only render the rail when the reference (Figma frame, screenshot, or description) shows a visible left column with a sort control + grouped counts (P0 / P1 / P2 / P3, Triage / Prioritized / …, owner avatars, etc.). If the reference shows the table starting flush against the sidebar — no "Sort by Default" header, no grouped rows — OMIT the rail. Pass the table alone to VistaPage's `children`. Rendering a rail the reference doesn't show adds an empty column and pushes the table right.
+ * @counterexample Do not render a single-item rail (`<VistaGroupRail.Item label="All" count={N} selected />`) as a fallback when the grouping isn't obvious in the reference. A one-item rail is visually indistinguishable from noise. If there is no grouping shown, there is no rail.
  */
 import type { MouseEventHandler, ReactNode } from "react";
 

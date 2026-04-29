@@ -50,6 +50,8 @@ describe("runClaudeTurn", () => {
       expect(args).toMatch(/--resume abc/);
       expect(args).toMatch(/--verbose/);
       expect(args).toMatch(/--dangerously-skip-permissions/);
+      expect(args).toMatch(/--settings/);
+      expect(args).toMatch(/blockImageReshape\.mjs/);
     } finally {
       fs.rmSync(spy, { force: true });
       fs.rmSync(logFile, { force: true });

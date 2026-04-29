@@ -127,6 +127,9 @@ type VistaPageProps = {
 - Do NOT also pass a `TitleBar` via `AppShell` — vista pages are deliberately chromeless above the sidebar; the sidebar starts at y=0.
 - Do NOT pre-wrap `title` or `count` in your own `<span className="text-…">`. `VistaHeader` applies `text-title-3` to the title and `text-body` + `--fg-neutral-subtle` to the count; any wrapper classes you add will just fight it.
 - For the table body inside `children`, use `<VistaRow>` + the column vocabulary. Do NOT hand-roll `<div className="flex items-center h-11 …">` rows — they drift on tokens and hover states.
+- Pass the `count` verbatim as it appears in the reference (Figma frame, screenshot, or description) — `"165.1K"`, `"1.2M"`, `"16,538"`. Do NOT reformat, expand (`"165100"`), strip separators (`"16538"`), or localize. `count` is a display string, not a number.
+- Render exactly the controls the reference shows in `actions` — count them before writing JSX. If the reference shows 3 icon buttons, render 3. Do not add a gear, a more-menu, a view-toggle, or any "list views usually have X" control. Same for `toolbarIcons` and `filters`.
+- When the reference shows a tab strip (e.g. `Issues +`) or segmented toggle between the toolbar and the table body, render it as the FIRST element inside `children`, ABOVE the group rail + table row. It is not optional chrome; dropping it changes the meaning of the page. If the template's slots don't cleanly accommodate a tab strip, put it inline inside `children` — just don't skip it.
 
 
 ## Composites
@@ -718,18 +721,29 @@ Each segment is separated by a 1px --stroke-neutral-subtle divider. The
 label is muted (--fg-neutral-subtle), the value is prominent. The trailing
 × is an affordance to remove the filter.
 
+Pill height is `h-control-md` (28px) to align with the vista header/toolbar
+icon-button cluster next to it. The composite forces the leading icon to
+14px so callers don't need to pass `size={…}` on every icon.
+
 Why this composite exists: generators were hand-rolling a single-cell
 div, losing the divider-segmented look. Encoding it here keeps every
 frame's filter row visually identical to production.
 
 Slots:
-- `icon` (optional) — 12–14px leading icon (arcade icon or custom SVG).
+- `icon` (optional) — leading icon (arcade icon or custom SVG). Size is
+  coerced to 14px automatically.
 - `label` — the filter category, e.g. "Created date", "Stage", "Part".
 - `operator` (optional, default "is") — the comparison word between label
   and value. Set to `null` to suppress (single-segment pill).
 - `value` — the selected value(s), e.g. "last 30 days", "None of +1".
 - `onRemove` (optional) — when provided, renders the trailing × button.
 
+**Compound:** `VistaFilterPill.Add` for the dashed "+ add filter" affordance
+at the end of the filter row. `VistaFilterPill.Clear` for the trailing text
+"Clear" button. Both are sized to match the pill height (28px) so the whole
+row aligns.
+
+**Compound:** `VistaFilterPill.Add`, `VistaFilterPill.Clear`
 
 ```ts
 type VistaFilterPillProps = {
@@ -747,6 +761,8 @@ type VistaFilterPillProps = {
   DevRev filter pill instead of a generic chip.
 - Do NOT use `<Tag>` for filter pills. Tag is a label
   component and renders as a solid-tinted chip without segment dividers.
+- Do NOT hand-roll `<button className="h-7 w-7 border-dashed">` for the add-filter affordance. Use `<VistaFilterPill.Add />` — it bakes the 28px height, dashed border, and 16px plus icon so the add button aligns with the pills beside it.
+- Do NOT hand-roll `<button className="text-body-small">Clear</button>` for the trailing clear-filters affordance. Use `<VistaFilterPill.Clear />` — it bakes the 28px height, muted foreground, and hover-prominent color so Clear aligns with the pills beside it.
 
 ## VistaGroupRail (composite)
 _source: `composites/VistaGroupRail.tsx`_
@@ -801,6 +817,10 @@ type VistaGroupRailProps = {
 }
 ```
 
+**When NOT to use this:**
+- Only render the rail when the reference (Figma frame, screenshot, or description) shows a visible left column with a sort control + grouped counts (P0 / P1 / P2 / P3, Triage / Prioritized / …, owner avatars, etc.). If the reference shows the table starting flush against the sidebar — no "Sort by Default" header, no grouped rows — OMIT the rail. Pass the table alone to VistaPage's `children`. Rendering a rail the reference doesn't show adds an empty column and pushes the table right.
+- Do not render a single-item rail (`<VistaGroupRail.Item label="All" count={N} selected />`) as a fallback when the grouping isn't obvious in the reference. A one-item rail is visually indistinguishable from noise. If there is no grouping shown, there is no rail.
+
 ## VistaHeader (composite)
 _source: `composites/VistaHeader.tsx`_
 
@@ -829,9 +849,25 @@ Slots:
 - `title` — the vista title. A string or inline node; wrapped in the
   composite's title-3 h1 automatically.
 - `count` (optional) — item count; rendered with text-body + fg-neutral-subtle.
-- `actions` (optional) — IconButton cluster (search/sort/filter/…).
+  **Pass the string the reference shows, verbatim** — `"165.1K"`, `"1.2M"`,
+  `"16,538"`. Do NOT strip separators (`"16538"`), expand abbreviations
+  (`"165100"`), or reformat. The count slot is display-only.
+- `actions` (optional) — icon-button cluster (search/sort/filter/…).
+  Pass a list of `<VistaHeader.Action icon={…} label="…" />` children.
+  The composite owns spacing (`gap-0.5`) and each Action bakes in the
+  correct IconButton variant+size — callers don't need to remember the
+  right props. Render exactly the icons the reference shows, in order.
 - `primaryAction` (optional) — primary call-to-action button (e.g. + Issue).
+  Use `<VistaHeader.PrimaryAction icon={<PlusSmall />}>Issue</VistaHeader.PrimaryAction>`.
+  The subcomponent bakes in `variant="primary"` + `size="md"` (28px, the
+  Figma-spec'd height for vista chrome) and forces the icon to 16px so the
+  CTA visually matches the header's icon-button cluster beside it.
+  Note: arcade `Button variant="primary"` renders a dark/inverted button.
+  DevRev vistas may show the CTA in DevRev-blue instead — if the reference
+  shows a blue CTA, leave a TODO gap (`{/* TODO: blue vista CTA *\/}`)
+  rather than substituting a dark button.
 
+**Compound:** `VistaHeader.Action`, `VistaHeader.PrimaryAction`
 
 ```ts
 type VistaHeaderProps = {
@@ -841,6 +877,11 @@ type VistaHeaderProps = {
   primaryAction?: ReactNode;
 }
 ```
+
+**When NOT to use this:**
+- Do NOT inline `<IconButton variant="secondary" size="sm">…</IconButton>` into the `actions` slot. Use `<VistaHeader.Action icon={<MagnifyingGlass />} label="Search" />` — the subcomponent bakes variant/size/hit-target so icon buttons match DevRev vista chrome exactly.
+- Do NOT inline `<Button variant="primary" size="sm" iconLeft={<PlusSmall />}>Issue</Button>` into the `primaryAction` slot. `size="sm"` is 20px tall — half the height of the vista icon cluster next to it, so the CTA renders squished. Use `<VistaHeader.PrimaryAction icon={<PlusSmall />}>Issue</VistaHeader.PrimaryAction>` so the CTA height + icon size stay aligned with the rest of the header.
+- Do NOT wrap `actions` children in your own `<div className="flex gap-*">`. The composite applies the correct inter-icon spacing; your wrapper will either collapse it or double it.
 
 ## VistaPagination (composite)
 _source: `composites/VistaPagination.tsx`_
@@ -969,8 +1010,12 @@ When absent, the row starts with `filters` directly.
 
 Slots:
 - `toolbarIcons` (optional) — icon cluster (@ / chart / clock / …).
+  Pass a list of `<VistaToolbar.IconAction icon={…} label="…" />` children.
+  The composite owns spacing (`gap-0.5`) and each IconAction bakes in the
+  correct IconButton variant+size — callers don't remember it.
 - `filters` (optional) — filter pill group + add-filter + clear.
 
+**Compound:** `VistaToolbar.IconAction`
 
 ```ts
 type VistaToolbarProps = {
@@ -978,3 +1023,7 @@ type VistaToolbarProps = {
   filters?: ReactNode;
 }
 ```
+
+**When NOT to use this:**
+- Do NOT inline `<IconButton variant="secondary" size="sm">…</IconButton>` into the `toolbarIcons` slot. Use `<VistaToolbar.IconAction icon={<AtSymbol />} label="Mentions" />` — the subcomponent bakes variant/size so icons in the toolbar match DevRev vista chrome exactly.
+- Do NOT wrap `toolbarIcons` children in your own `<div className="flex gap-*">`. The composite applies the correct inter-icon spacing; your wrapper will either collapse it or double it.

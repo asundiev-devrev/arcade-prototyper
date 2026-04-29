@@ -6,6 +6,12 @@ import { parseStreamLineAll, type StudioEvent } from "../src/lib/streamJson";
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 // Prototyper root: contains studio/prototype-kit — where composites + templates live.
 const PROTOTYPER_ROOT = path.resolve(MODULE_DIR, "..", "..");
+// PreToolUse hook that blocks `sips`/ImageMagick/PIL commands — the agent has
+// a recurring failure mode where it crops/rescales pasted screenshots into
+// sub-images and reads them back, burning the turn budget without producing
+// JSX. Structural enforcement instead of a prompt rule, because prompt rules
+// for this pattern have failed before.
+const BLOCK_IMAGE_RESHAPE_HOOK = path.resolve(MODULE_DIR, "hooks", "blockImageReshape.mjs");
 // Arcade-gen clone: contains src/components (stories, icons barrel) the agent
 // consults for component APIs. Overridable via env for non-default checkouts;
 // falls back to ~/arcade-gen when HOME is set, and to an unresolvable sentinel
@@ -92,11 +98,26 @@ export async function runClaudeTurn(opts: RunTurnOptions): Promise<void> {
   // Accepts aliases (`sonnet`, `opus`, `haiku`) or pinned IDs (e.g.
   // `claude-opus-4-7`).
   const model = opts.model?.trim() || process.env.ARCADE_STUDIO_MODEL?.trim();
+  // Inline settings: --bare turns off hook discovery, but --settings is an
+  // explicit opt-in. We register just the hooks studio needs (currently
+  // one PreToolUse hook on Bash) without pulling the user's global hooks
+  // back in.
+  const settings = JSON.stringify({
+    hooks: {
+      PreToolUse: [
+        {
+          matcher: "Bash",
+          hooks: [{ type: "command", command: `node ${BLOCK_IMAGE_RESHAPE_HOOK}` }],
+        },
+      ],
+    },
+  });
   const args = [
     "-p", decoratePrompt(opts.prompt, opts.images),
     "--output-format", "stream-json",
     "--verbose",
     "--bare",
+    "--settings", settings,
     "--dangerously-skip-permissions",
     "--allowed-tools", DEFAULT_ALLOWED_TOOLS,
     "--disallowed-tools", DEFAULT_DISALLOWED_TOOLS,

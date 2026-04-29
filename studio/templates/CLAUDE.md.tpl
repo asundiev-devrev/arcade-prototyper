@@ -406,6 +406,22 @@ Forbidden:
 
 If after per-section reads you still cannot see the actual text content, STOP and tell the designer exactly which node failed and what you tried. A half-real frame with invented labels is worse than no frame.
 
+### Match the reference's structure exactly — no additions, no omissions
+
+"Don't invent content" (above) is about text. This rule is about **shapes and counts**: if the reference has N icon-buttons in a cluster, render N. If the reference shows a tab bar, render the tab bar. If the reference omits a rail, omit the rail.
+
+"The reference" means whatever the designer handed you — a Figma URL, a screenshot pasted into the chat, or a description of a specific production screen. All three are authoritative about what the frame should look like; none of them are suggestions.
+
+Three recurring failure modes to watch for:
+
+1. **Don't reformat numeric strings.** If the reference shows `165.1K`, render `165.1K` — do NOT expand to `165100`, `165,100`, or `16538`. Same for dates (`Last 90 days` stays `Last 90 days`, not `last 30 days`), counts (`+12` stays `+12`, not `+0`), and currency. The character sequence you see is the character sequence you render. Count-parsing and format conversion are the #1 cosmetic failure on vista pages.
+
+2. **Count the controls in an action cluster; render exactly that many.** When the reference shows a right-side action cluster with, say, `[search][sort][filter][+ Issue]` (4 items), render exactly those 4 in exactly that order. Do not add a settings gear, a more-menu, or a view-toggle because "list views usually have those". Same for filter rows, tab strips, breadcrumb segments, and sidebar action rails. **Counting is a cheap sanity check before you write JSX** — if the generated cluster has more children than the reference, you've invented.
+
+3. **Tabs, segmented toggles, and filter rows are content, not optional chrome.** If the reference shows a tab strip (`Issues +`) between the header and the table, or a segmented toggle (`Open / Closed / All`) inside the body, it MUST appear in the frame. These elements change meaning when dropped — a vista without its `Issues +` tabs reads as a different page. Suppress only what the reference omits; never cull "for simplicity".
+
+A frame that matches the reference's shape but has wrong text is fixable in one iteration. A frame with the wrong shape needs to be rewritten. Match the shape first.
+
 Every Bash call is pre-approved. Never say "I need approval" — just run the command.
 
 ## Where things live
