@@ -128,7 +128,7 @@ export async function runClaudeTurn(opts: RunTurnOptions): Promise<void> {
     const abortHandler = () => proc.kill("SIGTERM");
     opts.signal?.addEventListener("abort", abortHandler);
 
-    const timeoutMs = opts.timeoutMs ?? 300_000;
+    const timeoutMs = opts.timeoutMs ?? 420_000;
     let timedOut = false;
     const timeoutHandle = setTimeout(() => {
       timedOut = true;

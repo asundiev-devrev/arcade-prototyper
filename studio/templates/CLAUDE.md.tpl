@@ -37,11 +37,24 @@ Can't resolve a Figma node to a composite slot, primitive, or icon? Write `{/* T
 Read {{PROTOTYPER}}/studio/prototype-kit/KIT-MANIFEST.md
 ```
 
-This is one file with every composite + template — header comment, layout ASCII, full TypeScript props type. ~90% of frames need only this. Drop down to `composites/<Name>.tsx` or `templates/<Name>.tsx` only when the prop signature isn't enough (you need internal markup or an undocumented behavior). Never read all the composite sources up front "just in case" — that burns the turn budget.
+This is one file with every composite + template — header comment, layout ASCII, full TypeScript props type, counterexamples, and relevant tokens. **The manifest is the API.** Treat it as authoritative: the props listed are the props that exist, the counterexamples are the cases you would have asked about, the tokens are the ones you'd want inside the slot.
+
+**After reading the manifest, do NOT consume the source of any composite or template file — regardless of the tool used (`Read`, `Bash cat`, `Bash head`, `Glob`, `Grep`).** The manifest replaces the source. Treat the `.tsx` files under `prototype-kit/composites/` and `prototype-kit/templates/` as non-existent until a build error names one by path. Past turns have tried to work around this rule by switching from `Read` to `cat` — same cost, same result. What matters is whether the source content enters your context, not which tool put it there.
+
+If the manifest's prop type + header comment aren't clear enough for some specific case, that's a manifest bug — note it and move on with your best guess, not a fresh lookup.
+
+### Tool budget — don't explore, act
+
+Every tool call costs a Bedrock round-trip. A frame that took 16 tool calls before writing JSX is a frame that has already failed. Specific patterns to skip:
+
+- **Do NOT `ls` or `find` directories.** Every path you need is named either in this file or in `KIT-MANIFEST.md`. Generated frames live at `frames/<slug>/index.tsx` inside the project cwd — you don't need to discover that by listing directories.
+- **To enumerate icons**, use `Read {{ARCADE}}/src/components/icons/index.ts` — do NOT pipe it through `grep | awk`. Shell-quoting bugs cost 2-3 retries per attempt. `Read` returns the full barrel in one call; scan the names yourself.
+- **Do NOT Read the arcade-gen main index** (`{{ARCADE}}/src/components/index.ts`) to enumerate primitives. The closed list is in the Primitives quick-ref below; that's the API.
+- **Do NOT verify your own output against Figma by re-reading the Figma subtree.** You already have the screenshot/JSON from the initial read. If the frame is wrong, the designer will iterate.
 
 ### A sensible order (not a ritual)
 
-For a Figma-driven frame: read the Figma outer frame (`figmanage reading get-nodes --depth 4`), read the manifest, write the frame. For an unclear subtree, one focused deeper Figma read on that subtree only. You don't need to enumerate every leaf or do a post-hoc count — start writing once you have the shape, and iterate when the build complains.
+For a Figma-driven frame: read the Figma outer frame (`figmanage reading get-nodes --depth 4`), read the manifest, write the frame. For an unclear Figma subtree, one focused deeper read on that subtree only. You don't need to enumerate every leaf or do a post-hoc count — start writing once you have the shape, and iterate when the build complains.
 
 ### Concrete anti-patterns (these are build-breakers, not warnings)
 
