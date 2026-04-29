@@ -22,7 +22,13 @@ export function ProjectPicker({
     setOpen(false);
     if (!next || !next.trim() || next.trim() === project.name) return;
     try {
-      await api.renameProject(project.slug, next.trim());
+      const renamed = await api.renameProject(project.slug, next.trim());
+      // Rename may move the project to a new slug. Navigate to the new URL
+      // before firing `onRenamed`, otherwise the caller refreshes against
+      // the old slug and renders a 404.
+      if (renamed.slug !== project.slug && onOpenProject) {
+        onOpenProject(renamed.slug);
+      }
       if (onRenamed) onRenamed();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Rename failed");

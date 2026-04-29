@@ -141,8 +141,27 @@ export async function listProjects(): Promise<Project[]> {
 export async function renameProject(slug: string, name: string): Promise<Project> {
   const p = await getProject(slug);
   if (!p) throw new Error(`Project not found: ${slug}`);
-  const next: Project = { ...p, name, updatedAt: new Date().toISOString() };
-  await fs.writeFile(projectJsonPath(slug), JSON.stringify(next, null, 2));
+
+  // Reslug from the new name so the URL tracks what the user sees. If the
+  // reslugged value matches the current slug (e.g. casing change, punctuation
+  // tweak), just update name in place — no directory move needed. Otherwise
+  // `uniqueSlug` resolves collisions by appending `-2`, `-3`, …
+  const desired = slugify(name);
+  const newSlug =
+    desired === slug ? slug : await uniqueSlug(desired);
+  const now = new Date().toISOString();
+
+  if (newSlug !== slug) {
+    // Move the on-disk dir first, then rewrite the project.json with the new
+    // slug. If the rename crashes between these two steps, the next call to
+    // `getProject(slug)` will 404 (the dir moved), the one to `getProject(newSlug)`
+    // will load the pre-rename JSON — still a valid project, just with the old
+    // name. That's the least-surprising partial-failure state.
+    await fs.rename(projectDir(slug), projectDir(newSlug));
+  }
+
+  const next: Project = { ...p, name, slug: newSlug, updatedAt: now };
+  await fs.writeFile(projectJsonPath(newSlug), JSON.stringify(next, null, 2));
   return next;
 }
 

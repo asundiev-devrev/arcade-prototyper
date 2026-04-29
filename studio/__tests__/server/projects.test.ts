@@ -43,13 +43,41 @@ describe("projects CRUD", () => {
     expect(b.slug).toBe("same-2");
   });
 
-  it("renames a project and updates updatedAt", async () => {
+  it("renames a project, moves the dir, and tracks the new slug", async () => {
     const p = await createProject({ name: "Orig", theme: "arcade", mode: "light" });
     await new Promise((r) => setTimeout(r, 10));
     const r = await renameProject(p.slug, "Renamed");
     expect(r.name).toBe("Renamed");
-    expect(r.slug).toBe(p.slug);
+    expect(r.slug).toBe("renamed");
     expect(r.updatedAt > p.updatedAt).toBe(true);
+
+    // Old dir is gone, new dir has the scaffolded files + updated JSON.
+    expect(fs.existsSync(path.join(tmp, "projects", p.slug))).toBe(false);
+    const newDir = path.join(tmp, "projects", "renamed");
+    expect(fs.existsSync(path.join(newDir, "project.json"))).toBe(true);
+    expect(fs.existsSync(path.join(newDir, "CLAUDE.md"))).toBe(true);
+    expect(fs.existsSync(path.join(newDir, "frames"))).toBe(true);
+
+    // getProject resolves under the new slug, the old one 404s.
+    expect(await getProject(p.slug)).toBeNull();
+    const reloaded = await getProject("renamed");
+    expect(reloaded?.name).toBe("Renamed");
+    expect(reloaded?.slug).toBe("renamed");
+  });
+
+  it("keeps the slug when the reslug would match the current one", async () => {
+    const p = await createProject({ name: "Orig", theme: "arcade", mode: "light" });
+    const r = await renameProject(p.slug, "Orig"); // same slug after slugify
+    expect(r.slug).toBe(p.slug);
+  });
+
+  it("disambiguates the slug when another project already occupies it", async () => {
+    const a = await createProject({ name: "Taken", theme: "arcade", mode: "light" });
+    const b = await createProject({ name: "Other", theme: "arcade", mode: "light" });
+    const r = await renameProject(b.slug, "Taken");
+    expect(r.slug).toBe("taken-2");
+    // The original "taken" project is unchanged.
+    expect((await getProject(a.slug))?.name).toBe("Taken");
   });
 
   it("deletes a project", async () => {
