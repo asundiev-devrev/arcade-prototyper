@@ -11,7 +11,7 @@
 # Node version is pinned to NODE_VERSION below. Bump manually.
 set -euo pipefail
 
-NODE_VERSION="${NODE_VERSION:-22.11.0}"
+NODE_VERSION="${NODE_VERSION:-22.14.0}"
 TARGET="${1:?target dir required}"
 ARCH="${2:?arch required (arm64|x64)}"
 

@@ -29,11 +29,35 @@ corepack prepare pnpm@latest --activate </dev/null 2>/dev/null || true
 # Install with devDeps — studio runs via Vite (devDep), tailwindcss (devDep),
 # @vitejs/plugin-react (devDep). We can't --prod=true. The playwright cost is
 # accepted; skipping browsers is done via env below.
-PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 pnpm install --frozen-lockfile
+#
+# --config.supported-architectures is critical: vite 8 depends on rolldown,
+# which ships platform-specific native bindings via `optionalDependencies`.
+# pnpm with `--frozen-lockfile` is prone to skipping the arch-specific
+# optional dep in fresh installs, which manifests at runtime as:
+#   Cannot find module '@rolldown/binding-darwin-arm64'
+# Forcing the supported architectures tells pnpm to eagerly pull the
+# darwin-arm64 binding into node_modules.
+PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 pnpm install --frozen-lockfile \
+  --config.supported-architectures.os=darwin \
+  --config.supported-architectures.cpu=arm64
 
 # Vendor the Claude CLI and figmanage as local deps so node_modules/.bin/
-# resolves both without the host having them globally installed.
-pnpm add --save-exact @anthropic-ai/claude-code figmanage
+# resolves both without the host having them globally installed. Same
+# architecture forcing as above so any native bindings they pull in land
+# in the right form.
+pnpm add --save-exact @anthropic-ai/claude-code figmanage \
+  --config.supported-architectures.os=darwin \
+  --config.supported-architectures.cpu=arm64
+
+# Paranoia: confirm the rolldown binding actually made it into the tree.
+# If pnpm silently skipped it (optional-deps weirdness), fail the build
+# loudly instead of shipping a .app that crashes at first launch.
+if [ ! -d "node_modules/@rolldown/binding-darwin-arm64" ] && \
+   ! find node_modules/.pnpm -maxdepth 2 -type d -name "@rolldown+binding-darwin-arm64*" | grep -q .; then
+  echo "ERROR: @rolldown/binding-darwin-arm64 not installed. Vite 8 will crash." >&2
+  echo "Inspect node_modules/.pnpm for what pnpm actually fetched." >&2
+  exit 1
+fi
 
 echo "Deps installed. bin contents:"
 ls node_modules/.bin/ | head -30
