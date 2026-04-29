@@ -12,6 +12,7 @@ import { CanvasToggle } from "../components/shell/CanvasToggle";
 import { ChatToggle } from "../components/shell/ChatToggle";
 import { ProjectPicker } from "../components/shell/ProjectPicker";
 import { AppSettingsButton } from "../components/shell/SettingsButton";
+import { ChatStreamProvider } from "../hooks/chatStreamContext";
 
 const CHAT_OPEN_STORAGE_KEY = "studio:chatPaneOpen";
 
@@ -83,6 +84,7 @@ export function ProjectDetail({
     );
 
   return (
+    <ChatStreamProvider projectSlug={project.slug}>
     <div style={{ display: "grid", gridTemplateRows: "48px 1fr", height: "100vh" }}>
       <StudioHeader
         title={
@@ -131,5 +133,6 @@ export function ProjectDetail({
         {devOpen && <DevModePanel slug={project.slug} />}
       </div>
     </div>
+    </ChatStreamProvider>
   );
 }

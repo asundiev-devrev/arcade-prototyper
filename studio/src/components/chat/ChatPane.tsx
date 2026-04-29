@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { MessageList } from "./MessageList";
 import { PromptInput } from "./PromptInput";
-import { useChatStream } from "../../hooks/useChatStream";
+import { useChatStreamContext } from "../../hooks/chatStreamContext";
 import type { ChatMessage } from "../../../server/types";
 import { EmptyStatePrompts } from "./EmptyStatePrompts";
 import { extractFigmaUrl, decoratePromptWithFigma } from "../../lib/figmaUrl";
@@ -10,7 +10,7 @@ import { AuthExpiredNotice } from "../feedback/AuthExpiredNotice";
 
 export function ChatPane({ projectSlug }: { projectSlug: string }) {
   const [history, setHistory] = useState<ChatMessage[]>([]);
-  const { state, send, retry } = useChatStream(projectSlug);
+  const { state, send, retry } = useChatStreamContext();
 
   useEffect(() => {
     let cancelled = false;

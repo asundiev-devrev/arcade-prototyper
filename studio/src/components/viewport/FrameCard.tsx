@@ -1,5 +1,6 @@
 import type { Frame } from "../../../server/types";
 import { computeFrameSize, type DevicePreset } from "../../lib/devicePresets";
+import { useChatStreamContext } from "../../hooks/chatStreamContext";
 
 export function FrameCard({
   projectSlug,
@@ -13,10 +14,39 @@ export function FrameCard({
   projectMode: "light" | "dark";
 }) {
   const effectiveWidth = computeFrameSize(devicePreset);
+  const { state, refine } = useChatStreamContext();
 
   return (
     <div style={{ flex: "none" }}>
-      <div style={{ fontSize: 12, color: "var(--fg-neutral-subtle)", marginBottom: 8 }}>{frame.name}</div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          marginBottom: 8,
+          fontSize: 12,
+          color: "var(--fg-neutral-subtle)",
+        }}
+      >
+        <span>{frame.name}</span>
+        <button
+          type="button"
+          title="Refine this frame against the most recent reference image in chat"
+          disabled={state.busy}
+          onClick={() => void refine(frame.slug)}
+          style={{
+            fontSize: 11,
+            padding: "2px 8px",
+            borderRadius: 6,
+            border: "1px solid var(--stroke-neutral-subtle)",
+            background: "var(--surface-overlay)",
+            color: state.busy ? "var(--fg-neutral-tertiary)" : "var(--fg-neutral-primary)",
+            cursor: state.busy ? "not-allowed" : "pointer",
+          }}
+        >
+          Refine against reference
+        </button>
+      </div>
       <div
         style={{
           position: "relative",
