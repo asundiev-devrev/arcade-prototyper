@@ -13,13 +13,16 @@ Produces `studio/packaging/dist/Arcade Studio.app` and `studio/packaging/dist/Ar
 ## Install (internal users)
 
 1. Download `Arcade Studio.dmg` from the DevRev-internal share link.
-2. Open the DMG and drag **Arcade Studio** to **Applications**.
-3. **First launch only:** right-click the app in Applications and choose **Open**, then click **Open** in the dialog. macOS Gatekeeper blocks unsigned apps on first launch; right-click → Open bypasses this. Subsequent launches work with a normal double-click.
-4. Studio opens `http://localhost:5556` in your default browser.
+2. Open the DMG and drag **Arcade Studio** to **Applications**. Eject the DMG.
+3. **First launch:** double-click **Arcade Studio** in `/Applications`. macOS shows "Arcade Studio cannot be opened because the developer cannot be verified." Click **Done** (or Cancel). This is Gatekeeper blocking the unsigned app — you have to override it once.
+4. Open **System Settings → Privacy & Security**. Scroll down to the "Security" section. There's a line "'Arcade Studio' was blocked to protect your Mac." with an **Open Anyway** button. Click it, authenticate with Touch ID or your password, and click **Open** in the confirmation dialog.
+5. Studio launches. Your browser opens `http://localhost:5556`. Every subsequent double-click works normally — no more Gatekeeper dialog.
+
+> **Why this is clunky:** the `.app` is unsigned (no Apple Developer ID certificate). On macOS Sonoma (14.x) and later, Apple removed the classic right-click → Open shortcut, so System Settings is the only way to whitelist an unsigned app. One-time pain per install.
 
 ## Why unsigned
 
-This bundle is for DevRev-internal distribution. Apple Developer ID signing + notarization are deferred until we have a DevRev signing certificate. For internal use, the one-time right-click → Open workflow is acceptable.
+This bundle is for DevRev-internal distribution. Apple Developer ID signing + notarization are deferred until we have a DevRev signing certificate. Once we do, the Privacy & Security dance goes away and double-click just works.
 
 ## Size
 
@@ -29,13 +32,14 @@ The DMG is ~290 MB compressed; the installed `.app` is ~710 MB. Most of that is 
 
 ### "Arcade Studio is damaged and can't be opened"
 
-You double-clicked before right-clicking → Open on first launch. Fix:
+This happens occasionally when macOS marks the bundle as truly damaged (bad ad-hoc signature, partial DMG copy, or Gatekeeper flagging it after several failed launches). Strip the quarantine attribute and re-sign:
 
 ```bash
 xattr -dr com.apple.quarantine "/Applications/Arcade Studio.app"
+codesign --force --deep --sign - --timestamp=none "/Applications/Arcade Studio.app"
 ```
 
-Then right-click → **Open**.
+Then go to **System Settings → Privacy & Security** and click **Open Anyway** as described in the install section. If the dialog isn't there, delete the app and reinstall from the DMG.
 
 ### Port 5556 already in use
 

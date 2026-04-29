@@ -42,7 +42,11 @@ cd "$APP_DIR"
 # Vite has `open: true` in its config, so it opens the browser itself once
 # listening. We still run `open` below as a safety net for cases where the
 # user closed the tab — idempotent.
-"$NODE_BIN/node" ./node_modules/.bin/vite --config studio/vite.config.ts >> "$LOG_FILE" 2>&1 &
+#
+# Invoke the JS entry directly with node. Do NOT pass `node_modules/.bin/vite`
+# to node — that's a shell-script wrapper, and node would try to parse it as
+# JavaScript and fail with "SyntaxError: missing ) after argument list".
+"$NODE_BIN/node" ./node_modules/vite/bin/vite.js --config studio/vite.config.ts >> "$LOG_FILE" 2>&1 &
 VITE_PID=$!
 
 # Wait up to 30s for the port to be ready, then open the browser defensively.

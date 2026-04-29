@@ -40,4 +40,20 @@ describe("launcher.sh", () => {
     expect(content).toMatch(/LOG_DIR="[^"]*Library\/Logs"/);
     expect(content).toMatch(/LOG_FILE="\$LOG_DIR\/arcade-studio\.log"/);
   });
+
+  it("invokes vite's JS entry, not the shell-script wrapper in .bin/", () => {
+    const content = readFileSync(launcher, "utf-8");
+    // Regression guard: feeding `node_modules/.bin/vite` to node crashes with
+    // "SyntaxError: missing ) after argument list" because .bin/vite is a
+    // bash wrapper, not JS. Must call vite.js directly instead.
+    //
+    // To allow the explanatory comment in the launcher to mention ".bin/vite"
+    // without tripping the negative assertion, check only non-comment lines.
+    const codeLines = content
+      .split("\n")
+      .filter((line) => !line.trim().startsWith("#"))
+      .join("\n");
+    expect(codeLines).toMatch(/node_modules\/vite\/bin\/vite\.js/);
+    expect(codeLines).not.toMatch(/node.*node_modules\/\.bin\/vite\b/);
+  });
 });
