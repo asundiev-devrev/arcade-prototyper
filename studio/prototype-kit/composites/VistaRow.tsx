@@ -139,6 +139,34 @@ function GroupHeader({ label, count, leading }: GroupHeaderProps) {
 
 /* ─── Column primitives ─────────────────────────────────────────────────── */
 
+/** Select — leading checkbox column. Pair with a matching `<VistaRow.HeaderCell
+ *  className="w-6"><Select /></…>` in the header so the column widths align.
+ *  Uncontrolled by default; pass `checked` + `onChange` to drive selection. */
+function Select({
+  checked,
+  defaultChecked,
+  onChange,
+  className = "w-6",
+}: {
+  checked?: boolean;
+  defaultChecked?: boolean;
+  onChange?: (next: boolean) => void;
+  className?: string;
+}) {
+  return (
+    <div className={`shrink-0 flex items-center justify-center ${className}`}>
+      <input
+        type="checkbox"
+        aria-label="Select row"
+        checked={checked}
+        defaultChecked={defaultChecked}
+        onChange={onChange ? (e) => onChange(e.currentTarget.checked) : undefined}
+        className="h-4 w-4 cursor-pointer accent-(--bg-info-prominent)"
+      />
+    </div>
+  );
+}
+
 type PriorityValue = "P0" | "P1" | "P2" | "P3";
 
 const PRIORITY_INTENT: Record<PriorityValue, TagIntent> = {
@@ -313,6 +341,7 @@ export const VistaRow = Object.assign(Root, {
   Header,
   HeaderCell,
   GroupHeader,
+  Select,
   Priority,
   Id,
   Title,

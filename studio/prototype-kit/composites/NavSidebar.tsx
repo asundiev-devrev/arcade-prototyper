@@ -90,15 +90,31 @@ function Section({ title, children }: SectionProps) {
 }
 
 type ItemProps = {
-  children: ReactNode;
+  /** Item label. Legacy callers pass it as `children`; new callers may use
+   *  `label` with `icon` / `trailing` for a richer row. Both are supported
+   *  to avoid breaking existing prototype code. */
+  children?: ReactNode;
+  label?: ReactNode;
+  /** Leading icon slot — typically a 16px arcade icon. Rendered with
+   *  --fg-neutral-subtle when idle, inheriting the active fg on selection. */
+  icon?: ReactNode;
+  /** Trailing content — counts (`<Tag intent="info">14</Tag>`), shortcuts,
+   *  or a chevron for expandable sections. Pushed to the row's right edge. */
+  trailing?: ReactNode;
+  /** Nest the item under its parent. Applies an extra 16px left padding
+   *  so child items align visually under a section/parent item. */
+  indent?: boolean;
   active?: boolean;
   onClick?: () => void;
 };
 
 const Item = forwardRef<HTMLDivElement, ItemProps>(function Item(
-  { children, active, onClick },
+  { children, label, icon, trailing, indent, active, onClick },
   ref,
 ) {
+  // Accept either `label` (new API) or `children` (legacy). `label` wins
+  // when both are set so callers can migrate piecemeal without ambiguity.
+  const body = label ?? children;
   return (
     <div
       ref={ref}
@@ -107,13 +123,28 @@ const Item = forwardRef<HTMLDivElement, ItemProps>(function Item(
       data-active={active ? "true" : undefined}
       onClick={onClick}
       className={[
-        "flex items-center gap-2 px-2 py-1 rounded-square text-system cursor-pointer select-none",
+        "flex items-center gap-2 py-1 rounded-square text-system cursor-pointer select-none",
+        indent ? "pl-8 pr-2" : "px-2",
         active
           ? "bg-(--bg-info-prominent) text-(--fg-info-on-prominent)"
           : "text-(--fg-neutral-subtle) hover:bg-(--control-bg-neutral-subtle-hover) hover:text-(--fg-neutral-prominent)",
       ].join(" ")}
     >
-      {children}
+      {icon ? (
+        <span
+          aria-hidden
+          className={[
+            "inline-flex items-center shrink-0",
+            active ? "" : "text-(--fg-neutral-subtle)",
+          ].join(" ")}
+        >
+          {icon}
+        </span>
+      ) : null}
+      <span className="flex-1 min-w-0 truncate">{body}</span>
+      {trailing != null ? (
+        <span className="shrink-0 inline-flex items-center">{trailing}</span>
+      ) : null}
     </div>
   );
 });

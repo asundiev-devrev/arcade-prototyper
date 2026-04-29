@@ -6,7 +6,7 @@
 > template source; if a prop signature here is enough, skip the extra
 > `Read`. Open the `.tsx` only when you need the full rendered markup.
 
-_19 entries — 17 composites, 2 templates._
+_21 entries — 19 composites, 2 templates._
 
 ## Templates
 
@@ -703,6 +703,51 @@ type TitleBarProps = {
 - Do NOT pass `nav={<></>}` to hide the back/forward arrows. Pass `nav={null}` — React treats empty fragments as present, `null` as absent.
 - Do NOT inline your own `<svg>` traffic lights or collapse icon. They're baked in and will be duplicated.
 
+## VistaFilterPill (composite)
+_source: `composites/VistaFilterPill.tsx`_
+
+VistaFilterPill — segmented filter chip for the VistaToolbar filters slot.
+
+DevRev vista toolbars show filters as compound pills:
+
+  ┌──────────────────────────────────────────┐
+  │ [icon] Label │ is │ Value │ × │
+  └──────────────────────────────────────────┘
+
+Each segment is separated by a 1px --stroke-neutral-subtle divider. The
+label is muted (--fg-neutral-subtle), the value is prominent. The trailing
+× is an affordance to remove the filter.
+
+Why this composite exists: generators were hand-rolling a single-cell
+div, losing the divider-segmented look. Encoding it here keeps every
+frame's filter row visually identical to production.
+
+Slots:
+- `icon` (optional) — 12–14px leading icon (arcade icon or custom SVG).
+- `label` — the filter category, e.g. "Created date", "Stage", "Part".
+- `operator` (optional, default "is") — the comparison word between label
+  and value. Set to `null` to suppress (single-segment pill).
+- `value` — the selected value(s), e.g. "last 30 days", "None of +1".
+- `onRemove` (optional) — when provided, renders the trailing × button.
+
+
+```ts
+type VistaFilterPillProps = {
+  icon?: ReactNode;
+  label: ReactNode;
+  operator?: ReactNode | null;
+  value: ReactNode;
+  onRemove?: () => void;
+}
+```
+
+**When NOT to use this:**
+- Do NOT hand-roll the filter pill as a single div with
+  inline content. The segmented dividers are what make it read as a
+  DevRev filter pill instead of a generic chip.
+- Do NOT use `<Tag>` for filter pills. Tag is a label
+  component and renders as a solid-tinted chip without segment dividers.
+
 ## VistaGroupRail (composite)
 _source: `composites/VistaGroupRail.tsx`_
 
@@ -797,6 +842,47 @@ type VistaHeaderProps = {
 }
 ```
 
+## VistaPagination (composite)
+_source: `composites/VistaPagination.tsx`_
+
+VistaPagination — footer band for vista list views.
+
+Matches the footer across DevRev vista pages:
+
+  ┌───────────────────────────────────────────────────────────┐
+  │ Rows per page [50 v]            1–50 of 16538  ‹  ›        │
+  └───────────────────────────────────────────────────────────┘
+
+Sits below the scrolling table container, owns its own top border, and
+is always visible (not part of the scroll region).
+
+Slots:
+- `pageSize` — current rows-per-page value as a plain number/string.
+- `onPageSizeClick` (optional) — handler for the size selector (toggles
+  a dropdown the caller owns — this composite just renders the trigger).
+- `rangeLabel` — the "1–50 of 16538" summary text (caller formats it).
+- `onPrev` / `onNext` (optional) — paging handlers; omit to disable.
+- `canPrev` / `canNext` (optional, default true) — disables the
+  respective button without hiding it.
+
+
+```ts
+type VistaPaginationProps = {
+  pageSize: ReactNode;
+  onPageSizeClick?: () => void;
+  rangeLabel: ReactNode;
+  onPrev?: () => void;
+  onNext?: () => void;
+  canPrev?: boolean;
+  canNext?: boolean;
+}
+```
+
+**When NOT to use this:**
+- Do NOT hand-roll the pagination row as inline JSX
+  inside VistaPage children. It's a sibling of the scrolling area with
+  its own border; rolling it inline causes the border to scroll away.
+
 ## VistaRow (composite)
 _source: `composites/VistaRow.tsx`_
 
@@ -853,7 +939,7 @@ Intentional opinions:
   same width+padding invariants as the row cell — pairing them here
   keeps them from drifting apart.
 
-**Compound:** `VistaRow.Header`, `VistaRow.HeaderCell`, `VistaRow.GroupHeader`, `VistaRow.Priority`, `VistaRow.Id`, `VistaRow.Title`, `VistaRow.Stage`, `VistaRow.Part`, `VistaRow.Owner`, `VistaRow.Tags`, `VistaRow.Updated`
+**Compound:** `VistaRow.Header`, `VistaRow.HeaderCell`, `VistaRow.GroupHeader`, `VistaRow.Select`, `VistaRow.Priority`, `VistaRow.Id`, `VistaRow.Title`, `VistaRow.Stage`, `VistaRow.Part`, `VistaRow.Owner`, `VistaRow.Tags`, `VistaRow.Updated`
 
 **When NOT to use this:**
 - Do NOT use `arcade.Table` for a vista list view — it's a generic data table and won't produce the DevRev vista row shape.
