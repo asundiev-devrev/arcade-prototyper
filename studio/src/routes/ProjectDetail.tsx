@@ -126,11 +126,7 @@ export function ProjectDetail({
           <ChatPane projectSlug={project.slug} />
         </aside>
         <main key={reloadKey} style={{ minWidth: 0, minHeight: 0, overflow: "hidden" }}>
-          <Viewport
-            project={project}
-            devicePreset={devicePreset}
-            onFramesChanged={refreshProject}
-          />
+          <Viewport project={project} devicePreset={devicePreset} />
         </main>
         {devOpen && <DevModePanel slug={project.slug} />}
       </div>

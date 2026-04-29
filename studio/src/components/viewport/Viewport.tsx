@@ -9,13 +9,11 @@ import type { DevicePreset } from "../../lib/devicePresets";
 export function Viewport({
   project,
   devicePreset,
-  onFramesChanged,
 }: {
   project: Project;
   devicePreset: DevicePreset;
-  onFramesChanged?: () => void;
 }) {
-  const { frames, refresh } = useFrames(project);
+  const { frames } = useFrames(project);
 
   useEffect(() => {
     function onMessage(e: MessageEvent) {
@@ -45,11 +43,6 @@ export function Viewport({
     return () => window.removeEventListener("message", onMessage);
   }, [project.slug]);
 
-  const handleChanged = () => {
-    void refresh();
-    onFramesChanged?.();
-  };
-
   if (!frames.length) return <EmptyViewport />;
 
   return (
@@ -72,7 +65,6 @@ export function Viewport({
             frame={f}
             devicePreset={devicePreset}
             projectMode={project.mode}
-            onFramesChanged={handleChanged}
           />
         ))}
       </div>
