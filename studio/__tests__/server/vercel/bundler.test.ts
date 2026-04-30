@@ -60,6 +60,65 @@ describe("buildFrameBundle", () => {
         expect(
           opts.nodePaths.some((p: string) => p.endsWith(path.join("node_modules"))),
         ).toBe(true);
+
+        // alias map must cover the specifiers generated frames commonly use.
+        // Keep in sync with studio/vite.config.ts. Regression guard: a
+        // generated frame that does `import { Button } from "arcade"` or
+        // `import { AppShell } from "arcade/components"` must bundle, not
+        // fail with "Could not resolve 'arcade/components'".
+        expect(opts.alias).toBeDefined();
+        expect(opts.alias["arcade"]).toBe("@xorkavi/arcade-gen");
+        expect(opts.alias["arcade/components"]).toBe("@xorkavi/arcade-gen");
+        expect(opts.alias["arcade-prototypes"]).toMatch(/prototype-kit$/);
+      } finally {
+        delete process.env.ARCADE_STUDIO_ROOT;
+        fs.rmSync(studioRootTmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it(
+    "entrypoint imports arcade-gen-patches.css from the studio source tree, NOT the user-data dir",
+    async () => {
+      // Regression guard: earlier the bundler used `studioRoot()` (which
+      // returns the user-data dir) to compute the patches CSS path. That
+      // dir does NOT contain src/styles/; only <repo>/studio/src/styles
+      // does. esbuild failed with:
+      //   Could not resolve "/Users/.../arcade-studio/src/styles/..."
+      // We now derive the CSS path from REPO_ROOT (the repo root, resolved
+      // from bundler.ts's own file location).
+      const studioRootTmp = fs.mkdtempSync(path.join(os.tmpdir(), "arcade-bundler-2-"));
+      const frameDir = path.join(studioRootTmp, "frame");
+      fs.mkdirSync(frameDir, { recursive: true });
+      fs.writeFileSync(path.join(frameDir, "index.tsx"), "export default () => null;\n");
+      process.env.ARCADE_STUDIO_ROOT = studioRootTmp;
+
+      // Capture the entrypoint file esbuild is asked to bundle so we can
+      // inspect the CSS import inside it.
+      buildMock.mockImplementation(async (opts: any) => {
+        const entryPath = Array.isArray(opts.entryPoints) ? opts.entryPoints[0] : opts.entryPoints;
+        const entryText = fs.readFileSync(entryPath, "utf-8");
+        // Expect the patches CSS reference to be under studio/src/styles,
+        // and NOT under the user-data directory.
+        expect(entryText).toMatch(/studio\/src\/styles\/arcade-gen-patches\.css/);
+        expect(entryText).not.toMatch(/Application Support\/arcade-studio\/src\/styles/);
+        return {
+          outputFiles: [
+            { path: "/test.js", text: "" },
+            { path: "/test.css", text: "" },
+          ],
+        };
+      });
+
+      try {
+        const { buildFrameBundle } = await import("../../../server/vercel/bundler");
+        await buildFrameBundle({
+          projectSlug: "p",
+          frameSlug: "f",
+          framePath: frameDir,
+          theme: "arcade",
+          mode: "light",
+        });
       } finally {
         delete process.env.ARCADE_STUDIO_ROOT;
         fs.rmSync(studioRootTmp, { recursive: true, force: true });

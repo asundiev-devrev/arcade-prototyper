@@ -13,6 +13,7 @@ import { generateDevRevStubs } from "./stubDevRev";
 const STUDIO_SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(STUDIO_SERVER_DIR, "..", "..", "..");
 const REPO_NODE_MODULES = path.join(REPO_ROOT, "node_modules");
+const STUDIO_SRC_STYLES = path.join(REPO_ROOT, "studio", "src", "styles");
 
 function devrevStubPlugin(): Plugin {
   return {
@@ -30,6 +31,24 @@ function devrevStubPlugin(): Plugin {
   };
 }
 
+// Mirror studio/vite.config.ts's path aliases for esbuild. Studio's generated
+// frames import from `arcade` and `arcade/components` (readable aliases the
+// agent is told to use in CLAUDE.md.tpl); `arcade-prototypes` maps to the
+// prototype-kit tree. Vite resolves these at dev time; esbuild needs the same
+// mapping explicitly or bundling fails with "Could not resolve 'arcade/...'".
+//
+// esbuild's built-in `alias` option rewrites the specifier BEFORE the
+// resolution walk, so the result still passes through node_modules / nodePaths
+// lookup naturally. That's cleaner than a plugin that tries to short-circuit
+// the path.
+//
+// Keep this in sync with studio/vite.config.ts's `resolve.alias`.
+const ARCADE_ALIASES = {
+  "arcade": "@xorkavi/arcade-gen",
+  "arcade/components": "@xorkavi/arcade-gen",
+  "arcade-prototypes": path.join(REPO_ROOT, "studio", "prototype-kit"),
+} as const;
+
 interface BuildContext {
   projectSlug: string;
   frameSlug: string;
@@ -46,12 +65,19 @@ export async function buildFrameBundle(ctx: BuildContext): Promise<{
   const tempDir = path.join(studioRoot(), ".temp", `build-${ctx.projectSlug}-${ctx.frameSlug}`);
   await fs.mkdir(tempDir, { recursive: true });
 
+  // arcade-gen-patches.css lives in the studio source tree, not in the
+  // user-data directory. `studioRoot()` returns ~/Library/Application Support
+  // /arcade-studio/ (where projects live), which does NOT contain src/. The
+  // correct location is <repo>/studio/src/styles/. Both dev checkouts and
+  // the packaged .app have this path under REPO_ROOT.
+  const patchesCssPath = path.join(STUDIO_SRC_STYLES, "arcade-gen-patches.css").replace(/\\/g, "/");
+
   const entrypoint = `
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { DevRevThemeProvider } from "@xorkavi/arcade-gen";
 import "@xorkavi/arcade-gen/styles.css";
-import "${path.join(studioRoot(), "src/styles/arcade-gen-patches.css").replace(/\\/g, "/")}";
+import "${patchesCssPath}";
 import Frame from "${ctx.framePath}/index.tsx";
 
 const root = document.getElementById("root");
@@ -92,6 +118,7 @@ if (root) {
       },
       external: [],
       jsx: "automatic",
+      alias: { ...ARCADE_ALIASES },
       plugins: [devrevStubPlugin()],
       // The entrypoint lives under ~/Library/Application Support/arcade-studio/
       // .temp/ — far outside the repo. esbuild's default node_modules
