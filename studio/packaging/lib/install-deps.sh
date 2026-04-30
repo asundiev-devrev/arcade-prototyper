@@ -49,6 +49,17 @@ pnpm add --save-exact @anthropic-ai/claude-code figmanage \
   --config.supported-architectures.os=darwin \
   --config.supported-architectures.cpu=arm64
 
+# pnpm 10+ silently blocks postinstall scripts by default as a security
+# measure, and @anthropic-ai/claude-code has a real postinstall (install.cjs)
+# that copies the 200MB platform-specific native binary over the
+# bin/claude.exe stub. Without it we ship the stub, and every chat turn
+# errors with "claude native binary not installed."
+#
+# pnpm 10's `approve-builds`, `rebuild`, and `--config.only-built-dependencies`
+# flags all get swallowed silently in a fresh-install context. The only
+# reliable lever is to run the postinstall ourselves.
+node "node_modules/@anthropic-ai/claude-code/install.cjs"
+
 # Paranoia: confirm the rolldown binding actually made it into the tree.
 # If pnpm silently skipped it (optional-deps weirdness), fail the build
 # loudly instead of shipping a .app that crashes at first launch.
@@ -59,5 +70,23 @@ if [ ! -d "node_modules/@rolldown/binding-darwin-arm64" ] && \
   exit 1
 fi
 
+# Paranoia: confirm Claude's postinstall actually replaced bin/claude.exe
+# with the real 200MB native binary. If it's still the ~500-byte stub,
+# every chat turn crashes with:
+#   Error: claude native binary not installed.
+CLAUDE_BIN="node_modules/@anthropic-ai/claude-code/bin/claude.exe"
+if [ ! -f "$CLAUDE_BIN" ]; then
+  echo "ERROR: $CLAUDE_BIN missing entirely." >&2
+  exit 1
+fi
+CLAUDE_SIZE=$(stat -f%z "$CLAUDE_BIN" 2>/dev/null || stat -c%s "$CLAUDE_BIN")
+if [ "$CLAUDE_SIZE" -lt 1000000 ]; then
+  echo "ERROR: $CLAUDE_BIN is only ${CLAUDE_SIZE} bytes — the Claude postinstall" >&2
+  echo "did not run, so the native binary was not copied over the stub." >&2
+  echo "Chat turns will fail with 'claude native binary not installed'." >&2
+  exit 1
+fi
+
 echo "Deps installed. bin contents:"
 ls node_modules/.bin/ | head -30
+echo "claude.exe: $((CLAUDE_SIZE / 1024 / 1024)) MB (native installed)"
