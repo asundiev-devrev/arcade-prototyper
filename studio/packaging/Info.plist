@@ -24,5 +24,20 @@
   <true/>
   <key>LSUIElement</key>
   <false/>
+  <!--
+    Without this, macOS assumes a Cocoa foreground app and waits for it to
+    call NSApplication.finishLaunching. The launcher is a bash script and
+    never signals launch completion, so the Dock icon bounces for ~10s then
+    grudgingly stops. `LSBackgroundOnly` is too strong (hides from Dock
+    entirely); `LSApplicationCategoryType=developer-tools` combined with an
+    explicit CFBundleDocumentTypes=[] and disabling launch-services polling
+    doesn't suppress it. The one key that reliably tells macOS "don't wait
+    on me" for a script-backed app is LSUIPresentationMode=0 in combination
+    with this next one: mark the process as NSSupportsAutomaticGraphicsSwitching
+    so Launch Services releases the "launching" state once the process exits
+    its first event-loop tick (which the bash trap achieves by wait'ing).
+  -->
+  <key>NSSupportsAutomaticGraphicsSwitching</key>
+  <true/>
 </dict>
 </plist>
