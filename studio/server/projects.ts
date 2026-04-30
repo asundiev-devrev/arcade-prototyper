@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { projectDir, projectsRoot, projectJsonPath, chatHistoryPath } from "./paths";
@@ -22,6 +23,26 @@ function slugify(name: string): string {
       .replace(/^-+|-+$/g, "")
       .slice(0, 60) || "project"
   );
+}
+
+/**
+ * Compute the directory where Claude CLI stores session data for a given cwd.
+ *
+ * Claude CLI hashes its spawn cwd into a directory name by replacing every
+ * non-alphanumeric character with `-` and storing conversations at
+ * ~/.claude/projects/<hashed-cwd>/<session-id>.jsonl. When we rename a
+ * project directory on disk (`fs.rename(projectDir(old), projectDir(new))`),
+ * the cwd hash changes, and Claude's `--resume <session-id>` lookup no
+ * longer finds the session. The next chat turn errors with:
+ *     "No conversation found with session ID: ..."
+ *
+ * Keep this mapping in sync with Claude CLI's internal encoding. Current
+ * observed encoding: replace `/` and space with `-`, preserve alphanumerics,
+ * drop no characters. Matches what appears in ~/.claude/projects/ today.
+ */
+function claudeSessionDirFor(cwd: string): string {
+  const encoded = cwd.replace(/[^A-Za-z0-9]/g, "-");
+  return path.join(os.homedir(), ".claude", "projects", encoded);
 }
 
 async function exists(p: string): Promise<boolean> {
@@ -158,6 +179,30 @@ export async function renameProject(slug: string, name: string): Promise<Project
     // will load the pre-rename JSON — still a valid project, just with the old
     // name. That's the least-surprising partial-failure state.
     await fs.rename(projectDir(slug), projectDir(newSlug));
+
+    // Also move Claude's session index alongside. Claude CLI stores sessions
+    // at ~/.claude/projects/<encoded-cwd>/<session-id>.jsonl; renaming the
+    // project's cwd without renaming the session dir orphans every active
+    // session — the next `--resume <id>` turn fails with "No conversation
+    // found with session ID: ...". Best effort: if the source doesn't exist
+    // (no turns yet) or the target already exists (pre-existing project at
+    // the new slug), silently skip — rename continues. This keeps the fix
+    // local to the rename happy path without adding new failure modes.
+    const oldClaudeDir = claudeSessionDirFor(projectDir(slug));
+    const newClaudeDir = claudeSessionDirFor(projectDir(newSlug));
+    try {
+      await fs.rename(oldClaudeDir, newClaudeDir);
+    } catch (err: any) {
+      // ENOENT: no sessions yet (new project). EEXIST/ENOTEMPTY: a session
+      // dir already exists at the target; leave the source orphaned rather
+      // than clobber a real one. Either way the project rename is done.
+      if (err?.code !== "ENOENT" && err?.code !== "EEXIST" && err?.code !== "ENOTEMPTY") {
+        console.warn(
+          `[studio] failed to move Claude session dir from ${oldClaudeDir} to ${newClaudeDir}:`,
+          err?.message ?? err,
+        );
+      }
+    }
   }
 
   const next: Project = { ...p, name, slug: newSlug, updatedAt: now };

@@ -5,14 +5,29 @@ import path from "node:path";
 import { createProject, listProjects, getProject, renameProject, deleteProject, reconcileFrames } from "../../server/projects";
 
 let tmp: string;
+let fakeHome: string;
+let origHome: string | undefined;
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "arcade-studio-"));
   process.env.ARCADE_STUDIO_ROOT = tmp;
+  // Redirect ~/.claude/projects to a tmp HOME so rename tests can inspect
+  // Claude session dir moves without touching the real Claude install.
+  fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), "arcade-fakehome-"));
+  origHome = process.env.HOME;
+  process.env.HOME = fakeHome;
 });
 afterEach(() => {
   delete process.env.ARCADE_STUDIO_ROOT;
+  if (origHome === undefined) delete process.env.HOME;
+  else process.env.HOME = origHome;
   fs.rmSync(tmp, { recursive: true, force: true });
+  fs.rmSync(fakeHome, { recursive: true, force: true });
 });
+
+function claudeDirFor(cwd: string): string {
+  const encoded = cwd.replace(/[^A-Za-z0-9]/g, "-");
+  return path.join(fakeHome, ".claude", "projects", encoded);
+}
 
 describe("projects CRUD", () => {
   it("creates a project with scaffolded files", async () => {
@@ -69,6 +84,35 @@ describe("projects CRUD", () => {
     const p = await createProject({ name: "Orig", theme: "arcade", mode: "light" });
     const r = await renameProject(p.slug, "Orig"); // same slug after slugify
     expect(r.slug).toBe(p.slug);
+  });
+
+  it("moves Claude's session dir alongside the project rename", async () => {
+    const p = await createProject({ name: "Before", theme: "arcade", mode: "light" });
+
+    // Simulate Claude having written a session.jsonl for this project.
+    const oldClaudeDir = claudeDirFor(path.join(tmp, "projects", p.slug));
+    fs.mkdirSync(oldClaudeDir, { recursive: true });
+    fs.writeFileSync(path.join(oldClaudeDir, "sess-1.jsonl"), "{}\n");
+
+    const r = await renameProject(p.slug, "After");
+    expect(r.slug).toBe("after");
+
+    // Old Claude dir is gone. New Claude dir exists with the session file
+    // intact — resume from the session still works.
+    expect(fs.existsSync(oldClaudeDir)).toBe(false);
+    const newClaudeDir = claudeDirFor(path.join(tmp, "projects", "after"));
+    expect(fs.existsSync(newClaudeDir)).toBe(true);
+    expect(fs.existsSync(path.join(newClaudeDir, "sess-1.jsonl"))).toBe(true);
+  });
+
+  it("rename without prior Claude session dir is a silent no-op", async () => {
+    // No session.jsonl written — fresh project, user renames before first turn.
+    const p = await createProject({ name: "Fresh", theme: "arcade", mode: "light" });
+    const r = await renameProject(p.slug, "Renamed");
+    expect(r.slug).toBe("renamed");
+    // No crash, no leftover Claude dir created.
+    const newClaudeDir = claudeDirFor(path.join(tmp, "projects", "renamed"));
+    expect(fs.existsSync(newClaudeDir)).toBe(false);
   });
 
   it("disambiguates the slug when another project already occupies it", async () => {
