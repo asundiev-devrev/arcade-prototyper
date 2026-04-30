@@ -14,10 +14,18 @@ interface AppSettings {
   };
 }
 
-// Keep in sync with claude CLI aliases. An explicit "" option lets the
-// user revert to the CLI default without having to `rm` the settings key.
+// Sentinel for "use the Claude CLI's default model" in the Select UI.
+// Radix Select (2.x) reserves the empty string as its internal "cleared"
+// marker and throws at mount if any Select.Item is given value="". So we
+// use a non-empty sentinel in the component and translate back to an
+// empty-or-absent settings value on save/load. Persisted settings keep
+// the historic shape (undefined or absent key means "CLI default").
+const MODEL_DEFAULT_SENTINEL = "__default__";
+
+// Keep in sync with claude CLI aliases. The first entry is the "let the
+// CLI pick" option — persisted as undefined in settings.json.
 const MODEL_OPTIONS: Array<{ value: string; label: string; hint?: string }> = [
-  { value: "", label: "Default (Sonnet)", hint: "CLI default — fast, cheap" },
+  { value: MODEL_DEFAULT_SENTINEL, label: "Default (Sonnet)", hint: "CLI default — fast, cheap" },
   { value: "sonnet", label: "Sonnet", hint: "balanced default" },
   { value: "opus", label: "Opus", hint: "smarter, slower, more expensive" },
   { value: "haiku", label: "Haiku", hint: "fastest, cheapest, less nuanced" },
@@ -42,7 +50,10 @@ export function AppSettingsModal({
   const [vercelProjectName, setVercelProjectName] = useState("");
   const [hasVercelToken, setHasVercelToken] = useState(false);
   const [studioMode, setStudioMode] = useState<"light" | "dark">("light");
-  const [studioModel, setStudioModel] = useState<string>("");
+  // studioModel is the Select's current value — a sentinel when the user
+  // has picked "Default (Sonnet)", otherwise one of the alias strings.
+  // NEVER let this be "" — Radix Select throws on empty-string items.
+  const [studioModel, setStudioModel] = useState<string>(MODEL_DEFAULT_SENTINEL);
   const [vercelSaving, setVercelSaving] = useState(false);
   const [vercelError, setVercelError] = useState<string | null>(null);
 
@@ -55,7 +66,8 @@ export function AppSettingsModal({
         if (data.studio?.mode === "dark" || data.studio?.mode === "light") {
           setStudioMode(data.studio.mode);
         }
-        setStudioModel(data.studio?.model ?? "");
+        // Missing/empty in settings → show the Default row (sentinel).
+        setStudioModel(data.studio?.model || MODEL_DEFAULT_SENTINEL);
         setVercelTeamId(data.vercel?.teamId || "");
         setVercelProjectName(data.vercel?.projectName || "");
       }
@@ -196,12 +208,16 @@ export function AppSettingsModal({
                   onValueChange={async (next: string) => {
                     const prev = studioModel;
                     setStudioModel(next);
+                    // Sentinel → persist as undefined so the chat middleware
+                    // treats it as "no explicit model, let the CLI pick".
+                    const persisted =
+                      next === MODEL_DEFAULT_SENTINEL ? undefined : next;
                     try {
                       await fetch("/api/settings", {
                         method: "PATCH",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
-                          studio: { model: next || undefined },
+                          studio: { model: persisted },
                         }),
                       });
                     } catch {
@@ -212,7 +228,7 @@ export function AppSettingsModal({
                   <Select.Trigger id="studio-model" />
                   <Select.Content>
                     {MODEL_OPTIONS.map((opt) => (
-                      <Select.Item key={opt.value || "__default__"} value={opt.value}>
+                      <Select.Item key={opt.value} value={opt.value}>
                         {opt.label}
                         {opt.hint ? (
                           <span style={{ marginLeft: 8, color: "var(--fg-neutral-subtle)", fontSize: 12 }}>
