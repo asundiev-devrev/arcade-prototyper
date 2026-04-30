@@ -43,6 +43,26 @@ describe("parseStreamLine", () => {
     expect(e).toEqual<StudioEvent>({ kind: "end", ok: false, error: "boom" });
   });
 
+  it("surfaces is_error=true even when subtype says success", () => {
+    // Regression guard: claude emits `subtype: "success"` together with
+    // `is_error: true` and the user-facing message in `result` when auth
+    // fails at the Bedrock layer. Without honoring is_error we'd report the
+    // turn as a clean success, drop the "AWS SSO expired" message, and the
+    // UI would sit on "Thinking…" with no error — cost us a beta tester
+    // debug session.
+    const e = parseStreamLine(JSON.stringify({
+      type: "result",
+      subtype: "success",
+      is_error: true,
+      result: "API Error: Token is expired. To refresh this SSO session run 'aws sso login' with the corresponding profile.",
+    }));
+    expect(e).toEqual<StudioEvent>({
+      kind: "end",
+      ok: false,
+      error: "API Error: Token is expired. To refresh this SSO session run 'aws sso login' with the corresponding profile.",
+    });
+  });
+
   it("returns null for unrelated garbage", () => {
     expect(parseStreamLine("not json")).toBeNull();
   });

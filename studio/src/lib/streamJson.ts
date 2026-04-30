@@ -157,6 +157,21 @@ export function parseStreamLineAll(line: string): StudioEvent[] {
   }
 
   if (ev.type === "result") {
+    // claude's "result" event can say `subtype: "success"` while still
+    // being a failure — it sets `is_error: true` and puts the message in
+    // `result`. AWS SSO expiry hits this exact shape:
+    //   {type:"result", subtype:"success", is_error:true,
+    //    result:"API Error: Token is expired. To refresh this SSO session
+    //           run 'aws sso login' with the corresponding profile."}
+    // Before we honored `is_error`, the parser reported this as a
+    // successful turn with no content, the UI stopped "Thinking…" and
+    // showed nothing — the user had no idea their creds had expired.
+    if (ev.is_error) {
+      const msg = typeof ev.result === "string" && ev.result.trim()
+        ? ev.result
+        : (ev.error ? String(ev.error) : "Agent returned an error.");
+      return [{ kind: "end", ok: false, error: msg }];
+    }
     if (ev.subtype === "success") return [{ kind: "end", ok: true }];
     return [{ kind: "end", ok: false, error: String(ev.error ?? "Agent error") }];
   }
