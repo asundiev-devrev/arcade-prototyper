@@ -3,28 +3,32 @@
 Arcade Studio uses AWS Bedrock to run Claude. You need one AWS SSO profile
 configured on your Mac before the app can generate prototypes.
 
-The app writes the DevRev SSO profile into `~/.aws/config` for you on
-first launch, and spawns all AWS calls with `AWS_PROFILE=dev`. All you
-have to do manually is install the AWS CLI and sign in once.
+The DMG ships with the AWS CLI bundled, writes the DevRev SSO profile
+into `~/.aws/config` on first launch, and spawns all child processes
+with `AWS_PROFILE=dev`. Onboarding is one click inside the app.
 
-## One-time setup (~1 minute)
+## First-time setup (~30 seconds)
 
-1. Install the AWS CLI if you don't have it:
+1. Open Arcade Studio, type a prompt.
+2. When the "Your AWS session looks expired" banner appears, click
+   **Sign in to AWS**. A browser tab opens — sign in with your DevRev
+   account and close the tab when it says "Request approved".
+3. Retry the prompt.
 
-   ```bash
-   brew install awscli
-   ```
+You'll see that banner once every ~8 hours (AWS SSO session TTL).
+Every time, one click is all it takes.
 
-2. Sign in:
+## If you prefer the Terminal path
 
-   ```bash
-   aws sso login --profile dev
-   ```
+If you'd rather not use the in-app button (e.g. you already have a
+Terminal session open for other reasons):
 
-   A browser tab opens. Sign in with your DevRev account. The tab closes
-   itself when done.
+```bash
+aws sso login --profile dev
+```
 
-3. Open (or reopen) Arcade Studio. The first chat turn should work.
+Both paths write to the same token cache, so it doesn't matter which
+you use.
 
 ## Refreshing your session
 

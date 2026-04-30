@@ -6,6 +6,29 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] — 2026-04-30
+
+### Added
+
+- **AWS CLI is now bundled in the DMG.** Fresh-Mac beta testers no
+  longer need to `brew install awscli` before their first chat turn.
+  Adds ~90 MB to the DMG but replaces the most common onboarding
+  blocker with zero-touch setup.
+- **"Sign in to AWS" button** on the expired-session banner. When a
+  chat turn fails because your Bedrock creds ran out, click the
+  button instead of opening Terminal — studio spawns
+  `aws sso login --profile dev` for you, the browser tab opens, you
+  approve, and you're back. No Terminal required for the hourly
+  re-auth anymore.
+- **Changelog and "What's new" link** (this file). Settings footer
+  shows the current version and a link to these release notes.
+
+### Changed
+
+- Launcher adds the bundled AWS CLI to PATH *after* any
+  system-installed one, so users with their own aws setup keep using
+  it.
+
 ## [0.2.0] — 2026-04-30
 
 First version with a version number. Before this, builds were distinguishable

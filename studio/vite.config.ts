@@ -16,6 +16,7 @@ import { thumbnailsMiddleware } from "./server/middleware/thumbnails";
 import { vercelMiddleware } from "./server/middleware/vercel";
 import { runtimeErrorMiddleware } from "./server/middleware/runtimeError";
 import { versionMiddleware, logVersionOnBoot } from "./server/middleware/version";
+import { awsLoginMiddleware } from "./server/middleware/awsLogin";
 import { frameMountPlugin } from "./server/plugins/frameMountPlugin";
 import { projectWatchPlugin } from "./server/plugins/projectWatchPlugin";
 import { injectStudioSourcePlugin } from "./server/plugins/injectStudioSourcePlugin";
@@ -28,6 +29,7 @@ function apiPlugin(): import("vite").Plugin {
     name: "arcade-studio-api",
     configureServer(server) {
       server.middlewares.use(versionMiddleware());
+      server.middlewares.use(awsLoginMiddleware());
       server.middlewares.use(devrevMiddleware());
       server.middlewares.use(settingsMiddleware());
       server.middlewares.use(vercelMiddleware());

@@ -83,6 +83,9 @@ fi
 echo "==> Downloading Node ($NODE_ARCH)"
 bash "$PKG_DIR/lib/download-node.sh" "$RESOURCES/node" "$NODE_ARCH"
 
+echo "==> Downloading AWS CLI"
+bash "$PKG_DIR/lib/download-awscli.sh" "$RESOURCES/awscli"
+
 echo "==> Copying repo into Resources/app"
 bash "$PKG_DIR/lib/copy-sources.sh" "$REPO_ROOT" "$RESOURCES/app"
 

@@ -12,11 +12,16 @@ RESOURCES="$SCRIPT_DIR/../Resources"
 APP_DIR="$RESOURCES/app"
 NODE_BIN="$RESOURCES/node/bin"
 LOCAL_BIN="$APP_DIR/node_modules/.bin"
+AWSCLI_DIR="$RESOURCES/awscli/aws-cli"
 
 # $NODE_BIN first so `node` resolves to the bundled runtime.
 # $LOCAL_BIN second so `figmanage`, `vite`, and `claude` all resolve from
 # the bundle's node_modules without the host having them installed globally.
-export PATH="$NODE_BIN:$LOCAL_BIN:$PATH"
+# $AWSCLI_DIR last so `aws` resolves to our bundled CLI when the user
+# doesn't have it installed — but a system-installed `aws` (e.g. from
+# Homebrew) still wins. Users with their own aws setup aren't forced onto
+# our bundled copy.
+export PATH="$NODE_BIN:$LOCAL_BIN:$PATH:$AWSCLI_DIR"
 
 # Point claudeBin.ts at the vendored install; belt-and-suspenders alongside
 # $LOCAL_BIN on $PATH.
