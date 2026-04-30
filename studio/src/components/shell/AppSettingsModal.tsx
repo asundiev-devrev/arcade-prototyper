@@ -44,6 +44,16 @@ export function AppSettingsModal({
   const [devrevSaving, setDevrevSaving] = useState(false);
   const [devrevError, setDevrevError] = useState<string | null>(null);
 
+  // Figma state — mirrors the DevRev PAT layout. figmaStatus comes from
+  // /api/figma/status (backed by `figmanage whoami`) so we reflect whatever
+  // the CLI already has stored, no separate settings.json entry.
+  const [figmaPat, setFigmaPat] = useState("");
+  const [figmaStatus, setFigmaStatus] = useState<
+    { authenticated: boolean; email?: string } | null
+  >(null);
+  const [figmaSaving, setFigmaSaving] = useState(false);
+  const [figmaError, setFigmaError] = useState<string | null>(null);
+
   // Vercel state
   const [vercelToken, setVercelToken] = useState("");
   const [vercelTeamId, setVercelTeamId] = useState("");
@@ -79,6 +89,18 @@ export function AppSettingsModal({
     } catch {
       // non-critical
     }
+    try {
+      const res = await fetch("/api/figma/status");
+      if (res.ok) {
+        const body = await res.json();
+        setFigmaStatus({
+          authenticated: !!body.authenticated,
+          email: body?.user?.email,
+        });
+      }
+    } catch {
+      // non-critical
+    }
   }, []);
 
   useEffect(() => {
@@ -108,6 +130,53 @@ export function AppSettingsModal({
       setPat("");
     } catch (e) {
       setDevrevError(e instanceof Error ? e.message : "Failed to remove PAT");
+    }
+  }
+
+  async function handleSaveFigma() {
+    const trimmed = figmaPat.trim();
+    if (!trimmed) return;
+    setFigmaSaving(true);
+    setFigmaError(null);
+    try {
+      const res = await fetch("/api/figma/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pat: trimmed }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({} as any));
+        throw new Error(body?.error?.message ?? `Login failed: ${res.status}`);
+      }
+      setFigmaPat("");
+      // Re-fetch so the badge picks up the email figmanage just stored.
+      const statusRes = await fetch("/api/figma/status");
+      if (statusRes.ok) {
+        const body = await statusRes.json();
+        setFigmaStatus({
+          authenticated: !!body.authenticated,
+          email: body?.user?.email,
+        });
+      }
+    } catch (e) {
+      setFigmaError(e instanceof Error ? e.message : "Failed to save Figma PAT");
+    } finally {
+      setFigmaSaving(false);
+    }
+  }
+
+  async function handleRemoveFigma() {
+    setFigmaError(null);
+    try {
+      const res = await fetch("/api/figma/auth", { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({} as any));
+        throw new Error(body?.error?.message ?? `Logout failed: ${res.status}`);
+      }
+      setFigmaStatus({ authenticated: false });
+      setFigmaPat("");
+    } catch (e) {
+      setFigmaError(e instanceof Error ? e.message : "Failed to remove Figma PAT");
     }
   }
 
@@ -293,6 +362,75 @@ export function AppSettingsModal({
 
               {devrevError && (
                 <div style={{ color: "var(--fg-alert-prominent)", fontSize: 12 }}>{devrevError}</div>
+              )}
+            </section>
+
+            {/* Figma */}
+            <section
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+                paddingTop: 16,
+                borderTop: "1px solid var(--stroke-neutral-subtle)",
+              }}
+            >
+              <div>
+                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 540 }}>Figma integration</h3>
+                <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--fg-neutral-subtle)" }}>
+                  Let Studio read Figma frames you reference in chat. Create a
+                  token at{" "}
+                  <a
+                    href="https://www.figma.com/settings"
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ color: "var(--fg-accent-prominent)", textDecoration: "underline" }}
+                  >
+                    figma.com/settings
+                  </a>{" "}
+                  → Security → Personal access tokens.
+                </p>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <label htmlFor="figma-pat" style={{ fontSize: 12, fontWeight: 540 }}>
+                  Personal access token
+                </label>
+                <Input
+                  id="figma-pat"
+                  type="password"
+                  value={figmaPat}
+                  onChange={(e) => setFigmaPat(e.target.value)}
+                  placeholder={figmaStatus?.authenticated ? "Enter new token to replace" : "figd_..."}
+                />
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={handleSaveFigma}
+                  disabled={!figmaPat.trim() || figmaSaving}
+                >
+                  {figmaSaving ? "Saving…" : figmaStatus?.authenticated ? "Replace" : "Save"}
+                </Button>
+                {figmaStatus?.authenticated && (
+                  <Button size="sm" variant="tertiary" onClick={handleRemoveFigma}>
+                    Remove
+                  </Button>
+                )}
+                {figmaStatus?.authenticated && (
+                  <Badge variant="emphasis">Connected</Badge>
+                )}
+                {figmaStatus?.authenticated && figmaStatus.email && (
+                  <span style={{ fontSize: 12, color: "var(--fg-neutral-subtle)" }}>
+                    {figmaStatus.email}
+                  </span>
+                )}
+              </div>
+
+              {figmaError && (
+                <div style={{ color: "var(--fg-alert-prominent)", fontSize: 12 }}>{figmaError}</div>
               )}
             </section>
 

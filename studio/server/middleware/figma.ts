@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
-import { figmaWhoami, getNode, nodeTree, exportNodePng, figmaLoginWithPat } from "../figmaCli";
+import { figmaWhoami, getNode, nodeTree, exportNodePng, figmaLoginWithPat, figmaLogout } from "../figmaCli";
 import { projectsRoot } from "../paths";
 
 function send(res: ServerResponse, status: number, body: unknown) {
@@ -44,6 +44,19 @@ export function figmaMiddleware() {
         if (!result.ok) {
           return send(res, 400, {
             error: { code: "login_failed", message: result.message || "figmanage login failed" },
+          });
+        }
+        return send(res, 200, { ok: true });
+      }
+
+      // DELETE /api/figma/auth — remove stored PAT. Used by the "Remove"
+      // button in the Settings modal's Figma section, mirroring the
+      // DevRev disconnect flow.
+      if (req.method === "DELETE" && url === "/api/figma/auth") {
+        const result = await figmaLogout();
+        if (!result.ok) {
+          return send(res, 500, {
+            error: { code: "logout_failed", message: result.message || "figmanage logout failed" },
           });
         }
         return send(res, 200, { ok: true });

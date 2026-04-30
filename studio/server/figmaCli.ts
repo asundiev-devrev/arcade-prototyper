@@ -122,6 +122,34 @@ export async function exportNodePng(
 }
 
 /**
+ * Clear figmanage's stored credentials (PAT + any cached cookies).
+ * Used by the "Remove" button in Settings. Non-zero exit surfaces the
+ * message so the UI can render an inline error rather than silently
+ * claiming success.
+ */
+export async function figmaLogout(): Promise<{ ok: boolean; message: string }> {
+  return new Promise((resolve) => {
+    let output = "";
+    let proc;
+    try {
+      proc = spawn("figmanage", ["logout"], { stdio: ["ignore", "pipe", "pipe"] });
+    } catch (err: any) {
+      resolve({ ok: false, message: `spawn failed: ${err?.message ?? String(err)}` });
+      return;
+    }
+    proc.stdout!.on("data", (c) => { output += c.toString(); });
+    proc.stderr!.on("data", (c) => { output += c.toString(); });
+    proc.on("error", (err: any) => {
+      resolve({ ok: false, message: `spawn error: ${err?.message ?? String(err)}` });
+    });
+    proc.on("close", (code) => {
+      if (code === 0) resolve({ ok: true, message: output.trim() });
+      else resolve({ ok: false, message: output.trim() || `figmanage exited ${code}` });
+    });
+  });
+}
+
+/**
  * Log in to figmanage using a Figma Personal Access Token.
  *
  * figmanage's `login` command is interactive: it reads Chrome cookies first,
