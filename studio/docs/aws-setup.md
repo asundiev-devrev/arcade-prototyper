@@ -1,10 +1,13 @@
 # AWS SSO setup for Arcade Studio
 
 Arcade Studio uses AWS Bedrock to run Claude. You need one AWS SSO profile
-configured on your Mac before the app can generate prototypes. This is a
-one-time setup; after it, you'll just re-authenticate every few hours.
+configured on your Mac before the app can generate prototypes.
 
-## One-time setup (~2 minutes)
+The app writes the DevRev SSO profile into `~/.aws/config` for you on
+first launch, and spawns all AWS calls with `AWS_PROFILE=dev`. All you
+have to do manually is install the AWS CLI and sign in once.
+
+## One-time setup (~1 minute)
 
 1. Install the AWS CLI if you don't have it:
 
@@ -12,18 +15,7 @@ one-time setup; after it, you'll just re-authenticate every few hours.
    brew install awscli
    ```
 
-2. Open `~/.aws/config` (create it if it doesn't exist) and paste:
-
-   ```ini
-   [profile dev]
-   sso_start_url = https://d-9067645937.awsapps.com/start#
-   sso_region = us-east-1
-   sso_account_id = 020040093233
-   sso_role_name = BedrockLongLivedTokenAccess
-   region = us-east-1
-   ```
-
-3. Sign in once:
+2. Sign in:
 
    ```bash
    aws sso login --profile dev
@@ -32,20 +24,7 @@ one-time setup; after it, you'll just re-authenticate every few hours.
    A browser tab opens. Sign in with your DevRev account. The tab closes
    itself when done.
 
-4. Tell your shell to use this profile by default. Add this line to the
-   bottom of `~/.zshrc` (or `~/.bash_profile` if you use bash):
-
-   ```bash
-   export AWS_PROFILE=dev
-   ```
-
-   Then reload:
-
-   ```bash
-   source ~/.zshrc
-   ```
-
-5. Quit and re-open Arcade Studio. The first chat turn should now work.
+3. Open (or reopen) Arcade Studio. The first chat turn should work.
 
 ## Refreshing your session
 
@@ -67,14 +46,20 @@ Then retry the prompt in studio. No restart required.
 **`An error occurred (Configuration): Missing the following required SSO
 configuration values: sso_start_url, sso_region`**
 
-You skipped step 2 above, or the `[profile dev]` block is in the wrong
-file. Verify:
+The app didn't get to write `~/.aws/config` — usually because it hasn't
+been launched yet after installing the DMG. Launch Arcade Studio once
+(it writes the config on boot), then retry `aws sso login --profile dev`.
 
-```bash
-cat ~/.aws/config
+If it still fails, add the profile block manually:
+
+```ini
+[profile dev]
+sso_start_url = https://d-9067645937.awsapps.com/start#
+sso_region = us-east-1
+sso_account_id = 020040093233
+sso_role_name = BedrockLongLivedTokenAccess
+region = us-east-1
 ```
-
-It should show the block from step 2.
 
 **Studio keeps showing "Thinking…" and never responds**
 

@@ -22,6 +22,40 @@ export PATH="$NODE_BIN:$LOCAL_BIN:$PATH"
 # $LOCAL_BIN on $PATH.
 export ARCADE_STUDIO_CLAUDE_BIN="$LOCAL_BIN/claude"
 
+# ── AWS Bedrock bootstrap ────────────────────────────────────────────────────
+# New users on a fresh Mac need ~/.aws/config populated with our org's SSO
+# profile before `claude` can reach Bedrock. Rather than making each beta
+# tester paste the block manually (from studio/docs/aws-setup.md), we
+# idempotently append it on first launch.
+#
+# We never overwrite an existing [profile dev] block — if the user already
+# has one configured (maybe pointing at a different role), we leave it alone.
+# Only add the block when it's missing entirely. Detection uses a literal
+# line match, not parsing, so any ini-like variation the user might have
+# counts as "already present".
+AWS_CONFIG_DIR="$HOME/.aws"
+AWS_CONFIG_FILE="$AWS_CONFIG_DIR/config"
+if ! grep -q "^\[profile dev\]" "$AWS_CONFIG_FILE" 2>/dev/null; then
+  mkdir -p "$AWS_CONFIG_DIR"
+  # Leading newline keeps us safe if the existing file doesn't end with one.
+  # These values match the DevRev Bedrock SSO portal. If they change, both
+  # this block AND studio/docs/aws-setup.md must be updated in lockstep.
+  {
+    printf '\n[profile dev]\n'
+    printf 'sso_start_url = https://d-9067645937.awsapps.com/start#\n'
+    printf 'sso_region = us-east-1\n'
+    printf 'sso_account_id = 020040093233\n'
+    printf 'sso_role_name = BedrockLongLivedTokenAccess\n'
+    printf 'region = us-east-1\n'
+  } >> "$AWS_CONFIG_FILE"
+  log "Installed [profile dev] into $AWS_CONFIG_FILE"
+fi
+
+# Make every `claude` / `aws` call in this session use the SSO profile by
+# default, without the user editing their ~/.zshrc. The app inherits this;
+# their shell stays untouched so their other CLI tools aren't affected.
+export AWS_PROFILE="${AWS_PROFILE:-dev}"
+
 LOG_DIR="$HOME/Library/Logs"
 LOG_FILE="$LOG_DIR/arcade-studio.log"
 mkdir -p "$LOG_DIR"
