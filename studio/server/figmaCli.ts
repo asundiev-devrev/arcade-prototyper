@@ -15,14 +15,30 @@ export function parseFigmaUrl(url: string): ParsedFigmaUrl | null {
   } catch { return null; }
 }
 
+/**
+ * Run figmanage and collect its output. Treats spawn failures (ENOENT,
+ * ENOEXEC) the same as a non-zero exit — resolves with `code: -1` and
+ * the error message in stderr. The alternative (rejecting the promise)
+ * cascades into a 500 response from the middleware, which the
+ * FigmaConnectButton renders as "Figma error — retry" — misleading
+ * when the real state is "figmanage is just not installed on PATH."
+ */
 async function runFigmanage(args: string[]): Promise<{ stdout: string; stderr: string; code: number }> {
-  return new Promise((resolve, reject) => {
-    const proc = spawn("figmanage", args, { stdio: ["ignore", "pipe", "pipe"] });
+  return new Promise((resolve) => {
     let stdout = "";
     let stderr = "";
+    let proc;
+    try {
+      proc = spawn("figmanage", args, { stdio: ["ignore", "pipe", "pipe"] });
+    } catch (err: any) {
+      resolve({ stdout: "", stderr: `spawn failed: ${err?.message ?? String(err)}`, code: -1 });
+      return;
+    }
     proc.stdout!.on("data", (c) => { stdout += c.toString(); });
     proc.stderr!.on("data", (c) => { stderr += c.toString(); });
-    proc.on("error", reject);
+    proc.on("error", (err: any) => {
+      resolve({ stdout, stderr: stderr + `\nspawn error: ${err?.message ?? String(err)}`, code: -1 });
+    });
     proc.on("close", (code) => resolve({ stdout, stderr, code: code ?? 0 }));
   });
 }
@@ -33,14 +49,31 @@ export interface FigmaWhoamiResult {
 }
 
 export async function figmaWhoami(): Promise<FigmaWhoamiResult> {
-  const r = await runFigmanage(["whoami", "--json"]);
-  if (r.code !== 0) return { authenticated: false };
-  try {
-    const parsed = JSON.parse(r.stdout);
-    return { authenticated: true, user: parsed?.user };
-  } catch {
-    return { authenticated: true };
+  // figmanage whoami does NOT support --json (it's plain-text only:
+  // "User: Name\nEmail: x@y\nAuth: PAT"). Exit code is the source of
+  // truth for authenticated vs not. We parse the plain-text output
+  // for the email when we can, but authenticated-ness doesn't depend
+  // on parsing succeeding.
+  const r = await runFigmanage(["whoami"]);
+  if (r.code !== 0) {
+    // Log spawn failures and non-zero exits server-side so we can
+    // diagnose "Figma error" states from the launcher log instead of
+    // guessing. Authenticated false is the frontend's cue to show
+    // "Connect Figma"; the log tells us whether that's because the
+    // user isn't logged in OR because figmanage itself is broken.
+    if (r.code === -1) {
+      console.warn("[studio] figmanage whoami spawn failed:", r.stderr.trim());
+    } else {
+      console.warn(`[studio] figmanage whoami exited ${r.code}:`, r.stderr.trim() || r.stdout.trim());
+    }
+    return { authenticated: false };
   }
+  // Parse the plain-text output. Format (as of figmanage 1.4.2):
+  //   User:  Andrey Sundiev
+  //   Email: andrey.sundiev@devrev.ai
+  //   Auth:  PAT
+  const emailMatch = r.stdout.match(/^\s*Email:\s*(\S+)/m);
+  return { authenticated: true, user: emailMatch ? { email: emailMatch[1] } : undefined };
 }
 
 export async function getNode(fileKey: string, nodeId: string): Promise<unknown> {
