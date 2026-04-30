@@ -18,22 +18,18 @@ export function ShareModal({ open, onClose, projectSlug, frames }: ShareModalPro
 
   async function handleDeploy() {
     if (!selectedFrame) return;
-
     setLoading(true);
     setError(null);
-
     try {
       const res = await fetch(`/api/projects/${projectSlug}/share`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ frameSlug: selectedFrame }),
       });
-
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.error?.message || `Deploy failed: ${res.status}`);
       }
-
       const data = await res.json();
       setShareUrl(data.url);
     } catch (err: any) {
@@ -44,11 +40,10 @@ export function ShareModal({ open, onClose, projectSlug, frames }: ShareModalPro
   }
 
   function handleCopy() {
-    if (shareUrl) {
-      navigator.clipboard.writeText(shareUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
+    if (!shareUrl) return;
+    navigator.clipboard.writeText(shareUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }
 
   function handleClose() {
@@ -60,130 +55,143 @@ export function ShareModal({ open, onClose, projectSlug, frames }: ShareModalPro
   }
 
   return (
-    <Modal.Root open={open} onOpenChange={(open) => !open && handleClose()}>
+    <Modal.Root open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
       <Modal.Content>
-        <Modal.Title>Share Frame</Modal.Title>
+        <Modal.Header>
+          <Modal.Title>Share Frame</Modal.Title>
+          <Modal.Description>
+            Deploy a frame as a standalone preview on Vercel.
+          </Modal.Description>
+        </Modal.Header>
 
-        <div className="space-y-4 py-4">
+        <Modal.Body>
           {shareUrl ? (
-            <>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div
-                className="p-3 rounded-square"
-                style={{ background: "var(--bg-success-subtle)" }}
+                style={{
+                  padding: 12,
+                  borderRadius: 8,
+                  background: "var(--bg-success-subtle)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                }}
               >
                 <div
-                  className="text-system-small font-medium mb-2"
-                  style={{ color: "var(--fg-success-default)" }}
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 540,
+                    color: "var(--fg-success-prominent)",
+                  }}
                 >
                   Deployed successfully
                 </div>
                 <code
-                  className="block p-2 rounded text-system-small break-all"
-                  style={{ background: "var(--surface-backdrop)" }}
+                  style={{
+                    display: "block",
+                    padding: 8,
+                    borderRadius: 6,
+                    background: "var(--bg-neutral-subtle)",
+                    fontSize: 12,
+                    wordBreak: "break-all",
+                    userSelect: "all",
+                  }}
                 >
                   {shareUrl}
                 </code>
               </div>
-
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  onClick={handleCopy}
-                  className="flex-1"
-                >
-                  {copied ? "Copied!" : "Copy Link"}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => window.open(shareUrl, "_blank")}
-                  className="flex-1"
-                >
-                  Open in New Tab
-                </Button>
-              </div>
-            </>
+            </div>
           ) : (
-            <>
-              <div>
-                <p
-                  className="text-body-small mb-3"
-                  style={{ color: "var(--fg-neutral-subtle)" }}
-                >
-                  Select a frame to deploy as a standalone preview on Vercel.
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {frames.length === 0 ? (
+                <p style={{ margin: 0, fontSize: 13, color: "var(--fg-neutral-subtle)" }}>
+                  This project has no frames yet. Generate one first, then come
+                  back to share it.
                 </p>
-
-                <div className="space-y-2">
-                  {frames.map((frame) => (
-                    <label
-                      key={frame.slug}
-                      className="flex items-center gap-3 p-3 rounded-square cursor-pointer"
-                      style={{
-                        border: "1px solid var(--stroke-neutral-subtle)",
-                      }}
-                    >
-                      <input
-                        type="radio"
-                        name="frame"
-                        value={frame.slug}
-                        checked={selectedFrame === frame.slug}
-                        onChange={(e) => setSelectedFrame(e.target.value)}
-                        className="w-4 h-4"
-                      />
-                      <div className="flex-1">
-                        <div className="text-body font-medium">{frame.name}</div>
-                        <div
-                          className="text-system-small"
-                          style={{ color: "var(--fg-neutral-subtle)" }}
-                        >
-                          {frame.size}px
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {frames.map((frame) => {
+                    const checked = selectedFrame === frame.slug;
+                    return (
+                      <label
+                        key={frame.slug}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                          padding: 12,
+                          borderRadius: 8,
+                          cursor: "pointer",
+                          border: `1px solid var(--stroke-neutral-${checked ? "prominent" : "subtle"})`,
+                          background: checked ? "var(--bg-neutral-subtle)" : "transparent",
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="share-frame"
+                          value={frame.slug}
+                          checked={checked}
+                          onChange={(e) => setSelectedFrame(e.target.value)}
+                          style={{ width: 16, height: 16, flexShrink: 0 }}
+                        />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 540 }}>{frame.name}</div>
+                          <div style={{ fontSize: 12, color: "var(--fg-neutral-subtle)" }}>
+                            {frame.size}px
+                          </div>
                         </div>
-                      </div>
-                    </label>
-                  ))}
+                      </label>
+                    );
+                  })}
                 </div>
-              </div>
+              )}
 
               {error && (
                 <div
-                  className="p-3 rounded-square text-body-small"
+                  role="alert"
                   style={{
-                    background: "var(--bg-error-subtle)",
-                    color: "var(--fg-error-default)",
+                    padding: 12,
+                    borderRadius: 8,
+                    background: "var(--bg-alert-subtle)",
+                    color: "var(--fg-alert-prominent)",
+                    fontSize: 13,
                   }}
                 >
                   {error}
                 </div>
               )}
+            </div>
+          )}
+        </Modal.Body>
 
-              <div className="flex gap-2 pt-2">
-                <Button
-                  size="sm"
-                  onClick={handleDeploy}
-                  disabled={!selectedFrame || loading}
-                  className="flex-1"
-                >
-                  {loading ? "Deploying..." : "Deploy to Vercel"}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={handleClose}
-                >
-                  Cancel
-                </Button>
-              </div>
+        <Modal.Footer>
+          {shareUrl ? (
+            <>
+              <Button
+                variant="secondary"
+                onClick={() => window.open(shareUrl, "_blank")}
+              >
+                Open in New Tab
+              </Button>
+              <Button variant="primary" onClick={handleCopy}>
+                {copied ? "Copied!" : "Copy Link"}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="secondary" onClick={handleClose}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleDeploy}
+                disabled={!selectedFrame || loading || frames.length === 0}
+              >
+                {loading ? "Deploying…" : "Deploy to Vercel"}
+              </Button>
             </>
           )}
-        </div>
-
-        {shareUrl && (
-          <Modal.Close asChild>
-            <Button variant="secondary" onClick={handleClose}>
-              Close
-            </Button>
-          </Modal.Close>
-        )}
+        </Modal.Footer>
       </Modal.Content>
     </Modal.Root>
   );
