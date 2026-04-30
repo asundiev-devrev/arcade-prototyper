@@ -27,7 +27,7 @@ export function ViewportPreview({
           maxWidth: "100%",
           border: "1px solid var(--stroke-neutral-subtle)",
           borderRadius: 12,
-          overflow: "hidden",
+          overflow: "auto",
           background: "var(--surface-overlay)",
           transition: "width 200ms ease-out",
         }}
