@@ -145,6 +145,9 @@ export async function listProjects(): Promise<Project[]> {
     const slugs = await fs.readdir(projectsRoot());
     const ps: Project[] = [];
     for (const slug of slugs) {
+      // Ignore dotfiles (macOS sprays .DS_Store into every directory). These
+      // aren't projects and shouldn't spam the logs.
+      if (slug.startsWith(".")) continue;
       try {
         const p = await getProject(slug);
         if (p) ps.push(p);

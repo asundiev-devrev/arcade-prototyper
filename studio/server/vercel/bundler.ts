@@ -5,6 +5,43 @@ import { fileURLToPath } from "node:url";
 import { studioRoot } from "../paths";
 import { generateDevRevStubs } from "./stubDevRev";
 
+// The DevRev font CDN Referer-whitelists its origins. Browsers loading a
+// Vercel-deployed frame hit 403 because `*.vercel.app` isn't whitelisted, so
+// @xorkavi/arcade-gen's @font-face URLs never resolve and headings render in
+// system sans-serif. Node's fetch omits Referer by default, so we can pull
+// the fonts server-side at bundle time, base64-inline them into the CSS, and
+// avoid any runtime dependency on the CDN.
+const FONT_CDN = "https://files.dev.devrev-eng.ai/fonts";
+const FONT_FAMILIES: Array<{
+  name: string;
+  family: string;
+  weight: string;
+}> = [
+  { name: "ChipDispVar.woff2", family: "Chip Display Variable", weight: "100 900" },
+  { name: "ChipTextVar.woff2", family: "Chip Text Variable", weight: "100 900" },
+  { name: "ChipMono-Regular.woff2", family: "Chip Mono", weight: "400" },
+  { name: "ChipMono-Medium.woff2", family: "Chip Mono", weight: "500" },
+];
+
+async function buildInlineFontFaceCss(): Promise<string> {
+  const blocks: string[] = [];
+  for (const f of FONT_FAMILIES) {
+    const res = await fetch(`${FONT_CDN}/${f.name}`);
+    if (!res.ok) {
+      // Soft-fail: skip the missing font, headings fall back to system stack.
+      // Better than blowing up the whole deploy.
+      console.warn(`[vercel] font fetch ${f.name} failed: ${res.status}`);
+      continue;
+    }
+    const buf = Buffer.from(await res.arrayBuffer());
+    const b64 = buf.toString("base64");
+    blocks.push(
+      `@font-face{font-family:"${f.family}";src:url(data:font/woff2;base64,${b64}) format("woff2");font-weight:${f.weight};font-display:swap}`,
+    );
+  }
+  return blocks.join("\n");
+}
+
 // Resolve the arcade-prototyper repo root from this file's own location:
 //   <repo>/studio/server/vercel/bundler.ts → two "../" lands at <repo>/studio/
 //   server, three more lands at <repo>. This is where the repo's node_modules
@@ -136,19 +173,30 @@ if (root) {
     const cssOutput = result.outputFiles.find(f => f.path.endsWith(".css"));
 
     const js = jsOutput?.text || "";
-    const css = cssOutput?.text || "";
+    // Append inlined @font-face rules. arcade-gen's own styles.css contains
+    // @font-face pointing at the CDN, which 403s on Vercel because of the
+    // Referer whitelist. Declarations with the same family+weight in this
+    // appended block override the CDN ones (per @font-face spec: last
+    // matching declaration wins).
+    const inlineFonts = await buildInlineFontFaceCss();
+    const css = (cssOutput?.text || "") + (inlineFonts ? "\n" + inlineFonts : "");
 
+    // Ship JS and CSS as separate files, not inlined. If the minified JS
+    // happens to contain a "</script>" substring (e.g. inside a string
+    // literal), inlining via <script>...</script> terminates the tag early
+    // and the remainder of the bundle renders as visible text — exactly the
+    // "blank page with a long hash" symptom a beta tester hit.
     const html = `<!DOCTYPE html>
 <html lang="en" data-theme="${ctx.theme}" class="${ctx.mode}">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${ctx.projectSlug} - ${ctx.frameSlug}</title>
-    <style>${css}</style>
+    <link rel="stylesheet" href="/assets/bundle.css" />
   </head>
   <body>
     <div id="root"></div>
-    <script type="module">${js}</script>
+    <script type="module" src="/assets/bundle.js"></script>
   </body>
 </html>`;
 
