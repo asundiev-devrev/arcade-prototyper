@@ -122,31 +122,57 @@ export async function exportNodePng(
 }
 
 /**
- * Spawn `figmanage login` as a child process. The command opens a browser
- * for OAuth and stores credentials in the OS keychain. Returns a handle that
- * streams stdout/stderr lines via the `onLine` callback and resolves when
- * the child exits. Used by the `/api/figma/auth/login` endpoint.
+ * Log in to figmanage using a Figma Personal Access Token.
+ *
+ * figmanage's `login` command is interactive: it reads Chrome cookies first,
+ * then prompts for a PAT on stdin. We used to spawn it with stdin closed
+ * and stream stdout via SSE, but that just hit the PAT prompt with EOF and
+ * exited immediately — the "click Connect Figma, button reverts in half a
+ * second, nothing happens" bug beta testers hit.
+ *
+ * Instead, pipe the PAT to stdin with `--pat-only` (skip the cookie step
+ * entirely), let figmanage validate it against Figma's API, and return the
+ * exit state. The output already contains a useful error message on failure
+ * ("PAT invalid or expired") so we surface it unchanged to the UI.
  */
-export interface FigmaLoginHandle {
-  stop: () => void;
-  done: Promise<{ code: number; ok: boolean }>;
-}
-
-export function figmaLoginStream(onLine: (line: string) => void): FigmaLoginHandle {
-  const proc = spawn("figmanage", ["login"], { stdio: ["ignore", "pipe", "pipe"] });
-  const push = (chunk: Buffer | string) => {
-    for (const line of String(chunk).split(/\r?\n/)) {
-      if (line) onLine(line);
+export async function figmaLoginWithPat(pat: string): Promise<{ ok: boolean; message: string }> {
+  return new Promise((resolve) => {
+    let output = "";
+    let proc;
+    try {
+      proc = spawn("figmanage", ["login", "--pat-only"], {
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+    } catch (err: any) {
+      resolve({ ok: false, message: `spawn failed: ${err?.message ?? String(err)}` });
+      return;
     }
-  };
-  proc.stdout!.on("data", push);
-  proc.stderr!.on("data", push);
-  const done = new Promise<{ code: number; ok: boolean }>((resolve) => {
-    proc.on("close", (code) => resolve({ code: code ?? 1, ok: code === 0 }));
-    proc.on("error", () => resolve({ code: 1, ok: false }));
+    proc.stdout!.on("data", (c) => { output += c.toString(); });
+    proc.stderr!.on("data", (c) => { output += c.toString(); });
+    proc.on("error", (err: any) => {
+      resolve({ ok: false, message: `spawn error: ${err?.message ?? String(err)}` });
+    });
+    proc.on("close", (code) => {
+      if (code === 0) {
+        resolve({ ok: true, message: output.trim() });
+      } else {
+        // Pick the most specific line figmanage printed. Its output has a
+        // predictable structure; the "PAT invalid or expired" line (or
+        // similar) is the signal we want to show the user.
+        const lines = output.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+        const specific =
+          lines.find((l) => /invalid|expired|unauthorized|denied|error/i.test(l)) ??
+          lines[lines.length - 1] ??
+          `figmanage exited ${code}`;
+        resolve({ ok: false, message: specific });
+      }
+    });
+    // Feed the PAT and close stdin so figmanage's readline resolves.
+    try {
+      proc.stdin!.write(pat.trim() + "\n");
+      proc.stdin!.end();
+    } catch {
+      // Write errors will surface through the close handler.
+    }
   });
-  return {
-    stop: () => { try { proc.kill("SIGTERM"); } catch {} },
-    done,
-  };
 }

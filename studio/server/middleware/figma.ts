@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
-import { figmaWhoami, getNode, nodeTree, exportNodePng, figmaLoginStream } from "../figmaCli";
+import { figmaWhoami, getNode, nodeTree, exportNodePng, figmaLoginWithPat } from "../figmaCli";
 import { projectsRoot } from "../paths";
 
 function send(res: ServerResponse, status: number, body: unknown) {
@@ -23,32 +23,30 @@ export function figmaMiddleware() {
         return send(res, 200, await figmaWhoami());
       }
 
-      // SSE endpoint: spawn `figmanage login`, stream stdout lines, close on exit.
-      // This branch has its own try/catch because once the 200 SSE headers are
-      // flushed the outer handler cannot safely send a 500 JSON response.
+      // POST /api/figma/auth/login { pat: "figd_..." }
+      // figmanage's `login` is interactive (reads PAT on stdin). We pipe
+      // the user's token in and return a simple ok/error JSON response.
+      // No streaming needed — figmanage validates PATs synchronously.
       if (req.method === "POST" && url === "/api/figma/auth/login") {
-        res.writeHead(200, {
-          "Content-Type": "text/event-stream",
-          "Cache-Control": "no-cache",
-          Connection: "keep-alive",
-        });
-        // Writes that happen after the client disconnected throw EPIPE; guard
-        // every write so a disconnect never surfaces as a crash.
-        const writeFrame = (frame: unknown) => {
-          if (res.writableEnded || res.destroyed) return;
-          try { res.write(`data: ${JSON.stringify(frame)}\n\n`); } catch { /* peer gone */ }
-        };
-        const handle = figmaLoginStream((line) => writeFrame({ kind: "line", line }));
-        req.on("close", () => handle.stop());
-        try {
-          const result = await handle.done;
-          writeFrame({ kind: "end", ...result });
-        } catch (err: any) {
-          writeFrame({ kind: "end", ok: false, code: 1, error: err?.message ?? String(err) });
-        } finally {
-          if (!res.writableEnded) res.end();
+        let buf = ""; for await (const c of req) buf += c;
+        let body: { pat?: string };
+        try { body = buf ? JSON.parse(buf) : {}; }
+        catch {
+          return send(res, 400, { error: { code: "bad_request", message: "Invalid JSON body" } });
         }
-        return;
+        const pat = body.pat?.trim();
+        if (!pat) {
+          return send(res, 400, {
+            error: { code: "missing_pat", message: "Figma personal access token required" },
+          });
+        }
+        const result = await figmaLoginWithPat(pat);
+        if (!result.ok) {
+          return send(res, 400, {
+            error: { code: "login_failed", message: result.message || "figmanage login failed" },
+          });
+        }
+        return send(res, 200, { ok: true });
       }
 
       // GET /api/figma/node/:fileKey/:nodeId
