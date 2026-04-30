@@ -1,8 +1,18 @@
 import { build, type Plugin } from "esbuild";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { studioRoot } from "../paths";
 import { generateDevRevStubs } from "./stubDevRev";
+
+// Resolve the arcade-prototyper repo root from this file's own location:
+//   <repo>/studio/server/vercel/bundler.ts → two "../" lands at <repo>/studio/
+//   server, three more lands at <repo>. This is where the repo's node_modules
+//   actually lives, both in dev checkouts and inside the packaged .app bundle
+//   (Contents/Resources/app/node_modules/).
+const STUDIO_SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(STUDIO_SERVER_DIR, "..", "..", "..");
+const REPO_NODE_MODULES = path.join(REPO_ROOT, "node_modules");
 
 function devrevStubPlugin(): Plugin {
   return {
@@ -83,6 +93,16 @@ if (root) {
       external: [],
       jsx: "automatic",
       plugins: [devrevStubPlugin()],
+      // The entrypoint lives under ~/Library/Application Support/arcade-studio/
+      // .temp/ — far outside the repo. esbuild's default node_modules
+      // resolution walks up from the entrypoint and never reaches the repo's
+      // node_modules, so it fails with "Could not resolve 'react'". Both
+      // `absWorkingDir` (so bare specifiers resolve against the repo) and
+      // `nodePaths` (so node_modules lookups fall back to the repo's) are
+      // needed — the former handles the resolveDir, the latter is the
+      // belt-and-suspenders for transitive dependencies.
+      absWorkingDir: REPO_ROOT,
+      nodePaths: [REPO_NODE_MODULES],
     });
 
     const jsOutput = result.outputFiles.find(f => f.path.endsWith(".js"));
