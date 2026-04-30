@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Modal, Button, Input, Badge, Switch, Select } from "@xorkavi/arcade-gen";
+import ReactMarkdown from "react-markdown";
 import { savePat, getPatStatus, clearPat, type DevRevPatStatus } from "../../lib/devrev";
 
 interface AppSettings {
@@ -59,6 +60,7 @@ export function AppSettingsModal({
   // dev checkouts surface "dev" so we can distinguish local builds at a
   // glance when a beta tester pastes their logs.
   const [versionLabel, setVersionLabel] = useState<string | null>(null);
+  const [changelogOpen, setChangelogOpen] = useState(false);
 
   // Vercel state
   const [vercelToken, setVercelToken] = useState("");
@@ -221,6 +223,7 @@ export function AppSettingsModal({
   }
 
   return (
+    <>
     <Modal.Root open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <Modal.Content>
         <Modal.Header>
@@ -515,7 +518,10 @@ export function AppSettingsModal({
             </section>
 
             {/* Version footer — sits inside the scrollable Body so it's
-                visible without crowding the action buttons. */}
+                visible without crowding the action buttons. The "What's
+                new" link fetches /api/changelog and renders it in a nested
+                modal; if the server has no changelog (old build without
+                the Resources/CHANGELOG.md copy) the link is hidden. */}
             <div
               style={{
                 marginTop: 16,
@@ -524,9 +530,29 @@ export function AppSettingsModal({
                 fontSize: 11,
                 color: "var(--fg-neutral-subtle)",
                 textAlign: "center",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
               }}
             >
-              Arcade Studio {versionLabel ?? "…"}
+              <span>Arcade Studio {versionLabel ?? "…"}</span>
+              <span>·</span>
+              <button
+                type="button"
+                onClick={() => setChangelogOpen(true)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  color: "var(--fg-accent-prominent)",
+                  fontSize: 11,
+                  cursor: "pointer",
+                  textDecoration: "underline",
+                }}
+              >
+                What's new
+              </button>
             </div>
           </div>
         </Modal.Body>
@@ -541,6 +567,70 @@ export function AppSettingsModal({
           >
             {vercelSaving ? "Saving…" : "Save Vercel settings"}
           </Button>
+        </Modal.Footer>
+      </Modal.Content>
+    </Modal.Root>
+    <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />
+    </>
+  );
+}
+
+function ChangelogModal({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  const [body, setBody] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setBody(null);
+    setError(null);
+    (async () => {
+      try {
+        const res = await fetch("/api/changelog");
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        const text = await res.text();
+        if (!cancelled) setBody(text);
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : String(e));
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open]);
+
+  return (
+    <Modal.Root open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <Modal.Content>
+        <Modal.Header>
+          <Modal.Title>What's new</Modal.Title>
+          <Modal.Description>Recent changes in Arcade Studio.</Modal.Description>
+        </Modal.Header>
+        <Modal.Body>
+          {error ? (
+            <div style={{ color: "var(--fg-alert-prominent)", fontSize: 13 }}>
+              Couldn't load changelog: {error}
+            </div>
+          ) : body === null ? (
+            <div style={{ color: "var(--fg-neutral-subtle)", fontSize: 13 }}>
+              Loading…
+            </div>
+          ) : (
+            <div style={{ fontSize: 13, lineHeight: 1.55 }}>
+              <ReactMarkdown>{body}</ReactMarkdown>
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="primary" onClick={onClose}>Close</Button>
         </Modal.Footer>
       </Modal.Content>
     </Modal.Root>

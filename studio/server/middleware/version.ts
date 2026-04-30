@@ -15,6 +15,13 @@ import { fileURLToPath } from "node:url";
 const SERVER_MW_DIR = path.dirname(fileURLToPath(import.meta.url));
 const VERSION_JSON = path.resolve(SERVER_MW_DIR, "..", "..", "..", "..", "version.json");
 
+// In a packaged .app, build.sh copies CHANGELOG.md next to version.json
+// (Contents/Resources/CHANGELOG.md). In a dev checkout, the source file
+// lives at studio/CHANGELOG.md — four "../" from server/middleware/ lands
+// at the repo root, then we pick it up from there.
+const CHANGELOG_PACKAGED = path.resolve(SERVER_MW_DIR, "..", "..", "..", "..", "CHANGELOG.md");
+const CHANGELOG_SOURCE = path.resolve(SERVER_MW_DIR, "..", "..", "CHANGELOG.md");
+
 interface VersionInfo {
   base: string;
   build: string;
@@ -40,12 +47,40 @@ async function readVersion(): Promise<VersionInfo> {
   return { base: "dev", build: "dev" };
 }
 
+async function readChangelog(): Promise<string | null> {
+  // Packaged .app takes precedence — if it's there it's authoritative for
+  // that build. Fall back to the in-repo source for dev checkouts.
+  for (const p of [CHANGELOG_PACKAGED, CHANGELOG_SOURCE]) {
+    try {
+      return await fs.readFile(p, "utf-8");
+    } catch {
+      // try the next path
+    }
+  }
+  return null;
+}
+
 export function versionMiddleware() {
   return async (req: IncomingMessage, res: ServerResponse, next?: () => void) => {
-    if (req.url !== "/api/version" || req.method !== "GET") return next?.();
-    const info = await readVersion();
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(info));
+    const url = req.url ?? "/";
+    if (req.method === "GET" && url === "/api/version") {
+      const info = await readVersion();
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(info));
+      return;
+    }
+    if (req.method === "GET" && url === "/api/changelog") {
+      const body = await readChangelog();
+      if (body === null) {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: { code: "not_found", message: "Changelog unavailable" } }));
+        return;
+      }
+      res.writeHead(200, { "Content-Type": "text/markdown; charset=utf-8" });
+      res.end(body);
+      return;
+    }
+    return next?.();
   };
 }
 

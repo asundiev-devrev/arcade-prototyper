@@ -73,6 +73,13 @@ cat > "$RESOURCES/version.json" <<EOF
 }
 EOF
 
+# Copy the changelog into Resources/ so the "What's new" modal in Settings
+# can serve the current version's release notes without shipping the whole
+# docs/ tree inside the app. Source of truth stays in studio/CHANGELOG.md.
+if [ -f "$REPO_ROOT/studio/CHANGELOG.md" ]; then
+  cp "$REPO_ROOT/studio/CHANGELOG.md" "$RESOURCES/CHANGELOG.md"
+fi
+
 echo "==> Downloading Node ($NODE_ARCH)"
 bash "$PKG_DIR/lib/download-node.sh" "$RESOURCES/node" "$NODE_ARCH"
 
