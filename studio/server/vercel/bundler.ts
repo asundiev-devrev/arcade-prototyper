@@ -2,6 +2,8 @@ import { build, type Plugin } from "esbuild";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { compile as tailwindCompile } from "@tailwindcss/node";
+import { Scanner as TailwindScanner } from "@tailwindcss/oxide";
 import { studioRoot } from "../paths";
 import { generateDevRevStubs } from "./stubDevRev";
 
@@ -22,6 +24,70 @@ const FONT_FAMILIES: Array<{
   { name: "ChipMono-Regular.woff2", family: "Chip Mono", weight: "400" },
   { name: "ChipMono-Medium.woff2", family: "Chip Mono", weight: "500" },
 ];
+
+// Compile Tailwind v4 for a specific frame directory.
+//
+// Why we need this: studio's dev server runs @tailwindcss/vite which scans
+// studio/src, studio/prototype-kit AND the generated frame's source for
+// utility classes and generates CSS for every one it finds. The Vercel
+// bundler historically only shipped arcade-gen's pre-compiled styles.css —
+// the subset of classes arcade-gen itself happened to use. Any class in the
+// generated frame that arcade-gen doesn't also use (pt-12, text-title-3,
+// arbitrary values like max-w-[832px], responsive variants, etc.) silently
+// didn't exist on Vercel, so spacing, typography and layout diverged from
+// what the user saw in studio.
+//
+// Fix: mirror the studio pipeline. Read the same tailwind.css entry, append
+// an @source for the frame directory + prototype-kit so frame-scoped
+// classes get scanned, compile with @tailwindcss/node, and produce the
+// resulting CSS. We append to the esbuild CSS output rather than replacing
+// it because arcade-gen's styles.css also carries tokens, font-face rules,
+// and component-specific CSS we still need.
+async function buildFrameTailwindCss(framePath: string): Promise<string> {
+  const tailwindEntry = path.join(STUDIO_SRC_STYLES, "tailwind.css");
+  const baseCss = await fs.readFile(tailwindEntry, "utf-8");
+
+  // Match studio's injectStudioSourcePlugin: point Tailwind at the frame's
+  // own source files so every utility class it uses gets compiled in. We
+  // also add prototype-kit here (even though the static @source already
+  // covers it) because `base` for @tailwindcss/node is set to the frame
+  // dir, not the repo — which changes how relative globs resolve.
+  const extraSources = [
+    `@source "${framePath.replace(/\\/g, "/")}/**/*.{ts,tsx}";`,
+    `@source "${path.join(REPO_ROOT, "studio", "prototype-kit").replace(/\\/g, "/")}/**/*.{ts,tsx}";`,
+  ].join("\n");
+  const cssWithSources = baseCss + "\n" + extraSources + "\n";
+
+  const compiler = await tailwindCompile(cssWithSources, {
+    // `base` is where Tailwind resolves relative imports and relative
+    // @source globs from. STUDIO_SRC_STYLES is what studio's vite pipeline
+    // uses implicitly, so matching it keeps `@source "../../../studio/src/..."`
+    // (in tailwind.css) resolving identically.
+    base: STUDIO_SRC_STYLES,
+    from: tailwindEntry,
+    onDependency: () => {},
+  });
+
+  // Build the Scanner from the compiler's declared sources, same way the
+  // official @tailwindcss/vite plugin does. The "root" source is the
+  // implicit scan root; "sources" are the @source globs.
+  const scannerSources =
+    compiler.root === "none"
+      ? []
+      : compiler.root === null
+        ? [{ base: STUDIO_SRC_STYLES, pattern: "**/*", negated: false }]
+        : [{ ...compiler.root, negated: false }];
+  const scanner = new TailwindScanner({
+    sources: [...scannerSources, ...compiler.sources],
+  });
+  const candidates = scanner.scan();
+  const ast = compiler.build(candidates);
+
+  // compiler.build returns an AST; @tailwindcss/node doesn't directly
+  // expose a stringifier. But the build function's return type is
+  // actually a string at runtime — the type declaration is a lie. Cast.
+  return ast as unknown as string;
+}
 
 async function buildInlineFontFaceCss(): Promise<string> {
   const blocks: string[] = [];
@@ -173,13 +239,22 @@ if (root) {
     const cssOutput = result.outputFiles.find(f => f.path.endsWith(".css"));
 
     const js = jsOutput?.text || "";
-    // Append inlined @font-face rules. arcade-gen's own styles.css contains
-    // @font-face pointing at the CDN, which 403s on Vercel because of the
-    // Referer whitelist. Declarations with the same family+weight in this
-    // appended block override the CDN ones (per @font-face spec: last
-    // matching declaration wins).
+    // Three things get appended to the bundle CSS, in order:
+    //
+    // 1. Tailwind v4 output compiled from studio/src/styles/tailwind.css
+    //    with @source pointing at this frame's dir. Without this, classes
+    //    the frame uses but arcade-gen didn't happen to use are missing.
+    // 2. Inlined @font-face rules (CDN Referer-blocks .vercel.app origins,
+    //    so the browser can't fetch fonts at runtime).
+    //
+    // Order matters for @font-face override: ours come after arcade-gen's
+    // so "last matching family wins" picks ours.
+    const frameTailwindCss = await buildFrameTailwindCss(ctx.framePath);
     const inlineFonts = await buildInlineFontFaceCss();
-    const css = (cssOutput?.text || "") + (inlineFonts ? "\n" + inlineFonts : "");
+    const css =
+      (cssOutput?.text || "") +
+      (frameTailwindCss ? "\n" + frameTailwindCss : "") +
+      (inlineFonts ? "\n" + inlineFonts : "");
 
     // Ship JS and CSS as separate files, not inlined. If the minified JS
     // happens to contain a "</script>" substring (e.g. inside a string

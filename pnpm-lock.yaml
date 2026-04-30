@@ -8,6 +8,12 @@ importers:
 
   .:
     dependencies:
+      '@tailwindcss/node':
+        specifier: ^4.2.4
+        version: 4.2.4
+      '@tailwindcss/oxide':
+        specifier: ^4.2.4
+        version: 4.2.4
       '@xorkavi/arcade-gen':
         specifier: ^1.0.0
         version: 1.0.0(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(vite@8.0.10(@types/node@22.19.17)(esbuild@0.25.12)(jiti@2.6.1))

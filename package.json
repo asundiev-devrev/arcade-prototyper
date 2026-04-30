@@ -8,6 +8,8 @@
     "studio:pack": "bash studio/packaging/build.sh && bash studio/packaging/dmg.sh"
   },
   "dependencies": {
+    "@tailwindcss/node": "^4.2.4",
+    "@tailwindcss/oxide": "^4.2.4",
     "@xorkavi/arcade-gen": "^1.0.0",
     "chokidar": "^4.0.0",
     "esbuild": "^0.25.0",
