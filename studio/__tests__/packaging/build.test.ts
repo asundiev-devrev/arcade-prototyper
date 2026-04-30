@@ -1,12 +1,11 @@
 import { execSync } from "node:child_process";
-import { existsSync, statSync, rmSync } from "node:fs";
+import { existsSync, readdirSync, statSync, rmSync } from "node:fs";
 import path from "node:path";
 import { describe, it, expect } from "vitest";
 
 const repoRoot = path.resolve(__dirname, "..", "..", "..");
 const dist = path.join(repoRoot, "studio", "packaging", "dist");
 const app = path.join(dist, "Arcade Studio.app");
-const dmg = path.join(dist, "Arcade Studio.dmg");
 
 // Both the .app build and the .dmg wrap touch the same dist/ directory.
 // Run them sequentially in one describe so the dmg step is guaranteed to see
@@ -42,7 +41,15 @@ describe("build.sh + dmg.sh (end-to-end)", () => {
       stdio: "inherit",
       cwd: repoRoot,
     });
-    expect(existsSync(dmg)).toBe(true);
+    // DMG filename now includes the version (read from
+    // Contents/Resources/version.json at dmg.sh time). Match any file that
+    // looks like `Arcade Studio <anything>.dmg` so the test stays happy as
+    // VERSION bumps happen.
+    const dmgs = readdirSync(dist).filter(
+      (f) => f.startsWith("Arcade Studio ") && f.endsWith(".dmg"),
+    );
+    expect(dmgs.length).toBeGreaterThan(0);
+    const dmg = path.join(dist, dmgs[0]);
     expect(statSync(dmg).size).toBeGreaterThan(50_000_000);
   });
 });

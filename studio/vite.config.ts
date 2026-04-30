@@ -15,6 +15,7 @@ import { settingsMiddleware } from "./server/middleware/settings";
 import { thumbnailsMiddleware } from "./server/middleware/thumbnails";
 import { vercelMiddleware } from "./server/middleware/vercel";
 import { runtimeErrorMiddleware } from "./server/middleware/runtimeError";
+import { versionMiddleware, logVersionOnBoot } from "./server/middleware/version";
 import { frameMountPlugin } from "./server/plugins/frameMountPlugin";
 import { projectWatchPlugin } from "./server/plugins/projectWatchPlugin";
 import { injectStudioSourcePlugin } from "./server/plugins/injectStudioSourcePlugin";
@@ -26,6 +27,7 @@ function apiPlugin(): import("vite").Plugin {
   return {
     name: "arcade-studio-api",
     configureServer(server) {
+      server.middlewares.use(versionMiddleware());
       server.middlewares.use(devrevMiddleware());
       server.middlewares.use(settingsMiddleware());
       server.middlewares.use(vercelMiddleware());
@@ -42,6 +44,7 @@ function apiPlugin(): import("vite").Plugin {
       server.middlewares.use(fontsMiddleware());
       server.middlewares.use(runtimeErrorMiddleware());
       attachBuildErrorReporter(server);
+      void logVersionOnBoot();
       refreshStaleClaudeMd()
         .then((n) => { if (n > 0) console.log(`[studio] refreshed CLAUDE.md for ${n} project(s)`); })
         .catch((err) => console.warn("[studio] CLAUDE.md refresh failed:", err));

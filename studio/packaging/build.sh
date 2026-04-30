@@ -27,13 +27,51 @@ CONTENTS="$APP/Contents"
 RESOURCES="$CONTENTS/Resources"
 MACOS="$CONTENTS/MacOS"
 
+# Version: single source of truth is studio/packaging/VERSION. The build
+# stamp also appends a short git SHA so intermediate builds from the same
+# released version stay distinguishable in logs, Settings UI, and on disk.
+# VERSION_BASE → CFBundleShortVersionString + DMG filename.
+# VERSION_BUILD (base+sha) → CFBundleVersion + the runtime version label.
+VERSION_BASE="$(head -1 "$PKG_DIR/VERSION" | tr -d '[:space:]')"
+if [ -z "$VERSION_BASE" ]; then
+  echo "studio/packaging/VERSION is empty" >&2
+  exit 2
+fi
+GIT_SHA="$(git -C "$REPO_ROOT" rev-parse --short=7 HEAD 2>/dev/null || echo "unknown")"
+# If the working tree is dirty, mark the SHA so we never mistake a
+# locally modified build for a pinned commit.
+if [ -n "$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null)" ]; then
+  GIT_SHA="${GIT_SHA}-dirty"
+fi
+VERSION_BUILD="${VERSION_BASE}+${GIT_SHA}"
+export VERSION_BASE VERSION_BUILD
+echo "==> Version ${VERSION_BUILD}"
+
 echo "==> Cleaning prior build"
 rm -rf "$APP"
 mkdir -p "$MACOS" "$RESOURCES"
 
 echo "==> Installing Info.plist and icon"
-cp "$PKG_DIR/Info.plist" "$CONTENTS/Info.plist"
+# Stamp the version into Info.plist so macOS's Finder "Get Info" and
+# About box show what we think the build is. Using a temp file + mv is
+# BSD-sed safe (no -i "" quirks across macOS/Linux).
+sed \
+  -e "s|<key>CFBundleShortVersionString</key>[[:space:]]*<string>[^<]*</string>|<key>CFBundleShortVersionString</key><string>${VERSION_BASE}</string>|" \
+  -e "s|<key>CFBundleVersion</key>[[:space:]]*<string>[^<]*</string>|<key>CFBundleVersion</key><string>${VERSION_BUILD}</string>|" \
+  "$PKG_DIR/Info.plist" > "$CONTENTS/Info.plist"
 cp "$PKG_DIR/icon.icns"  "$RESOURCES/icon.icns"
+
+# Drop a version.json next to the Info.plist so the runtime can read it
+# without shelling out to /usr/libexec/PlistBuddy. Referenced by the
+# /api/version endpoint wired up in server/middleware/version.ts.
+cat > "$RESOURCES/version.json" <<EOF
+{
+  "base": "${VERSION_BASE}",
+  "build": "${VERSION_BUILD}",
+  "gitSha": "${GIT_SHA}",
+  "builtAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+EOF
 
 echo "==> Downloading Node ($NODE_ARCH)"
 bash "$PKG_DIR/lib/download-node.sh" "$RESOURCES/node" "$NODE_ARCH"
@@ -52,5 +90,5 @@ echo "==> Ad-hoc codesigning"
 bash "$PKG_DIR/lib/codesign.sh" "$APP"
 
 echo ""
-echo "✓ Built: $APP"
+echo "✓ Built: $APP (${VERSION_BUILD})"
 du -sh "$APP"

@@ -54,6 +54,12 @@ export function AppSettingsModal({
   const [figmaSaving, setFigmaSaving] = useState(false);
   const [figmaError, setFigmaError] = useState<string | null>(null);
 
+  // Build version — shown in the footer. Stamped at packaging time
+  // (studio/packaging/build.sh writes Contents/Resources/version.json);
+  // dev checkouts surface "dev" so we can distinguish local builds at a
+  // glance when a beta tester pastes their logs.
+  const [versionLabel, setVersionLabel] = useState<string | null>(null);
+
   // Vercel state
   const [vercelToken, setVercelToken] = useState("");
   const [vercelTeamId, setVercelTeamId] = useState("");
@@ -97,6 +103,15 @@ export function AppSettingsModal({
           authenticated: !!body.authenticated,
           email: body?.user?.email,
         });
+      }
+    } catch {
+      // non-critical
+    }
+    try {
+      const res = await fetch("/api/version");
+      if (res.ok) {
+        const body = await res.json();
+        if (typeof body?.build === "string") setVersionLabel(body.build);
       }
     } catch {
       // non-critical
@@ -498,6 +513,21 @@ export function AppSettingsModal({
                 <div style={{ color: "var(--fg-alert-prominent)", fontSize: 12 }}>{vercelError}</div>
               )}
             </section>
+
+            {/* Version footer — sits inside the scrollable Body so it's
+                visible without crowding the action buttons. */}
+            <div
+              style={{
+                marginTop: 16,
+                paddingTop: 16,
+                borderTop: "1px solid var(--stroke-neutral-subtle)",
+                fontSize: 11,
+                color: "var(--fg-neutral-subtle)",
+                textAlign: "center",
+              }}
+            >
+              Arcade Studio {versionLabel ?? "…"}
+            </div>
           </div>
         </Modal.Body>
         <Modal.Footer>
