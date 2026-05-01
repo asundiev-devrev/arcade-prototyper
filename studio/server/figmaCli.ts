@@ -104,12 +104,23 @@ export async function exportNodePng(
   ]);
   if (r.code !== 0) throw new Error(`figmanage export failed (${r.code}): ${r.stderr}`);
 
-  let parsed: Record<string, string>;
+  let parsed: unknown;
   try { parsed = JSON.parse(r.stdout); }
   catch { throw new Error(`figmanage export returned unparseable JSON: ${r.stdout.slice(0, 200)}`); }
 
-  const url = parsed[nodeId] ?? Object.values(parsed)[0];
-  if (typeof url !== "string") {
+  let url: string | undefined;
+  if (Array.isArray(parsed)) {
+    // figmanage current shape: [{ node_id, url }]
+    const entry = parsed.find((e: any) => e?.node_id === nodeId) ?? parsed[0];
+    url = typeof entry?.url === "string" ? entry.url : undefined;
+  } else if (parsed && typeof parsed === "object") {
+    // legacy dict shape: { [nodeId]: url }
+    const dict = parsed as Record<string, unknown>;
+    const v = dict[nodeId] ?? Object.values(dict)[0];
+    url = typeof v === "string" ? v : undefined;
+  }
+
+  if (!url) {
     throw new Error(`figmanage export produced no URL for node ${nodeId}`);
   }
 
@@ -203,4 +214,17 @@ export async function figmaLoginWithPat(pat: string): Promise<{ ok: boolean; mes
       // Write errors will surface through the close handler.
     }
   });
+}
+
+/**
+ * Fetch the Figma file's local variable definitions. Returns `null` rather
+ * than throwing on figmanage failure — variables are best-effort input to
+ * token resolution. A missing response degrades to "tokens left raw" and
+ * does not block ingest.
+ */
+export async function getVariables(fileKey: string): Promise<any | null> {
+  const r = await runFigmanage(["reading", "get-variables", fileKey, "--json"]);
+  if (r.code !== 0) return null;
+  try { return JSON.parse(r.stdout); }
+  catch { return null; }
 }

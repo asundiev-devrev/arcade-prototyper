@@ -120,4 +120,52 @@ describe("figmaCli (figmanage bridge)", () => {
       expect.anything(),
     );
   });
+
+  it("getVariables returns parsed JSON when figmanage exits 0", async () => {
+    spawnMock.mockImplementation(() => mockSpawn(JSON.stringify({ variables: { x: { name: "t" } } }), 0) as any);
+    const { getVariables } = await import("../../server/figmaCli");
+    const r = await getVariables("AbC123");
+    expect(r).toEqual({ variables: { x: { name: "t" } } });
+    expect(spawnMock).toHaveBeenCalledWith(
+      "figmanage",
+      ["reading", "get-variables", "AbC123", "--json"],
+      expect.any(Object),
+    );
+  });
+
+  it("getVariables returns null on non-zero exit instead of throwing", async () => {
+    spawnMock.mockImplementation(() => mockSpawn("boom", 2) as any);
+    const { getVariables } = await import("../../server/figmaCli");
+    expect(await getVariables("AbC123")).toBeNull();
+  });
+});
+
+describe("exportNodePng (array shape from figmanage)", () => {
+  beforeEach(() => {
+    spawnMock.mockClear();
+  });
+
+  it("handles the array response shape and downloads the PNG", async () => {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const os = await import("node:os");
+    const arrayReply = JSON.stringify([
+      { node_id: "1448:43844", url: "https://example.invalid/img.png" },
+    ]);
+    spawnMock.mockImplementation(() => mockSpawn(arrayReply, 0) as any);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => new Uint8Array([137, 80, 78, 71]).buffer,
+    } as any);
+    try {
+      const { exportNodePng } = await import("../../server/figmaCli");
+      const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "figma-export-test-"));
+      const out = path.join(tmp, "x.png");
+      const result = await exportNodePng("AbC", "1448:43844", out, 2);
+      expect(result).toBe(out);
+      expect(fetchSpy).toHaveBeenCalledWith("https://example.invalid/img.png");
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
 });

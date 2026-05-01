@@ -6,6 +6,33 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.0] — 2026-05-01
+
+### Added
+
+- **Figma references are now ingested as structured context** before
+  generation. When you paste a Figma URL, Studio silently prefetches
+  the document tree, asks a quick classifier which `prototype-kit`
+  composites fit, and attaches a frame PNG — all in parallel while
+  you're still typing. The generator no longer has to reverse-engineer
+  layout from pixels. Falls back to the URL-only behavior if Figma
+  auth is missing.
+
+### Changed
+
+- Studio now auto-exports a PNG of the referenced Figma node and attaches
+  it to the chat turn (previously users had to paste a screenshot
+  themselves).
+
+### Known limitations
+
+- Design-system tokens are not yet resolved — the generator receives raw
+  hex fills because `figmanage` has no `get-variables` command. A future
+  release will call Figma's REST API directly to close this gap.
+- The composite classifier can time out on very deep trees; when that
+  happens the tree + PNG still reach the generator but no composite
+  suggestions are attached.
+
 ## [0.3.1] — 2026-05-01
 
 ### Fixed

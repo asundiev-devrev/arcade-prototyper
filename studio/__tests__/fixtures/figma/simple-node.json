@@ -1,0 +1,24 @@
+{
+  "1038:14518": {
+    "document": {
+      "id": "1038:14518",
+      "name": "Card",
+      "type": "FRAME",
+      "absoluteBoundingBox": { "x": 0, "y": 0, "width": 320, "height": 120 },
+      "fills": [{ "type": "SOLID", "color": { "r": 1, "g": 1, "b": 1, "a": 1 } }],
+      "cornerRadius": 8,
+      "layoutMode": "NONE",
+      "children": [
+        {
+          "id": "1038:14519",
+          "name": "Title",
+          "type": "TEXT",
+          "characters": "Hello world",
+          "absoluteBoundingBox": { "x": 16, "y": 16, "width": 288, "height": 24 },
+          "style": { "fontSize": 16, "fontWeight": 500, "lineHeightPx": 24 },
+          "fills": [{ "type": "SOLID", "color": { "r": 0.1, "g": 0.1, "b": 0.1, "a": 1 } }]
+        }
+      ]
+    }
+  }
+}

@@ -1,7 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
-import { figmaWhoami, getNode, nodeTree, exportNodePng, figmaLoginWithPat, figmaLogout } from "../figmaCli";
+import { figmaWhoami, getNode, nodeTree, exportNodePng, figmaLoginWithPat, figmaLogout, parseFigmaUrl } from "../figmaCli";
 import { projectsRoot } from "../paths";
+import { getFigmaIngest } from "../figmaIngest";
 
 function send(res: ServerResponse, status: number, body: unknown) {
   res.writeHead(status, { "Content-Type": "application/json" });
@@ -21,6 +22,35 @@ export function figmaMiddleware() {
     try {
       if (url === "/api/figma/status") {
         return send(res, 200, await figmaWhoami());
+      }
+
+      if (req.method === "POST" && url === "/api/figma/ingest") {
+        let buf = ""; for await (const c of req) buf += c;
+        let body: { url?: string; fileKey?: string; nodeId?: string };
+        try { body = buf ? JSON.parse(buf) : {}; }
+        catch {
+          return send(res, 400, { error: { code: "bad_request", message: "Invalid JSON body" } });
+        }
+
+        let fileKey = body.fileKey;
+        let nodeId = body.nodeId;
+        let sourceUrl = body.url ?? "";
+        if ((!fileKey || !nodeId) && body.url) {
+          const parsed = parseFigmaUrl(body.url);
+          if (!parsed) {
+            return send(res, 400, { error: { code: "bad_url", message: "URL is not a recognized Figma link" } });
+          }
+          fileKey = parsed.fileId;
+          nodeId = parsed.nodeId;
+          sourceUrl = body.url;
+        }
+        if (!fileKey || !nodeId) {
+          return send(res, 400, { error: { code: "bad_request", message: "url or (fileKey + nodeId) required" } });
+        }
+
+        const ingest = await getFigmaIngest();
+        const outcome = await ingest.ingest(fileKey, nodeId, sourceUrl || `figma://${fileKey}/${nodeId}`);
+        return send(res, 200, outcome);
       }
 
       // POST /api/figma/auth/login { pat: "figd_..." }

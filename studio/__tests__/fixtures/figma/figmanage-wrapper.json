@@ -1,0 +1,36 @@
+{
+  "name": "Demo file",
+  "editorType": "figma",
+  "lastModified": "2026-05-01T00:00:00Z",
+  "linkAccess": "view",
+  "role": "owner",
+  "schemaVersion": 0,
+  "thumbnailUrl": "https://example/stub.png",
+  "version": "1",
+  "nodes": {
+    "1448:43844": {
+      "document": {
+        "id": "1448:43844",
+        "name": "Current_elevated",
+        "type": "FRAME",
+        "absoluteBoundingBox": { "x": 0, "y": 0, "width": 248, "height": 800 },
+        "fills": [{ "type": "SOLID", "color": { "r": 0.96, "g": 0.96, "b": 0.96, "a": 1 } }],
+        "layoutMode": "VERTICAL",
+        "children": [
+          {
+            "id": "1448:43845",
+            "name": "Header row",
+            "type": "FRAME",
+            "absoluteBoundingBox": { "x": 0, "y": 0, "width": 248, "height": 40 },
+            "layoutMode": "HORIZONTAL",
+            "children": []
+          }
+        ]
+      },
+      "components": {},
+      "componentSets": {},
+      "styles": {},
+      "schemaVersion": 0
+    }
+  }
+}

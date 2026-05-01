@@ -1,0 +1,43 @@
+{
+  "node": {
+    "1:2": {
+      "document": {
+        "id": "1:2",
+        "name": "Sidebar",
+        "type": "FRAME",
+        "absoluteBoundingBox": { "x": 0, "y": 0, "width": 248, "height": 800 },
+        "fills": [{
+          "type": "SOLID",
+          "color": { "r": 1, "g": 1, "b": 1, "a": 1 },
+          "boundVariables": { "color": { "type": "VARIABLE_ALIAS", "id": "VariableID:1:10" } }
+        }],
+        "layoutMode": "VERTICAL",
+        "itemSpacing": 12,
+        "paddingLeft": 16,
+        "paddingRight": 16,
+        "paddingTop": 16,
+        "paddingBottom": 16,
+        "boundVariables": {
+          "itemSpacing": { "type": "VARIABLE_ALIAS", "id": "VariableID:1:11" }
+        },
+        "children": []
+      }
+    }
+  },
+  "variables": {
+    "variables": {
+      "VariableID:1:10": {
+        "id": "VariableID:1:10",
+        "name": "surface/default",
+        "resolvedType": "COLOR",
+        "valuesByMode": { "mode-1": { "r": 1, "g": 1, "b": 1, "a": 1 } }
+      },
+      "VariableID:1:11": {
+        "id": "VariableID:1:11",
+        "name": "spacing/md",
+        "resolvedType": "FLOAT",
+        "valuesByMode": { "mode-1": 12 }
+      }
+    }
+  }
+}
