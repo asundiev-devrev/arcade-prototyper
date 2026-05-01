@@ -120,4 +120,22 @@ describe("figmaCli (figmanage bridge)", () => {
       expect.anything(),
     );
   });
+
+  it("getVariables returns parsed JSON when figmanage exits 0", async () => {
+    spawnMock.mockImplementation(() => mockSpawn(JSON.stringify({ variables: { x: { name: "t" } } }), 0) as any);
+    const { getVariables } = await import("../../server/figmaCli");
+    const r = await getVariables("AbC123");
+    expect(r).toEqual({ variables: { x: { name: "t" } } });
+    expect(spawnMock).toHaveBeenCalledWith(
+      "figmanage",
+      ["reading", "get-variables", "AbC123", "--json"],
+      expect.any(Object),
+    );
+  });
+
+  it("getVariables returns null on non-zero exit instead of throwing", async () => {
+    spawnMock.mockImplementation(() => mockSpawn("boom", 2) as any);
+    const { getVariables } = await import("../../server/figmaCli");
+    expect(await getVariables("AbC123")).toBeNull();
+  });
 });

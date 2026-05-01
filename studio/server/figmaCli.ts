@@ -204,3 +204,16 @@ export async function figmaLoginWithPat(pat: string): Promise<{ ok: boolean; mes
     }
   });
 }
+
+/**
+ * Fetch the Figma file's local variable definitions. Returns `null` rather
+ * than throwing on figmanage failure — variables are best-effort input to
+ * token resolution. A missing response degrades to "tokens left raw" and
+ * does not block ingest.
+ */
+export async function getVariables(fileKey: string): Promise<any | null> {
+  const r = await runFigmanage(["reading", "get-variables", fileKey, "--json"]);
+  if (r.code !== 0) return null;
+  try { return JSON.parse(r.stdout); }
+  catch { return null; }
+}
