@@ -12,7 +12,7 @@ import {
   getVariables as figmanageGetVariables,
 } from "./figmaCli";
 import { classifyComposites } from "./figma/classifyComposites";
-import { projectsRoot } from "./paths";
+import { figmaIngestRoot } from "./paths";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -67,6 +67,7 @@ export function createFigmaIngest(deps: IngestDeps, cfg: IngestConfig): FigmaIng
   }
 
   async function runOnce(fileKey: string, nodeId: string, url: string): Promise<IngestOutcome> {
+    const startedAt = Date.now();
     const warnings: string[] = [];
     let rawDict: any;
     try { rawDict = await deps.getNode(fileKey, nodeId); }
@@ -76,11 +77,14 @@ export function createFigmaIngest(deps: IngestDeps, cfg: IngestConfig): FigmaIng
         reason: `figmanage getNode failed: ${err?.message ?? String(err)}`,
         source: { fileKey, nodeId, url },
       };
+      console.warn(`[figmaIngest] fileKey=${fileKey} nodeId=${nodeId} failed: ${failure.reason}`);
       return failure;
     }
     const rawDoc = pickDocument(rawDict, nodeId);
     if (!rawDoc) {
-      return { ok: false, reason: "figmanage returned no document for nodeId", source: { fileKey, nodeId, url } };
+      const reason = "figmanage returned no document for nodeId";
+      console.warn(`[figmaIngest] fileKey=${fileKey} nodeId=${nodeId} failed: ${reason}`);
+      return { ok: false, reason, source: { fileKey, nodeId, url } };
     }
 
     const { tree: compacted, warnings: compactWarnings } = compactTree(rawDoc);
@@ -107,6 +111,13 @@ export function createFigmaIngest(deps: IngestDeps, cfg: IngestConfig): FigmaIng
       diagnostics: { warnings },
     };
     cacheSet(cacheKey(fileKey, nodeId), result);
+
+    const nodeCount = countNodes(tokenedTree);
+    const ms = Date.now() - startedAt;
+    console.log(
+      `[figmaIngest] fileKey=${fileKey} nodeId=${nodeId} ms=${ms} nodes=${nodeCount} composites=${composites.length} warnings=${warnings.length}${warnings.length ? ` [${warnings.join(" | ")}]` : ""}`,
+    );
+
     return { ok: true, ...result };
   }
 
@@ -126,6 +137,12 @@ export function createFigmaIngest(deps: IngestDeps, cfg: IngestConfig): FigmaIng
     getCached(fileKey, nodeId) { return cacheGet(cacheKey(fileKey, nodeId)); },
     getPending(fileKey, nodeId) { return pending.get(cacheKey(fileKey, nodeId)); },
   };
+}
+
+function countNodes(node: CompactNode): number {
+  let n = 1;
+  for (const c of node.children ?? []) n += countNodes(c);
+  return n;
 }
 
 function pickDocument(dict: any, nodeId: string): any | null {
@@ -162,7 +179,7 @@ export async function getFigmaIngest(): Promise<FigmaIngest> {
       getNode: (fileKey, nodeId) => figmanageGetNode(fileKey, nodeId),
       getVariables: (fileKey) => figmanageGetVariables(fileKey),
       exportPng: async (fileKey, nodeId) => {
-        const dir = path.join(projectsRoot(), "_figma-ingest");
+        const dir = figmaIngestRoot();
         await fs.mkdir(dir, { recursive: true });
         const out = path.join(dir, `${fileKey}_${nodeId.replace(/:/g, "-")}.png`);
         try {

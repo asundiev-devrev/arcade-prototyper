@@ -49,3 +49,12 @@ export function lastErrorLogPath(projectSlug: string): string {
 export function lastStdoutLogPath(projectSlug: string): string {
   return path.join(projectDir(projectSlug), "last-stdout.log");
 }
+
+/**
+ * Scratch directory for Figma-ingest artifacts (PNG exports, etc.). Sibling
+ * of `projects/`, not nested inside it — otherwise the project watcher
+ * mistakes it for a project slug and spams `Invalid slug` errors every poll.
+ */
+export function figmaIngestRoot(): string {
+  return path.join(studioRoot(), ".figma-ingest");
+}
