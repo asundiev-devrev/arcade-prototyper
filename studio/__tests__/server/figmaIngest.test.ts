@@ -62,18 +62,75 @@ describe("figmaIngest", () => {
     expect(outcome.ok).toBe(false);
   });
 
-  it("getPending returns an in-flight promise", async () => {
+  it("getPhase1Pending returns an in-flight phase-1 promise", async () => {
     let resolveFn!: (v: any) => void;
     const deps = makeDeps({
       getNode: vi.fn().mockImplementation(() => new Promise((r) => { resolveFn = r; })),
     });
     const ingest = createFigmaIngest(deps, { composites: [] });
     const url = "https://figma.com/design/file?node-id=1-2";
-    const p = ingest.ingest("file", "1:2", url);
-    const pending = ingest.getPending("file", "1:2");
+    const p = ingest.ingestPhase1("file", "1:2", url);
+    const pending = ingest.getPhase1Pending("file", "1:2");
     expect(pending).toBeDefined();
     resolveFn({ "1:2": { document: simpleNode() } });
     await p;
+  });
+});
+
+describe("figmaIngest (phase split)", () => {
+  it("ingestPhase1 returns before the classifier runs", async () => {
+    let resolveClassify!: (v: any) => void;
+    const classify = vi.fn().mockImplementation(() =>
+      new Promise((r) => { resolveClassify = r; }),
+    );
+    const deps = makeDeps({ classify });
+    const ingest = createFigmaIngest(deps, { composites: ["AppShell"] });
+    const phase1 = await ingest.ingestPhase1(
+      "file", "1:2", "https://figma.com/design/file?node-id=1-2",
+    );
+    if (!phase1.ok) throw new Error(`expected ok, got ${phase1.reason}`);
+    expect(phase1.composites).toEqual([]);
+    expect(classify).toHaveBeenCalledTimes(1); // kicked off in background
+    // Let phase 2 resolve so the test doesn't leak an unresolved promise.
+    resolveClassify({ composites: [], warnings: [] });
+  });
+
+  it("phase 2 upgrades the cached entry with composites", async () => {
+    const classify = vi.fn().mockResolvedValue({
+      composites: [{ composite: "AppShell", path: "0", confidence: "high", reason: "chrome" }],
+      warnings: [],
+    });
+    const deps = makeDeps({ classify });
+    const ingest = createFigmaIngest(deps, { composites: ["AppShell"] });
+    // `ingest` awaits both phases — by the time it resolves, composites must be present.
+    const outcome = await ingest.ingest("file", "1:2", "https://figma.com/design/file?node-id=1-2");
+    if (!outcome.ok) throw new Error(`expected ok, got ${outcome.reason}`);
+    expect(outcome.composites).toHaveLength(1);
+    expect(outcome.composites[0].composite).toBe("AppShell");
+
+    const cached = ingest.getCached("file", "1:2");
+    expect(cached?.composites).toHaveLength(1);
+  });
+
+  it("ingestPhase1 hits the cache and skips re-fetch after phase 1 completes", async () => {
+    const deps = makeDeps();
+    const ingest = createFigmaIngest(deps, { composites: [] });
+    const url = "https://figma.com/design/file?node-id=1-2";
+    await ingest.ingestPhase1("file", "1:2", url);
+    await ingest.ingestPhase1("file", "1:2", url);
+    expect(deps.getNode).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not start phase 2 when the composite catalog is empty", async () => {
+    const classify = vi.fn();
+    const deps = makeDeps({ classify });
+    const ingest = createFigmaIngest(deps, { composites: [] });
+    await ingest.ingestPhase1(
+      "file", "1:2", "https://figma.com/design/file?node-id=1-2",
+    );
+    // Give any chained phase-2 promise a microtask window to run — shouldn't fire.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(classify).not.toHaveBeenCalled();
   });
 });
 
