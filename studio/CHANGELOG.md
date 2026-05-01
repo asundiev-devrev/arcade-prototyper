@@ -6,6 +6,25 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.2] — 2026-05-01
+
+### Fixed
+
+- **Figma context now actually reaches the generator on first-time
+  URLs.** 0.4.1 was silently failing: the composite classifier takes
+  ~40 s end-to-end, the chat middleware only waited 10 s for the whole
+  ingest, so the first turn on a URL hit the miss path and generated
+  with no Figma context at all. Split the ingest into a fast phase 1
+  (tree + tokens + PNG, ~3–8 s) the chat turn waits for, and a slow
+  phase 2 (classifier) that runs in the background and upgrades the
+  cache entry in place. First turn now gets tree + PNG; the next turn
+  on the same URL gets composite hints too.
+
+### Changed
+
+- Figma ingest logs split across two lines so you can see both phases:
+  `[figmaIngest] phase=1 … nodes=N warnings=K` and `phase=2 … composites=M`.
+
 ## [0.4.1] — 2026-05-01
 
 ### Fixed
