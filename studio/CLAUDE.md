@@ -37,16 +37,21 @@ studio/
 2. Add an entry at the top of `studio/CHANGELOG.md` — keep-a-changelog style (`## [0.x.0] — YYYY-MM-DD` + Added / Fixed / Changed bullets).
 3. `pnpm run studio:pack` — DMG filename auto-picks up the new version.
 4. Commit + push.
-5. Publish a **public** GitHub release so beta testers see the
-   "update available" banner in the app:
+5. Publish a release to the **public mirror** repo so beta testers see
+   the "update available" banner in the app. The mirror is
+   `asundiev-devrev/arcade-studio-releases` — a separate, public repo
+   that carries only DMG artifacts; source stays in this private repo.
+
+   From this repo, run:
    ```
    gh release create v0.x.y "studio/packaging/dist/Arcade Studio 0.x.y.dmg" \
+     --repo asundiev-devrev/arcade-studio-releases \
      --title "Arcade Studio 0.x.y" \
-     --notes-from-tag
+     --notes-file <(awk '/^## \[0\.x\.y\]/{f=1;next} /^## \[/{f=0} f' studio/CHANGELOG.md) \
+     --latest
    ```
-   (Or via the GitHub UI — tick "This is not a pre-release" and make
-   sure the release is public even though the repo is private.)
-   The app polls `https://api.github.com/repos/asundiev-devrev/arcade-prototyper/releases/latest`
+
+   The app polls `https://api.github.com/repos/asundiev-devrev/arcade-studio-releases/releases/latest`
    once per launch and caches the response for an hour.
 
 The version is stamped into `Info.plist`, `Contents/Resources/version.json`, the launcher boot log, and the Settings footer. Builds from a dirty working tree get a `-dirty` git-SHA suffix.

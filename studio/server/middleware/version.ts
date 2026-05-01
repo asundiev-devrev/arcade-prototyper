@@ -50,7 +50,13 @@ async function readVersion(): Promise<VersionInfo> {
 // GitHub repo the update-checker polls for public releases. Hardcoded
 // because it's a distribution fact, not a user setting — a downstream
 // fork can change this constant.
-const GITHUB_RELEASES_URL = "https://api.github.com/repos/asundiev-devrev/arcade-prototyper/releases/latest";
+//
+// We deliberately point at a public mirror repo rather than the main
+// (private) source repo. Releases on private repos return 404 to
+// unauthenticated callers, which would silently break the banner for
+// all beta testers. The mirror repo carries only DMG artifacts; source
+// stays private.
+const GITHUB_RELEASES_URL = "https://api.github.com/repos/asundiev-devrev/arcade-studio-releases/releases/latest";
 // How long to cache the upstream response in-memory. Conservative; the
 // point is to avoid hammering the GitHub API on every app reload while
 // still seeing new releases within an hour of publish.
