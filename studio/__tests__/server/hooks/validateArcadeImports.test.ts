@@ -124,3 +124,67 @@ describe("loadBarrel", () => {
     expect(barrel.has("MagnifyingGlass")).toBe(true);
   });
 });
+
+// @ts-expect-error — .mjs import of a pure-JS module with no types
+import { validateImports } from "../../../server/hooks/validateArcadeImports.mjs";
+
+describe("validateImports", () => {
+  const barrels = {
+    "arcade/components": new Set([
+      "Button", "IconButton", "Input", "Dialog", "Avatar",
+      "ArrowsUpAndDown", "ChevronUpAndDownSmall", "ArrowDownSmall",
+    ]),
+    "arcade-prototypes": new Set(["AppShell", "NavSidebar", "ComputerSidebar"]),
+  };
+
+  it("returns empty violations when every import exists", () => {
+    const imports = [
+      { source: "arcade/components", names: ["Button", "Avatar"] },
+      { source: "arcade-prototypes", names: ["AppShell"] },
+    ];
+    expect(validateImports(imports, barrels)).toEqual([]);
+  });
+
+  it("flags a single bad name with top-3 suggestions", () => {
+    const imports = [{ source: "arcade/components", names: ["ArrowsUpDownSmall"] }];
+    const violations = validateImports(imports, barrels);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].source).toBe("arcade/components");
+    expect(violations[0].badName).toBe("ArrowsUpDownSmall");
+    expect(violations[0].suggestions.length).toBeGreaterThan(0);
+    expect(violations[0].suggestions.length).toBeLessThanOrEqual(3);
+    // ArrowDownSmall is the closest (3 edits); make sure it's included.
+    expect(violations[0].suggestions).toContain("ArrowDownSmall");
+  });
+
+  it("drops suggestions whose Levenshtein distance is greater than 4", () => {
+    const imports = [{ source: "arcade/components", names: ["Xyzzy"] }];
+    const violations = validateImports(imports, barrels);
+    expect(violations).toHaveLength(1);
+    // "Xyzzy" is 5+ edits away from everything in the barrel → no suggestions.
+    expect(violations[0].suggestions).toEqual([]);
+  });
+
+  it("flags multiple bad names", () => {
+    const imports = [{ source: "arcade/components", names: ["Button", "BadOne", "BadTwo"] }];
+    const violations = validateImports(imports, barrels);
+    expect(violations).toHaveLength(2);
+    expect(violations.map((v) => v.badName).sort()).toEqual(["BadOne", "BadTwo"]);
+  });
+
+  it("flags bad names across multiple sources", () => {
+    const imports = [
+      { source: "arcade/components", names: ["BadIcon"] },
+      { source: "arcade-prototypes", names: ["FakeComposite"] },
+    ];
+    const violations = validateImports(imports, barrels);
+    expect(violations).toHaveLength(2);
+    expect(violations.map((v) => v.source).sort()).toEqual(["arcade-prototypes", "arcade/components"]);
+  });
+
+  it("fails open (empty violations) when a source's barrel is empty", () => {
+    const imports = [{ source: "arcade/components", names: ["ArrowsUpDownSmall"] }];
+    const emptyBarrels = { "arcade/components": new Set(), "arcade-prototypes": new Set() };
+    expect(validateImports(imports, emptyBarrels)).toEqual([]);
+  });
+});
