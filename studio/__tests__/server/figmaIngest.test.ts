@@ -76,3 +76,35 @@ describe("figmaIngest", () => {
     await p;
   });
 });
+
+describe("figmaIngest (real figmanage shape)", () => {
+  it("unwraps { nodes: { <id>: { document } } } and produces a usable tree", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    const wrapperFixture = JSON.parse(fs.readFileSync(
+      path.resolve(__dirname, "../fixtures/figma/figmanage-wrapper.json"), "utf-8"));
+
+    const deps = {
+      getNode: vi.fn().mockResolvedValue(wrapperFixture),
+      getVariables: vi.fn().mockResolvedValue(null),
+      exportPng: vi.fn().mockResolvedValue(null),
+      classify: vi.fn().mockResolvedValue({ composites: [], warnings: [] }),
+      now: () => 1_000_000,
+    };
+    const ingest = createFigmaIngest(deps, { composites: ["AppShell"] });
+    const outcome = await ingest.ingest(
+      "dHEyK3XWnLEWbTBmF7crQ8", "1448:43844",
+      "https://www.figma.com/design/dHEyK3XWnLEWbTBmF7crQ8/x?node-id=1448-43844",
+    );
+
+    if (!outcome.ok) throw new Error(`expected ok, got ${outcome.reason}`);
+    // The tree should NOT be the empty fallback — it should have the vertical
+    // layout and one child from our fixture.
+    expect(outcome.tree.layout?.direction).toBe("col");
+    expect(outcome.tree.children).toBeDefined();
+    expect(outcome.tree.children!.length).toBeGreaterThan(0);
+    expect(outcome.diagnostics.warnings).not.toContain("root node was empty");
+  });
+});

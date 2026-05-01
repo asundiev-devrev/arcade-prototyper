@@ -130,8 +130,24 @@ export function createFigmaIngest(deps: IngestDeps, cfg: IngestConfig): FigmaIng
 
 function pickDocument(dict: any, nodeId: string): any | null {
   if (!dict || typeof dict !== "object") return null;
-  const byId = dict[nodeId] ?? dict[nodeId.replace(":", "-")] ?? Object.values(dict)[0];
-  return byId?.document ?? byId ?? null;
+
+  // Our unit-test fixtures use a flat shape: { <nodeId>: { document } }.
+  const direct = dict[nodeId]?.document ?? dict[nodeId.replace(":", "-")]?.document;
+  if (direct && typeof direct === "object") return direct;
+
+  // figmanage's real shape wraps everything in `.nodes`:
+  //   { nodes: { <nodeId>: { document } }, name, editorType, ... }
+  const nodes = dict.nodes;
+  if (nodes && typeof nodes === "object") {
+    const viaWrapper = nodes[nodeId]?.document ?? nodes[nodeId.replace(":", "-")]?.document;
+    if (viaWrapper && typeof viaWrapper === "object") return viaWrapper;
+    const keys = Object.keys(nodes);
+    if (keys.length === 1) {
+      const only = nodes[keys[0]]?.document;
+      if (only && typeof only === "object") return only;
+    }
+  }
+  return null;
 }
 
 let singleton: FigmaIngest | null = null;
