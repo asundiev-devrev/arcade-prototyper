@@ -1,6 +1,10 @@
 import type { CompactLayout, CompactNode, CompactStyle, CompactText, NodeType, SizeAxis } from "./types";
 
-export const DEPTH_CAP = 8;
+// Real Figma frames are routinely 9–11 deep (nested auto-layout frames + groups
+// that survive compactTree's passthrough-collapse pass). 8 was too aggressive
+// — the live smoke showed the sidebar hitting cap at depth 10 and dropping
+// content the classifier then couldn't see.
+export const DEPTH_CAP = 12;
 export const MAX_NODES = 200;
 
 interface CompactResult {
