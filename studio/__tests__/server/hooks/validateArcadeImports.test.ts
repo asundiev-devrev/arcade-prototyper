@@ -188,3 +188,58 @@ describe("validateImports", () => {
     expect(validateImports(imports, emptyBarrels)).toEqual([]);
   });
 });
+
+// @ts-expect-error — .mjs import of a pure-JS module with no types
+import { formatErrorMessage } from "../../../server/hooks/validateArcadeImports.mjs";
+
+describe("formatErrorMessage", () => {
+  const barrels = {
+    "arcade/components": new Set(["Button", "IconButton", "ArrowsUpAndDown"]),
+    "arcade-prototypes": new Set(["AppShell", "ComputerSidebar"]),
+  };
+  const barrelPaths = {
+    "arcade/components": "/abs/arcade-gen/src/components/index.ts",
+    "arcade-prototypes": "/abs/studio/prototype-kit/index.ts",
+  };
+
+  it("includes a per-source group header", () => {
+    const msg = formatErrorMessage(
+      [{ source: "arcade/components", badName: "FakeIcon", suggestions: ["ArrowsUpAndDown"] }],
+      barrels, barrelPaths,
+    );
+    expect(msg).toContain(`In "arcade/components"`);
+  });
+
+  it("includes the top-3 suggestions inline", () => {
+    const msg = formatErrorMessage(
+      [{ source: "arcade/components", badName: "FakeIcon",
+        suggestions: ["ArrowsUpAndDown", "IconButton", "Button"] }],
+      barrels, barrelPaths,
+    );
+    expect(msg).toMatch(/did you mean.+ArrowsUpAndDown/i);
+    expect(msg).toContain("IconButton");
+    expect(msg).toContain("Button");
+  });
+
+  it("shows the barrel path when no suggestion meets the threshold", () => {
+    const msg = formatErrorMessage(
+      [{ source: "arcade/components", badName: "Xyzzy", suggestions: [] }],
+      barrels, barrelPaths,
+    );
+    expect(msg).toContain("/abs/arcade-gen/src/components/index.ts");
+    expect(msg).toContain("3 exports"); // includes size
+  });
+
+  it("groups multiple violations by source", () => {
+    const msg = formatErrorMessage(
+      [
+        { source: "arcade/components", badName: "A", suggestions: ["Button"] },
+        { source: "arcade/components", badName: "B", suggestions: ["IconButton"] },
+        { source: "arcade-prototypes", badName: "C", suggestions: ["AppShell"] },
+      ],
+      barrels, barrelPaths,
+    );
+    expect(msg).toMatch(/In "arcade\/components".+\n.+A.+\n.+B/s);
+    expect(msg).toMatch(/In "arcade-prototypes".+\n.+C/s);
+  });
+});

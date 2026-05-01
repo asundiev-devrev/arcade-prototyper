@@ -164,3 +164,36 @@ export function levenshtein(a, b) {
   }
   return prev[bl];
 }
+
+/**
+ * Build the human-readable stderr message the hook emits on block.
+ * Groups violations by source; for each bad name, emits the top-3
+ * suggestions inline or the absolute barrel path if no suggestion met
+ * the distance threshold. Export counts are included so the model's
+ * size intuition is correct.
+ */
+export function formatErrorMessage(violations, barrels, barrelPaths) {
+  const bySource = new Map();
+  for (const v of violations) {
+    if (!bySource.has(v.source)) bySource.set(v.source, []);
+    bySource.get(v.source).push(v);
+  }
+  const lines = ["Blocked: some imports don't exist in their declared source.", ""];
+  for (const [source, group] of bySource) {
+    lines.push(`In "${source}":`);
+    for (const v of group) {
+      if (v.suggestions.length > 0) {
+        lines.push(`  - \`${v.badName}\` — did you mean ${v.suggestions.map((s) => `\`${s}\``).join(", ")}?`);
+      } else {
+        const size = barrels[source]?.size ?? 0;
+        const p = barrelPaths[source] ?? "<unknown>";
+        lines.push(`  - \`${v.badName}\` — no near-matches.`);
+        lines.push(`      Read ${p} for the full list of ${size} exports.`);
+      }
+    }
+    lines.push("");
+  }
+  lines.push("Fix the names (or drop the symbol) and re-Write. This hook runs on");
+  lines.push("every Write/Edit and will block again if the imports still don't exist.");
+  return lines.join("\n");
+}
