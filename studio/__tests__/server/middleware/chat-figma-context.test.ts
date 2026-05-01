@@ -45,13 +45,14 @@ describe("/api/chat with Figma structured context", () => {
   it("injects <figma_context> when an IngestResult is cached", async () => {
     vi.spyOn(ingestModule, "getFigmaIngest").mockResolvedValue({
       ingest: vi.fn(),
+      ingestPhase1: vi.fn(),
       getCached: vi.fn().mockReturnValue({
         source: { fileKey: "k", nodeId: "1:2", url: "u", fetchedAt: "t" },
         png: null, tree: { id: "0", type: "frame", name: "App" },
         tokens: { colors: {}, typography: {}, spacing: {} },
         composites: [], diagnostics: { warnings: [] },
       }),
-      getPending: vi.fn().mockReturnValue(undefined),
+      getPhase1Pending: vi.fn().mockReturnValue(undefined),
     });
 
     const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
@@ -69,11 +70,18 @@ describe("/api/chat with Figma structured context", () => {
     expect(sent).toContain("App");
   });
 
-  it("proceeds without <figma_context> on cache miss + timeout", async () => {
+  it("proceeds without <figma_context> when phase 1 fails", async () => {
     vi.spyOn(ingestModule, "getFigmaIngest").mockResolvedValue({
       ingest: vi.fn(),
+      // Simulate phase 1 failure (figmanage down, auth missing, etc.) —
+      // chat turn should fall through cleanly and generate without context.
+      ingestPhase1: vi.fn().mockResolvedValue({
+        ok: false,
+        reason: "figmanage unavailable",
+        source: { fileKey: "k", nodeId: "1:2", url: "u" },
+      }),
       getCached: vi.fn().mockReturnValue(undefined),
-      getPending: vi.fn().mockReturnValue(undefined),
+      getPhase1Pending: vi.fn().mockReturnValue(undefined),
     });
     const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
     const res = await fetch(`http://localhost:${port}/api/chat`, {
@@ -86,5 +94,42 @@ describe("/api/chat with Figma structured context", () => {
     await res.text();
     const sent = fs.readFileSync(process.env.ARCADE_TEST_PROMPT_OUT!, "utf-8");
     expect(sent).not.toContain("<figma_context");
+  });
+
+  it("injects phase-1-only context (composites=[]) when phase 2 is still pending", async () => {
+    // Simulate the realistic case: user pastes URL, prefetch runs phase 1
+    // (3–8s) and caches it with composites=[], then hits Send before phase 2
+    // (~30s classifier) has finished. Turn should still attach the context —
+    // just without composite hints — rather than falling through to the miss
+    // path as 0.4.1 did with its 10s combined budget.
+    vi.spyOn(ingestModule, "getFigmaIngest").mockResolvedValue({
+      ingest: vi.fn(),
+      ingestPhase1: vi.fn(),
+      getCached: vi.fn().mockReturnValue({
+        source: { fileKey: "k", nodeId: "1:2", url: "u", fetchedAt: "t" },
+        png: null, tree: { id: "0", type: "frame", name: "Sidebar" },
+        tokens: { colors: {}, typography: {}, spacing: {} },
+        composites: [],
+        diagnostics: { warnings: ["variables unavailable; styles left raw"] },
+      }),
+      getPhase1Pending: vi.fn().mockReturnValue(undefined),
+    });
+
+    const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
+    const res = await fetch(`http://localhost:${port}/api/chat`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        slug: p.slug,
+        prompt: "build this https://www.figma.com/design/k/x?node-id=1-2",
+      }),
+    });
+    await res.text();
+    const sent = fs.readFileSync(process.env.ARCADE_TEST_PROMPT_OUT!, "utf-8");
+    expect(sent).toContain("<figma_context");
+    expect(sent).toContain("Sidebar");
+    // No suggested_composites section because composites=[] — buildFigmaContextBlock
+    // omits it entirely. Just confirm it's absent so we know we're getting
+    // phase-1-only content.
+    expect(sent).not.toContain("suggested_composites:");
   });
 });

@@ -149,18 +149,19 @@ async function enrichPromptWithFigmaContext(
   const ingest = await getFigmaIngest();
   let result = ingest.getCached(parsed.fileId, parsed.nodeId);
   if (!result) {
-    const pending = ingest.getPending(parsed.fileId, parsed.nodeId);
-    if (pending) {
-      const raced = await Promise.race([
-        pending,
-        new Promise<null>((r) => setTimeout(() => r(null), 10_000)),
-      ]);
-      if (raced && "ok" in raced && raced.ok) {
-        // Destructure to drop `ok`, yielding an IngestResult.
-        const { ok, ...rest } = raced as any;
-        void ok;
-        result = rest;
-      }
+    // Wait for phase 1 (tree + tokens + PNG) only — typically 3–8s. Phase 2
+    // (classifier) runs in the background and upgrades the cache in place
+    // once done; the next turn on this URL will pick up composites for free.
+    const pending = ingest.getPhase1Pending(parsed.fileId, parsed.nodeId)
+      ?? ingest.ingestPhase1(parsed.fileId, parsed.nodeId, url);
+    const raced = await Promise.race([
+      pending,
+      new Promise<null>((r) => setTimeout(() => r(null), 15_000)),
+    ]);
+    if (raced && "ok" in raced && raced.ok) {
+      const { ok, ...rest } = raced as any;
+      void ok;
+      result = rest;
     }
   }
   if (!result) {

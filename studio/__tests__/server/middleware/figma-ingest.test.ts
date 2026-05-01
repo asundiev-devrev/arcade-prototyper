@@ -7,16 +7,18 @@ import * as ingestModule from "../../../server/figmaIngest";
 let server: http.Server; let port: number;
 
 beforeEach(async () => {
+  const phase1Result = {
+    ok: true,
+    source: { fileKey: "k", nodeId: "1:2", url: "u", fetchedAt: "t" },
+    png: null, tree: { id: "0", type: "frame" },
+    tokens: { colors: {}, typography: {}, spacing: {} },
+    composites: [], diagnostics: { warnings: [] },
+  };
   vi.spyOn(ingestModule, "getFigmaIngest").mockResolvedValue({
-    ingest: vi.fn().mockResolvedValue({
-      ok: true,
-      source: { fileKey: "k", nodeId: "1:2", url: "u", fetchedAt: "t" },
-      png: null, tree: { id: "0", type: "frame" },
-      tokens: { colors: {}, typography: {}, spacing: {} },
-      composites: [], diagnostics: { warnings: [] },
-    }),
+    ingest: vi.fn().mockResolvedValue(phase1Result),
+    ingestPhase1: vi.fn().mockResolvedValue(phase1Result),
     getCached: vi.fn().mockReturnValue(undefined),
-    getPending: vi.fn().mockReturnValue(undefined),
+    getPhase1Pending: vi.fn().mockReturnValue(undefined),
   });
   server = http.createServer(figmaMiddleware());
   await new Promise<void>((r) => server.listen(0, () => r()));

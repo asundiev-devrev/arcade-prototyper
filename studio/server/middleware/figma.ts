@@ -48,8 +48,12 @@ export function figmaMiddleware() {
           return send(res, 400, { error: { code: "bad_request", message: "url or (fileKey + nodeId) required" } });
         }
 
+        // Use ingestPhase1 so the prefetch returns as soon as the
+        // deterministic half is cached (tree + tokens + PNG, 3–8s).
+        // The classifier (phase 2) runs in the background and upgrades
+        // the cache entry in place — the UI never waits on it.
         const ingest = await getFigmaIngest();
-        const outcome = await ingest.ingest(fileKey, nodeId, sourceUrl || `figma://${fileKey}/${nodeId}`);
+        const outcome = await ingest.ingestPhase1(fileKey, nodeId, sourceUrl || `figma://${fileKey}/${nodeId}`);
         return send(res, 200, outcome);
       }
 
