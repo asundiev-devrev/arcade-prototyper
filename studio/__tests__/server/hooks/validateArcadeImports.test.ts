@@ -243,3 +243,106 @@ describe("formatErrorMessage", () => {
     expect(msg).toMatch(/In "arcade-prototypes".+\n.+C/s);
   });
 });
+
+import { spawnSync } from "node:child_process";
+
+const HOOK = path.resolve(__dirname, "../../../server/hooks/validateArcadeImports.mjs");
+
+function runHook(payload, envOverrides = {}) {
+  return spawnSync("node", [HOOK], {
+    input: JSON.stringify(payload),
+    env: {
+      ...process.env,
+      ARCADE_GEN_ROOT: path.join(FIXTURES, "arcade-gen"),
+      ARCADE_PROTOTYPER_ROOT: FIXTURES,
+      ...envOverrides,
+    },
+    encoding: "utf-8",
+  });
+}
+
+describe("validateArcadeImports hook (integration)", () => {
+  it("exits 0 when file_path is outside a .tsx file", () => {
+    const proc = runHook({
+      tool_name: "Write",
+      tool_input: {
+        file_path: "/tmp/foo.css",
+        content: `import { BadIcon } from "arcade/components";`,
+      },
+    });
+    expect(proc.status).toBe(0);
+  });
+
+  it("exits 0 when the file has no tracked imports", () => {
+    const proc = runHook({
+      tool_name: "Write",
+      tool_input: {
+        file_path: "/tmp/frame.tsx",
+        content: `import React from "react";\nexport default () => null;`,
+      },
+    });
+    expect(proc.status).toBe(0);
+  });
+
+  it("exits 0 when all imports are valid", () => {
+    const proc = runHook({
+      tool_name: "Write",
+      tool_input: {
+        file_path: "/tmp/frame.tsx",
+        content: `import { Button, IconButton } from "arcade/components";\nimport { AppShell } from "arcade-prototypes";`,
+      },
+    });
+    expect(proc.status).toBe(0);
+  });
+
+  it("exits 2 with a human-readable stderr on a bad import", () => {
+    const proc = runHook({
+      tool_name: "Write",
+      tool_input: {
+        file_path: "/tmp/frame.tsx",
+        content: `import { ArrowsUpDownSmall } from "arcade/components";`,
+      },
+    });
+    expect(proc.status).toBe(2);
+    expect(proc.stderr).toMatch(/Blocked/);
+    expect(proc.stderr).toMatch(/ArrowsUpDownSmall/);
+    expect(proc.stderr).toMatch(/did you mean/i);
+    expect(proc.stderr).toMatch(/ArrowDownSmall/);
+  });
+
+  it("validates the new_string field for Edit tool calls", () => {
+    const proc = runHook({
+      tool_name: "Edit",
+      tool_input: {
+        file_path: "/tmp/frame.tsx",
+        old_string: `import { Button } from "arcade/components";`,
+        new_string: `import { Button, ArrowsUpDownSmall } from "arcade/components";`,
+      },
+    });
+    expect(proc.status).toBe(2);
+    expect(proc.stderr).toMatch(/ArrowsUpDownSmall/);
+  });
+
+  it("fails open (exit 0) when barrels cannot be read", () => {
+    const proc = runHook(
+      {
+        tool_name: "Write",
+        tool_input: {
+          file_path: "/tmp/frame.tsx",
+          content: `import { ArrowsUpDownSmall } from "arcade/components";`,
+        },
+      },
+      { ARCADE_GEN_ROOT: "/nonexistent/path", ARCADE_PROTOTYPER_ROOT: "/nonexistent/path" },
+    );
+    expect(proc.status).toBe(0);
+  });
+
+  it("fails open on malformed JSON input", () => {
+    const proc = spawnSync("node", [HOOK], {
+      input: "not json",
+      env: { ...process.env, ARCADE_GEN_ROOT: path.join(FIXTURES, "arcade-gen") },
+      encoding: "utf-8",
+    });
+    expect(proc.status).toBe(0);
+  });
+});

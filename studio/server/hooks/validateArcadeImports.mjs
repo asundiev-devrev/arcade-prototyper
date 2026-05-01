@@ -197,3 +197,94 @@ export function formatErrorMessage(violations, barrels, barrelPaths) {
   lines.push("every Write/Edit and will block again if the imports still don't exist.");
   return lines.join("\n");
 }
+
+import path from "node:path";
+
+const HOME = process.env.HOME ?? "";
+const ARCADE_GEN_ROOT = process.env.ARCADE_GEN_ROOT
+  ?? (HOME ? path.join(HOME, "arcade-gen") : "/__arcade_gen_unconfigured");
+const ARCADE_PROTOTYPER_ROOT = process.env.ARCADE_PROTOTYPER_ROOT ?? "";
+
+function barrelPathsForEnv() {
+  return {
+    "arcade/components": [
+      path.join(ARCADE_GEN_ROOT, "src/components/index.ts"),
+      path.join(ARCADE_GEN_ROOT, "src/components/icons/index.ts"),
+    ],
+    "arcade-prototypes": [
+      ARCADE_PROTOTYPER_ROOT
+        ? path.join(ARCADE_PROTOTYPER_ROOT, "prototype-kit/index.ts")
+        : path.resolve(new URL("../../prototype-kit/index.ts", import.meta.url).pathname),
+    ],
+  };
+}
+
+function loadAllBarrels() {
+  const paths = barrelPathsForEnv();
+  const barrels = {};
+  const resolvedPaths = {};
+  for (const [source, files] of Object.entries(paths)) {
+    const merged = new Set();
+    for (const f of files) {
+      for (const name of loadBarrel(f)) merged.add(name);
+    }
+    barrels[source] = merged;
+    // Show the first file as the "canonical" path in error messages — the
+    // one the model is most likely to Read.
+    resolvedPaths[source] = files[0];
+  }
+  return { barrels, barrelPaths: resolvedPaths };
+}
+
+function isInScope(filePath) {
+  if (typeof filePath !== "string") return false;
+  if (!filePath.endsWith(".ts") && !filePath.endsWith(".tsx")) return false;
+  const base = path.basename(filePath);
+  if (base === "index.errors.json" || base === "project.json") return false;
+  return true;
+}
+
+function extractContent(toolName, toolInput) {
+  if (!toolInput || typeof toolInput !== "object") return "";
+  if (toolName === "Write") return typeof toolInput.content === "string" ? toolInput.content : "";
+  if (toolName === "Edit") return typeof toolInput.new_string === "string" ? toolInput.new_string : "";
+  return "";
+}
+
+async function readStdin() {
+  let buf = "";
+  for await (const chunk of process.stdin) buf += chunk;
+  return buf;
+}
+
+async function main() {
+  let payload;
+  try {
+    const raw = await readStdin();
+    payload = raw ? JSON.parse(raw) : null;
+  } catch {
+    process.exit(0);
+  }
+  const toolName = payload?.tool_name;
+  const toolInput = payload?.tool_input;
+  if (toolName !== "Write" && toolName !== "Edit") process.exit(0);
+  const filePath = toolInput?.file_path;
+  if (!isInScope(filePath)) process.exit(0);
+  const content = extractContent(toolName, toolInput);
+  if (!content) process.exit(0);
+
+  const imports = parseImports(content);
+  if (imports.length === 0) process.exit(0);
+
+  const { barrels, barrelPaths } = loadAllBarrels();
+  const violations = validateImports(imports, barrels);
+  if (violations.length === 0) process.exit(0);
+
+  process.stderr.write(formatErrorMessage(violations, barrels, barrelPaths));
+  process.exit(2);
+}
+
+// Allow importing for tests without running main().
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch(() => process.exit(0));
+}
