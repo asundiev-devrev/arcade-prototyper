@@ -6,6 +6,20 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.5] — 2026-05-01
+
+### Added
+
+- **Update-available banner.** Studio now checks GitHub once per
+  launch (cached an hour server-side) and shows a dismissable banner
+  when a newer release is published. Click "Download" opens the DMG
+  asset in your browser; install the usual way. The banner
+  remembers your dismissal per-version, so it won't nag again for
+  the same release.
+- `GET /api/version/check` — thin wrapper around the GitHub releases
+  API; fails quiet when the API is unreachable so offline launches
+  don't get a spurious warning.
+
 ## [0.4.4] — 2026-05-01
 
 ### Fixed

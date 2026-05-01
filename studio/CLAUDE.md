@@ -36,7 +36,18 @@ studio/
 1. Bump `studio/packaging/VERSION` (semver, `0.x.y`).
 2. Add an entry at the top of `studio/CHANGELOG.md` — keep-a-changelog style (`## [0.x.0] — YYYY-MM-DD` + Added / Fixed / Changed bullets).
 3. `pnpm run studio:pack` — DMG filename auto-picks up the new version.
-4. Commit + push, share the DMG with testers.
+4. Commit + push.
+5. Publish a **public** GitHub release so beta testers see the
+   "update available" banner in the app:
+   ```
+   gh release create v0.x.y "studio/packaging/dist/Arcade Studio 0.x.y.dmg" \
+     --title "Arcade Studio 0.x.y" \
+     --notes-from-tag
+   ```
+   (Or via the GitHub UI — tick "This is not a pre-release" and make
+   sure the release is public even though the repo is private.)
+   The app polls `https://api.github.com/repos/asundiev-devrev/arcade-prototyper/releases/latest`
+   once per launch and caches the response for an hour.
 
 The version is stamped into `Info.plist`, `Contents/Resources/version.json`, the launcher boot log, and the Settings footer. Builds from a dirty working tree get a `-dirty` git-SHA suffix.
 

@@ -4,6 +4,7 @@ import { FrameFontProxy } from "./frame/FrameFontProxy";
 import { ProjectList } from "./routes/ProjectList";
 import { ProjectDetail } from "./routes/ProjectDetail";
 import { StartupAuthGate } from "./components/feedback/StartupAuthGate";
+import { UpdateBanner } from "./components/feedback/UpdateBanner";
 
 function readSlugFromHash(): string | null {
   const match = window.location.hash.match(/^#\/project\/([a-z0-9][a-z0-9-]{0,62})$/i);
@@ -73,6 +74,7 @@ export function App() {
   return (
     <DevRevThemeProvider mode={studioMode}>
       <FrameFontProxy />
+      <UpdateBanner />
       <StartupAuthGate>
         {openSlug === null ? (
           <ProjectList onOpen={openProject} />
