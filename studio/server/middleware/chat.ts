@@ -136,7 +136,11 @@ export function chatMiddleware() {
   };
 }
 
-async function enrichPromptWithFigmaContext(prompt: string, images: string[]): Promise<{ prompt: string; images: string[] }> {
+async function enrichPromptWithFigmaContext(
+  prompt: string,
+  images: string[],
+  onNarration?: (text: string) => void,
+): Promise<{ prompt: string; images: string[] }> {
   const url = extractFigmaUrl(prompt);
   if (!url) return { prompt, images };
   const parsed = parseFigmaUrl(url);
@@ -166,6 +170,13 @@ async function enrichPromptWithFigmaContext(prompt: string, images: string[]): P
 
   const block = buildFigmaContextBlock(result);
   const nextImages = result.png ? [...images, result.png.path] : images;
+
+  const parts = [`Figma context: ${result.composites.length} composites suggested`];
+  if (result.diagnostics.warnings.length) {
+    parts.push(`${result.diagnostics.warnings.length} diagnostic${result.diagnostics.warnings.length > 1 ? "s" : ""}`);
+  }
+  onNarration?.(parts.join(" · "));
+
   return { prompt: `${prompt}\n\n${block}`, images: nextImages };
 }
 
@@ -177,7 +188,14 @@ async function runClaudeBranch(ctx: {
   project: { sessionId?: string };
 }) {
   const { res, slug, project } = ctx;
-  const { prompt, images } = await enrichPromptWithFigmaContext(ctx.prompt, ctx.images ?? []);
+  const { prompt, images } = await enrichPromptWithFigmaContext(
+    ctx.prompt,
+    ctx.images ?? [],
+    (text) => {
+      res.write(`event: narration\n`);
+      res.write(`data: ${JSON.stringify({ kind: "narration", text })}\n\n`);
+    },
+  );
   let capturedSessionId: string | undefined;
   const narrationTexts: string[] = [];
   const toolLabels: string[] = [];
