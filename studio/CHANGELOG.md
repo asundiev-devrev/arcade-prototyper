@@ -6,6 +6,27 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.1] — 2026-05-01
+
+### Fixed
+
+- **Figma ingest no longer times out the composite classifier on real
+  files.** Haiku needs 20–40 s to digest a full sidebar-sized tree; the
+  previous 15 s budget SIGTERM'd it almost every time, so the
+  "Figma context: 0 composites suggested" narration was silently the
+  norm. Raised to 60 s.
+- **Depth cap raised from 8 to 12.** Real Figma frames (sidebars,
+  toolbars) are routinely 9–11 deep after our compact/collapse pass;
+  at 8, interior sections were truncated before the classifier saw
+  them.
+- **Projects list no longer spams "Invalid slug: _figma-ingest".** The
+  PNG scratch directory moved from `projects/_figma-ingest/` to a
+  sibling `.figma-ingest/` location so the watcher stops scanning it
+  as a project.
+- **Figma ingest now logs a structured success line** to the server
+  console: `[figmaIngest] fileKey=X nodeId=Y ms=Z nodes=N composites=M
+  warnings=K`. The spec required it; it wasn't wired up in 0.4.0.
+
 ## [0.4.0] — 2026-05-01
 
 ### Added
