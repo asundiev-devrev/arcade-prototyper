@@ -3,6 +3,19 @@ import type {
 } from "./figma/types";
 import { compactTree } from "./figma/compactTree";
 import { resolveTokens } from "./figma/resolveTokens";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import fs from "node:fs/promises";
+import {
+  exportNodePng,
+  getNode as figmanageGetNode,
+  getVariables as figmanageGetVariables,
+} from "./figmaCli";
+import { classifyComposites } from "./figma/classifyComposites";
+import { projectsRoot } from "./paths";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export interface IngestDeps {
   getNode: (fileKey: string, nodeId: string) => Promise<any>;
@@ -119,4 +132,47 @@ function pickDocument(dict: any, nodeId: string): any | null {
   if (!dict || typeof dict !== "object") return null;
   const byId = dict[nodeId] ?? dict[nodeId.replace(":", "-")] ?? Object.values(dict)[0];
   return byId?.document ?? byId ?? null;
+}
+
+let singleton: FigmaIngest | null = null;
+let cataloging: Promise<string[]> | null = null;
+
+export async function getFigmaIngest(): Promise<FigmaIngest> {
+  if (singleton) return singleton;
+  cataloging ??= loadCompositeCatalog();
+  const composites = await cataloging;
+  singleton = createFigmaIngest(
+    {
+      getNode: (fileKey, nodeId) => figmanageGetNode(fileKey, nodeId),
+      getVariables: (fileKey) => figmanageGetVariables(fileKey),
+      exportPng: async (fileKey, nodeId) => {
+        const dir = path.join(projectsRoot(), "_figma-ingest");
+        await fs.mkdir(dir, { recursive: true });
+        const out = path.join(dir, `${fileKey}_${nodeId.replace(/:/g, "-")}.png`);
+        try {
+          const filepath = await exportNodePng(fileKey, nodeId, out, 2);
+          return { path: filepath, widthPx: 0, heightPx: 0 };
+        } catch { return null; }
+      },
+      classify: (tree, names) => classifyComposites(tree, names),
+    },
+    { composites, cacheCapacity: 32, cacheTtlMs: 10 * 60_000 },
+  );
+  return singleton;
+}
+
+async function loadCompositeCatalog(): Promise<string[]> {
+  try {
+    const manifest = await fs.readFile(
+      path.resolve(__dirname, "..", "prototype-kit", "KIT-MANIFEST.md"),
+      "utf-8",
+    );
+    const names = new Set<string>();
+    for (const m of manifest.matchAll(/^##\s+([A-Za-z][A-Za-z0-9]+)\s*\((?:composite|template)\)/gm)) {
+      names.add(m[1]);
+    }
+    return [...names];
+  } catch {
+    return [];
+  }
 }
