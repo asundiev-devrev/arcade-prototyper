@@ -139,3 +139,33 @@ describe("figmaCli (figmanage bridge)", () => {
     expect(await getVariables("AbC123")).toBeNull();
   });
 });
+
+describe("exportNodePng (array shape from figmanage)", () => {
+  beforeEach(() => {
+    spawnMock.mockClear();
+  });
+
+  it("handles the array response shape and downloads the PNG", async () => {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const os = await import("node:os");
+    const arrayReply = JSON.stringify([
+      { node_id: "1448:43844", url: "https://example.invalid/img.png" },
+    ]);
+    spawnMock.mockImplementation(() => mockSpawn(arrayReply, 0) as any);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => new Uint8Array([137, 80, 78, 71]).buffer,
+    } as any);
+    try {
+      const { exportNodePng } = await import("../../server/figmaCli");
+      const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "figma-export-test-"));
+      const out = path.join(tmp, "x.png");
+      const result = await exportNodePng("AbC", "1448:43844", out, 2);
+      expect(result).toBe(out);
+      expect(fetchSpy).toHaveBeenCalledWith("https://example.invalid/img.png");
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+});
