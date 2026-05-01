@@ -62,6 +62,18 @@ export function PromptInput({ busy, projectSlug, onSend }: PromptInputProps) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!detectedFigmaUrl) return;
+    const ctrl = new AbortController();
+    fetch("/api/figma/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: detectedFigmaUrl }),
+      signal: ctrl.signal,
+    }).catch(() => { /* fire-and-forget; server logs real failures */ });
+    return () => ctrl.abort();
+  }, [detectedFigmaUrl]);
+
   function scheduleErrorClear() {
     if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
     errorTimerRef.current = setTimeout(() => {
