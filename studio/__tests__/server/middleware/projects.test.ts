@@ -57,6 +57,42 @@ describe("/api/projects", () => {
     const r = await req("DELETE", `/api/projects/${c.body.slug}`);
     expect(r.status).toBe(204);
   });
+
+  it("GET /:slug self-heals frames that exist on disk but are missing from project.json", async () => {
+    // Simulates the bug beta testers hit: chokidar missed the fs event for a
+    // frame Claude just wrote, so project.json stayed stale and the UI showed
+    // EmptyViewport. The GET handler should reconcile before responding.
+    const c = await req("POST", "/api/projects", { name: "A", theme: "arcade", mode: "light" });
+    const slug = c.body.slug as string;
+    const frameDir = path.join(tmp, "projects", slug, "frames", "01-orphan");
+    fs.mkdirSync(frameDir, { recursive: true });
+    fs.writeFileSync(path.join(frameDir, "index.tsx"), "export default function F() { return null; }");
+
+    const r = await req("GET", `/api/projects/${slug}`);
+    expect(r.status).toBe(200);
+    expect(r.body.frames.map((f: any) => f.slug)).toEqual(["01-orphan"]);
+
+    const pj = JSON.parse(
+      fs.readFileSync(path.join(tmp, "projects", slug, "project.json"), "utf-8"),
+    );
+    expect(pj.frames.map((f: any) => f.slug)).toEqual(["01-orphan"]);
+  });
+
+  it("GET / self-heals orphaned frames across all projects", async () => {
+    const a = await req("POST", "/api/projects", { name: "A", theme: "arcade", mode: "light" });
+    const b = await req("POST", "/api/projects", { name: "B", theme: "arcade", mode: "light" });
+    for (const slug of [a.body.slug, b.body.slug]) {
+      const d = path.join(tmp, "projects", slug, "frames", "orphan");
+      fs.mkdirSync(d, { recursive: true });
+      fs.writeFileSync(path.join(d, "index.tsx"), "export default () => null;");
+    }
+
+    const r = await req("GET", "/api/projects");
+    expect(r.status).toBe(200);
+    for (const p of r.body) {
+      expect(p.frames.map((f: any) => f.slug)).toEqual(["orphan"]);
+    }
+  });
 });
 
 describe("/api/projects/:slug/frames/:frame", () => {

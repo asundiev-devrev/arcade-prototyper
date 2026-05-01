@@ -1,7 +1,20 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import fs from "node:fs/promises";
-import { createProject, deleteProject, listProjects, renameProject, updateProject, getProject, readHistory, fileTree, readProjectFile } from "../projects";
+import { createProject, deleteProject, listProjects, renameProject, updateProject, getProject, readHistory, fileTree, readProjectFile, reconcileFrames } from "../projects";
 import { frameDir } from "../paths";
+
+// Self-heal wrapper for GET handlers: if chokidar in projectWatchPlugin missed
+// an fs event (startup race, unhandled error mid-reconcile), project.json can
+// drift from what's actually on disk and the UI gets stuck on EmptyViewport.
+// `reconcileFrames` is idempotent + deduped, so calling it on every read is
+// cheap and unsticks the user without requiring a restart.
+async function reconcileSafely(slug: string): Promise<void> {
+  try {
+    await reconcileFrames(slug);
+  } catch (err) {
+    console.warn(`[projects] reconcileFrames(${slug}) failed:`, err);
+  }
+}
 
 async function readJson(req: IncomingMessage): Promise<any> {
   let buf = "";
@@ -106,8 +119,13 @@ export function projectsMiddleware() {
       const parts = url.replace(/\?.*$/, "").split("/").filter(Boolean); // ["api","projects",slug?]
       const slug = parts[2];
 
-      if (req.method === "GET" && !slug) return send(res, 200, await listProjects());
+      if (req.method === "GET" && !slug) {
+        const ps = await listProjects();
+        await Promise.all(ps.map((p) => reconcileSafely(p.slug)));
+        return send(res, 200, await listProjects());
+      }
       if (req.method === "GET" && slug)  {
+        await reconcileSafely(slug);
         const p = await getProject(slug);
         return send(res, p ? 200 : 404, p ?? { error: { code: "not_found", message: "Project not found" } });
       }
