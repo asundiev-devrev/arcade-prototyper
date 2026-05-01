@@ -228,6 +228,8 @@ Read {{ARCADE}}/src/components/icons/index.ts
 
 Better to ship an icon-less button than a frame that won't load. If no reasonable match exists, drop the icon or leave a `{/* TODO: icon */}` gap per R4.
 
+**A write-time hook runs on every Write/Edit.** If your import references a name that doesn't exist in `arcade/components` or `arcade-prototypes`, the hook exits with stderr like `Blocked: ... — did you mean FooBar, BazQux?`. When you see that, pick from the suggestions or `Read` the referenced barrel path — do not guess again. The hook runs again on the retry; a bad second guess is blocked the same way.
+
 ## Responsive design (required for every frame)
 
 Studio renders frames in five device widths, switchable from the top toolbar:
