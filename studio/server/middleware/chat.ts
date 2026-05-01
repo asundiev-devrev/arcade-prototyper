@@ -9,6 +9,10 @@ import { readGlobalSettings } from "./settings";
 import { chatHistoryPath, lastErrorLogPath, lastStdoutLogPath, projectDir } from "../paths";
 import { runComputerTurn } from "../devrev/computerAgent";
 import type { ChatMessage } from "../types";
+import { extractFigmaUrl } from "../../src/lib/figmaUrl";
+import { parseFigmaUrl } from "../figmaCli";
+import { getFigmaIngest } from "../figmaIngest";
+import { buildFigmaContextBlock } from "../figma/promptBlock";
 
 // @Computer mention anywhere in the prompt routes to the DevRev agent. The
 // mention is stripped before the prompt is sent to the agent. Per-turn switch:
@@ -132,6 +136,39 @@ export function chatMiddleware() {
   };
 }
 
+async function enrichPromptWithFigmaContext(prompt: string, images: string[]): Promise<{ prompt: string; images: string[] }> {
+  const url = extractFigmaUrl(prompt);
+  if (!url) return { prompt, images };
+  const parsed = parseFigmaUrl(url);
+  if (!parsed) return { prompt, images };
+
+  const ingest = await getFigmaIngest();
+  let result = ingest.getCached(parsed.fileId, parsed.nodeId);
+  if (!result) {
+    const pending = ingest.getPending(parsed.fileId, parsed.nodeId);
+    if (pending) {
+      const raced = await Promise.race([
+        pending,
+        new Promise<null>((r) => setTimeout(() => r(null), 10_000)),
+      ]);
+      if (raced && "ok" in raced && raced.ok) {
+        // Destructure to drop `ok`, yielding an IngestResult.
+        const { ok, ...rest } = raced as any;
+        void ok;
+        result = rest;
+      }
+    }
+  }
+  if (!result) {
+    console.warn("[studio] figma ingest miss; proceeding without structured context");
+    return { prompt, images };
+  }
+
+  const block = buildFigmaContextBlock(result);
+  const nextImages = result.png ? [...images, result.png.path] : images;
+  return { prompt: `${prompt}\n\n${block}`, images: nextImages };
+}
+
 async function runClaudeBranch(ctx: {
   res: ServerResponse;
   slug: string;
@@ -139,7 +176,8 @@ async function runClaudeBranch(ctx: {
   images?: string[];
   project: { sessionId?: string };
 }) {
-  const { res, slug, prompt, images, project } = ctx;
+  const { res, slug, project } = ctx;
+  const { prompt, images } = await enrichPromptWithFigmaContext(ctx.prompt, ctx.images ?? []);
   let capturedSessionId: string | undefined;
   const narrationTexts: string[] = [];
   const toolLabels: string[] = [];
