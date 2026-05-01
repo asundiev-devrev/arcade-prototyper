@@ -6,6 +6,24 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [unreleased]
+
+### Added
+
+- **Figma references are now ingested as structured context** before
+  generation. When you paste a Figma URL, Studio silently prefetches
+  the document tree, resolves bound design-system tokens, asks a quick
+  classifier which `prototype-kit` composites fit, and attaches a frame
+  PNG — all in parallel while you're still typing. The generator no
+  longer has to reverse-engineer layout from pixels. Falls back to the
+  URL-only behavior if Figma auth is missing.
+
+### Changed
+
+- Studio now auto-exports a PNG of the referenced Figma node and attaches
+  it to the chat turn (previously users had to paste a screenshot
+  themselves).
+
 ## [0.3.1] — 2026-05-01
 
 ### Fixed
