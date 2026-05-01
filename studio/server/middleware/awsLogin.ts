@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { spawn } from "node:child_process";
+import { hasBedrockAuth } from "../awsPreflight";
 
 /**
  * POST /api/aws/sso-login
@@ -31,6 +32,17 @@ function streamFrame(res: ServerResponse, frame: unknown) {
 
 export function awsLoginMiddleware() {
   return async (req: IncomingMessage, res: ServerResponse, next?: () => void) => {
+    // GET /api/aws/status — lightweight probe the UI uses to gate the
+    // chat shell. Returns { authenticated } from the same hasBedrockAuth
+    // check that chat.ts does at turn time, so the UI can block at
+    // launch instead of letting the user discover missing auth by
+    // losing their first prompt.
+    if (req.url === "/api/aws/status" && req.method === "GET") {
+      const authenticated = await hasBedrockAuth();
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ authenticated }));
+      return;
+    }
     if (req.url !== "/api/aws/sso-login" || req.method !== "POST") return next?.();
 
     res.writeHead(200, {

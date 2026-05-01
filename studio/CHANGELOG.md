@@ -6,6 +6,18 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.4] — 2026-05-01
+
+### Fixed
+
+- **AWS sign-in is now checked before you can type a prompt.**
+  Previously, if your SSO credentials weren't valid, the first time
+  you'd hear about it was after sending your first prompt — which
+  lost the prompt and was baffling onboarding. Studio now probes
+  `/api/aws/status` on launch and blocks the app behind a modal with
+  a "Sign in to AWS" button until you're authenticated. No more
+  typing into a broken shell.
+
 ## [0.4.3] — 2026-05-01
 
 ### Fixed
