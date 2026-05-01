@@ -6,6 +6,20 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.3] — 2026-05-01
+
+### Fixed
+
+- **Hallucinated icon imports no longer reach the browser.** The
+  generator sometimes writes imports like `ArrowsUpDownSmall` that
+  don't exist in `arcade/components`, and the frame renders blank
+  with a load error. A new PostToolUse hook runs on every `Write` /
+  `Edit` and checks named imports from `arcade/components` and
+  `arcade-prototypes` against the real barrels. On a bad name it
+  exits 2 with a `did you mean …` message, and the model
+  self-corrects in the same turn — no more broken frames from this
+  class of typo.
+
 ## [0.4.2] — 2026-05-01
 
 ### Fixed

@@ -12,6 +12,11 @@ const PROTOTYPER_ROOT = path.resolve(MODULE_DIR, "..", "..");
 // JSX. Structural enforcement instead of a prompt rule, because prompt rules
 // for this pattern have failed before.
 const BLOCK_IMAGE_RESHAPE_HOOK = path.resolve(MODULE_DIR, "hooks", "blockImageReshape.mjs");
+// PostToolUse hook that blocks Write/Edit tool calls introducing named
+// imports (from "arcade/components" / "arcade-prototypes") that don't
+// exist in the real barrels. Emits Did-you-mean suggestions on block so
+// the model self-corrects in the same turn.
+const VALIDATE_ARCADE_IMPORTS_HOOK = path.resolve(MODULE_DIR, "hooks", "validateArcadeImports.mjs");
 // Arcade-gen clone: contains src/components (stories, icons barrel) the agent
 // consults for component APIs. Overridable via env for non-default checkouts;
 // falls back to ~/arcade-gen when HOME is set, and to an unresolvable sentinel
@@ -108,6 +113,12 @@ export async function runClaudeTurn(opts: RunTurnOptions): Promise<void> {
         {
           matcher: "Bash",
           hooks: [{ type: "command", command: `node ${BLOCK_IMAGE_RESHAPE_HOOK}` }],
+        },
+      ],
+      PostToolUse: [
+        {
+          matcher: "Write|Edit",
+          hooks: [{ type: "command", command: `node ${VALIDATE_ARCADE_IMPORTS_HOOK}` }],
         },
       ],
     },
