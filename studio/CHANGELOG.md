@@ -6,6 +6,45 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0] — 2026-05-03
+
+### Added
+
+- **Resizable chat pane.** Drag the right edge of the chat pane to
+  widen or narrow it; double-click the handle to reset. The width
+  is remembered per-install in localStorage.
+- **Drag-to-resize frame handle.** The viewport's device-preset
+  toggle has been replaced with a direct drag handle on the right
+  edge of the frame — resize the frame to any width instead of
+  picking from a fixed preset.
+- **Markdown in Claude Code replies.** Assistant bubbles now
+  render markdown (headings, lists, inline code, bold/italic)
+  instead of a wall of plain text.
+
+### Changed
+
+- **Chat toggle moved into the header.** The collapse/expand
+  control for the chat pane now sits to the left of the project
+  picker (stable position regardless of pane state) and uses the
+  `DotInLeftWindow` icon from arcade-gen.
+- **Header icon buttons refreshed.** Canvas toggle now uses
+  `DotInRightWindow` mirroring the chat toggle. Share, settings,
+  and canvas toggle all use the lighter `tertiary` variant in
+  their default state.
+- **Generator no longer emits `size="sm"` buttons and icons.**
+  An arcade-components shim narrows the Button/IconButton types so
+  the generator can't write `size="sm"`, and a runtime guard
+  ignores it if older frames do. Icons inside IconButton are also
+  constrained so the generator can't accidentally produce giant
+  icons. See `studio/docs/plans/` for the full design.
+
+### Fixed
+
+- **Update-check points at the public mirror.** `GET /api/version/check`
+  now polls `asundiev-devrev/arcade-studio-releases` instead of the
+  private source repo, so unauthenticated launches actually see new
+  releases. (Was a 0.4.5 follow-up that never made it into a DMG.)
+
 ## [0.4.5] — 2026-05-01
 
 ### Added
