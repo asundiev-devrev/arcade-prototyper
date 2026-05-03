@@ -1,8 +1,9 @@
 import { useEffect, useState, type ReactNode } from "react";
+import ReactMarkdown from "react-markdown";
 import { ChatBubble } from "@xorkavi/arcade-gen";
 import type { ChatMessage } from "../../../server/types";
 import type { ChatTurnItem } from "../../hooks/useChatStream";
-import { ComputerMessage } from "./computer/ComputerMessage";
+import { ComputerMessage, markdownComponents } from "./computer/ComputerMessage";
 import { ComputerThinkingRow } from "./computer/ComputerThinkingRow";
 import { DottedLoader } from "./computer/DottedLoader";
 
@@ -206,7 +207,11 @@ export function MessageList({
           <ComputerMessage key={m.id} content={m.content} />
         ) : (
           <BubbleRow key={m.id} role={m.role === "user" ? "user" : "assistant"}>
-            {m.content}
+            {m.role === "assistant" ? (
+              <ReactMarkdown components={markdownComponents}>{m.content}</ReactMarkdown>
+            ) : (
+              m.content
+            )}
           </BubbleRow>
         ),
       )}

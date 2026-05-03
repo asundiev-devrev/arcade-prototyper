@@ -13,9 +13,9 @@ import { Computer } from "@xorkavi/arcade-gen";
  * edge — the gutter is only for line 1.
  */
 
-const markdownComponents: Components = {
+export const markdownComponents: Components = {
   p: ({ children }) => (
-    <p className="my-2 leading-relaxed text-body text-(--fg-neutral-prominent) first:mt-0 last:mb-0">{children}</p>
+    <p className="my-2 leading-relaxed text-(--fg-neutral-prominent) first:mt-0 last:mb-0">{children}</p>
   ),
   h1: ({ children }) => (
     <h1 className="mt-4 mb-2 text-base font-medium text-(--fg-neutral-prominent) first:mt-0">{children}</h1>
@@ -31,7 +31,7 @@ const markdownComponents: Components = {
   ul: ({ children }) => <ul className="my-2 pl-5 list-disc space-y-0.5 marker:text-(--fg-neutral-subtle)">{children}</ul>,
   ol: ({ children }) => <ol className="my-2 pl-5 list-decimal space-y-0.5 marker:text-(--fg-neutral-subtle)">{children}</ol>,
   li: ({ children }) => (
-    <li className="leading-relaxed text-body text-(--fg-neutral-prominent)">{children}</li>
+    <li className="leading-relaxed text-(--fg-neutral-prominent)">{children}</li>
   ),
   a: ({ href, children }) => (
     <a
