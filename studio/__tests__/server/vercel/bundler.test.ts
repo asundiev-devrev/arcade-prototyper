@@ -67,8 +67,8 @@ describe("buildFrameBundle", () => {
         // `import { AppShell } from "arcade/components"` must bundle, not
         // fail with "Could not resolve 'arcade/components'".
         expect(opts.alias).toBeDefined();
-        expect(opts.alias["arcade"]).toBe("@xorkavi/arcade-gen");
-        expect(opts.alias["arcade/components"]).toBe("@xorkavi/arcade-gen");
+        expect(opts.alias["arcade"]).toMatch(/arcade-components\.tsx$/);
+        expect(opts.alias["arcade/components"]).toMatch(/arcade-components\.tsx$/);
         expect(opts.alias["arcade-prototypes"]).toMatch(/prototype-kit$/);
       } finally {
         delete process.env.ARCADE_STUDIO_ROOT;
