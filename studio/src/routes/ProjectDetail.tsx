@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Project } from "../../server/types";
 import { Viewport } from "../components/viewport/Viewport";
 import { DeviceToggle } from "../components/viewport/DeviceToggle";
@@ -15,6 +15,10 @@ import { AppSettingsButton } from "../components/shell/SettingsButton";
 import { ChatStreamProvider } from "../hooks/chatStreamContext";
 
 const CHAT_OPEN_STORAGE_KEY = "studio:chatPaneOpen";
+const CHAT_WIDTH_STORAGE_KEY = "studio:chatPaneWidth";
+const CHAT_WIDTH_DEFAULT = 400;
+const CHAT_WIDTH_MIN = 280;
+const CHAT_WIDTH_MAX = 720;
 
 export function ProjectDetail({
   slug,
@@ -34,10 +38,59 @@ export function ProjectDetail({
     const stored = window.localStorage.getItem(CHAT_OPEN_STORAGE_KEY);
     return stored === null ? true : stored === "true";
   });
+  const [chatWidth, setChatWidth] = useState<number>(() => {
+    if (typeof window === "undefined") return CHAT_WIDTH_DEFAULT;
+    const stored = window.localStorage.getItem(CHAT_WIDTH_STORAGE_KEY);
+    const parsed = stored ? Number(stored) : NaN;
+    if (!Number.isFinite(parsed)) return CHAT_WIDTH_DEFAULT;
+    return Math.min(CHAT_WIDTH_MAX, Math.max(CHAT_WIDTH_MIN, parsed));
+  });
+  const [resizing, setResizing] = useState(false);
+  const resizeStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
   useEffect(() => {
     window.localStorage.setItem(CHAT_OPEN_STORAGE_KEY, String(chatOpen));
   }, [chatOpen]);
+
+  useEffect(() => {
+    window.localStorage.setItem(CHAT_WIDTH_STORAGE_KEY, String(chatWidth));
+  }, [chatWidth]);
+
+  useEffect(() => {
+    if (!resizing) return;
+    function onMove(e: MouseEvent) {
+      const s = resizeStateRef.current;
+      if (!s) return;
+      const next = s.startWidth + (e.clientX - s.startX);
+      setChatWidth(Math.min(CHAT_WIDTH_MAX, Math.max(CHAT_WIDTH_MIN, next)));
+    }
+    function onUp() {
+      setResizing(false);
+      resizeStateRef.current = null;
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    const prevCursor = document.body.style.cursor;
+    const prevSelect = document.body.style.userSelect;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = prevCursor;
+      document.body.style.userSelect = prevSelect;
+    };
+  }, [resizing]);
+
+  function startResize(e: React.MouseEvent) {
+    e.preventDefault();
+    resizeStateRef.current = { startX: e.clientX, startWidth: chatWidth };
+    setResizing(true);
+  }
+
+  function resetChatWidth() {
+    setChatWidth(CHAT_WIDTH_DEFAULT);
+  }
 
   const refreshProject = useCallback(async () => {
     const res = await fetch(`/api/projects/${slug}`);
@@ -109,9 +162,10 @@ export function ProjectDetail({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: `${chatOpen ? "400px" : "0px"} 1fr${devOpen ? " auto" : ""}`,
+          gridTemplateColumns: `${chatOpen ? `${chatWidth}px` : "0px"} 1fr${devOpen ? " auto" : ""}`,
           minHeight: 0,
-          transition: "grid-template-columns 0.2s ease",
+          transition: resizing ? "none" : "grid-template-columns 0.2s ease",
+          position: "relative",
         }}
       >
         <aside
@@ -123,9 +177,41 @@ export function ProjectDetail({
             minWidth: 0,
             overflow: "hidden",
             borderRight: chatOpen ? "1px solid var(--stroke-neutral-subtle)" : "none",
+            position: "relative",
           }}
         >
           <ChatPane projectSlug={project.slug} />
+          {chatOpen && (
+            <div
+              role="separator"
+              aria-label="Resize chat pane"
+              aria-orientation="vertical"
+              aria-valuenow={chatWidth}
+              aria-valuemin={CHAT_WIDTH_MIN}
+              aria-valuemax={CHAT_WIDTH_MAX}
+              onMouseDown={startResize}
+              onDoubleClick={resetChatWidth}
+              style={{
+                position: "absolute",
+                top: 0,
+                right: -3,
+                width: 6,
+                height: "100%",
+                cursor: "col-resize",
+                zIndex: 2,
+                background: resizing ? "var(--stroke-neutral-strong, #888)" : "transparent",
+                transition: resizing ? "none" : "background 0.15s ease",
+              }}
+              onMouseEnter={(e) => {
+                if (!resizing)
+                  (e.currentTarget as HTMLDivElement).style.background =
+                    "var(--stroke-neutral-subtle)";
+              }}
+              onMouseLeave={(e) => {
+                if (!resizing) (e.currentTarget as HTMLDivElement).style.background = "transparent";
+              }}
+            />
+          )}
         </aside>
         <main key={reloadKey} style={{ minWidth: 0, minHeight: 0, overflow: "hidden" }}>
           <Viewport project={project} devicePreset={devicePreset} />
