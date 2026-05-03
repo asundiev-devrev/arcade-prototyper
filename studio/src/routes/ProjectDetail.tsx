@@ -148,10 +148,13 @@ export function ProjectDetail({
             onRenamed={() => void refreshProject()}
           />
         }
+        titleEnd={
+          <ChatToggle active={chatOpen} onToggle={() => setChatOpen((o) => !o)} />
+        }
+        titleRegionWidth={chatWidth}
         center={<DeviceToggle value={devicePreset} onValueChange={setDevicePreset} />}
         right={
           <>
-            <ChatToggle active={chatOpen} onToggle={() => setChatOpen((o) => !o)} />
             <ThemeToggle mode={project.mode} onToggle={toggleProjectMode} />
             <ShareButton project={project} />
             <AppSettingsButton />

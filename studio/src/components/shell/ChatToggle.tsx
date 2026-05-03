@@ -1,4 +1,4 @@
-import { IconButton } from "@xorkavi/arcade-gen";
+import { DotInLeftWindow, IconButton } from "@xorkavi/arcade-gen";
 
 export function ChatToggle({
   active,
@@ -10,22 +10,10 @@ export function ChatToggle({
   return (
     <IconButton
       aria-label={active ? "Collapse chat panel" : "Expand chat panel"}
-      variant={active ? "primary" : "secondary"}
+      variant={active ? "primary" : "tertiary"}
       onClick={onToggle}
     >
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-      </svg>
+      <DotInLeftWindow size={16} aria-hidden="true" />
     </IconButton>
   );
 }
