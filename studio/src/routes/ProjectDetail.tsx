@@ -151,17 +151,16 @@ export function ProjectDetail({
     <div style={{ display: "grid", gridTemplateRows: "48px 1fr", height: "100vh" }}>
       <StudioHeader
         title={
-          <ProjectPicker
-            project={project}
-            onHome={onBack}
-            onOpenProject={onOpenProject}
-            onRenamed={() => void refreshProject()}
-          />
+          <>
+            <ChatToggle active={chatOpen} onToggle={() => setChatOpen((o) => !o)} />
+            <ProjectPicker
+              project={project}
+              onHome={onBack}
+              onOpenProject={onOpenProject}
+              onRenamed={() => void refreshProject()}
+            />
+          </>
         }
-        titleEnd={
-          <ChatToggle active={chatOpen} onToggle={() => setChatOpen((o) => !o)} />
-        }
-        titleRegionWidth={chatWidth}
         right={
           <>
             <ThemeToggle mode={project.mode} onToggle={toggleProjectMode} />
