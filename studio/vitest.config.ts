@@ -5,9 +5,9 @@ export default defineConfig({
   root: __dirname,
   resolve: {
     alias: [
-      { find: /^arcade\/components$/, replacement: "@xorkavi/arcade-gen" },
-      { find: /^arcade$/, replacement: "@xorkavi/arcade-gen" },
-      { find: "arcade-prototypes", replacement: path.resolve(__dirname, "prototype-kit") },
+      { find: /^arcade\/components$/, replacement: path.resolve(__dirname, "prototype-kit/arcade-components.tsx") },
+      { find: /^arcade$/,              replacement: path.resolve(__dirname, "prototype-kit/arcade-components.tsx") },
+      { find: "arcade-prototypes",     replacement: path.resolve(__dirname, "prototype-kit") },
     ],
   },
   test: {

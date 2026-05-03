@@ -146,9 +146,10 @@ function devrevStubPlugin(): Plugin {
 // the path.
 //
 // Keep this in sync with studio/vite.config.ts's `resolve.alias`.
+const ARCADE_SHIM_PATH = path.join(REPO_ROOT, "studio", "prototype-kit", "arcade-components.tsx");
 const ARCADE_ALIASES = {
-  "arcade": "@xorkavi/arcade-gen",
-  "arcade/components": "@xorkavi/arcade-gen",
+  "arcade": ARCADE_SHIM_PATH,
+  "arcade/components": ARCADE_SHIM_PATH,
   "arcade-prototypes": path.join(REPO_ROOT, "studio", "prototype-kit"),
 } as const;
 

@@ -62,10 +62,10 @@ export default defineConfig({
   plugins: [injectStudioSourcePlugin(), kitManifestPlugin(), react(), tailwindcss(), frameMountPlugin(), projectWatchPlugin(), apiPlugin()],
   resolve: {
     alias: [
-      { find: /^arcade\/components$/, replacement: "@xorkavi/arcade-gen" },
-      { find: /^arcade$/, replacement: "@xorkavi/arcade-gen" },
-      { find: "arcade-studio", replacement: path.resolve(__dirname, "src") },
-      { find: "arcade-prototypes", replacement: path.resolve(__dirname, "prototype-kit") },
+      { find: /^arcade\/components$/, replacement: path.resolve(__dirname, "prototype-kit/arcade-components.tsx") },
+      { find: /^arcade$/,              replacement: path.resolve(__dirname, "prototype-kit/arcade-components.tsx") },
+      { find: "arcade-studio",         replacement: path.resolve(__dirname, "src") },
+      { find: "arcade-prototypes",     replacement: path.resolve(__dirname, "prototype-kit") },
     ],
   },
   server: {
