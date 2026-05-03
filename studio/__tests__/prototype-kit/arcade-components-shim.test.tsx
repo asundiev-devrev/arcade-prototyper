@@ -123,6 +123,50 @@ describe("arcade-components shim — IconButton", () => {
     );
     expect(out.props.size).toBe("md");
   });
+
+  it("passes size=16 to the child icon element for md", () => {
+    function FakeIcon(_props: { size?: number }) { return null; }
+    const out = renderOnce(
+      <IconButton size="md" aria-label="Close"><FakeIcon /></IconButton>,
+    );
+    const child = out.props.children as React.ReactElement<{ size?: number }>;
+    expect(React.isValidElement(child)).toBe(true);
+    expect(child.props.size).toBe(16);
+  });
+
+  it("passes size=20 to the child icon element for lg", () => {
+    function FakeIcon(_props: { size?: number }) { return null; }
+    const out = renderOnce(
+      <IconButton size="lg" aria-label="Close"><FakeIcon /></IconButton>,
+    );
+    const child = out.props.children as React.ReactElement<{ size?: number }>;
+    expect(child.props.size).toBe(20);
+  });
+
+  it("uses md (16px) icon sizing when size prop is omitted", () => {
+    function FakeIcon(_props: { size?: number }) { return null; }
+    const out = renderOnce(
+      <IconButton aria-label="Close"><FakeIcon /></IconButton>,
+    );
+    const child = out.props.children as React.ReactElement<{ size?: number }>;
+    expect(child.props.size).toBe(16);
+  });
+
+  it("respects a caller-supplied numeric size on the child icon", () => {
+    function FakeIcon(_props: { size?: number }) { return null; }
+    const out = renderOnce(
+      <IconButton size="md" aria-label="Close"><FakeIcon size={12} /></IconButton>,
+    );
+    const child = out.props.children as React.ReactElement<{ size?: number }>;
+    expect(child.props.size).toBe(12);
+  });
+
+  it("leaves non-element children (strings) unchanged", () => {
+    const out = renderOnce(
+      <IconButton size="md" aria-label="Close">×</IconButton>,
+    );
+    expect(out.props.children).toBe("×");
+  });
 });
 
 describe("arcade-components shim — type narrowing", () => {
