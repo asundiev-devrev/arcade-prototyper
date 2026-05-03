@@ -13,6 +13,7 @@ import {
   filterMentions,
   type MentionOption,
 } from "./MentionPopover";
+import { useTargetSelection, type TargetSelection } from "../../hooks/targetSelectionContext";
 
 interface PromptInputProps {
   busy: boolean;
@@ -37,12 +38,27 @@ function detectMentionAtCaret(value: string, caret: number): { query: string; at
   return { query, atIdx };
 }
 
+function buildTargetPreamble(t: TargetSelection): string {
+  const rel = t.file.split("/frames/").pop() ?? t.file;
+  const label = t.tagName && t.tagName !== t.componentName
+    ? `<${t.tagName}> inside <${t.componentName}>`
+    : `<${t.componentName}>`;
+  return [
+    `Target element: ${label}`,
+    `Source: ${rel}:${t.line}:${t.column}`,
+    "",
+    "Apply the following change only to this element (or its direct children if the intent clearly requires it). Do not make unrelated edits.",
+    "",
+  ].join("\n");
+}
+
 export function PromptInput({ busy, projectSlug, onSend }: PromptInputProps) {
   const [text, setText] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [imagePaths, setImagePaths] = useState<string[]>([]);
   const [detectedFigmaUrl, setDetectedFigmaUrl] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const { target, clear: clearTarget } = useTargetSelection();
   const [mention, setMention] = useState<{
     query: string;
     atIdx: number;
@@ -164,12 +180,14 @@ export function PromptInput({ busy, projectSlug, onSend }: PromptInputProps) {
     if (mention) return;
     const p = text.trim();
     if (!p || busy) return;
-    onSend(p, imagePaths);
+    const finalPrompt = target ? `${buildTargetPreamble(target)}${p}` : p;
+    onSend(finalPrompt, imagePaths);
     setText("");
     setImages([]);
     setImagePaths([]);
     setDetectedFigmaUrl(null);
     setMention(null);
+    clearTarget();
   };
 
   function updateMentionFromCaret(next: string, el: HTMLInputElement | HTMLTextAreaElement | null) {
@@ -279,8 +297,11 @@ export function PromptInput({ busy, projectSlug, onSend }: PromptInputProps) {
         }}
         placeholder="Ask me anything"
         attachments={
-          (images.length > 0 || detectedFigmaUrl || hasComputerMention || hasFrameTrigger) ? (
+          (images.length > 0 || detectedFigmaUrl || hasComputerMention || hasFrameTrigger || target) ? (
             <>
+              {target && (
+                <TargetChip target={target} onClear={clearTarget} />
+              )}
               {hasComputerMention && (
                 <ChatInput.ContextAttachment
                   title="Computer"
@@ -320,6 +341,47 @@ export function PromptInput({ busy, projectSlug, onSend }: PromptInputProps) {
           onDismiss={() => setMention(null)}
         />
       )}
+    </div>
+  );
+}
+
+function TargetChip({ target, onClear }: { target: TargetSelection; onClear: () => void }) {
+  const file = target.file.split("/").pop() ?? target.file;
+  return (
+    <div
+      className="shrink-0 h-[66px] rounded-square-x2 border border-dashed border-(--stroke-neutral-subtle) bg-(--bg-neutral-soft) p-2 flex flex-col justify-between"
+      style={{ minWidth: 120, maxWidth: 200 }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-caption text-(--fg-neutral-subtle)">Target</span>
+        <button
+          type="button"
+          onClick={onClear}
+          aria-label="Clear target"
+          style={{
+            background: "transparent",
+            border: "none",
+            color: "var(--fg-neutral-subtle)",
+            cursor: "pointer",
+            fontSize: 14,
+            lineHeight: 1,
+            padding: 0,
+          }}
+        >
+          ×
+        </button>
+      </div>
+      <div className="flex flex-col min-w-0">
+        <span
+          className="text-caption text-(--fg-neutral-prominent) truncate"
+          title={target.componentName}
+        >
+          {target.componentName}
+        </span>
+        <span className="text-caption text-(--fg-neutral-subtle) truncate" title={target.file}>
+          {file}:{target.line}
+        </span>
+      </div>
     </div>
   );
 }

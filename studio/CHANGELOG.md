@@ -6,6 +6,32 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.0] — 2026-05-03
+
+### Added
+
+- **Point-to-prompt targeting.** A new crosshair IconButton on the
+  frame toolbar switches the frame into "pick" mode. Hover highlights
+  the element under the cursor with a blue outline; click it and the
+  element is added to the chat input as a context chip showing its
+  component name and source file:line. The next prompt is
+  automatically prefaced with a structured reference to that element,
+  so the agent knows to scope its edits to it.
+- **Targeting state on the button.** The picker button reflects
+  three states: idle (secondary), picking (primary + Esc to cancel),
+  and targeted (primary + click-to-clear). A success toast fires when
+  an element is picked; a failure toast explains why if the pick
+  can't be resolved.
+- **Visual feedback on click.** The hover outline briefly flashes
+  green on a successful pick (red on failure) before the overlay
+  clears, so the user sees the result of their click.
+
+### Notes
+
+- Targeting works against React 19's new `_debugStack` (not the
+  removed `_debugSource`). Dev-only by design — the feature relies on
+  React fibers and would not survive a production build.
+
 ## [0.5.1] — 2026-05-03
 
 ### Added

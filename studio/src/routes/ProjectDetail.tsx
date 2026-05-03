@@ -11,6 +11,7 @@ import { ChatToggle } from "../components/shell/ChatToggle";
 import { ProjectPicker } from "../components/shell/ProjectPicker";
 import { AppSettingsButton } from "../components/shell/SettingsButton";
 import { ChatStreamProvider } from "../hooks/chatStreamContext";
+import { TargetSelectionProvider } from "../hooks/targetSelectionContext";
 
 const CHAT_OPEN_STORAGE_KEY = "studio:chatPaneOpen";
 const CHAT_WIDTH_STORAGE_KEY = "studio:chatPaneWidth";
@@ -148,6 +149,7 @@ export function ProjectDetail({
 
   return (
     <ChatStreamProvider projectSlug={project.slug}>
+    <TargetSelectionProvider>
     <div style={{ display: "grid", gridTemplateRows: "48px 1fr", height: "100vh" }}>
       <StudioHeader
         title={
@@ -234,6 +236,7 @@ export function ProjectDetail({
         {devOpen && <DevModePanel slug={project.slug} />}
       </div>
     </div>
+    </TargetSelectionProvider>
     </ChatStreamProvider>
   );
 }
