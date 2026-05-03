@@ -5,7 +5,6 @@ import path from "node:path";
 import { studioRoot } from "./server/paths";
 import { projectsMiddleware } from "./server/middleware/projects";
 import { chatMiddleware } from "./server/middleware/chat";
-import { critiqueMiddleware } from "./server/middleware/critique";
 import { figmaMiddleware } from "./server/middleware/figma";
 import { uploadsMiddleware } from "./server/middleware/uploads";
 import { preflightMiddleware } from "./server/middleware/preflight";
@@ -33,10 +32,6 @@ function apiPlugin(): import("vite").Plugin {
       server.middlewares.use(devrevMiddleware());
       server.middlewares.use(settingsMiddleware());
       server.middlewares.use(vercelMiddleware());
-      // critiqueMiddleware must be registered before projectsMiddleware
-      // because projects claims all /api/projects/* URLs and 405s on any
-      // path it doesn't recognize, shadowing sub-routes.
-      server.middlewares.use(critiqueMiddleware());
       server.middlewares.use(projectsMiddleware());
       server.middlewares.use(chatMiddleware());
       server.middlewares.use(figmaMiddleware());

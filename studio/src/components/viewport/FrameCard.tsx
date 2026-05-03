@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { ArrowUpRightSmall, IconButton } from "@xorkavi/arcade-gen";
 import type { Frame } from "../../../server/types";
-import { useChatStreamContext } from "../../hooks/chatStreamContext";
 
 const FRAME_WIDTH_MIN = 320;
 const FRAME_WIDTH_MAX = 2560;
@@ -18,7 +18,6 @@ export function FrameCard({
   onFrameWidthChange: (next: number) => void;
   projectMode: "light" | "dark";
 }) {
-  const { state, refine } = useChatStreamContext();
   const [resizing, setResizing] = useState(false);
   const [hoverHandle, setHoverHandle] = useState(false);
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
@@ -62,6 +61,7 @@ export function FrameCard({
     Math.max(FRAME_WIDTH_MIN, frameWidth),
   );
   const handleVisible = hoverHandle || resizing;
+  const frameUrl = `/api/frames/${projectSlug}/${frame.slug}?mode=${projectMode}`;
 
   return (
     <div style={{ flex: "none" }}>
@@ -84,23 +84,27 @@ export function FrameCard({
         >
           {clampedWidth}px
         </span>
-        <button
-          type="button"
-          title="Refine this frame against the most recent reference image in chat"
-          disabled={state.busy}
-          onClick={() => void refine(frame.slug)}
+        <div
           style={{
-            fontSize: 11,
-            padding: "2px 8px",
-            borderRadius: 6,
-            border: "1px solid var(--stroke-neutral-subtle)",
-            background: "var(--surface-overlay)",
-            color: state.busy ? "var(--fg-neutral-tertiary)" : "var(--fg-neutral-primary)",
-            cursor: state.busy ? "not-allowed" : "pointer",
+            marginLeft: "auto",
+            opacity: 0.5,
+            transition: "opacity 0.15s ease",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLDivElement).style.opacity = "1";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLDivElement).style.opacity = "0.5";
           }}
         >
-          Refine against reference
-        </button>
+          <IconButton
+            aria-label="Open frame in new tab"
+            variant="secondary"
+            onClick={() => window.open(frameUrl, "_blank", "noopener,noreferrer")}
+          >
+            <ArrowUpRightSmall size={16} aria-hidden="true" />
+          </IconButton>
+        </div>
       </div>
       <div
         style={{
@@ -123,7 +127,7 @@ export function FrameCard({
           <iframe
             key={projectMode}
             title={frame.name}
-            src={`/api/frames/${projectSlug}/${frame.slug}?mode=${projectMode}`}
+            src={frameUrl}
             style={{
               width: "100%",
               height: "100%",

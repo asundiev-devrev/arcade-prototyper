@@ -6,6 +6,25 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.1] — 2026-05-03
+
+### Added
+
+- **Open frame in a new tab.** A subtle secondary IconButton sits on
+  the same row as the frame name and width, pushed to the right.
+  Click it to open the rendered frame in a separate browser tab —
+  useful for full-window preview or devtools debugging.
+
+### Removed
+
+- **"Refine against reference" feature.** The button that sent the
+  latest chat reference image + a fresh frame screenshot to a second
+  Claude pass has been removed. The server middleware
+  (`/api/projects/:slug/frames/:frame/critique`) and the headless
+  chromium screenshot helper are gone too. The dependency on
+  `puppeteer` that this feature required is no longer pulled at dev
+  time.
+
 ## [0.5.0] — 2026-05-03
 
 ### Added
