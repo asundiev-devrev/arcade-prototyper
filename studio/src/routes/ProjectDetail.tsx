@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Project } from "../../server/types";
 import { Viewport } from "../components/viewport/Viewport";
-import { DeviceToggle } from "../components/viewport/DeviceToggle";
-import type { DevicePreset } from "../lib/devicePresets";
 import { ChatPane } from "../components/chat/ChatPane";
 import { DevModePanel } from "../components/devmode/DevModePanel";
 import { StudioHeader } from "../components/shell/StudioHeader";
@@ -19,6 +17,8 @@ const CHAT_WIDTH_STORAGE_KEY = "studio:chatPaneWidth";
 const CHAT_WIDTH_DEFAULT = 400;
 const CHAT_WIDTH_MIN = 280;
 const CHAT_WIDTH_MAX = 720;
+const FRAME_WIDTH_STORAGE_KEY = "studio:frameWidth";
+const FRAME_WIDTH_DEFAULT = 1440;
 
 export function ProjectDetail({
   slug,
@@ -32,7 +32,13 @@ export function ProjectDetail({
   const [project, setProject] = useState<Project | null>(null);
   const [devOpen, setDevOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  const [devicePreset, setDevicePreset] = useState<DevicePreset>("desktop");
+  const [frameWidth, setFrameWidth] = useState<number>(() => {
+    if (typeof window === "undefined") return FRAME_WIDTH_DEFAULT;
+    const stored = window.localStorage.getItem(FRAME_WIDTH_STORAGE_KEY);
+    const parsed = stored ? Number(stored) : NaN;
+    if (!Number.isFinite(parsed)) return FRAME_WIDTH_DEFAULT;
+    return parsed;
+  });
   const [chatOpen, setChatOpen] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
     const stored = window.localStorage.getItem(CHAT_OPEN_STORAGE_KEY);
@@ -55,6 +61,10 @@ export function ProjectDetail({
   useEffect(() => {
     window.localStorage.setItem(CHAT_WIDTH_STORAGE_KEY, String(chatWidth));
   }, [chatWidth]);
+
+  useEffect(() => {
+    window.localStorage.setItem(FRAME_WIDTH_STORAGE_KEY, String(frameWidth));
+  }, [frameWidth]);
 
   useEffect(() => {
     if (!resizing) return;
@@ -152,7 +162,6 @@ export function ProjectDetail({
           <ChatToggle active={chatOpen} onToggle={() => setChatOpen((o) => !o)} />
         }
         titleRegionWidth={chatWidth}
-        center={<DeviceToggle value={devicePreset} onValueChange={setDevicePreset} />}
         right={
           <>
             <ThemeToggle mode={project.mode} onToggle={toggleProjectMode} />
@@ -217,7 +226,11 @@ export function ProjectDetail({
           )}
         </aside>
         <main key={reloadKey} style={{ minWidth: 0, minHeight: 0, overflow: "hidden" }}>
-          <Viewport project={project} devicePreset={devicePreset} />
+          <Viewport
+            project={project}
+            frameWidth={frameWidth}
+            onFrameWidthChange={setFrameWidth}
+          />
         </main>
         {devOpen && <DevModePanel slug={project.slug} />}
       </div>

@@ -2,10 +2,8 @@ import type { ReactNode } from "react";
 
 export function ViewportPreview({
   children,
-  fit = false,
 }: {
   children: ReactNode;
-  fit?: boolean;
 }) {
   return (
     <div
@@ -22,14 +20,13 @@ export function ViewportPreview({
     >
       <div
         style={{
-          flex: fit ? 1 : "none",
-          width: fit ? undefined : "fit-content",
+          flex: "none",
+          width: "fit-content",
           maxWidth: "100%",
           border: "1px solid var(--stroke-neutral-subtle)",
           borderRadius: 12,
           overflow: "auto",
           background: "var(--surface-overlay)",
-          transition: "width 200ms ease-out",
         }}
       >
         {children}

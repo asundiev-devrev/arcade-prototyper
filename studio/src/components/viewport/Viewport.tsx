@@ -4,14 +4,15 @@ import { useFrames } from "../../hooks/useFrames";
 import { FrameCard } from "./FrameCard";
 import { EmptyViewport } from "./EmptyViewport";
 import { ViewportPreview } from "./ViewportPreview";
-import type { DevicePreset } from "../../lib/devicePresets";
 
 export function Viewport({
   project,
-  devicePreset,
+  frameWidth,
+  onFrameWidthChange,
 }: {
   project: Project;
-  devicePreset: DevicePreset;
+  frameWidth: number;
+  onFrameWidthChange: (next: number) => void;
 }) {
   const { frames } = useFrames(project);
 
@@ -46,7 +47,7 @@ export function Viewport({
   if (!frames.length) return <EmptyViewport />;
 
   return (
-    <ViewportPreview fit={devicePreset === "fit"}>
+    <ViewportPreview>
       <div
         style={{
           display: "flex",
@@ -63,7 +64,8 @@ export function Viewport({
             key={f.slug}
             projectSlug={project.slug}
             frame={f}
-            devicePreset={devicePreset}
+            frameWidth={frameWidth}
+            onFrameWidthChange={onFrameWidthChange}
             projectMode={project.mode}
           />
         ))}
