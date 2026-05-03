@@ -10,7 +10,7 @@ export function CanvasToggle({
   return (
     <IconButton
       aria-label="Toggle canvas panel"
-      variant={active ? "primary" : "secondary"}
+      variant={active ? "primary" : "tertiary"}
       onClick={onToggle}
     >
       <DotInRightWindow size={16} aria-hidden="true" />

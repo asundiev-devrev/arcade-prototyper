@@ -27,7 +27,7 @@ export function AppSettingsButton() {
     <>
       <IconButton
         aria-label="Settings"
-        variant="secondary"
+        variant="tertiary"
         onClick={() => setOpen(true)}
       >
         <GearIcon />

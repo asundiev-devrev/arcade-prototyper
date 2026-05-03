@@ -60,7 +60,7 @@ export function ShareButton({ project }: ShareButtonProps) {
       <Tooltip content={tooltipContent}>
         <IconButton
           aria-label="Share"
-          variant="secondary"
+          variant="tertiary"
           disabled={disabled}
           onClick={() => setShowModal(true)}
         >
