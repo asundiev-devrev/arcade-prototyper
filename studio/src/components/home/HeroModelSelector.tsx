@@ -44,15 +44,17 @@ export function HeroModelSelector() {
 
   return (
     <Select.Root value={value} onValueChange={onChange}>
-      {/* Arcade's default Select.Trigger is `w-full min-w-[160px]`. In the
-          hero trailing row we want a compact pill sized to its label, like
-          the Figma reference shows. `w-auto min-w-0` + pill radius does it.
-          Children must be a <Select.Value /> for the current option's label
-          to render; without it the trigger shows the chevron alone. */}
+      {/* Arcade's default Select.Trigger is `w-full min-w-[160px]` and its
+          cn() helper doesn't resolve class conflicts, so className overrides
+          for width don't reliably beat the defaults. Force width via inline
+          style instead — it always wins over class-based utilities. The
+          <Select.Value /> child is required for the current option's label
+          to render; without it the trigger shows only the chevron. */}
       <Select.Trigger
         id="hero-model-selector"
         aria-label="Model"
-        className="w-auto min-w-0 rounded-circle-x2 h-8 px-3 border-0 bg-transparent hover:bg-(--bg-neutral-soft)"
+        className="rounded-circle-x2 h-8 px-3 border-0 bg-transparent hover:bg-(--bg-neutral-soft)"
+        style={{ width: "auto", minWidth: 0, maxWidth: 160 }}
       >
         <Select.Value />
       </Select.Trigger>
