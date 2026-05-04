@@ -82,14 +82,17 @@ describe("HeroPromptInput", () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  it("shrinks font-size when scrollHeight exceeds the max", () => {
-    render(<HeroPromptInput onSubmit={vi.fn()} />);
+  it("shrinks font-size when the mirror spans multiple lines", () => {
+    const { container } = render(<HeroPromptInput onSubmit={vi.fn()} />);
     const textarea = screen.getByPlaceholderText(/what we're building today/i) as HTMLTextAreaElement;
+    const mirror = container.querySelector('[aria-hidden="true"]') as HTMLDivElement;
+    expect(mirror).toBeTruthy();
 
-    // jsdom returns 0 for scrollHeight; stub it high enough to force a shrink.
-    Object.defineProperty(textarea, "scrollHeight", {
+    // jsdom reports scrollHeight as 0. Stub the mirror's scrollHeight to a
+    // value that fontSizeForLines will read as ~4 lines at line-height 60px.
+    Object.defineProperty(mirror, "scrollHeight", {
       configurable: true,
-      get: () => 400,
+      get: () => 60 * 4,
     });
 
     act(() => {

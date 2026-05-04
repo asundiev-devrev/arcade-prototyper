@@ -1,45 +1,31 @@
-export interface NextFontSizeArgs {
-  /** Current rendered font-size in px. */
-  current: number;
-  /** Max (starting) font-size in px. The input never grows past this. */
+/**
+ * Maps a line count (measured at the starting/maximum font size) to the
+ * rendered font size. Discrete steps, one per added line, keep the shrink
+ * deterministic and idempotent per keystroke — the same text always produces
+ * the same size, so there's no oscillation.
+ *
+ * The caller should measure line count against a hidden mirror that's pinned
+ * to `start`, not against the live textarea whose height depends on the
+ * output of this function (that's a feedback loop).
+ *
+ * Curve rationale:
+ *   1 line  → start (no change)
+ *   2 lines → one step smaller
+ *   N lines → each extra line shaves one more step, down to floor
+ */
+export interface FontSizeForLinesArgs {
+  /** Number of visually-wrapped lines at the starting font size. */
+  lines: number;
+  /** Max (starting) font-size in px. */
   start: number;
-  /** Floor font-size in px. Below this we scroll instead of shrinking. */
+  /** Floor font-size in px. Below this the textarea scrolls instead of shrinking further. */
   floor: number;
-  /** Step size in px for each shrink/grow iteration. */
+  /** Step size in px between line-count tiers. */
   step: number;
-  /** Last-measured textarea scrollHeight in px. */
-  measuredHeight: number;
-  /** Target max height the textarea should fit within. */
-  maxHeight: number;
 }
 
-/**
- * Pure font-size stepper used by HeroPromptInput. Returns the next font-size
- * to render based on whether the textarea is overflowing or has slack.
- *
- * The React caller runs this inside useLayoutEffect after every text change:
- * set the size, re-measure on the next render, call again. One-step-at-a-time
- * keeps each iteration legible and animatable.
- */
-export function nextFontSize({
-  current,
-  start,
-  floor,
-  step,
-  measuredHeight,
-  maxHeight,
-}: NextFontSizeArgs): number {
-  if (measuredHeight > maxHeight && current > floor) {
-    return Math.max(floor, current - step);
-  }
-  if (current < start) {
-    // Predict scrollHeight at the next larger size assuming near-linear
-    // scaling. Only grow if the prediction still fits, so we don't
-    // oscillate between two adjacent sizes.
-    const predicted = measuredHeight * ((current + step) / current);
-    if (predicted <= maxHeight) {
-      return Math.min(start, current + step);
-    }
-  }
-  return current;
+export function fontSizeForLines({ lines, start, floor, step }: FontSizeForLinesArgs): number {
+  const shrinkSteps = Math.max(0, Math.floor(lines) - 1);
+  const target = start - shrinkSteps * step;
+  return Math.max(floor, target);
 }

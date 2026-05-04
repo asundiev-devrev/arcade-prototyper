@@ -11,7 +11,7 @@ import {
 } from "react";
 import { Button, IconButton, ArrowUpSmall, PlusSmall } from "@xorkavi/arcade-gen";
 import { ChatInput } from "../../../prototype-kit/composites/ChatInput";
-import { nextFontSize } from "../../lib/nextFontSize";
+import { fontSizeForLines } from "../../lib/nextFontSize";
 import { extractFigmaUrl } from "../../lib/figmaUrl";
 import { api } from "../../lib/api";
 import {
@@ -23,8 +23,8 @@ import { HeroModelSelector } from "./HeroModelSelector";
 
 const START_FONT = 50;
 const FLOOR_FONT = 20;
-const STEP_FONT = 2;
-const MAX_HEIGHT = 180; // ~3 lines at 50px / 1.2 line-height
+const STEP_FONT = 6;
+const LINE_HEIGHT = 1.2;
 const PLACEHOLDER = "What we're building today?";
 
 export interface HeroPromptSubmitArgs {
@@ -63,29 +63,36 @@ export function HeroPromptInput({ onSubmit, disabled }: HeroPromptInputProps) {
   const [submitting, setSubmitting] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const mirrorRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Progressive font-shrink: measure after render, step size based on overflow.
+  // Progressive font-shrink. The live textarea's scrollHeight depends on the
+  // current font size, which creates a feedback loop: shrink → re-measure →
+  // looks fine → try growing → overflows again → shrink → … A hidden mirror
+  // pinned to START_FONT gives a stable measurement whose only input is
+  // `text`, so the same text always resolves to the same size.
   useLayoutEffect(() => {
     const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    const measured = el.scrollHeight;
-    const nextSize = nextFontSize({
-      current: fontSize,
+    const mirror = mirrorRef.current;
+    if (!el || !mirror) return;
+    const mirrorLineHeight = LINE_HEIGHT * START_FONT;
+    const lines = Math.max(1, Math.round(mirror.scrollHeight / mirrorLineHeight));
+    const next = fontSizeForLines({
+      lines,
       start: START_FONT,
       floor: FLOOR_FONT,
       step: STEP_FONT,
-      measuredHeight: measured,
-      maxHeight: MAX_HEIGHT,
     });
-    if (nextSize !== fontSize) {
-      setFontSize(nextSize);
-      return;
-    }
-    el.style.height = `${Math.min(measured, MAX_HEIGHT)}px`;
-    el.style.overflowY = measured > MAX_HEIGHT ? "auto" : "hidden";
+    if (next !== fontSize) setFontSize(next);
+    // Let the textarea reflow to its natural height at the newly-chosen
+    // size. We cap at start's 3-line visual budget to match the original
+    // spec: past the floor, the textarea scrolls instead of growing.
+    el.style.height = "auto";
+    const maxHeight = START_FONT * LINE_HEIGHT * 3;
+    const measured = el.scrollHeight;
+    el.style.height = `${Math.min(measured, maxHeight)}px`;
+    el.style.overflowY = measured > maxHeight ? "auto" : "hidden";
   }, [text, fontSize]);
 
   const hasComputerMention = /@Computer\b/i.test(text);
@@ -237,6 +244,34 @@ export function HeroPromptInput({ onSubmit, disabled }: HeroPromptInputProps) {
           e.target.value = "";
         }}
       />
+      {/* Hidden mirror pinned to START_FONT. Measures how many visual lines
+          the text would take at the maximum size, without a feedback loop
+          against the live textarea's own dynamic font size. The textarea
+          itself measures its natural scrollHeight to set its rendered
+          height, which is safe because the height equation doesn't feed
+          back into the font-size equation anymore. */}
+      <div
+        ref={mirrorRef}
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          visibility: "hidden",
+          pointerEvents: "none",
+          width: "100%",
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
+          fontFamily: "var(--core-font-display), 'Chip Display Variable', sans-serif",
+          fontWeight: 600,
+          fontSize: START_FONT,
+          lineHeight: LINE_HEIGHT,
+        }}
+      >
+        {/* A trailing space guarantees the last line is counted when the
+            user ends on a newline. */}
+        {(text || PLACEHOLDER) + "​"}
+      </div>
       <textarea
         ref={textareaRef}
         value={text}
@@ -255,9 +290,9 @@ export function HeroPromptInput({ onSubmit, disabled }: HeroPromptInputProps) {
           fontWeight: 600,
           color: "var(--fg-neutral-prominent, #211e20)",
           fontSize,
-          lineHeight: 1.2,
+          lineHeight: LINE_HEIGHT,
           opacity: 1,
-          transition: "font-size 120ms ease-out",
+          transition: "font-size 160ms ease-out",
         }}
         // Placeholder styling relies on the global stylesheet; see
         // studio/src/styles/tailwind.css for ::placeholder opacity:0.48.
