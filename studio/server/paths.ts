@@ -58,3 +58,23 @@ export function lastStdoutLogPath(projectSlug: string): string {
 export function figmaIngestRoot(): string {
   return path.join(studioRoot(), ".figma-ingest");
 }
+
+/**
+ * Root folder for pre-project uploads (images pasted into the hero input
+ * before a project exists). Sibling of `projects/`; `adopt-uploads` moves
+ * files from here into the project once it is created.
+ */
+export function stagingRoot(): string {
+  return path.join(studioRoot(), "uploads-staging");
+}
+
+const SESSION_ID = /^[a-z0-9][a-z0-9-]{0,63}$/i;
+
+function requireSessionId(id: string): string {
+  if (!SESSION_ID.test(id)) throw new Error(`Invalid staging session id: ${id}`);
+  return id;
+}
+
+export function stagingSessionDir(sessionId: string): string {
+  return path.join(stagingRoot(), requireSessionId(sessionId));
+}
