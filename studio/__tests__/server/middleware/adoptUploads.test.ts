@@ -92,4 +92,46 @@ describe("POST /api/projects/:slug/adopt-uploads", () => {
     const res = await post(`/api/projects/nonexistent/adopt-uploads`, { paths: [] });
     expect(res.status).toBe(404);
   });
+
+  it("suffixes collisions so two files with the same basename both land", async () => {
+    const project = await createProject({ name: "Test", theme: "arcade", mode: "light" });
+    const sessionDir = stagingSessionDir("alice");
+    fs.mkdirSync(sessionDir, { recursive: true });
+    const first = path.join(sessionDir, "photo.png");
+    fs.writeFileSync(first, Buffer.from([0x01]));
+    await post(`/api/projects/${project.slug}/adopt-uploads`, { paths: [first] });
+
+    // Second upload with the same basename (fresh staging file) should land
+    // at photo-1.png — the placeholder reservation prevents overwriting the
+    // first adoption.
+    const second = path.join(sessionDir, "photo.png");
+    fs.writeFileSync(second, Buffer.from([0x02]));
+    const res = await post(`/api/projects/${project.slug}/adopt-uploads`, { paths: [second] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.mapping[second]).toMatch(new RegExp(`_uploads/photo-1\\.png$`));
+    const firstDest = path.join(tmp, "projects", project.slug, "_uploads", "photo.png");
+    expect(fs.existsSync(firstDest)).toBe(true);
+    expect(fs.readFileSync(firstDest)[0]).toBe(0x01);
+    expect(fs.readFileSync(res.body.mapping[second])[0]).toBe(0x02);
+  });
+
+  it("leaves no placeholder behind when the source goes missing mid-adopt", async () => {
+    const project = await createProject({ name: "Test", theme: "arcade", mode: "light" });
+    const sessionDir = stagingSessionDir("alice");
+    fs.mkdirSync(sessionDir, { recursive: true });
+    const staged = path.join(sessionDir, "doomed.png");
+    fs.writeFileSync(staged, Buffer.from([0x03]));
+    fs.unlinkSync(staged); // simulate the file vanishing after request dispatch
+
+    const res = await post(`/api/projects/${project.slug}/adopt-uploads`, { paths: [staged] });
+    expect(res.status).toBe(200);
+    expect(res.body.missing).toEqual([staged]);
+    expect(res.body.mapping).toEqual({});
+    // Crucially: no empty placeholder file should be left in the project
+    // uploads dir, because reserveDest only ran after access confirmed the
+    // source existed — and when source is missing we bail before reserving.
+    const uploadsDir = path.join(tmp, "projects", project.slug, "_uploads");
+    expect(fs.existsSync(uploadsDir) ? fs.readdirSync(uploadsDir) : []).toEqual([]);
+  });
 });
