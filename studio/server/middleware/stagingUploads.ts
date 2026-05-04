@@ -26,7 +26,11 @@ export function stagingUploadsMiddleware() {
     if (req.url !== "/api/uploads/_staging" || req.method !== "POST") return next?.();
 
     const ct = req.headers["content-type"] ?? "";
-    const extMatch = /image\/(png|jpeg|webp|gif)/.exec(ct);
+    // Strip any parameters (e.g. `; charset=utf-8`) and normalize before the
+    // strict equality check. An unanchored regex would let non-image bodies
+    // slip through by sending e.g. `Content-Type: text/plain; fake=image/png`.
+    const baseType = ct.split(";")[0].trim().toLowerCase();
+    const extMatch = /^image\/(png|jpeg|webp|gif)$/.exec(baseType);
     if (!extMatch) {
       res.writeHead(400, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: { message: "Unsupported image type" } }));

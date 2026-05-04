@@ -76,4 +76,21 @@ describe("POST /api/uploads/_staging", () => {
     });
     expect(res.status).toBe(400);
   });
+
+  it("rejects headers that only contain an image/ token as a parameter", async () => {
+    // Pre-fix the unanchored regex would accept this because the substring
+    // `image/png` appears anywhere in the header value.
+    const res = await post("/api/uploads/_staging", Buffer.from("hello"), {
+      "content-type": "text/plain; fake=image/png",
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("accepts a valid image type with charset parameter", async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    const res = await post("/api/uploads/_staging", png, {
+      "content-type": "image/png; charset=binary",
+    });
+    expect(res.status).toBe(200);
+  });
 });
