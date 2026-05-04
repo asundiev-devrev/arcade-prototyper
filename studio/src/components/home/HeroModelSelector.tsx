@@ -44,7 +44,14 @@ export function HeroModelSelector() {
 
   return (
     <Select.Root value={value} onValueChange={onChange}>
-      <Select.Trigger id="hero-model-selector" aria-label="Model" />
+      {/* Arcade's default Select.Trigger is `w-full min-w-[160px]`. In the
+          hero trailing row we want a compact pill sized to its label, like
+          the Figma reference shows. `w-auto min-w-0` + pill radius does it. */}
+      <Select.Trigger
+        id="hero-model-selector"
+        aria-label="Model"
+        className="w-auto min-w-0 rounded-circle-x2 h-8 px-3 border-0 bg-transparent hover:bg-(--bg-neutral-soft)"
+      />
       <Select.Content>
         {MODEL_OPTIONS.map((opt) => (
           <Select.Item key={opt.value} value={opt.value}>

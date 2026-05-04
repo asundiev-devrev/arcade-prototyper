@@ -237,16 +237,6 @@ export function HeroPromptInput({ onSubmit, disabled }: HeroPromptInputProps) {
           e.target.value = "";
         }}
       />
-      <div
-        aria-hidden
-        style={{
-          width: 4,
-          height: 60,
-          background: "var(--fg-neutral-black, #211e20)",
-          borderRadius: 8,
-          marginBottom: 24,
-        }}
-      />
       <textarea
         ref={textareaRef}
         value={text}
@@ -261,7 +251,7 @@ export function HeroPromptInput({ onSubmit, disabled }: HeroPromptInputProps) {
           outline: 0,
           background: "transparent",
           resize: "none",
-          fontFamily: "'Chip_Display_Variable', sans-serif",
+          fontFamily: "var(--core-font-display), 'Chip Display Variable', sans-serif",
           fontWeight: 600,
           color: "var(--fg-neutral-prominent, #211e20)",
           fontSize,

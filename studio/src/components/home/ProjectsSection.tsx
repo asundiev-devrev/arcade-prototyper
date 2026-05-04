@@ -17,7 +17,7 @@ export function ProjectsSection({ projects, onOpen, onRename, onDelete }: Projec
         style={{
           margin: 0,
           marginBottom: 16,
-          fontFamily: "'Chip_Display_Variable', sans-serif",
+          fontFamily: "var(--core-font-display), 'Chip Display Variable', sans-serif",
           fontWeight: 600,
           fontSize: 27,
           lineHeight: "36px",
