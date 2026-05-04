@@ -4,6 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
 import { studioRoot } from "./server/paths";
 import { projectsMiddleware } from "./server/middleware/projects";
+import { adoptUploadsMiddleware } from "./server/middleware/adoptUploads";
 import { chatMiddleware } from "./server/middleware/chat";
 import { figmaMiddleware } from "./server/middleware/figma";
 import { uploadsMiddleware } from "./server/middleware/uploads";
@@ -34,6 +35,7 @@ function apiPlugin(): import("vite").Plugin {
       server.middlewares.use(settingsMiddleware());
       server.middlewares.use(vercelMiddleware());
       server.middlewares.use(projectsMiddleware());
+      server.middlewares.use(adoptUploadsMiddleware());
       server.middlewares.use(chatMiddleware());
       server.middlewares.use(figmaMiddleware());
       server.middlewares.use(uploadsMiddleware());
