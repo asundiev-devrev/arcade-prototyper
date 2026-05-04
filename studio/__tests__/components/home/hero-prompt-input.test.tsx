@@ -4,10 +4,10 @@ import { render, screen, fireEvent, act, cleanup } from "@testing-library/react"
 // Mock @xorkavi/arcade-gen to avoid gridstack ESM resolution issues pulled in
 // via the Dashboard re-export. Provides minimal shims for the components used
 // by HeroPromptInput + HeroModelSelector.
-vi.mock("@xorkavi/arcade-gen", () => {
-  const React = require("react");
+vi.mock("@xorkavi/arcade-gen", async () => {
+  const React = await import("react");
   const passthrough = (tag: string) =>
-    React.forwardRef<HTMLElement, any>((props: any, ref: any) =>
+    React.forwardRef((props: any, ref: any) =>
       React.createElement(tag, { ...props, ref }),
     );
   const Select: any = ({ children }: any) => React.createElement("div", null, children);
