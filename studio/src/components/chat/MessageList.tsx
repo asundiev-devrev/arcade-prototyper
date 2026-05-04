@@ -189,6 +189,10 @@ export function MessageList({
     .map((i) => i.pretty);
 
   const isComputerLive = source === "computer" && busy;
+  // Once a Computer turn ends, the persisted assistant message is rendered
+  // from `history` as <ComputerMessage>. Suppress the live activity rows so
+  // we don't show the same reply twice until the next turn clears `items`.
+  const suppressActivity = source === "computer" && !busy;
 
   return (
     <div
@@ -223,7 +227,7 @@ export function MessageList({
         <ComputerLive thoughts={liveTools} narrations={liveNarrations} />
       ) : (
         <>
-          {hasActivity && (
+          {hasActivity && !suppressActivity && (
             <div style={{ display: "flex", flexDirection: "column", gap: 2, marginLeft: -16, marginRight: -16 }}>
               {currentItems!.map((item, i) => (
                 <ActivityRow key={i} item={item} />
