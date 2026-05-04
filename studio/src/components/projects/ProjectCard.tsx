@@ -31,8 +31,8 @@ export function ProjectCard({
       >
         <Menu.Root>
           <Menu.Trigger asChild>
-            <IconButton aria-label="More" variant="secondary" size="sm">
-              <ThreeDotsHorizontal />
+            <IconButton aria-label="More" variant="tertiary" size="md">
+              <ThreeDotsHorizontal style={{ color: "var(--fg-neutral-subtle)" }} />
             </IconButton>
           </Menu.Trigger>
           <Menu.Content align="end">
@@ -44,7 +44,8 @@ export function ProjectCard({
       <div
         style={{
           fontFamily: "var(--core-font-display), 'Chip Display Variable', sans-serif",
-          fontWeight: 900,
+          fontWeight: 700,
+          lineHeight: "16px",
           color: "var(--fg-neutral-prominent)",
         }}
       >
