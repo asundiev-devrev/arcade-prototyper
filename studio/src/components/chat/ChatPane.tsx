@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { MessageList } from "./MessageList";
 import { PromptInput } from "./PromptInput";
 import { useChatStreamContext } from "../../hooks/chatStreamContext";
+import { usePendingPrompt } from "../../hooks/pendingPromptContext";
 import type { ChatMessage } from "../../../server/types";
 import { EmptyStatePrompts } from "./EmptyStatePrompts";
 import { extractFigmaUrl, decoratePromptWithFigma } from "../../lib/figmaUrl";
@@ -11,6 +12,15 @@ import { AuthExpiredNotice } from "../feedback/AuthExpiredNotice";
 export function ChatPane({ projectSlug }: { projectSlug: string }) {
   const [history, setHistory] = useState<ChatMessage[]>([]);
   const { state, send, retry } = useChatStreamContext();
+  const pending = usePendingPrompt();
+
+  useEffect(() => {
+    const p = pending.consume();
+    if (!p) return;
+    const withFigma = p.figmaUrl ? decoratePromptWithFigma(p.prompt, p.figmaUrl) : p.prompt;
+    send(withFigma, p.imagePaths);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
