@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -89,6 +90,13 @@ export function HeroPromptInput({ onSubmit, disabled }: HeroPromptInputProps) {
 
   const hasComputerMention = /@Computer\b/i.test(text);
 
+  function computeMentionAnchor(): { left: number; bottom: number } {
+    const rect = containerRef.current?.getBoundingClientRect();
+    const left = rect ? rect.left + 24 : 24;
+    const bottom = rect ? window.innerHeight - rect.top + 8 : 80;
+    return { left, bottom };
+  }
+
   function updateMentionFromCaret(next: string, el: HTMLTextAreaElement | null) {
     if (!el) { setMention(null); return; }
     const caret = el.selectionStart ?? next.length;
@@ -97,11 +105,27 @@ export function HeroPromptInput({ onSubmit, disabled }: HeroPromptInputProps) {
       setMention(null);
       return;
     }
-    const rect = containerRef.current?.getBoundingClientRect();
-    const left = rect ? rect.left + 24 : 24;
-    const bottom = rect ? window.innerHeight - rect.top + 8 : 80;
-    setMention({ query: detected.query, atIdx: detected.atIdx, anchor: { left, bottom } });
+    setMention({ query: detected.query, atIdx: detected.atIdx, anchor: computeMentionAnchor() });
   }
+
+  // Keep the popover anchored to the hero container as the user scrolls or
+  // resizes. Without this, the popover is placed once and then drifts away
+  // from the input when the page moves. Keyed on whether the popover is
+  // open (not the mention object itself) so we don't re-subscribe on every
+  // anchor update.
+  const mentionOpen = mention !== null;
+  useEffect(() => {
+    if (!mentionOpen) return;
+    const reanchor = () => {
+      setMention((m) => (m ? { ...m, anchor: computeMentionAnchor() } : m));
+    };
+    window.addEventListener("scroll", reanchor, { capture: true, passive: true });
+    window.addEventListener("resize", reanchor, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", reanchor, { capture: true } as EventListenerOptions);
+      window.removeEventListener("resize", reanchor);
+    };
+  }, [mentionOpen]);
 
   function insertMention(option: MentionOption) {
     if (!mention) return;
