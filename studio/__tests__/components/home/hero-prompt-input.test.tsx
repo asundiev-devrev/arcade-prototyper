@@ -12,7 +12,8 @@ vi.mock("@xorkavi/arcade-gen", async () => {
     );
   const Select: any = ({ children }: any) => React.createElement("div", null, children);
   Select.Root = ({ children }: any) => React.createElement("div", null, children);
-  Select.Trigger = (props: any) => React.createElement("button", props);
+  Select.Trigger = ({ children, ...rest }: any) => React.createElement("button", rest, children);
+  Select.Value = (props: any) => React.createElement("span", props);
   Select.Content = ({ children }: any) => React.createElement("div", null, children);
   Select.Item = ({ children, ...rest }: any) => React.createElement("div", rest, children);
   return {
