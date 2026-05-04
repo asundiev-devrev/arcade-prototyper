@@ -72,10 +72,15 @@ export function HeroPromptInput({ onSubmit, disabled }: HeroPromptInputProps) {
   // looks fine → try growing → overflows again → shrink → … A hidden mirror
   // pinned to START_FONT gives a stable measurement whose only input is
   // `text`, so the same text always resolves to the same size.
+  //
+  // We also derive the textarea height from lines × fontSize × line-height
+  // instead of reading scrollHeight, to avoid a read-after-write ordering
+  // issue where React hasn't yet committed the new fontSize to the DOM by
+  // the time we measure.
   useLayoutEffect(() => {
-    const el = textareaRef.current;
     const mirror = mirrorRef.current;
-    if (!el || !mirror) return;
+    const el = textareaRef.current;
+    if (!mirror || !el) return;
     const mirrorLineHeight = LINE_HEIGHT * START_FONT;
     const lines = Math.max(1, Math.round(mirror.scrollHeight / mirrorLineHeight));
     const next = fontSizeForLines({
@@ -85,14 +90,14 @@ export function HeroPromptInput({ onSubmit, disabled }: HeroPromptInputProps) {
       step: STEP_FONT,
     });
     if (next !== fontSize) setFontSize(next);
-    // Let the textarea reflow to its natural height at the newly-chosen
-    // size. We cap at start's 3-line visual budget to match the original
-    // spec: past the floor, the textarea scrolls instead of growing.
-    el.style.height = "auto";
+
+    // Visible content height at the chosen size, capped at start's 3-line
+    // budget. Past the cap the textarea scrolls instead of growing further.
     const maxHeight = START_FONT * LINE_HEIGHT * 3;
-    const measured = el.scrollHeight;
-    el.style.height = `${Math.min(measured, maxHeight)}px`;
-    el.style.overflowY = measured > maxHeight ? "auto" : "hidden";
+    const naturalHeight = next * LINE_HEIGHT * lines;
+    const height = Math.min(naturalHeight, maxHeight);
+    el.style.height = `${height}px`;
+    el.style.overflowY = naturalHeight > maxHeight ? "auto" : "hidden";
   }, [text, fontSize]);
 
   const hasComputerMention = /@Computer\b/i.test(text);
