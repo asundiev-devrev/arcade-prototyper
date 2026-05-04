@@ -285,6 +285,7 @@ export function HeroPromptInput({ onSubmit, disabled }: HeroPromptInputProps) {
         onKeyDown={onKeyDown}
         placeholder={PLACEHOLDER}
         rows={1}
+        autoFocus
         style={{
           width: "100%",
           border: 0,
