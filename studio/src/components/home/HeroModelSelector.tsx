@@ -30,7 +30,9 @@ export function HeroModelSelector() {
 
   const onChange = useCallback(async (next: string) => {
     setValue(next);
-    const persisted = next === MODEL_DEFAULT_SENTINEL ? undefined : next;
+    // PATCH deep-merges; `null` explicitly unsets `studio.model` without
+    // clobbering sibling studio.* keys (e.g., studio.mode).
+    const persisted = next === MODEL_DEFAULT_SENTINEL ? null : next;
     try {
       await fetch("/api/settings", {
         method: "PATCH",

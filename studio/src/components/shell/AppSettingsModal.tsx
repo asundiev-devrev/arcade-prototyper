@@ -295,10 +295,12 @@ export function AppSettingsModal({
                   onValueChange={async (next: string) => {
                     const prev = studioModel;
                     setStudioModel(next);
-                    // Sentinel → persist as undefined so the chat middleware
-                    // treats it as "no explicit model, let the CLI pick".
+                    // Sentinel → null so the PATCH's deep-merge explicitly
+                    // deletes studio.model without clobbering sibling
+                    // studio.* keys (e.g., studio.mode). The chat middleware
+                    // then treats an absent key as "let the CLI pick".
                     const persisted =
-                      next === MODEL_DEFAULT_SENTINEL ? undefined : next;
+                      next === MODEL_DEFAULT_SENTINEL ? null : next;
                     try {
                       await fetch("/api/settings", {
                         method: "PATCH",

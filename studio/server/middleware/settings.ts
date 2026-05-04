@@ -48,6 +48,37 @@ export async function readGlobalSettings(): Promise<GlobalSettings> {
   return readSettings();
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Deep-merge a patch into existing settings. Semantics:
+ * - `null` deletes that key.
+ * - Plain objects recurse (so `{ studio: { model: "opus" } }` updates only
+ *   `studio.model`, never overwriting `studio.mode`).
+ * - Arrays and primitives replace the current value.
+ * - Keys absent from the patch are preserved.
+ */
+export function mergeSettings<T extends Record<string, unknown>>(
+  base: T,
+  patch: Record<string, unknown>,
+): T {
+  const out: Record<string, unknown> = { ...base };
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === null) {
+      delete out[k];
+      continue;
+    }
+    if (isPlainObject(v) && isPlainObject(out[k])) {
+      out[k] = mergeSettings(out[k] as Record<string, unknown>, v);
+      continue;
+    }
+    out[k] = v;
+  }
+  return out as T;
+}
+
 async function readSettings(): Promise<GlobalSettings> {
   const file = path.join(studioRoot(), SETTINGS_FILE);
   try {
@@ -125,7 +156,7 @@ export function settingsMiddleware() {
       if (req.method === "PATCH") {
         const body = await readJson(req);
         const current = await readSettings();
-        const next = { ...current, ...body };
+        const next = mergeSettings(current, body);
         await writeSettings(next);
         return send(res, 200, next);
       }
