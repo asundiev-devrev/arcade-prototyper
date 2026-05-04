@@ -9,18 +9,44 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [0.7.0] — 2026-05-04
 
 ### Added
-- Branded homepage with a hero prompt input. Type what you want to build and
-  hit send — Studio creates a new project named after your prompt and fires
-  the first turn automatically.
-- Model selector in the hero input. Picks the same `studio.model` setting as
-  the Settings modal.
-- Image paste/drop, Figma URL pastes, and `@Computer` mentions all work in
-  the hero input before a project exists.
+- **Branded homepage with a hero prompt input.** Type what you want to build
+  and hit send — Studio creates a new project named after your prompt and
+  fires the first turn automatically. The hero textarea is borderless, uses
+  the Chip display font, autofocuses on mount, and progressively shrinks
+  (50px → 20px in discrete per-line steps) as the prompt gets longer.
+- **Model selector** in the hero input, rendered as a compact pill. Reads
+  and writes the same `studio.model` setting as the Settings modal.
+- **Staging uploads.** Images pasted, dropped, or picked before a project
+  exists go to `POST /api/uploads/_staging` and get adopted into the new
+  project via `POST /api/projects/:slug/adopt-uploads` on submit.
+- **`@Computer` mentions, Figma URL detection, and image attachments** all
+  work on the homepage's hero input, same surface as the in-project chat.
 
 ### Changed
-- The project list now sits below the hero as a compact 3-column gallery.
-  The explicit "+ New project" button and search input on the homepage have
-  been removed — the hero input replaces both creation paths.
+- **Project list** now sits below the hero as a compact 3-column gallery
+  with no thumbnails. Cards show name + date anchored to the bottom-left
+  and a Rename / Delete menu behind a tertiary `⋯` button in the
+  top-right. The explicit "+ New project" button and search input on the
+  homepage have been removed — the hero input replaces both creation
+  paths.
+- **Settings PATCH is now a deep merge.** Previously a shallow top-level
+  merge meant touching `studio.*` could accidentally drop sibling keys
+  (e.g., selecting a model would wipe `studio.mode`). Patch now recurses
+  into plain objects, and `null` is the explicit-unset convention.
+- **Upload MIME validation** is anchored and parameter-stripped on both
+  the staging and per-project endpoints, closing a loophole where a
+  header like `text/plain; fake=image/png` could slip through.
+
+### Fixed
+- **Pending first-turn prompt is StrictMode-safe.** The hero's first
+  prompt is handed to `ChatPane` via a one-shot context; the consume
+  runs inside a microtask the first cleanup cancels, so the second
+  StrictMode mount is the one that actually fires `send`.
+- **`adoptUploads` closes the collision race** via exclusive destination
+  reservation, and the EXDEV cross-device fallback now surfaces unlink
+  failures instead of leaving orphan files in staging.
+- **Mention popover reanchors** on scroll and resize while open, so it
+  follows the hero input instead of drifting when the page moves.
 
 ## [0.6.0] — 2026-05-03
 
