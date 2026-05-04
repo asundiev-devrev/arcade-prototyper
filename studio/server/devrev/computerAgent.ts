@@ -15,7 +15,7 @@ import { getDevRevPat } from "../secrets/keychain";
  *   as `narration`, so the existing chat UI renders them like a Claude turn.
  */
 
-const COMPUTER_AGENT_ID = "don:core:dvrv-us-1:devo/0:ai_agent/198";
+const COMPUTER_AGENT_ID = "don:core:dvrv-us-1:devo/0:ai_agent/620";
 const ENDPOINT = "https://api.devrev.ai/internal/ai-agents.events.execute-sync";
 
 export interface RunComputerTurnOptions {
@@ -66,6 +66,10 @@ export async function runComputerTurn(
     session_object: sessionObject,
   };
 
+  if (process.env.STUDIO_DEBUG_COMPUTER) {
+    console.log(`[computer-req] promptChars=${opts.prompt.length} session=${sessionObject}`);
+  }
+
   const controller = new AbortController();
   const abortHandler = () => controller.abort();
   opts.signal?.addEventListener("abort", abortHandler);
@@ -83,6 +87,10 @@ export async function runComputerTurn(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        // agent/620 was rejecting requests — first 406 with no Accept, then
+        // 400 "no matching response content type" with Accept: text/event-stream.
+        // Broaden to */* and let the server choose whatever it supports.
+        Accept: "*/*",
         Authorization: pat,
       },
       body: JSON.stringify(body),
@@ -122,14 +130,21 @@ export async function runComputerTurn(
           .map((l) => l.slice(5).trimStart())
           .join("\n");
         if (!payload) continue;
+        // Dev-only: dump raw SSE payloads so we can see exactly what the
+        // agent emits when wiring up a new agent id or progress shape.
+        // Set STUDIO_DEBUG_COMPUTER=1 to enable.
+        if (process.env.STUDIO_DEBUG_COMPUTER) {
+          console.log("[computer-sse]", payload.slice(0, 2000));
+        }
         let ev: AgentSseEvent;
         try { ev = JSON.parse(payload) as AgentSseEvent; } catch { continue; }
 
         if (ev.response === "progress") {
-          const label = progressLabel(ev);
-          if (label) {
-            opts.onEvent({ kind: "tool_call", tool: "Computer", pretty: label });
-          }
+          // Known shapes (skill_triggered / skill_executed) get a precise
+          // label; anything else falls back to "Working" so the UI at least
+          // shows motion rather than a silent dotted loader.
+          const label = progressLabel(ev) ?? "Working";
+          opts.onEvent({ kind: "tool_call", tool: "Computer", pretty: label });
           continue;
         }
         if (ev.response === "message") {
