@@ -1,0 +1,55 @@
+import { useCallback, useEffect, useState } from "react";
+import { Select } from "@xorkavi/arcade-gen";
+
+const MODEL_DEFAULT_SENTINEL = "__default__";
+
+const MODEL_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: MODEL_DEFAULT_SENTINEL, label: "Auto" },
+  { value: "sonnet", label: "Sonnet" },
+  { value: "opus", label: "Opus" },
+  { value: "haiku", label: "Haiku" },
+];
+
+export function HeroModelSelector() {
+  const [value, setValue] = useState<string>(MODEL_DEFAULT_SENTINEL);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/settings");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) {
+          setValue(data?.studio?.model || MODEL_DEFAULT_SENTINEL);
+        }
+      } catch { /* non-critical */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const onChange = useCallback(async (next: string) => {
+    setValue(next);
+    const persisted = next === MODEL_DEFAULT_SENTINEL ? undefined : next;
+    try {
+      await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studio: { model: persisted } }),
+      });
+    } catch { /* non-critical — UI already updated */ }
+  }, []);
+
+  return (
+    <Select.Root value={value} onValueChange={onChange}>
+      <Select.Trigger id="hero-model-selector" aria-label="Model" />
+      <Select.Content>
+        {MODEL_OPTIONS.map((opt) => (
+          <Select.Item key={opt.value} value={opt.value}>
+            {opt.label}
+          </Select.Item>
+        ))}
+      </Select.Content>
+    </Select.Root>
+  );
+}
