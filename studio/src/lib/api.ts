@@ -18,4 +18,17 @@ export const api = {
     fetch(`/api/projects/${slug}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) }).then(j<Project>),
   deleteProject: (slug: string) =>
     fetch(`/api/projects/${slug}`, { method: "DELETE" }).then(j<void>),
+  stageUpload: (blob: Blob) =>
+    fetch("/api/uploads/_staging", {
+      method: "POST",
+      headers: { "Content-Type": blob.type },
+      credentials: "include",
+      body: blob,
+    }).then(j<{ path: string; url: string }>),
+  adoptUploads: (slug: string, paths: string[]) =>
+    fetch(`/api/projects/${slug}/adopt-uploads`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paths }),
+    }).then(j<{ mapping: Record<string, string>; missing: string[] }>),
 };

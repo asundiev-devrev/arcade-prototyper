@@ -4,9 +4,11 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
 import { studioRoot } from "./server/paths";
 import { projectsMiddleware } from "./server/middleware/projects";
+import { adoptUploadsMiddleware } from "./server/middleware/adoptUploads";
 import { chatMiddleware } from "./server/middleware/chat";
 import { figmaMiddleware } from "./server/middleware/figma";
 import { uploadsMiddleware } from "./server/middleware/uploads";
+import { stagingUploadsMiddleware, cleanStaleStagingSessions } from "./server/middleware/stagingUploads";
 import { preflightMiddleware } from "./server/middleware/preflight";
 import { fontsMiddleware } from "./server/middleware/fonts";
 import { devrevMiddleware } from "./server/middleware/devrev";
@@ -33,15 +35,18 @@ function apiPlugin(): import("vite").Plugin {
       server.middlewares.use(settingsMiddleware());
       server.middlewares.use(vercelMiddleware());
       server.middlewares.use(projectsMiddleware());
+      server.middlewares.use(adoptUploadsMiddleware());
       server.middlewares.use(chatMiddleware());
       server.middlewares.use(figmaMiddleware());
       server.middlewares.use(uploadsMiddleware());
+      server.middlewares.use(stagingUploadsMiddleware());
       server.middlewares.use(thumbnailsMiddleware());
       server.middlewares.use(preflightMiddleware());
       server.middlewares.use(fontsMiddleware());
       server.middlewares.use(runtimeErrorMiddleware());
       attachBuildErrorReporter(server);
       void logVersionOnBoot();
+      void cleanStaleStagingSessions();
       refreshStaleClaudeMd()
         .then((n) => { if (n > 0) console.log(`[studio] refreshed CLAUDE.md for ${n} project(s)`); })
         .catch((err) => console.warn("[studio] CLAUDE.md refresh failed:", err));

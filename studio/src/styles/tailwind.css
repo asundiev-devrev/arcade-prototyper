@@ -181,3 +181,9 @@
   letter-spacing: var(--typography-caption-letter-spacing, 0.15px);
   font-variation-settings: "wght" var(--font-weight-regular, 460);
 }
+
+/* Hero input placeholder: same text treatment as typed text, 48% opacity. */
+textarea[data-hero-input]::placeholder {
+  color: var(--fg-neutral-prominent, #211e20);
+  opacity: 0.48;
+}

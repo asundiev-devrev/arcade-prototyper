@@ -1,5 +1,5 @@
+import { IconButton, Menu, ThreeDotsHorizontal } from "@xorkavi/arcade-gen";
 import type { Project } from "../../../server/types";
-import { placeholderTint } from "../../../server/thumbnails";
 
 export function ProjectCard({
   project, onOpen, onRename, onDelete,
@@ -9,14 +9,15 @@ export function ProjectCard({
   onRename: () => void;
   onDelete: () => void;
 }) {
-  const thumbnailUrl = project.coverThumbnail
-    ? `/api/projects/${project.slug}/thumbnails/${project.coverThumbnail.replace("thumbnails/", "").replace(".png", "")}.png`
-    : null;
-
   return (
     <article
       onClick={onOpen}
       style={{
+        position: "relative",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "flex-end",
+        minHeight: 180,
         padding: 16,
         borderRadius: 12,
         background: "var(--surface-shallow)",
@@ -24,28 +25,34 @@ export function ProjectCard({
         cursor: "pointer",
       }}
     >
-      {thumbnailUrl ? (
-        <img
-          src={thumbnailUrl}
-          alt={project.name}
-          style={{
-            width: "100%",
-            height: 120,
-            borderRadius: 8,
-            marginBottom: 12,
-            objectFit: "cover",
-          }}
-        />
-      ) : (
-        <div style={{ height: 120, borderRadius: 8, marginBottom: 12, background: placeholderTint(project.theme) }} />
-      )}
-      <div style={{ fontWeight: 540, color: "var(--fg-neutral-prominent)" }}>{project.name}</div>
-      <div style={{ color: "var(--fg-neutral-subtle)", fontSize: 12 }}>
-        {new Date(project.updatedAt).toLocaleDateString()}
+      <div
+        style={{ position: "absolute", top: 8, right: 8 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Menu.Root>
+          <Menu.Trigger asChild>
+            <IconButton aria-label="More" variant="tertiary" size="md">
+              <ThreeDotsHorizontal style={{ color: "var(--fg-neutral-subtle)" }} />
+            </IconButton>
+          </Menu.Trigger>
+          <Menu.Content align="end">
+            <Menu.Item onSelect={() => onRename()}>Rename</Menu.Item>
+            <Menu.Item onSelect={() => onDelete()}>Delete</Menu.Item>
+          </Menu.Content>
+        </Menu.Root>
       </div>
-      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-        <button onClick={(e) => { e.stopPropagation(); onRename(); }}>Rename</button>
-        <button onClick={(e) => { e.stopPropagation(); onDelete(); }}>Delete</button>
+      <div
+        style={{
+          fontFamily: "var(--core-font-display), 'Chip Display Variable', sans-serif",
+          fontWeight: 700,
+          lineHeight: "16px",
+          color: "var(--fg-neutral-prominent)",
+        }}
+      >
+        {project.name}
+      </div>
+      <div style={{ color: "var(--fg-neutral-subtle)", fontSize: 12, marginTop: 4 }}>
+        {new Date(project.updatedAt).toLocaleDateString()}
       </div>
     </article>
   );

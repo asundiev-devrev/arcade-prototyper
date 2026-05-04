@@ -16,7 +16,8 @@ export function uploadsMiddleware() {
     const slug = m[1];
 
     const ct = req.headers["content-type"] ?? "";
-    const extMatch = /image\/(png|jpeg|webp|gif)/.exec(ct);
+    const baseType = ct.split(";")[0].trim().toLowerCase();
+    const extMatch = /^image\/(png|jpeg|webp|gif)$/.exec(baseType);
     if (!extMatch) {
       res.writeHead(400, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: { message: "Unsupported image type" } }));
