@@ -6,6 +6,22 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.0] — 2026-05-04
+
+### Added
+- Branded homepage with a hero prompt input. Type what you want to build and
+  hit send — Studio creates a new project named after your prompt and fires
+  the first turn automatically.
+- Model selector in the hero input. Picks the same `studio.model` setting as
+  the Settings modal.
+- Image paste/drop, Figma URL pastes, and `@Computer` mentions all work in
+  the hero input before a project exists.
+
+### Changed
+- The project list now sits below the hero as a compact 3-column gallery.
+  The explicit "+ New project" button and search input on the homepage have
+  been removed — the hero input replaces both creation paths.
+
 ## [0.6.0] — 2026-05-03
 
 ### Added
