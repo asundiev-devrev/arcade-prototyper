@@ -18,7 +18,7 @@ vi.mock("@xorkavi/arcade-gen", async () => {
     React.createElement("button", { onClick: onSelect }, children);
   return {
     IconButton: passthrough("button"),
-    DotsHorizontal: () => null,
+    ThreeDotsHorizontal: () => null,
     Menu,
   };
 });

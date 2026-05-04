@@ -1,4 +1,4 @@
-import { IconButton, Menu, DotsHorizontal } from "@xorkavi/arcade-gen";
+import { IconButton, Menu, ThreeDotsHorizontal } from "@xorkavi/arcade-gen";
 import type { Project } from "../../../server/types";
 
 export function ProjectCard({
@@ -32,7 +32,7 @@ export function ProjectCard({
         <Menu.Root>
           <Menu.Trigger asChild>
             <IconButton aria-label="More" variant="secondary" size="sm">
-              <DotsHorizontal />
+              <ThreeDotsHorizontal />
             </IconButton>
           </Menu.Trigger>
           <Menu.Content align="end">
