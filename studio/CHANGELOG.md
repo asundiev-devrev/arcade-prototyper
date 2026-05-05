@@ -6,7 +6,7 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.8.0] — 2026-05-05
 
 ### Added
 - **Lift Manifest.** Every frame now gets a `LIFT.md` and `LIFT.json`
@@ -21,7 +21,9 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   a manifest from a shared URL without installing Studio. The mapping
   table lives under `studio/src/lift/mappings/` and is enforced by a
   coverage test that fails loudly when a prototype-kit composite or
-  arcade-gen primitive drifts without a mapping entry.
+  arcade-gen primitive drifts without a mapping entry. On Studio start,
+  manifests are also backfilled for every pre-existing frame so the new
+  button works out of the box.
 
 ## [0.7.0] — 2026-05-04
 
