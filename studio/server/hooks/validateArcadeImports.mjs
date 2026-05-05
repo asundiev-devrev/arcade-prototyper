@@ -244,6 +244,234 @@ function isInScope(filePath) {
   return true;
 }
 
+/**
+ * Strip line comments and block comments. Strings and template literals
+ * are left intact — downstream callers that need strings removed should
+ * use `stripCommentsAndStrings` on top.
+ */
+export function stripComments(source) {
+  if (typeof source !== "string") return "";
+  let out = "";
+  let i = 0;
+  const n = source.length;
+  while (i < n) {
+    const c = source[i];
+    const c2 = source[i + 1];
+    if (c === "/" && c2 === "/") {
+      while (i < n && source[i] !== "\n") i++;
+      continue;
+    }
+    if (c === "/" && c2 === "*") {
+      i += 2;
+      while (i < n && !(source[i] === "*" && source[i + 1] === "/")) i++;
+      i += 2;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === "`") {
+      // Copy the string verbatim so downstream regexes can still match
+      // `from "module-path"` in import statements.
+      const quote = c;
+      out += c;
+      i++;
+      while (i < n) {
+        if (source[i] === "\\") { out += source[i] + (source[i + 1] ?? ""); i += 2; continue; }
+        out += source[i];
+        if (source[i] === quote) { i++; break; }
+        i++;
+      }
+      continue;
+    }
+    out += c;
+    i++;
+  }
+  return out;
+}
+
+/**
+ * Strip line comments, block comments, and string/template literals. The
+ * goal is to stop `// <Foo>` and `"<Foo>"` from being read as JSX.
+ */
+export function stripCommentsAndStrings(source) {
+  if (typeof source !== "string") return "";
+  let out = "";
+  let i = 0;
+  const n = source.length;
+  while (i < n) {
+    const c = source[i];
+    const c2 = source[i + 1];
+    if (c === "/" && c2 === "/") {
+      while (i < n && source[i] !== "\n") i++;
+      continue;
+    }
+    if (c === "/" && c2 === "*") {
+      i += 2;
+      while (i < n && !(source[i] === "*" && source[i + 1] === "/")) i++;
+      i += 2;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === "`") {
+      const quote = c;
+      out += c;
+      i++;
+      while (i < n) {
+        if (source[i] === "\\") { i += 2; continue; }
+        if (source[i] === quote) { out += quote; i++; break; }
+        // Inside template literals, allow ${...} to keep expressions visible.
+        if (quote === "`" && source[i] === "$" && source[i + 1] === "{") {
+          out += "${";
+          i += 2;
+          let depth = 1;
+          while (i < n && depth > 0) {
+            if (source[i] === "{") depth++;
+            else if (source[i] === "}") depth--;
+            if (depth === 0) break;
+            out += source[i];
+            i++;
+          }
+          out += "}";
+          i++;
+          continue;
+        }
+        i++;
+      }
+      continue;
+    }
+    out += c;
+    i++;
+  }
+  return out;
+}
+
+/**
+ * Extract capitalized JSX opening-element names from source text. For
+ * member expressions like `<Foo.Bar />`, records the root name `Foo` —
+ * that's the binding that must be defined in scope.
+ *
+ * The heuristic distinguishes JSX from TS generics:
+ *   - A JSX opener's `<` is preceded by whitespace, `(`, `{`, `,`, `>`,
+ *     `;`, `=`, `?`, `:`, `&`, `|`, or start-of-file — never by an
+ *     identifier or `.`. `useState<Foo>()` is excluded because `<` is
+ *     preceded by `useState`.
+ *   - The character after the name is `\s`, `/`, `>`, or `.` (member
+ *     access). `<Foo, Bar>` (generic list) is excluded.
+ *
+ * Call only on .tsx content. In .ts files, `<Foo>y` is a type cast and
+ * would produce false positives.
+ */
+export function extractJsxComponentNames(source) {
+  const stripped = stripCommentsAndStrings(source);
+  const re = /(^|[^A-Za-z0-9_$.])<([A-Z][A-Za-z0-9_$]*)(?=\.|[\s/>])/g;
+  const out = new Set();
+  let m;
+  while ((m = re.exec(stripped)) !== null) out.add(m[2]);
+  return [...out];
+}
+
+/**
+ * Collect every identifier that's defined as a *value* in this file. Used
+ * to decide whether a JSX component name resolves to anything. Includes:
+ *   - named/default/namespace imports (from any source, not just tracked)
+ *   - top-level `function`, `class`, `const`, `let`, `var` declarations
+ *
+ * Deliberately conservative: destructured names, nested functions, and
+ * re-exports are ignored. Missing a real definition only produces a
+ * false-positive block, which the agent can resolve by moving the
+ * declaration to module scope — same shape as the Did-you-mean block.
+ */
+export function collectDefinedIdentifiers(source) {
+  // Strip comments but keep string contents — import sources live in strings,
+  // and the regexes below look for `from "..."` to anchor import matches.
+  const stripped = stripComments(source);
+  const defined = new Set();
+
+  // import { Foo, Bar as Baz } from "..."
+  const namedImport = /import\s+(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([^}]+)\}\s+from\s+["'][^"']+["']/g;
+  let m;
+  while ((m = namedImport.exec(stripped)) !== null) {
+    for (const tok of m[1].split(",")) {
+      const t = tok.trim();
+      if (!t || /^type\s+/.test(t)) continue;
+      const asMatch = t.match(/^([A-Za-z_$][\w$]*)\s+as\s+([A-Za-z_$][\w$]*)$/);
+      if (asMatch) defined.add(asMatch[2]);
+      else if (/^[A-Za-z_$][\w$]*$/.test(t)) defined.add(t);
+    }
+  }
+
+  // import Foo from "..."   and   import Foo, { ... } from "..."
+  const defaultImport = /import\s+([A-Za-z_$][\w$]*)(?:\s*,\s*\{[^}]*\})?\s+from\s+["'][^"']+["']/g;
+  while ((m = defaultImport.exec(stripped)) !== null) defined.add(m[1]);
+
+  // import * as Foo from "..."
+  const namespaceImport = /import\s+\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s+["'][^"']+["']/g;
+  while ((m = namespaceImport.exec(stripped)) !== null) defined.add(m[1]);
+
+  // function Foo(...) / export function Foo(...) / async function Foo(...)
+  const fnDecl = /(?:^|\n)\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/g;
+  while ((m = fnDecl.exec(stripped)) !== null) defined.add(m[1]);
+
+  // class Foo / export class Foo
+  const classDecl = /(?:^|\n)\s*(?:export\s+)?(?:default\s+)?class\s+([A-Za-z_$][\w$]*)/g;
+  while ((m = classDecl.exec(stripped)) !== null) defined.add(m[1]);
+
+  // const Foo = / let Foo = / var Foo =    (single-binding top-level-ish form)
+  const varDecl = /(?:^|\n)\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*[:=]/g;
+  while ((m = varDecl.exec(stripped)) !== null) defined.add(m[1]);
+
+  return defined;
+}
+
+/**
+ * Given the full source of a .tsx file and the merged barrel of known
+ * valid component names (arcade/components ∪ arcade-prototypes), return
+ * one violation per undefined JSX component reference, with Did-you-mean
+ * suggestions sourced from the merged barrel.
+ *
+ * Fails open when the merged barrel is empty — mirrors `validateImports`
+ * so a misconfigured env doesn't block every write.
+ */
+export function validateJsxReferences(source, mergedBarrel) {
+  if (!mergedBarrel || mergedBarrel.size === 0) return [];
+  const defined = collectDefinedIdentifiers(source);
+  const names = extractJsxComponentNames(source);
+  const violations = [];
+  for (const name of names) {
+    if (defined.has(name)) continue;
+    violations.push({
+      name,
+      suggestions: topSuggestions(name, mergedBarrel),
+    });
+  }
+  return violations;
+}
+
+/**
+ * Format JSX-reference violations as a stderr block. Shape mirrors
+ * `formatErrorMessage` so the agent sees a consistent "Blocked: …" shell
+ * regardless of which check failed.
+ */
+export function formatJsxErrorMessage(violations, barrelPaths) {
+  if (violations.length === 0) return "";
+  const lines = [];
+  lines.push("JSX references that aren't imported or declared:");
+  for (const v of violations) {
+    if (v.suggestions.length > 0) {
+      lines.push(`  - \`<${v.name}>\` — did you mean ${v.suggestions.map((s) => `\`${s}\``).join(", ")}? (and add the import)`);
+    } else {
+      const paths = Object.values(barrelPaths ?? {}).filter(Boolean);
+      lines.push(`  - \`<${v.name}>\` — no near-matches in the kit.`);
+      if (paths.length) {
+        lines.push(`      Read one of:`);
+        for (const p of paths) lines.push(`        ${p}`);
+      }
+    }
+  }
+  lines.push("");
+  lines.push("Every capitalized JSX tag must resolve to an import or a local");
+  lines.push("declaration in the same file. Inventing composite names is the");
+  lines.push("top cause of runtime-only frame crashes.");
+  return lines.join("\n");
+}
+
 function extractContent(toolName, toolInput) {
   if (!toolInput || typeof toolInput !== "object") return "";
   if (toolName === "Write") return typeof toolInput.content === "string" ? toolInput.content : "";
@@ -273,14 +501,32 @@ async function main() {
   const content = extractContent(toolName, toolInput);
   if (!content) process.exit(0);
 
-  const imports = parseImports(content);
-  if (imports.length === 0) process.exit(0);
-
   const { barrels, barrelPaths } = loadAllBarrels();
-  const violations = validateImports(imports, barrels);
-  if (violations.length === 0) process.exit(0);
 
-  process.stderr.write(formatErrorMessage(violations, barrels, barrelPaths));
+  const imports = parseImports(content);
+  const importViolations = imports.length ? validateImports(imports, barrels) : [];
+
+  // JSX-reference check only for .tsx — .ts files use `<Foo>x` as type casts.
+  let jsxViolations = [];
+  if (filePath.endsWith(".tsx")) {
+    const merged = new Set();
+    for (const s of Object.values(barrels)) for (const n of s) merged.add(n);
+    jsxViolations = validateJsxReferences(content, merged);
+  }
+
+  if (importViolations.length === 0 && jsxViolations.length === 0) process.exit(0);
+
+  const chunks = [];
+  if (importViolations.length) {
+    chunks.push(formatErrorMessage(importViolations, barrels, barrelPaths));
+  }
+  if (jsxViolations.length) {
+    if (chunks.length === 0) {
+      chunks.push("Blocked: some JSX tags don't resolve to an import or a local declaration.\n");
+    }
+    chunks.push(formatJsxErrorMessage(jsxViolations, barrelPaths));
+  }
+  process.stderr.write(chunks.join("\n"));
   process.exit(2);
 }
 

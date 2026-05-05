@@ -346,3 +346,206 @@ describe("validateArcadeImports hook (integration)", () => {
     expect(proc.status).toBe(0);
   });
 });
+
+// @ts-expect-error — .mjs import of a pure-JS module with no types
+import {
+  stripCommentsAndStrings,
+  extractJsxComponentNames,
+  collectDefinedIdentifiers,
+  validateJsxReferences,
+} from "../../../server/hooks/validateArcadeImports.mjs";
+
+describe("stripCommentsAndStrings", () => {
+  it("removes line comments", () => {
+    expect(stripCommentsAndStrings("a // <Foo />\nb")).not.toContain("<Foo");
+  });
+  it("removes block comments", () => {
+    expect(stripCommentsAndStrings("/* <Foo /> */ x")).not.toContain("<Foo");
+  });
+  it("preserves code outside strings", () => {
+    const src = `const x = "<Foo />"; <Bar/>`;
+    expect(stripCommentsAndStrings(src)).toContain("<Bar/>");
+  });
+  it("removes JSX-looking content inside a string literal", () => {
+    const src = `const label = "<FakeComposite />";`;
+    expect(extractJsxComponentNames(stripCommentsAndStrings(src))).toEqual([]);
+  });
+  it("keeps template-literal ${expr} substitutions visible", () => {
+    const src = "const s = `hello ${<Inner />}`;";
+    const out = stripCommentsAndStrings(src);
+    expect(out).toContain("<Inner />");
+  });
+});
+
+describe("extractJsxComponentNames", () => {
+  it("finds a bare JSX opener", () => {
+    expect(extractJsxComponentNames("return <Foo />;")).toEqual(["Foo"]);
+  });
+  it("finds multiple, deduped", () => {
+    const src = `<A><B /><A /></A>`;
+    expect(extractJsxComponentNames(src).sort()).toEqual(["A", "B"]);
+  });
+  it("records the root of a member expression", () => {
+    expect(extractJsxComponentNames("<Menu.Item />")).toEqual(["Menu"]);
+  });
+  it("ignores lowercase tags (host elements)", () => {
+    expect(extractJsxComponentNames("<div><span/></div>")).toEqual([]);
+  });
+  it("does not confuse TS generics for JSX (e.g. useState<Foo>())", () => {
+    const src = `const x = useState<MyType>();`;
+    expect(extractJsxComponentNames(src)).toEqual([]);
+  });
+  it("does not confuse a type alias like Record<X> for JSX", () => {
+    const src = `type Y = Record<Key, Value>;`;
+    expect(extractJsxComponentNames(src)).toEqual([]);
+  });
+  it("captures opener preceded by '('", () => {
+    expect(extractJsxComponentNames("render(<Foo />)")).toEqual(["Foo"]);
+  });
+});
+
+describe("collectDefinedIdentifiers", () => {
+  it("includes named imports", () => {
+    const defined = collectDefinedIdentifiers(`import { Foo, Bar as Baz } from "x";`);
+    expect(defined.has("Foo")).toBe(true);
+    expect(defined.has("Baz")).toBe(true);
+    expect(defined.has("Bar")).toBe(false);
+  });
+  it("includes default and namespace imports", () => {
+    const defined = collectDefinedIdentifiers(
+      `import React from "react";\nimport * as Icons from "icons";`,
+    );
+    expect(defined.has("React")).toBe(true);
+    expect(defined.has("Icons")).toBe(true);
+  });
+  it("includes function, class, and const declarations", () => {
+    const defined = collectDefinedIdentifiers(
+      `function MyFn() {}\nexport class MyClass {}\nconst MyConst = 1;`,
+    );
+    expect(defined.has("MyFn")).toBe(true);
+    expect(defined.has("MyClass")).toBe(true);
+    expect(defined.has("MyConst")).toBe(true);
+  });
+});
+
+describe("validateJsxReferences", () => {
+  const barrel = new Set([
+    "AppShell", "NavSidebar", "Button", "IconButton", "VistaPage",
+  ]);
+
+  it("returns [] when every JSX name resolves", () => {
+    const src = `
+      import { AppShell, NavSidebar } from "arcade-prototypes";
+      function Local() { return <div />; }
+      export default () => (
+        <AppShell sidebar={<NavSidebar />}>
+          <Local />
+        </AppShell>
+      );
+    `;
+    expect(validateJsxReferences(src, barrel)).toEqual([]);
+  });
+
+  it("flags an undeclared JSX reference with a Did-you-mean", () => {
+    // Mirrors the beta-tester crash: WindowWithGrid is used as JSX but
+    // nothing is imported for it and nothing is declared in the file.
+    const src = `
+      import { AppShell } from "arcade-prototypes";
+      export default () => (
+        <AppShell>
+          <WindowWithGrid />
+        </AppShell>
+      );
+    `;
+    const violations = validateJsxReferences(src, new Set([...barrel, "AppShell"]));
+    expect(violations).toHaveLength(1);
+    expect(violations[0].name).toBe("WindowWithGrid");
+  });
+
+  it("does not flag locally declared components", () => {
+    const src = `
+      function LocalThing() { return <div />; }
+      export default () => <LocalThing />;
+    `;
+    expect(validateJsxReferences(src, barrel)).toEqual([]);
+  });
+
+  it("does not flag member-expression JSX whose root is imported", () => {
+    const src = `
+      import { AppShell } from "arcade-prototypes";
+      export default () => <AppShell.Header />;
+    `;
+    expect(validateJsxReferences(src, new Set([...barrel]))).toEqual([]);
+  });
+
+  it("fails open when the merged barrel is empty", () => {
+    const src = `export default () => <UndefinedThing />;`;
+    expect(validateJsxReferences(src, new Set())).toEqual([]);
+  });
+
+  it("does not mistake a string literal for JSX", () => {
+    const src = `
+      const label = "<Ghost />";
+      export default () => <div>{label}</div>;
+    `;
+    expect(validateJsxReferences(src, barrel)).toEqual([]);
+  });
+});
+
+describe("validateArcadeImports hook — JSX reference integration", () => {
+  it("blocks a frame that uses <WindowWithGrid /> without importing it", () => {
+    // The exact shape from the beta-tester crash: import looks valid, but
+    // the generator dropped an invented composite name into the JSX.
+    const proc = runHook({
+      tool_name: "Write",
+      tool_input: {
+        file_path: "/tmp/frame.tsx",
+        content: [
+          `import { AppShell, NavSidebar } from "arcade-prototypes";`,
+          `export default function MyWorkPage() {`,
+          `  return (`,
+          `    <AppShell sidebar={<NavSidebar />}>`,
+          `      <WindowWithGrid />`,
+          `    </AppShell>`,
+          `  );`,
+          `}`,
+        ].join("\n"),
+      },
+    });
+    expect(proc.status).toBe(2);
+    expect(proc.stderr).toMatch(/WindowWithGrid/);
+    expect(proc.stderr).toMatch(/JSX/i);
+  });
+
+  it("allows a frame whose JSX names all resolve to imports", () => {
+    const proc = runHook({
+      tool_name: "Write",
+      tool_input: {
+        file_path: "/tmp/frame.tsx",
+        content: [
+          `import { AppShell, NavSidebar } from "arcade-prototypes";`,
+          `import { Button } from "arcade/components";`,
+          `export default function Page() {`,
+          `  return (`,
+          `    <AppShell sidebar={<NavSidebar />}>`,
+          `      <Button>click</Button>`,
+          `    </AppShell>`,
+          `  );`,
+          `}`,
+        ].join("\n"),
+      },
+    });
+    expect(proc.status).toBe(0);
+  });
+
+  it("does not run the JSX check on .ts files (type casts look like JSX)", () => {
+    const proc = runHook({
+      tool_name: "Write",
+      tool_input: {
+        file_path: "/tmp/helper.ts",
+        content: `export const asNode = (x: unknown) => x as { foo: string };`,
+      },
+    });
+    expect(proc.status).toBe(0);
+  });
+});
