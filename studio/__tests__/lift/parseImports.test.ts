@@ -40,4 +40,14 @@ describe("parseImports", () => {
     const src = `import React from "react"; export default () => null;`;
     expect(parseImports(src)).toEqual([]);
   });
+
+  it("handles multiline import clauses (Prettier-style)", () => {
+    // Any import with 3+ names gets wrapped by Prettier, and the generator
+    // emits formatter-shaped code. The regex uses [^}] which matches newlines
+    // — this test pins that contract so a future swap to `.` breaks loudly.
+    const src = `import {\n  Button,\n  Input,\n  Modal,\n} from "arcade";`;
+    expect(parseImports(src)).toEqual([
+      { source: "arcade", names: ["Button", "Input", "Modal"] },
+    ]);
+  });
 });
