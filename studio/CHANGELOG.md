@@ -6,6 +6,19 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.2] — 2026-05-05
+
+### Fixed
+- **Copy Lift Manifest now returns the manifest, not `project.json`.**
+  The projects middleware had a greedy catch-all that matched any URL of
+  the form `/api/projects/<slug>/...`, extracted the slug, and returned
+  project metadata — clobbering the Lift Manifest route (and every other
+  `/api/projects/<slug>/<subresource>` endpoint). It now handles only the
+  exact root and slug-only routes and falls through to the next
+  middleware for anything deeper, so `liftMiddleware`, `thumbnailsMiddleware`,
+  and friends actually run. Two regression tests pin both the fall-through
+  and the kept happy path.
+
 ## [0.8.1] — 2026-05-05
 
 ### Fixed

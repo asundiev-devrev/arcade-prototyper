@@ -116,33 +116,45 @@ export function projectsMiddleware() {
         return send(res, 200, next);
       }
 
-      const parts = url.replace(/\?.*$/, "").split("/").filter(Boolean); // ["api","projects",slug?]
-      const slug = parts[2];
+      // Root and slug-only routes. The earlier branches handle every
+      // specific subresource (history, tree, file, reveal, frames, etc.);
+      // anything that's `/api/projects/<slug>/<something-else>` must fall
+      // through to the next middleware — otherwise this block swallows
+      // sibling routes like /api/projects/:slug/lift/:frame.md and returns
+      // project.json to callers that asked for a different thing.
+      const parts = url.replace(/\?.*$/, "").split("/").filter(Boolean);
+      const [api, projects, slug, rest] = parts;
+      if (api === "api" && projects === "projects" && !rest) {
+        if (req.method === "GET" && !slug) {
+          const ps = await listProjects();
+          await Promise.all(ps.map((p) => reconcileSafely(p.slug)));
+          return send(res, 200, await listProjects());
+        }
+        if (req.method === "GET" && slug)  {
+          await reconcileSafely(slug);
+          const p = await getProject(slug);
+          return send(res, p ? 200 : 404, p ?? { error: { code: "not_found", message: "Project not found" } });
+        }
+        if (req.method === "POST" && !slug) {
+          const body = await readJson(req);
+          return send(res, 201, await createProject(body));
+        }
+        if (req.method === "PATCH" && slug) {
+          const body = await readJson(req);
+          if (typeof body.name === "string") return send(res, 200, await renameProject(slug, body.name));
+          return send(res, 200, await updateProject(slug, body));
+        }
+        if (req.method === "DELETE" && slug) {
+          await deleteProject(slug);
+          return send(res, 204);
+        }
+        return send(res, 405, { error: { code: "method_not_allowed", message: "Method not allowed" } });
+      }
 
-      if (req.method === "GET" && !slug) {
-        const ps = await listProjects();
-        await Promise.all(ps.map((p) => reconcileSafely(p.slug)));
-        return send(res, 200, await listProjects());
-      }
-      if (req.method === "GET" && slug)  {
-        await reconcileSafely(slug);
-        const p = await getProject(slug);
-        return send(res, p ? 200 : 404, p ?? { error: { code: "not_found", message: "Project not found" } });
-      }
-      if (req.method === "POST" && !slug) {
-        const body = await readJson(req);
-        return send(res, 201, await createProject(body));
-      }
-      if (req.method === "PATCH" && slug) {
-        const body = await readJson(req);
-        if (typeof body.name === "string") return send(res, 200, await renameProject(slug, body.name));
-        return send(res, 200, await updateProject(slug, body));
-      }
-      if (req.method === "DELETE" && slug) {
-        await deleteProject(slug);
-        return send(res, 204);
-      }
-      send(res, 405, { error: { code: "method_not_allowed", message: "Method not allowed" } });
+      // Unrecognized subresource under /api/projects/... — hand off to the
+      // next middleware (liftMiddleware, thumbnailsMiddleware, share, etc.)
+      // rather than returning project.json as a fallback.
+      return next?.();
     } catch (err: any) {
       send(res, 400, { error: { code: "bad_request", message: err.message } });
     }

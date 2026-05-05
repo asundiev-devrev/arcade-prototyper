@@ -178,3 +178,51 @@ describe("/api/projects/:slug/frames/:frame", () => {
     expect(r.body.error.message).toBe("Frame not found");
   });
 });
+
+describe("/api/projects subresource routing", () => {
+  // Regression guard: a user clicked "Copy Lift Manifest" in the Share
+  // modal, which hits GET /api/projects/<slug>/lift/<frame>.md. The
+  // earlier projectsMiddleware used a greedy catch-all that matched any
+  // URL of the form /api/projects/<slug>/..., extracted the slug, and
+  // returned project.json — clobbering sibling middlewares like
+  // liftMiddleware and thumbnailsMiddleware. The clipboard then contained
+  // the project's JSON metadata instead of the manifest.
+  //
+  // The fix: projectsMiddleware only handles /api/projects and
+  // /api/projects/<slug> exactly; anything deeper falls through to the
+  // next middleware via next().
+  it("falls through on unrecognized subresources instead of returning project.json", async () => {
+    const c = await req("POST", "/api/projects", { name: "A", theme: "arcade", mode: "light" });
+    const slug = c.body.slug as string;
+
+    // Composed chain: projectsMiddleware then a sentinel downstream
+    // middleware. A correct projectsMiddleware must invoke next() for
+    // /api/projects/<slug>/lift/... so the sentinel runs.
+    const composedServer = http.createServer((reqNode, resNode) => {
+      void (projectsMiddleware() as any)(reqNode, resNode, () => {
+        resNode.writeHead(200, { "Content-Type": "application/json" });
+        resNode.end(JSON.stringify({ downstream: true }));
+      });
+    });
+    await new Promise<void>((r) => composedServer.listen(0, () => r()));
+    const composedPort = (composedServer.address() as any).port;
+
+    try {
+      const res = await fetch(
+        `http://localhost:${composedPort}/api/projects/${slug}/lift/some-frame.md`,
+      );
+      const body = await res.json();
+      expect(body).toEqual({ downstream: true });
+    } finally {
+      await new Promise<void>((r) => composedServer.close(() => r()));
+    }
+  });
+
+  it("still handles the exact /api/projects/:slug GET route", async () => {
+    const c = await req("POST", "/api/projects", { name: "A", theme: "arcade", mode: "light" });
+    const slug = c.body.slug as string;
+    const r = await req("GET", `/api/projects/${slug}`);
+    expect(r.status).toBe(200);
+    expect(r.body.slug).toBe(slug);
+  });
+});
