@@ -36,4 +36,16 @@ describe("renderMarkdown", () => {
   it("renders an ad-hoc frame", () => {
     expect(snap("adhoc-frame.tsx", "Confirmation modal.")).toMatchSnapshot();
   });
+
+  // Regression guard: Studio-only composites (ComputerHeader, ChatInput, etc.)
+  // have production.source === "n/a". They must appear in the inventory table
+  // as "_no direct equivalent_" but MUST NOT render a "### X → n/a" block in
+  // the Composite mapping details section (which would just restate the
+  // inventory row's judgment note under a misleading heading).
+  it("skips n/a composites in the details section", () => {
+    const rendered = snap("computer-frame.tsx", "Computer app chrome.");
+    expect(rendered).toContain("_no direct equivalent_");
+    expect(rendered).not.toContain("→ n/a");
+    expect(rendered).toMatchSnapshot();
+  });
 });

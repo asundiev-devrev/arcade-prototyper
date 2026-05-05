@@ -39,7 +39,15 @@ export function renderMarkdown(m: Manifest): string {
   push("");
 
   // 3. Composite mapping details
-  const compositesUsed = m.mappings.filter((e) => e.studio.source === "arcade-prototypes");
+  //
+  // Skip entries with `production.source === "n/a"` (Studio-only composites
+  // like ComputerHeader, ComputerSidebar, CanvasPanel). The inventory row
+  // above already says "_no direct equivalent_" and carries the judgment
+  // note — a details section for them would just restate the same thing
+  // under a misleading "X → n/a" heading.
+  const compositesUsed = m.mappings.filter(
+    (e) => e.studio.source === "arcade-prototypes" && e.production.source !== "n/a",
+  );
   if (compositesUsed.length > 0) {
     push("## Composite mapping details");
     for (const e of compositesUsed) {

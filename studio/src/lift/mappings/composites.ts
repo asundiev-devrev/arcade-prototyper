@@ -21,8 +21,10 @@ import type { MappingEntry } from "../types";
 const PROD_RDS = "@devrev-web/design-system/shared/raw-design-system";
 const PROD_PAGES = "@devrev-web/design-system/shared/pages";
 const PROD_SETTINGS = "@devrev-web/design-system/shared/settings";
-const PROD_LISTVIEW =
-  "@devrev-web/part-work-components/shared/ui-components/src/pages/list-view-page";
+// Verified against devrev-web: consumers import `ListViewPage` from the
+// package root, not from an internal file path. Grep shows dozens of real
+// usages: `import { ListViewPage } from '@devrev-web/shared/part-work-components';`
+const PROD_LISTVIEW = "@devrev-web/shared/part-work-components";
 
 export const COMPOSITE_MAPPINGS: MappingEntry[] = [
   // --- Layout chrome -----------------------------------------------------
