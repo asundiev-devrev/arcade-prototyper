@@ -18,6 +18,12 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   middleware for anything deeper, so `liftMiddleware`, `thumbnailsMiddleware`,
   and friends actually run. Two regression tests pin both the fall-through
   and the kept happy path.
+- **Lift Manifest primitives are no longer all `_unmapped_`.** The mapping
+  table is keyed on the `"arcade"` specifier, but the generator's prompt
+  template instructs frames to import from `"arcade/components"`. Both
+  resolve to the same `prototype-kit/arcade-components.tsx` barrel at
+  build time, so the lift parser now normalizes `"arcade/components"` to
+  `"arcade"` before the lookup.
 
 ## [0.8.1] — 2026-05-05
 

@@ -17,6 +17,20 @@ const ARCADE_SOURCES = new Set(["arcade", "arcade/components", "arcade-prototype
 // Captures the named-imports clause and the module specifier.
 const IMPORT_RE = /import\s*\{([^}]+)\}\s*from\s*["']([^"']+)["']\s*;?/g;
 
+/**
+ * Generated frames may import primitives from either `"arcade"` or
+ * `"arcade/components"` — both resolve to the same `prototype-kit/
+ * arcade-components.tsx` barrel at build time. The lift mapping table
+ * is keyed on `"arcade"`, so we collapse the two forms here. Without
+ * this normalization, a frame that imports from `"arcade/components"`
+ * (which is what the generator's prompt template instructs) ends up
+ * in the manifest's `unmapped` list even though the table knows the
+ * symbol.
+ */
+function normalizeSource(specifier: string): string {
+  return specifier === "arcade/components" ? "arcade" : specifier;
+}
+
 export function parseImports(source: string): FrameImport[] {
   const bySource = new Map<string, Set<string>>();
   let m: RegExpExecArray | null;
@@ -24,6 +38,7 @@ export function parseImports(source: string): FrameImport[] {
     const clause = m[1];
     const specifier = m[2];
     if (!ARCADE_SOURCES.has(specifier)) continue;
+    const normalized = normalizeSource(specifier);
 
     const names = clause
       .split(",")
@@ -36,9 +51,9 @@ export function parseImports(source: string): FrameImport[] {
         return asIdx === -1 ? part : part.slice(0, asIdx).trim();
       });
 
-    const set = bySource.get(specifier) ?? new Set<string>();
+    const set = bySource.get(normalized) ?? new Set<string>();
     for (const n of names) set.add(n);
-    bySource.set(specifier, set);
+    bySource.set(normalized, set);
   }
 
   return Array.from(bySource.entries()).map(([source, names]) => ({
