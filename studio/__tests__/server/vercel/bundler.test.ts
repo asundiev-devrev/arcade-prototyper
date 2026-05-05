@@ -77,6 +77,32 @@ describe("buildFrameBundle", () => {
     },
   );
 
+  it("includes LIFT.md and LIFT.json in the bundle output when present", async () => {
+    const studioRootTmp = fs.mkdtempSync(path.join(os.tmpdir(), "arcade-bundler-lift-"));
+    const frameDir = path.join(studioRootTmp, "frame");
+    fs.mkdirSync(frameDir, { recursive: true });
+    fs.writeFileSync(path.join(frameDir, "index.tsx"), "export default () => null;\n");
+    fs.writeFileSync(path.join(frameDir, "LIFT.md"), "# Manifest");
+    fs.writeFileSync(path.join(frameDir, "LIFT.json"), '{"schemaVersion":1}');
+    process.env.ARCADE_STUDIO_ROOT = studioRootTmp;
+
+    try {
+      const { buildFrameBundle } = await import("../../../server/vercel/bundler");
+      const result = await buildFrameBundle({
+        projectSlug: "p",
+        frameSlug: "f",
+        framePath: frameDir,
+        theme: "arcade",
+        mode: "light",
+      });
+      expect(result.liftMd).toBe("# Manifest");
+      expect(JSON.parse(result.liftJson!).schemaVersion).toBe(1);
+    } finally {
+      delete process.env.ARCADE_STUDIO_ROOT;
+      fs.rmSync(studioRootTmp, { recursive: true, force: true });
+    }
+  });
+
   it(
     "entrypoint imports arcade-gen-patches.css from the studio source tree, NOT the user-data dir",
     async () => {

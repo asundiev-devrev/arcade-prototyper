@@ -101,13 +101,17 @@ export function vercelMiddleware() {
         // setting `encoding: "base64"` makes Vercel store the literal
         // base64 string as the file contents — which served `PCFET0NU...`
         // as our homepage. Text files go through as plain strings.
+        const files: Array<{ file: string; data: string }> = [
+          { file: "index.html", data: bundle.html },
+          { file: "assets/bundle.js", data: bundle.js },
+          { file: "assets/bundle.css", data: bundle.css },
+        ];
+        if (bundle.liftMd) files.push({ file: `lift/${frameSlug}.md`, data: bundle.liftMd });
+        if (bundle.liftJson) files.push({ file: `lift/${frameSlug}.json`, data: bundle.liftJson });
+
         const deployment = await deployToVercel({
           name: projectName,
-          files: [
-            { file: "index.html", data: bundle.html },
-            { file: "assets/bundle.js", data: bundle.js },
-            { file: "assets/bundle.css", data: bundle.css },
-          ],
+          files,
           token: vercelToken,
           teamId: settings.vercel?.teamId,
         });

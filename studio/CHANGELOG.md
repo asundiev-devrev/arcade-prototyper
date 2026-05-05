@@ -6,6 +6,23 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- **Lift Manifest.** Every frame now gets a `LIFT.md` and `LIFT.json`
+  written next to `index.tsx`, plus a "Copy Lift Manifest" button in the
+  Share modal. The manifest maps every arcade-gen import in a frame to
+  its production `raw-design-system` equivalent (with prop deltas and
+  structural notes), detects the frame's shape (list-view, settings-form,
+  detail, ad-hoc) to surface a production-scaffolding checklist, and
+  flags any imports with no mapping entry. Served locally at
+  `/api/projects/<slug>/lift/<frame>.(md|json)` and bundled into Vercel
+  share deployments at `/lift/<frame>.(md|json)` so an engineer can grab
+  a manifest from a shared URL without installing Studio. The mapping
+  table lives under `studio/src/lift/mappings/` and is enforced by a
+  coverage test that fails loudly when a prototype-kit composite or
+  arcade-gen primitive drifts without a mapping entry.
+
 ## [0.7.0] — 2026-05-04
 
 ### Added

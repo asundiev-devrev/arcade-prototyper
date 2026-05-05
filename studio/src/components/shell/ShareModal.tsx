@@ -15,6 +15,21 @@ export function ShareModal({ open, onClose, projectSlug, frames }: ShareModalPro
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [manifestCopied, setManifestCopied] = useState(false);
+
+  async function handleCopyManifest() {
+    if (!selectedFrame) return;
+    try {
+      const res = await fetch(`/api/projects/${projectSlug}/lift/${selectedFrame}.md`);
+      if (!res.ok) throw new Error(`Manifest fetch failed: ${res.status}`);
+      const text = await res.text();
+      await navigator.clipboard.writeText(text);
+      setManifestCopied(true);
+      setTimeout(() => setManifestCopied(false), 2000);
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }
 
   async function handleDeploy() {
     if (!selectedFrame) return;
@@ -51,6 +66,7 @@ export function ShareModal({ open, onClose, projectSlug, frames }: ShareModalPro
     setShareUrl(null);
     setError(null);
     setCopied(false);
+    setManifestCopied(false);
     onClose();
   }
 
@@ -181,6 +197,13 @@ export function ShareModal({ open, onClose, projectSlug, frames }: ShareModalPro
             <>
               <Button variant="secondary" onClick={handleClose}>
                 Cancel
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={handleCopyManifest}
+                disabled={!selectedFrame || loading || frames.length === 0}
+              >
+                {manifestCopied ? "Copied!" : "Copy Lift Manifest"}
               </Button>
               <Button
                 variant="primary"
