@@ -14,6 +14,7 @@ import { fontsMiddleware } from "./server/middleware/fonts";
 import { devrevMiddleware } from "./server/middleware/devrev";
 import { settingsMiddleware } from "./server/middleware/settings";
 import { thumbnailsMiddleware } from "./server/middleware/thumbnails";
+import { liftMiddleware } from "./server/middleware/lift";
 import { vercelMiddleware } from "./server/middleware/vercel";
 import { runtimeErrorMiddleware } from "./server/middleware/runtimeError";
 import { versionMiddleware, logVersionOnBoot } from "./server/middleware/version";
@@ -42,6 +43,7 @@ function apiPlugin(): import("vite").Plugin {
       server.middlewares.use(uploadsMiddleware());
       server.middlewares.use(stagingUploadsMiddleware());
       server.middlewares.use(thumbnailsMiddleware());
+      server.middlewares.use(liftMiddleware());
       server.middlewares.use(preflightMiddleware());
       server.middlewares.use(fontsMiddleware());
       server.middlewares.use(runtimeErrorMiddleware());
