@@ -1,0 +1,231 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`renderXml > marks n/a composites with equivalent="none" 1`] = `
+"<lift_manifest schema_version="1" project="demo" frame="computer-frame" shape="ad-hoc">
+  <generated_by>Arcade Studio</generated_by>
+  <frame_path>/abs/computer-frame.tsx</frame_path>
+  <intent>Computer app chrome.</intent>
+  <frame_inventory>
+    <mapping class="judgment" studio_source="arcade-prototypes" studio_name="ChatInput" equivalent="none">
+      <judgment_note>Studio provides a chat-input composite. In devrev-web chat inputs live inside specific features (Support, Timeline) and are bespoke. Map against the host feature's input component.</judgment_note>
+    </mapping>
+    <mapping class="judgment" studio_source="arcade-prototypes" studio_name="ComputerHeader" equivalent="none">
+      <judgment_note>ComputerHeader is Studio-specific UI (the 'Computer' app's own title bar). No production equivalent — drop when the frame is being lifted as a product feature, keep if lifting the whole Computer experience.</judgment_note>
+    </mapping>
+    <mapping class="judgment" studio_source="arcade-prototypes" studio_name="ComputerSidebar" equivalent="none">
+      <judgment_note>Studio-specific UI (chat sidebar for the Computer app). Treat like ComputerHeader.</judgment_note>
+    </mapping>
+    <mapping class="mechanical" studio_source="arcade" studio_name="Button" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Button">
+      <prop_delta from="size" value_map="md-&gt;M, lg-&gt;L">Studio narrows to md|lg; production accepts S|M|L. A Studio frame never uses sm.</prop_delta>
+      <prop_delta from="variant" value_map="primary-&gt;primary, secondary-&gt;secondary, tertiary-&gt;tertiary, destructive-&gt;destructive"/>
+      <slot_note>Children are identical. Leading/trailing icons move from raw children to \`start\` / \`end\` slots in production.</slot_note>
+    </mapping>
+  </frame_inventory>
+  <tokens alignment="aligned">Tokens are aligned between arcade-gen and arcade-theme. CSS custom property names carry across. No token remap is required.</tokens>
+  <scaffolding shape="ad-hoc">
+    <description>These are the things a Studio frame never covers by itself. Engineer and agent divide between them.</description>
+    <item status="required">Consider whether this fits an existing Tier-2/3 template (PageLayout, ListViewPage, SettingsPage)</item>
+    <item status="required" path="libs/&lt;domain&gt;/shared/data-layer/src/use-&lt;entity&gt;.ts">Data-layer hook (useDL&lt;Entity&gt; query)</item>
+    <item status="required" path="libs/&lt;domain&gt;/adapters/src/&lt;entity&gt;.ts">Adapter (API response → UI shape)</item>
+    <item status="required" path="libs/&lt;domain&gt;/shared/data-layer/src/keys.ts">Query keys entry</item>
+    <item status="required" path="STALE_TIMES_IN_MS.&lt;ENTITY&gt;">Stale time entry</item>
+    <item status="required" path="apps/product/dr-router.tsx + libs/micro-apps/main/src/...">Route registration</item>
+    <item status="required">Feature flag gate (useFeatureFlag)</item>
+    <item status="required">Event tracker wiring (useEventTracker + track)</item>
+  </scaffolding>
+  <grounding>
+    <figma_url>https://figma.com/file/xyz</figma_url>
+    <screenshot_url>/api/projects/demo/thumbnails/computer-frame.png</screenshot_url>
+  </grounding>
+  <agent_directives>
+    You are lifting an Arcade Studio frame into devrev-web. Apply MECHANICAL rewrites directly. For STRUCTURAL rewrites, write the new production shape and leave brief comments explaining what changed. For JUDGMENT entries, leave a // TODO: comment carrying the judgment note verbatim and ask the user before deciding. Do NOT invent production equivalents for &lt;unmapped/&gt; entries — surface them back to the user.
+  </agent_directives>
+</lift_manifest>
+"
+`;
+
+exports[`renderXml > renders a detail frame 1`] = `
+"<lift_manifest schema_version="1" project="demo" frame="detail-frame" shape="detail">
+  <generated_by>Arcade Studio</generated_by>
+  <frame_path>/abs/detail-frame.tsx</frame_path>
+  <intent>Ticket detail with tabs.</intent>
+  <frame_inventory>
+    <mapping class="structural" studio_source="arcade-prototypes" studio_name="AppShell" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Page">
+      <slot_note>AppShell wraps the whole app in a sidebar+content flex layout. In devrev-web, features compose this inline: \`&lt;div className="flex h-screen"&gt;&lt;aside&gt;{sidebar}&lt;/aside&gt;&lt;div className="flex-1"&gt;{children}&lt;/div&gt;&lt;/div&gt;\` alongside &lt;Page&gt;. There is no single-component equivalent. Unroll into inline flex + Page.</slot_note>
+    </mapping>
+    <mapping class="mechanical" studio_source="arcade-prototypes" studio_name="BreadcrumbBar" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Breadcrumbs"/>
+    <mapping class="mechanical" studio_source="arcade-prototypes" studio_name="PageBody" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Page.Content"/>
+    <mapping class="structural" studio_source="arcade-prototypes" studio_name="TitleBar" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Page.Header">
+      <slot_note>Production pages use Page.Header for the top bar; traffic-lights/window-chrome elements from Studio's TitleBar do not exist in production (they are Studio's own chrome).</slot_note>
+    </mapping>
+    <mapping class="mechanical" studio_source="arcade" studio_name="Button" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Button">
+      <prop_delta from="size" value_map="md-&gt;M, lg-&gt;L">Studio narrows to md|lg; production accepts S|M|L. A Studio frame never uses sm.</prop_delta>
+      <prop_delta from="variant" value_map="primary-&gt;primary, secondary-&gt;secondary, tertiary-&gt;tertiary, destructive-&gt;destructive"/>
+      <slot_note>Children are identical. Leading/trailing icons move from raw children to \`start\` / \`end\` slots in production.</slot_note>
+    </mapping>
+    <mapping class="mechanical" studio_source="arcade" studio_name="Tabs" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="TabList">
+      <prop_delta from="value"/>
+      <prop_delta from="onChange" to="onValueChange"/>
+      <slot_note>Production names the component TabList; subcomponent shape is similar.</slot_note>
+    </mapping>
+  </frame_inventory>
+  <tokens alignment="aligned">Tokens are aligned between arcade-gen and arcade-theme. CSS custom property names carry across. No token remap is required.</tokens>
+  <scaffolding shape="detail">
+    <description>These are the things a Studio frame never covers by itself. Engineer and agent divide between them.</description>
+    <item status="required" path="libs/&lt;domain&gt;/shared/data-layer/src/use-&lt;entity&gt;.ts">Data-layer hook (useDL&lt;Entity&gt; query)</item>
+    <item status="required" path="libs/&lt;domain&gt;/adapters/src/&lt;entity&gt;.ts">Adapter (API response → UI shape)</item>
+    <item status="required" path="libs/&lt;domain&gt;/shared/data-layer/src/keys.ts">Query keys entry</item>
+    <item status="required" path="STALE_TIMES_IN_MS.&lt;ENTITY&gt;">Stale time entry</item>
+    <item status="required" path="apps/product/dr-router.tsx + libs/micro-apps/main/src/...">Route registration</item>
+    <item status="required">Feature flag gate (useFeatureFlag)</item>
+    <item status="required">Event tracker wiring (useEventTracker + track)</item>
+  </scaffolding>
+  <grounding>
+    <figma_url>https://figma.com/file/xyz</figma_url>
+    <screenshot_url>/api/projects/demo/thumbnails/detail-frame.png</screenshot_url>
+  </grounding>
+  <agent_directives>
+    You are lifting an Arcade Studio frame into devrev-web. Apply MECHANICAL rewrites directly. For STRUCTURAL rewrites, write the new production shape and leave brief comments explaining what changed. For JUDGMENT entries, leave a // TODO: comment carrying the judgment note verbatim and ask the user before deciding. Do NOT invent production equivalents for &lt;unmapped/&gt; entries — surface them back to the user.
+  </agent_directives>
+</lift_manifest>
+"
+`;
+
+exports[`renderXml > renders a list-view frame 1`] = `
+"<lift_manifest schema_version="1" project="demo" frame="list-frame" shape="list-view">
+  <generated_by>Arcade Studio</generated_by>
+  <frame_path>/abs/list-frame.tsx</frame_path>
+  <intent>List of tickets with filters and pagination.</intent>
+  <frame_inventory>
+    <mapping class="structural" studio_source="arcade-prototypes" studio_name="VistaFilterPill" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Chip">
+      <slot_note>Production uses Chip with a close-button slot; Studio's VistaFilterPill bundles behaviour into one component.</slot_note>
+    </mapping>
+    <mapping class="structural" studio_source="arcade-prototypes" studio_name="VistaPage" production_source="@devrev-web/shared/part-work-components" production_name="ListViewPage">
+      <slot_note>VistaPage composes AppShell + VistaHeader + VistaToolbar + content. Production wraps these behaviours in ListViewPage: pass tableProps, filterProps, headerProps.</slot_note>
+      <slot_note>The \`primaryAction\`, \`count\`, \`toolbarIcons\`, \`filters\` slots from VistaPage map onto headerProps.actions, headerProps.count, toolbarProps.actions, toolbarProps.filters respectively.</slot_note>
+    </mapping>
+    <mapping class="mechanical" studio_source="arcade-prototypes" studio_name="VistaPagination" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Pagination"/>
+    <mapping class="mechanical" studio_source="arcade" studio_name="Button" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Button">
+      <prop_delta from="size" value_map="md-&gt;M, lg-&gt;L">Studio narrows to md|lg; production accepts S|M|L. A Studio frame never uses sm.</prop_delta>
+      <prop_delta from="variant" value_map="primary-&gt;primary, secondary-&gt;secondary, tertiary-&gt;tertiary, destructive-&gt;destructive"/>
+      <slot_note>Children are identical. Leading/trailing icons move from raw children to \`start\` / \`end\` slots in production.</slot_note>
+    </mapping>
+    <mapping class="structural" studio_source="arcade" studio_name="Input" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="TextInput">
+      <prop_delta from="value"/>
+      <prop_delta from="onChange"/>
+      <prop_delta from="placeholder"/>
+      <prop_delta from="disabled" to="modifiers">Production moves disabled/readOnly into a \`modifiers\` prop object: modifiers={{ disabled: true }}.</prop_delta>
+      <slot_note>Studio exposes \`start\` / \`end\` as children-like nodes. Production uses explicit \`start\` / \`end\` slot props.</slot_note>
+    </mapping>
+  </frame_inventory>
+  <tokens alignment="aligned">Tokens are aligned between arcade-gen and arcade-theme. CSS custom property names carry across. No token remap is required.</tokens>
+  <scaffolding shape="list-view">
+    <description>These are the things a Studio frame never covers by itself. Engineer and agent divide between them.</description>
+    <item status="required" path="libs/&lt;domain&gt;/shared/data-layer/src/use-&lt;entity&gt;s.ts">Data-layer hook (useDL&lt;Entity&gt;s list query)</item>
+    <item status="required" path="libs/&lt;domain&gt;/adapters/src/&lt;entity&gt;-list.ts">Adapter (API list response → UI shape)</item>
+    <item status="required" path="libs/&lt;domain&gt;/shared/data-layer/src/keys.ts">Query keys entry</item>
+    <item status="required" path="STALE_TIMES_IN_MS.&lt;ENTITY&gt;">Stale time entry</item>
+    <item status="required" path="apps/product/dr-router.tsx + libs/micro-apps/main/src/...">Route registration</item>
+    <item status="required">Feature flag gate (useFeatureFlag)</item>
+    <item status="required">Event tracker wiring (useEventTracker + track)</item>
+  </scaffolding>
+  <grounding>
+    <figma_url>https://figma.com/file/xyz</figma_url>
+    <screenshot_url>/api/projects/demo/thumbnails/list-frame.png</screenshot_url>
+  </grounding>
+  <agent_directives>
+    You are lifting an Arcade Studio frame into devrev-web. Apply MECHANICAL rewrites directly. For STRUCTURAL rewrites, write the new production shape and leave brief comments explaining what changed. For JUDGMENT entries, leave a // TODO: comment carrying the judgment note verbatim and ask the user before deciding. Do NOT invent production equivalents for &lt;unmapped/&gt; entries — surface them back to the user.
+  </agent_directives>
+</lift_manifest>
+"
+`;
+
+exports[`renderXml > renders a settings-form frame 1`] = `
+"<lift_manifest schema_version="1" project="demo" frame="settings-frame" shape="settings-form">
+  <generated_by>Arcade Studio</generated_by>
+  <frame_path>/abs/settings-frame.tsx</frame_path>
+  <intent>Profile settings form.</intent>
+  <frame_inventory>
+    <mapping class="mechanical" studio_source="arcade-prototypes" studio_name="SettingsCard" production_source="@devrev-web/design-system/shared/settings" production_name="SettingsSection">
+      <slot_note>Card heading + body → SettingsSection with \`title\` + children.</slot_note>
+    </mapping>
+    <mapping class="mechanical" studio_source="arcade-prototypes" studio_name="SettingsPage" production_source="@devrev-web/design-system/shared/settings" production_name="SettingsPage">
+      <slot_note>Production SettingsPage is the exact production template engineers use for settings routes. Near-mechanical at the page level.</slot_note>
+    </mapping>
+    <mapping class="mechanical" studio_source="arcade-prototypes" studio_name="SettingsRow" production_source="@devrev-web/design-system/shared/settings" production_name="SettingsRow"/>
+    <mapping class="mechanical" studio_source="arcade" studio_name="Button" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Button">
+      <prop_delta from="size" value_map="md-&gt;M, lg-&gt;L">Studio narrows to md|lg; production accepts S|M|L. A Studio frame never uses sm.</prop_delta>
+      <prop_delta from="variant" value_map="primary-&gt;primary, secondary-&gt;secondary, tertiary-&gt;tertiary, destructive-&gt;destructive"/>
+      <slot_note>Children are identical. Leading/trailing icons move from raw children to \`start\` / \`end\` slots in production.</slot_note>
+    </mapping>
+    <mapping class="structural" studio_source="arcade" studio_name="Input" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="TextInput">
+      <prop_delta from="value"/>
+      <prop_delta from="onChange"/>
+      <prop_delta from="placeholder"/>
+      <prop_delta from="disabled" to="modifiers">Production moves disabled/readOnly into a \`modifiers\` prop object: modifiers={{ disabled: true }}.</prop_delta>
+      <slot_note>Studio exposes \`start\` / \`end\` as children-like nodes. Production uses explicit \`start\` / \`end\` slot props.</slot_note>
+    </mapping>
+  </frame_inventory>
+  <tokens alignment="aligned">Tokens are aligned between arcade-gen and arcade-theme. CSS custom property names carry across. No token remap is required.</tokens>
+  <scaffolding shape="settings-form">
+    <description>These are the things a Studio frame never covers by itself. Engineer and agent divide between them.</description>
+    <item status="required" path="libs/&lt;domain&gt;/shared/data-layer/src/use-&lt;entity&gt;.ts">Data-layer hook (useDL&lt;Entity&gt; query)</item>
+    <item status="required" path="libs/&lt;domain&gt;/shared/data-layer/src/use-update-&lt;entity&gt;.ts">Data-layer hook (useDL&lt;Entity&gt; mutation)</item>
+    <item status="required" path="libs/&lt;domain&gt;/adapters/src/&lt;entity&gt;.ts">Adapter (API response → UI shape)</item>
+    <item status="required" path="libs/&lt;domain&gt;/shared/data-layer/src/keys.ts">Query keys entry</item>
+    <item status="required" path="STALE_TIMES_IN_MS.&lt;ENTITY&gt;">Stale time entry</item>
+    <item status="required" path="libs/&lt;domain&gt;/feature/&lt;feature&gt;/src/hooks/use-&lt;feature&gt;-form.ts">Form hook (validation + submission)</item>
+    <item status="required" path="apps/product/dr-router.tsx + libs/micro-apps/main/src/...">Route registration</item>
+    <item status="required">Feature flag gate (useFeatureFlag)</item>
+    <item status="required">Event tracker wiring (useEventTracker + track)</item>
+  </scaffolding>
+  <grounding>
+    <figma_url>https://figma.com/file/xyz</figma_url>
+    <screenshot_url>/api/projects/demo/thumbnails/settings-frame.png</screenshot_url>
+  </grounding>
+  <agent_directives>
+    You are lifting an Arcade Studio frame into devrev-web. Apply MECHANICAL rewrites directly. For STRUCTURAL rewrites, write the new production shape and leave brief comments explaining what changed. For JUDGMENT entries, leave a // TODO: comment carrying the judgment note verbatim and ask the user before deciding. Do NOT invent production equivalents for &lt;unmapped/&gt; entries — surface them back to the user.
+  </agent_directives>
+</lift_manifest>
+"
+`;
+
+exports[`renderXml > renders an ad-hoc frame 1`] = `
+"<lift_manifest schema_version="1" project="demo" frame="adhoc-frame" shape="ad-hoc">
+  <generated_by>Arcade Studio</generated_by>
+  <frame_path>/abs/adhoc-frame.tsx</frame_path>
+  <intent>Confirmation modal.</intent>
+  <frame_inventory>
+    <mapping class="mechanical" studio_source="arcade" studio_name="Button" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Button">
+      <prop_delta from="size" value_map="md-&gt;M, lg-&gt;L">Studio narrows to md|lg; production accepts S|M|L. A Studio frame never uses sm.</prop_delta>
+      <prop_delta from="variant" value_map="primary-&gt;primary, secondary-&gt;secondary, tertiary-&gt;tertiary, destructive-&gt;destructive"/>
+      <slot_note>Children are identical. Leading/trailing icons move from raw children to \`start\` / \`end\` slots in production.</slot_note>
+    </mapping>
+    <mapping class="mechanical" studio_source="arcade" studio_name="Modal" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Modal">
+      <prop_delta from="open"/>
+      <prop_delta from="onOpenChange"/>
+      <slot_note>Both use compound subcomponents. Rename Modal.Root → Modal.Root, Modal.Content → Modal.Content, etc. API shape matches closely; mechanical.</slot_note>
+    </mapping>
+  </frame_inventory>
+  <tokens alignment="aligned">Tokens are aligned between arcade-gen and arcade-theme. CSS custom property names carry across. No token remap is required.</tokens>
+  <scaffolding shape="ad-hoc">
+    <description>These are the things a Studio frame never covers by itself. Engineer and agent divide between them.</description>
+    <item status="required">Consider whether this fits an existing Tier-2/3 template (PageLayout, ListViewPage, SettingsPage)</item>
+    <item status="required" path="libs/&lt;domain&gt;/shared/data-layer/src/use-&lt;entity&gt;.ts">Data-layer hook (useDL&lt;Entity&gt; query)</item>
+    <item status="required" path="libs/&lt;domain&gt;/adapters/src/&lt;entity&gt;.ts">Adapter (API response → UI shape)</item>
+    <item status="required" path="libs/&lt;domain&gt;/shared/data-layer/src/keys.ts">Query keys entry</item>
+    <item status="required" path="STALE_TIMES_IN_MS.&lt;ENTITY&gt;">Stale time entry</item>
+    <item status="required" path="apps/product/dr-router.tsx + libs/micro-apps/main/src/...">Route registration</item>
+    <item status="required">Feature flag gate (useFeatureFlag)</item>
+    <item status="required">Event tracker wiring (useEventTracker + track)</item>
+  </scaffolding>
+  <grounding>
+    <figma_url>https://figma.com/file/xyz</figma_url>
+    <screenshot_url>/api/projects/demo/thumbnails/adhoc-frame.png</screenshot_url>
+  </grounding>
+  <agent_directives>
+    You are lifting an Arcade Studio frame into devrev-web. Apply MECHANICAL rewrites directly. For STRUCTURAL rewrites, write the new production shape and leave brief comments explaining what changed. For JUDGMENT entries, leave a // TODO: comment carrying the judgment note verbatim and ask the user before deciding. Do NOT invent production equivalents for &lt;unmapped/&gt; entries — surface them back to the user.
+  </agent_directives>
+</lift_manifest>
+"
+`;

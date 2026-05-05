@@ -77,12 +77,15 @@ describe("buildFrameBundle", () => {
     },
   );
 
-  it("includes LIFT.md and LIFT.json in the bundle output when present", async () => {
+  it("includes LIFT.xml and LIFT.json in the bundle output when present", async () => {
     const studioRootTmp = fs.mkdtempSync(path.join(os.tmpdir(), "arcade-bundler-lift-"));
     const frameDir = path.join(studioRootTmp, "frame");
     fs.mkdirSync(frameDir, { recursive: true });
     fs.writeFileSync(path.join(frameDir, "index.tsx"), "export default () => null;\n");
-    fs.writeFileSync(path.join(frameDir, "LIFT.md"), "# Manifest");
+    fs.writeFileSync(
+      path.join(frameDir, "LIFT.xml"),
+      `<lift_manifest schema_version="1" project="p" frame="f" shape="ad-hoc"></lift_manifest>`,
+    );
     fs.writeFileSync(path.join(frameDir, "LIFT.json"), '{"schemaVersion":1}');
     process.env.ARCADE_STUDIO_ROOT = studioRootTmp;
 
@@ -95,7 +98,8 @@ describe("buildFrameBundle", () => {
         theme: "arcade",
         mode: "light",
       });
-      expect(result.liftMd).toBe("# Manifest");
+      expect(result.liftXml).toContain(`<lift_manifest`);
+      expect(result.liftXml).toContain(`project="p"`);
       expect(JSON.parse(result.liftJson!).schemaVersion).toBe(1);
     } finally {
       delete process.env.ARCADE_STUDIO_ROOT;

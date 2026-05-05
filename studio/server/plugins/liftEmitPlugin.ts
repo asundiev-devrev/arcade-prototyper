@@ -1,7 +1,7 @@
 // studio/server/plugins/liftEmitPlugin.ts
 //
 // Watches each project's frames directory. Whenever a frame's index.tsx
-// changes, regenerate LIFT.md and LIFT.json next to it.
+// changes, regenerate LIFT.xml and LIFT.json next to it.
 //
 // We piggyback on chokidar directly (same pattern as projectWatchPlugin).
 // The actual regeneration is an exported async function so tests can
@@ -13,7 +13,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { frameDir, projectsRoot, chatHistoryPath } from "../paths";
 import { buildManifest } from "../../src/lift/buildManifest";
-import { renderJson, renderMarkdown } from "../../src/lift/render";
+import { renderJson, renderXml } from "../../src/lift/render";
 import type { ChatMessage } from "../types";
 
 async function readFirstUserPrompt(slug: string): Promise<string> {
@@ -52,8 +52,19 @@ export async function emitLiftForFrame(slug: string, frame: string): Promise<voi
   });
 
   const dir = path.dirname(fPath);
-  await fs.writeFile(path.join(dir, "LIFT.md"), renderMarkdown(manifest));
+  await fs.writeFile(path.join(dir, "LIFT.xml"), renderXml(manifest));
   await fs.writeFile(path.join(dir, "LIFT.json"), renderJson(manifest));
+
+  // Remove any lingering LIFT.md from an older Studio install. As of 0.9.0
+  // the markdown form was dropped in favor of XML; leaving stale .md files
+  // on disk would mislead anyone who grepped the project directory.
+  try {
+    await fs.unlink(path.join(dir, "LIFT.md"));
+  } catch (err: any) {
+    if (err?.code !== "ENOENT") {
+      console.warn(`[liftEmitPlugin] failed to clean stale LIFT.md for ${slug}/${frame}:`, err);
+    }
+  }
 }
 
 function parseFrameTouched(filePath: string): { slug: string; frame: string } | null {
@@ -70,9 +81,11 @@ function parseFrameTouched(filePath: string): { slug: string; frame: string } | 
  * Walk existing frames on boot and emit a manifest for each.
  *
  * Without this pass, frames that already exist when Studio starts never get
- * a LIFT.md until their index.tsx is touched — so the UI's "Copy Lift
+ * a LIFT.xml until their index.tsx is touched — so the UI's "Copy Lift
  * Manifest" button 404s for anything not edited this session. The watcher
  * below still handles post-boot changes; this just closes the cold-start gap.
+ * As a side effect this also removes any stale LIFT.md files left behind by
+ * an older Studio install (see emitLiftForFrame).
  */
 async function emitForExistingFrames(): Promise<void> {
   let slugs: string[];

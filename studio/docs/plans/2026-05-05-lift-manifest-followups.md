@@ -42,25 +42,19 @@ Today the two `fs.writeFile` calls can throw ENOENT; the outer watcher
 `ENOENT` silently (the frame is gone; the manifest doesn't matter). Mirror the
 pattern in `readFile` at line 39.
 
-### 3. Reword the `Button` row's notes column
+### 3. ~~Reword the Button row's notes column~~ — partially resolved by 0.9.0
 
-**Status:** readability  
+**Status:** partially superseded by the XML format shift in 0.9.0.  
 **Files:** `studio/src/lift/render.ts`, `studio/src/lift/mappings/primitives.ts`
 
-The Button row today reads:
+The original complaint was a six-clause semicolon chain in a Markdown table
+cell. With the XML format (0.9.0), `prop_delta` entries are distinct child
+elements, so the scan-friendliness problem is gone for free.
 
-> prop `size`: md→M, lg→L; Studio narrows to md\|lg; production accepts S\|M\|L. A Studio frame never uses sm.; prop `variant`: primary→primary, secondary→secondary, tertiary→tertiary, destructive→destructive; Children are identical. Leading/trailing icons move from raw children to `start` / `end` slots in production.
-
-Six clauses joined by `;`. Hard to scan; the `variant: primary→primary`
-segment is pure noise (identity mapping). Two small fixes:
-
-- In `render.ts`, when a `propDelta.valueMap` is an identity (every key ===
-  value), omit it from the output entirely.
-- Consider splitting the notes column into a bulleted list instead of a
-  semicolon chain. Markdown tables can't contain literal newlines, but a
-  `<br>` tag renders in GitHub markdown and in most previewers.
-
-Adjust the snapshot accordingly.
+The remaining micro-cleanup is the identity-mapping noise: the Button entry's
+`variant` value map still renders as `primary->primary, secondary->secondary,
+tertiary->tertiary, destructive->destructive`. Omit value maps where every
+key equals its value — they carry no translation information.
 
 ### 4. Disambiguate `VistaRow → Row`
 
@@ -78,15 +72,15 @@ variable name *and* a common export). Options:
   tables build rows per-feature from cell components; there may be no single
   "Row" component that VistaRow maps cleanly onto.
 
-### 5. Tokens section: drop when empty
+### 5. ~~Tokens section: drop when empty~~ — still open in 0.9.0
 
 **Status:** filler content  
-**Files:** `studio/src/lift/render.ts:57-60`
+**Files:** `studio/src/lift/render.ts`
 
-The "Tokens" section currently always renders a one-sentence paragraph
-("Tokens are aligned…"). When tokens are aligned (steady-state), the section
-tells the reader nothing. Proposal: omit the section entirely when no token
-exceptions apply. Revisit if/when token drift introduces real exceptions.
+0.9.0 kept the `<tokens alignment="aligned">…</tokens>` element with the
+same single-sentence "nothing to do" body. Still filler; still true that
+omitting the element in the steady-state case would tighten the artifact.
+Revisit when token drift introduces real exceptions that need listing.
 
 ### 6. Concurrency cap on cold-start emissions
 

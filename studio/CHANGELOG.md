@@ -6,6 +6,27 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.0] — 2026-05-05
+
+### Changed
+- **Lift Manifest is now XML instead of Markdown.** `LIFT.md` is gone;
+  each frame now gets a `LIFT.xml` next to its source (plus the
+  unchanged `LIFT.json` machine-readable companion). The "Copy Lift
+  Manifest" button now puts XML on the clipboard. The HTTP endpoint
+  moved from `/api/projects/<slug>/lift/<frame>.md` to
+  `/api/projects/<slug>/lift/<frame>.xml`; the Vercel share bundle
+  ships `/lift/<frame>.xml`. The rationale: the primary consumer is
+  Claude Code in a `devrev-web` session, and Claude extracts
+  XML-tagged sections (`<frame_inventory>`, `<scaffolding>`,
+  `<agent_directives>`, …) more reliably than markdown headings —
+  which is Anthropic's own guidance for structured prompt context.
+  Early-adopter engineers' first handoffs confirmed the uneven
+  markdown behavior was real, not theoretical.
+- **Stale `LIFT.md` files are cleaned up on the next frame write.** Users
+  upgrading from 0.8.x will see the old `.md` file disappear the next
+  time Studio regenerates a manifest (or on next launch, via the
+  cold-start walk).
+
 ## [0.8.2] — 2026-05-05
 
 ### Fixed

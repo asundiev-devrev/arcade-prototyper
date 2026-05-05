@@ -1,9 +1,9 @@
 // studio/server/middleware/lift.ts
 //
-// Serves LIFT.md and LIFT.json that liftEmitPlugin writes next to each
+// Serves LIFT.xml and LIFT.json that liftEmitPlugin writes next to each
 // frame. Read-only; the plugin is the source of truth. Routes:
 //
-//   GET /api/projects/:slug/lift/:frame.md
+//   GET /api/projects/:slug/lift/:frame.xml
 //   GET /api/projects/:slug/lift/:frame.json
 
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -16,18 +16,27 @@ function send(res: ServerResponse, status: number, body: string, contentType: st
   res.end(body);
 }
 
+const CONTENT_TYPES: Record<string, string> = {
+  xml: "application/xml; charset=utf-8",
+  json: "application/json; charset=utf-8",
+};
+
+const FILENAMES: Record<string, string> = {
+  xml: "LIFT.xml",
+  json: "LIFT.json",
+};
+
 export function liftMiddleware() {
   return async (req: IncomingMessage, res: ServerResponse, next?: () => void) => {
     const url = req.url ?? "/";
-    const m = url.match(/^\/api\/projects\/([a-z0-9-]+)\/lift\/([a-z0-9-]+)\.(md|json)(?:\?.*)?$/);
+    const m = url.match(/^\/api\/projects\/([a-z0-9-]+)\/lift\/([a-z0-9-]+)\.(xml|json)(?:\?.*)?$/);
     if (!m || req.method !== "GET") return next?.();
 
     const [, slug, frame, ext] = m;
-    const file = path.join(frameDir(slug, frame), ext === "md" ? "LIFT.md" : "LIFT.json");
+    const file = path.join(frameDir(slug, frame), FILENAMES[ext]);
     try {
       const body = await fs.readFile(file, "utf-8");
-      const contentType = ext === "md" ? "text/markdown; charset=utf-8" : "application/json; charset=utf-8";
-      return send(res, 200, body, contentType);
+      return send(res, 200, body, CONTENT_TYPES[ext]);
     } catch (err: any) {
       if (err.code === "ENOENT") {
         return send(

@@ -23,19 +23,31 @@ afterEach(() => {
 });
 
 describe("emitLiftForFrame", () => {
-  it("writes LIFT.md and LIFT.json next to index.tsx", async () => {
+  it("writes LIFT.xml and LIFT.json next to index.tsx", async () => {
     await emitLiftForFrame("p", "hello");
     const frameDir = path.join(tmp, "projects", "p", "frames", "hello");
-    expect(fs.existsSync(path.join(frameDir, "LIFT.md"))).toBe(true);
+    expect(fs.existsSync(path.join(frameDir, "LIFT.xml"))).toBe(true);
     expect(fs.existsSync(path.join(frameDir, "LIFT.json"))).toBe(true);
 
-    const md = fs.readFileSync(path.join(frameDir, "LIFT.md"), "utf-8");
-    expect(md).toContain("# Lift Manifest — p/hello");
-    expect(md).toContain("list-view");
+    const xml = fs.readFileSync(path.join(frameDir, "LIFT.xml"), "utf-8");
+    expect(xml).toContain(`<lift_manifest schema_version="1"`);
+    expect(xml).toContain(`project="p"`);
+    expect(xml).toContain(`frame="hello"`);
+    expect(xml).toContain(`shape="list-view"`);
 
     const json = JSON.parse(fs.readFileSync(path.join(frameDir, "LIFT.json"), "utf-8"));
     expect(json.schemaVersion).toBe(1);
     expect(json.shape).toBe("list-view");
+  });
+
+  it("removes a stale LIFT.md left by an older Studio install", async () => {
+    const frameDir = path.join(tmp, "projects", "p", "frames", "hello");
+    fs.writeFileSync(path.join(frameDir, "LIFT.md"), "# old junk from 0.8.x");
+
+    await emitLiftForFrame("p", "hello");
+
+    expect(fs.existsSync(path.join(frameDir, "LIFT.md"))).toBe(false);
+    expect(fs.existsSync(path.join(frameDir, "LIFT.xml"))).toBe(true);
   });
 
   it("is a no-op when the frame file is missing", async () => {
@@ -65,7 +77,7 @@ describe("emitForExistingFrames", () => {
       ["q", "bye"],
     ] as const) {
       const dir = path.join(tmp, "projects", project, "frames", frame);
-      expect(fs.existsSync(path.join(dir, "LIFT.md"))).toBe(true);
+      expect(fs.existsSync(path.join(dir, "LIFT.xml"))).toBe(true);
       expect(fs.existsSync(path.join(dir, "LIFT.json"))).toBe(true);
     }
   });

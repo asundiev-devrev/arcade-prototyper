@@ -41,11 +41,15 @@ One manifest per frame. Lives alongside the frame, surfaced through Studio's UI.
 
 ### 4.1 Location and format
 
-- File: `projects/<slug>/frames/<frame>/LIFT.md` (Markdown, human-readable, agent-readable).
+- File: `projects/<slug>/frames/<frame>/LIFT.xml` (XML-tagged, agent-first, human-readable).
 - Regenerated on every frame write. Cheap — it's computed from the frame's imports, not from model output.
 - Reachable from Studio's UI on the frame via a "Copy lift manifest" action and via a public URL when a project is shared to Vercel.
 
-Markdown, not JSON, because the primary consumer is a human engineer pasting it into a Claude Code session. A machine-readable companion (`LIFT.json`) ships alongside for the future automated-lift rung; same source of truth, rendered two ways.
+XML, not Markdown, because the primary consumer is Claude Code pasting it into a session inside `devrev-web`. Anthropic explicitly recommends XML-tagged sections for structured prompt context: Claude extracts `<frame_inventory>`, `<scaffolding>`, `<agent_directives>`, and sibling sections more reliably than it does the equivalent markdown headings, and the self-describing tagging is what makes this pasteable into Claude Code without a separate "how to read this" preamble.
+
+> **Format history:** 0.8.0–0.8.2 shipped a Markdown form (`LIFT.md`). 0.9.0 replaced it with XML after the first real designer-to-engineer handoff showed that Claude's interpretation of the markdown was uneven. The change is deliberately breaking — the clipboard contents and the file on disk are both different — and the `liftEmitPlugin` deletes any stale `LIFT.md` it finds next to a frame so old artifacts don't confuse consumers.
+
+A machine-readable companion (`LIFT.json`) ships alongside for the future automated-lift rung; same source of truth, rendered two ways.
 
 ### 4.2 Sections
 

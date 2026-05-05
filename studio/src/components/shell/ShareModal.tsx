@@ -20,7 +20,7 @@ export function ShareModal({ open, onClose, projectSlug, frames }: ShareModalPro
   async function handleCopyManifest() {
     if (!selectedFrame) return;
     try {
-      const res = await fetch(`/api/projects/${projectSlug}/lift/${selectedFrame}.md`);
+      const res = await fetch(`/api/projects/${projectSlug}/lift/${selectedFrame}.xml`);
       if (!res.ok) throw new Error(`Manifest fetch failed: ${res.status}`);
       const text = await res.text();
       await navigator.clipboard.writeText(text);

@@ -106,7 +106,7 @@ export function vercelMiddleware() {
           { file: "assets/bundle.js", data: bundle.js },
           { file: "assets/bundle.css", data: bundle.css },
         ];
-        if (bundle.liftMd) files.push({ file: `lift/${frameSlug}.md`, data: bundle.liftMd });
+        if (bundle.liftXml) files.push({ file: `lift/${frameSlug}.xml`, data: bundle.liftXml });
         if (bundle.liftJson) files.push({ file: `lift/${frameSlug}.json`, data: bundle.liftJson });
 
         const deployment = await deployToVercel({

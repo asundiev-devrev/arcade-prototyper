@@ -165,7 +165,7 @@ export async function buildFrameBundle(ctx: BuildContext): Promise<{
   html: string;
   js: string;
   css: string;
-  liftMd?: string;
+  liftXml?: string;
   liftJson?: string;
 }> {
   const tempDir = path.join(studioRoot(), ".temp", `build-${ctx.projectSlug}-${ctx.frameSlug}`);
@@ -280,14 +280,14 @@ if (root) {
 
     // Read the manifest files emitted by liftEmitPlugin (best effort —
     // a missing manifest is fine; the deployment still works without it).
-    let liftMd: string | undefined;
+    let liftXml: string | undefined;
     let liftJson: string | undefined;
-    try { liftMd = await fs.readFile(path.join(ctx.framePath, "LIFT.md"), "utf-8"); } catch {}
+    try { liftXml = await fs.readFile(path.join(ctx.framePath, "LIFT.xml"), "utf-8"); } catch {}
     try { liftJson = await fs.readFile(path.join(ctx.framePath, "LIFT.json"), "utf-8"); } catch {}
 
     await fs.rm(tempDir, { recursive: true, force: true });
 
-    return { html, js, css, liftMd, liftJson };
+    return { html, js, css, liftXml, liftJson };
   } catch (err: any) {
     await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
     throw new Error(`Bundle failed: ${err.message}`);

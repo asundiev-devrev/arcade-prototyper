@@ -37,7 +37,8 @@ describe("ShareModal — Copy Lift Manifest", () => {
     });
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      text: async () => "# Lift Manifest — demo/hello",
+      text: async () =>
+        `<lift_manifest schema_version="1" project="demo" frame="hello" shape="ad-hoc"></lift_manifest>`,
     }) as any;
   });
 
@@ -48,15 +49,16 @@ describe("ShareModal — Copy Lift Manifest", () => {
     expect(screen.getByRole("button", { name: /Copy Lift Manifest/i })).toBeTruthy();
   });
 
-  it("fetches the manifest and writes to clipboard on click", async () => {
+  it("fetches the XML manifest and writes it to clipboard on click", async () => {
     render(<ShareModal open={true} onClose={() => {}} projectSlug="demo" frames={frames} />);
     fireEvent.click(screen.getByRole("radio", { name: /Hello/ }));
     fireEvent.click(screen.getByRole("button", { name: /Copy Lift Manifest/i }));
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith("/api/projects/demo/lift/hello.md");
-      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
-        "# Lift Manifest — demo/hello",
-      );
+      expect(global.fetch).toHaveBeenCalledWith("/api/projects/demo/lift/hello.xml");
+      const [clipboardArg] = (navigator.clipboard.writeText as any).mock.calls[0];
+      expect(clipboardArg).toContain(`<lift_manifest`);
+      expect(clipboardArg).toContain(`project="demo"`);
+      expect(clipboardArg).toContain(`frame="hello"`);
     });
   });
 });
