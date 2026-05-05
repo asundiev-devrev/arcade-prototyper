@@ -142,6 +142,27 @@ export const PRIMITIVE_MAPPINGS: MappingEntry[] = [
     translationClass: "mechanical",
   },
   {
+    studio: { source: "arcade", name: "Avatar" },
+    production: { source: PROD_SOURCE, name: "Avatar" },
+    propDeltas: [],
+    slotNotes: [],
+    translationClass: "mechanical",
+  },
+  {
+    studio: { source: "arcade", name: "Tag" },
+    production: { source: PROD_SOURCE, name: "Chip" },
+    propDeltas: [{ from: "intent", to: "variant", note: "Studio's TagIntent maps onto production Chip variants; 1:1 for the common cases." }],
+    slotNotes: [],
+    translationClass: "structural",
+  },
+  {
+    studio: { source: "arcade", name: "Separator" },
+    production: { source: PROD_SOURCE, name: "Separator" },
+    propDeltas: [],
+    slotNotes: [],
+    translationClass: "mechanical",
+  },
+  {
     studio: { source: "arcade", name: "DevRevThemeProvider" },
     production: { source: PROD_SOURCE, name: "ThemeProvider" },
     propDeltas: [],
