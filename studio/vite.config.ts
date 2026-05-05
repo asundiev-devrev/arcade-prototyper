@@ -22,6 +22,7 @@ import { frameMountPlugin } from "./server/plugins/frameMountPlugin";
 import { projectWatchPlugin } from "./server/plugins/projectWatchPlugin";
 import { injectStudioSourcePlugin } from "./server/plugins/injectStudioSourcePlugin";
 import { kitManifestPlugin } from "./server/plugins/kitManifestPlugin";
+import { liftEmitPlugin } from "./server/plugins/liftEmitPlugin";
 import { attachBuildErrorReporter } from "./server/buildErrorReporter";
 import { refreshStaleClaudeMd } from "./server/projects";
 
@@ -59,7 +60,7 @@ function apiPlugin(): import("vite").Plugin {
 // stay readable. Studio's own source imports @xorkavi/arcade-gen directly.
 export default defineConfig({
   root: path.resolve(__dirname),
-  plugins: [injectStudioSourcePlugin(), kitManifestPlugin(), react(), tailwindcss(), frameMountPlugin(), projectWatchPlugin(), apiPlugin()],
+  plugins: [injectStudioSourcePlugin(), kitManifestPlugin(), react(), tailwindcss(), frameMountPlugin(), projectWatchPlugin(), liftEmitPlugin(), apiPlugin()],
   resolve: {
     alias: [
       { find: /^arcade\/components$/, replacement: path.resolve(__dirname, "prototype-kit/arcade-components.tsx") },
