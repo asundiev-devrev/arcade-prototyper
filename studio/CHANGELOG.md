@@ -6,6 +6,15 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.1] — 2026-05-05
+
+### Fixed
+- **Undefined JSX components no longer slip into frames.** The
+  `validateArcadeImports` PostToolUse hook now also scans JSX for
+  capitalized tags that aren't imported or declared in the same file,
+  blocking the Write with Did-you-mean suggestions instead of letting a
+  runtime `ReferenceError: <Foo> is not defined` surface to the viewport.
+
 ## [0.8.0] — 2026-05-05
 
 ### Added
