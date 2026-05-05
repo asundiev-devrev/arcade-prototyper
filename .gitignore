@@ -6,3 +6,4 @@ dist/
 .vite/
 .worktrees/
 studio/packaging/dist/
+studio/tmp/
