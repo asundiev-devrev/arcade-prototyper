@@ -9,7 +9,6 @@ import { ShareButton } from "../components/shell/ShareButton";
 import { CanvasToggle } from "../components/shell/CanvasToggle";
 import { ChatToggle } from "../components/shell/ChatToggle";
 import { ProjectPicker } from "../components/shell/ProjectPicker";
-import { AppSettingsButton } from "../components/shell/SettingsButton";
 import { ChatStreamProvider } from "../hooks/chatStreamContext";
 import { TargetSelectionProvider } from "../hooks/targetSelectionContext";
 
@@ -167,7 +166,6 @@ export function ProjectDetail({
           <>
             <ThemeToggle mode={project.mode} onToggle={toggleProjectMode} />
             <ShareButton project={project} />
-            <AppSettingsButton />
             <CanvasToggle active={devOpen} onToggle={() => setDevOpen((o) => !o)} />
           </>
         }
