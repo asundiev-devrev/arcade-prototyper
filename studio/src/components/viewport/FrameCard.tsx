@@ -160,7 +160,7 @@ export function FrameCard({
           gap: 8,
           marginBottom: 8,
           fontSize: 12,
-          color: "var(--fg-neutral-subtle)",
+          color: "var(--fg-neutral-medium)",
         }}
       >
         <span>{frame.name}</span>
@@ -207,7 +207,7 @@ export function FrameCard({
                   : "Pick element"
               }
               aria-pressed={picking || isTargetedFrame}
-              variant={picking || isTargetedFrame ? "primary" : "secondary"}
+              variant={picking || isTargetedFrame ? "primary" : "tertiary"}
               onClick={() => {
                 if (picking) {
                   setPicking(false);
@@ -225,7 +225,7 @@ export function FrameCard({
           </Tooltip>
           <IconButton
             aria-label="Open frame in new tab"
-            variant="secondary"
+            variant="tertiary"
             onClick={() => window.open(frameUrl, "_blank", "noopener,noreferrer")}
           >
             <ArrowUpRightSmall size={16} aria-hidden="true" />
@@ -245,7 +245,8 @@ export function FrameCard({
           style={{
             position: "absolute",
             inset: 0,
-            background: "var(--surface-shallow)",
+            background: "var(--surface-overlay)",
+            border: "1px solid var(--stroke-neutral-subtle)",
             borderRadius: 12,
             overflow: "hidden",
             boxShadow: picking

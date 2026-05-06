@@ -12,25 +12,12 @@ export function ViewportPreview({
         alignItems: "stretch",
         justifyContent: "flex-start",
         height: "100%",
-        padding: 24,
         position: "relative",
         background: "var(--surface-shallow)",
         overflow: "auto",
       }}
     >
-      <div
-        style={{
-          flex: "none",
-          width: "fit-content",
-          maxWidth: "100%",
-          border: "1px solid var(--stroke-neutral-subtle)",
-          borderRadius: 12,
-          overflow: "auto",
-          background: "var(--surface-overlay)",
-        }}
-      >
-        {children}
-      </div>
+      {children}
       <span
         style={{
           position: "absolute",
