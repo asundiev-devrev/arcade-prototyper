@@ -6,6 +6,46 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.10.0] — 2026-05-06
+
+### Changed
+- **Streaming is now server-owned and survives refresh.** Turn state used
+  to live entirely in the React hook, which meant a page reload or a
+  home-to-project navigation lost the stream until the agent's final
+  bubble appeared. The server now keeps every turn in an in-memory
+  per-slug registry: `POST /api/chat` starts the turn and returns `202`
+  immediately, and a new `GET /api/chat/stream/:slug` SSE endpoint
+  replays every buffered event then follows the live tail (with
+  heartbeats and 5-minute retention after `end`). The client always
+  subscribes on mount and reconnects on drops. Concrete effects:
+  - New project from the home prompt shows streaming from event #1 —
+    no more "prompt appears but the chat stays silent until the first
+    frame lands".
+  - Refreshing mid-turn rehydrates the full activity timeline and
+    continues streaming live instead of going dark until completion.
+  - A persistent "Working… 0:23" row (turning into an error banner on
+    failure) replaces the ephemeral "Thinking…" so it's always clear
+    whether the agent is still cooking.
+- **`pendingPromptContext` is gone.** The home page now starts the
+  chat turn via the same `POST /api/chat` before navigating, so the
+  project page simply subscribes to an already-live turn on mount.
+  Previously we deferred the first send to a `setTimeout(0)` inside
+  the chat pane's mount effect to dodge StrictMode double-mounting —
+  that whole dance is no longer needed.
+
+### Fixed
+- **Settings gear no longer appears in the project header.** Settings
+  are global; rendering the icon on each project header implied
+  per-project settings existed.
+- **Multiple frames in the viewport are visually separated.** Adjacent
+  frames used to blend into one continuous surface because both
+  inherited the canvas background. A subtle stroke now delineates each
+  frame so it's clear where one ends and the next begins.
+- **Clean builds no longer carry a `-dirty` suffix.** `studio/tmp/` is
+  scratch space that packaging scripts write to during a build; it's
+  now ignored by git so the commit-SHA stamp sees a clean tree and
+  drops the `-dirty` marker from the version label.
+
 ## [0.9.0] — 2026-05-05
 
 ### Changed
