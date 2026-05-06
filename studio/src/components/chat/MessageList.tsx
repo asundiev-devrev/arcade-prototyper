@@ -196,10 +196,14 @@ export function MessageList({
     .map((i) => i.pretty);
 
   const isComputerLive = source === "computer" && busy;
-  // Once a Computer turn ends, the persisted assistant message is rendered
-  // from `history` as <ComputerMessage>. Suppress the live activity rows so
-  // we don't show the same reply twice until the next turn clears `items`.
-  const suppressActivity = source === "computer" && !busy;
+  // Once any turn ends, the persisted assistant message is the canonical
+  // display — it comes back from history as a <ChatBubble> (Claude) or
+  // <ComputerMessage> (Computer). We suppress the raw activity rows past
+  // that point so we don't render narrations/tool calls twice alongside
+  // the bubble. This also covers late subscribers on reload: the server
+  // replays every buffered event, which would otherwise leak into the UI
+  // as a duplicate rendering of the previous turn.
+  const suppressActivity = !busy;
 
   return (
     <div
@@ -241,7 +245,12 @@ export function MessageList({
               ))}
             </div>
           )}
-          {!suppressActivity && (
+          {/* Only show the live status row while the turn is running or has
+           *  errored (error needs surfacing even without an assistant
+           *  bubble). Suppress on `done` — the persisted assistant bubble
+           *  from history is already visible and a late "Done in 1:12"
+           *  sticker would feel tacked-on. */}
+          {(phase === "running" || phase === "error") && (
             <TurnStatusRow
               phase={phase}
               startedAt={turnStartedAt}
