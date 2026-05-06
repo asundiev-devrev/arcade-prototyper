@@ -15,6 +15,7 @@ import { parseFigmaUrl } from "../figmaCli";
 import { getFigmaIngest } from "../figmaIngest";
 import { buildFigmaContextBlock } from "../figma/promptBlock";
 import { startTurn, subscribe, getTurn } from "../turnRegistry";
+import { hasDeviationsSection, DEVIATIONS_MISSING_TRAILER } from "../deviationsContract";
 
 // @Computer mention anywhere in the prompt routes to the DevRev agent. The
 // mention is stripped before the prompt is sent to the agent. Per-turn switch:
@@ -400,6 +401,18 @@ async function runClaudeBranch(ctx: {
 
   const endResult = pendingEnd ?? { ok: false, error: "Claude turn exited without reporting a result." };
   if (endResult.ok) {
+    // Enforce the deviations-section contract defined in templates/CLAUDE.md.tpl.
+    // If the agent produced narration at all and that narration doesn't contain
+    // a `### Deviations` heading, append a visible warning trailer. Emitting
+    // the trailer as a live `narration` event AND pushing it to narrationTexts
+    // keeps the SSE view in agreement with what readHistory() will return
+    // after reload.
+    const joined = narrationTexts.join("\n\n").trim();
+    if (joined && !hasDeviationsSection(joined)) {
+      emit({ kind: "narration", text: DEVIATIONS_MISSING_TRAILER.trimStart() });
+      narrationTexts.push(DEVIATIONS_MISSING_TRAILER.trimStart());
+    }
+
     const content = narrationTexts.join("\n\n").trim();
     if (content || toolLabels.length > 0) {
       await appendHistory(slug, {

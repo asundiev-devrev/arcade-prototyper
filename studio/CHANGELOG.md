@@ -6,6 +6,17 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.11.0] — 2026-05-06
+
+### Added
+- Generator now ends every response with a required `### Deviations` section listing where the frame deviated from the design system (hand-rolled chrome, off-token colors, invented props, `{/* TODO */}` gaps). Designers see all deviations inline instead of relying on the agent's discretion.
+
+### Changed
+- System prompt reshaped around a strict response shape: one-sentence summary + bulleted deviations. Verbose technical narration ("I read the manifest, then wrote the file…") is suppressed.
+
+### Fixed
+- When the generator skips the deviations contract, the chat now shows a visible warning trailer instead of silently letting the omission through.
+
 ## [0.10.0] — 2026-05-06
 
 ### Changed
