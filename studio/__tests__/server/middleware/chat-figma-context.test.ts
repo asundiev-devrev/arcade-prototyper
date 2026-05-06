@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { chatMiddleware } from "../../../server/middleware/chat";
 import { createProject } from "../../../server/projects";
 import * as ingestModule from "../../../server/figmaIngest";
+import { __resetTurnRegistryForTests } from "../../../server/turnRegistry";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,6 +27,7 @@ beforeEach(async () => {
   // on prompt shape. The fake script is expected to write its argv to
   // ARCADE_TEST_PROMPT_OUT.
   process.env.ARCADE_TEST_PROMPT_OUT = path.join(tmp, "last-prompt.txt");
+  __resetTurnRegistryForTests();
   server = http.createServer(chatMiddleware());
   await new Promise<void>((r) => server.listen(0, () => r()));
   port = (server.address() as any).port;
@@ -33,6 +35,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   server.close();
+  __resetTurnRegistryForTests();
   vi.restoreAllMocks();
   delete process.env.ARCADE_STUDIO_ROOT;
   delete process.env.ARCADE_STUDIO_CLAUDE_BIN;
@@ -40,6 +43,13 @@ afterEach(() => {
   delete process.env.ARCADE_TEST_PROMPT_OUT;
   fs.rmSync(tmp, { recursive: true, force: true });
 });
+
+/** Drain the per-slug SSE stream so the subprocess completes before
+ *  assertions read the prompt argv file. */
+async function drainStream(slug: string): Promise<void> {
+  const r = await fetch(`http://localhost:${port}/api/chat/stream/${slug}`);
+  await r.text();
+}
 
 describe("/api/chat with Figma structured context", () => {
   it("injects <figma_context> when an IngestResult is cached", async () => {
@@ -63,7 +73,8 @@ describe("/api/chat with Figma structured context", () => {
         prompt: "build this https://www.figma.com/design/k/x?node-id=1-2",
       }),
     });
-    await res.text();
+    expect(res.status).toBe(202);
+    await drainStream(p.slug);
     const sent = fs.readFileSync(process.env.ARCADE_TEST_PROMPT_OUT!, "utf-8");
     expect(sent).toContain("<figma_context");
     expect(sent).toContain("</figma_context>");
@@ -91,7 +102,8 @@ describe("/api/chat with Figma structured context", () => {
         prompt: "build this https://www.figma.com/design/k/x?node-id=1-2",
       }),
     });
-    await res.text();
+    expect(res.status).toBe(202);
+    await drainStream(p.slug);
     const sent = fs.readFileSync(process.env.ARCADE_TEST_PROMPT_OUT!, "utf-8");
     expect(sent).not.toContain("<figma_context");
   });
@@ -123,7 +135,8 @@ describe("/api/chat with Figma structured context", () => {
         prompt: "build this https://www.figma.com/design/k/x?node-id=1-2",
       }),
     });
-    await res.text();
+    expect(res.status).toBe(202);
+    await drainStream(p.slug);
     const sent = fs.readFileSync(process.env.ARCADE_TEST_PROMPT_OUT!, "utf-8");
     expect(sent).toContain("<figma_context");
     expect(sent).toContain("Sidebar");

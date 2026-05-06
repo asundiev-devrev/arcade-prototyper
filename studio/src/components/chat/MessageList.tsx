@@ -2,10 +2,11 @@ import { useEffect, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import { ChatBubble } from "@xorkavi/arcade-gen";
 import type { ChatMessage } from "../../../server/types";
-import type { ChatTurnItem } from "../../hooks/useChatStream";
+import type { ChatTurnItem, TurnPhase } from "../../hooks/useChatStream";
 import { ComputerMessage, markdownComponents } from "./computer/ComputerMessage";
 import { ComputerThinkingRow } from "./computer/ComputerThinkingRow";
 import { DottedLoader } from "./computer/DottedLoader";
+import { TurnStatusRow } from "./TurnStatusRow";
 
 function toolIcon(tool: string): string {
   if (tool === "Read") return "↘";
@@ -172,13 +173,19 @@ export function MessageList({
   pendingPrompt,
   currentItems,
   busy,
+  phase = "idle",
   source = "claude",
+  turnStartedAt = null,
+  turnEndedAt = null,
 }: {
   history: ChatMessage[];
   pendingPrompt?: string;
   currentItems?: ChatTurnItem[];
   busy?: boolean;
+  phase?: TurnPhase;
   source?: "claude" | "computer";
+  turnStartedAt?: number | null;
+  turnEndedAt?: number | null;
 }) {
   const hasActivity = !!currentItems && currentItems.length > 0;
   const liveNarrations = (currentItems ?? [])
@@ -234,16 +241,12 @@ export function MessageList({
               ))}
             </div>
           )}
-          {busy && !hasActivity && (
-            <div
-              style={{
-                color: "var(--fg-neutral-subtle)",
-                fontSize: 12,
-                fontStyle: "italic",
-              }}
-            >
-              Thinking…
-            </div>
+          {!suppressActivity && (
+            <TurnStatusRow
+              phase={phase}
+              startedAt={turnStartedAt}
+              endedAt={turnEndedAt}
+            />
           )}
         </>
       )}

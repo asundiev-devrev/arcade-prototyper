@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useToast } from "@xorkavi/arcade-gen";
 import { useProjects } from "../hooks/useProjects";
-import { usePendingPrompt } from "../hooks/pendingPromptContext";
 import { api } from "../lib/api";
 import { deriveProjectName } from "../lib/deriveProjectName";
+import { decoratePromptWithFigma } from "../lib/figmaUrl";
 import { StudioHeader } from "../components/shell/StudioHeader";
 import { AppSettingsButton } from "../components/shell/SettingsButton";
 import { HeroPromptInput, type HeroPromptSubmitArgs } from "../components/home/HeroPromptInput";
@@ -13,7 +13,6 @@ import type { Project } from "../../server/types";
 export function HomePage({ onOpen }: { onOpen: (slug: string) => void }) {
   const { projects, refresh } = useProjects();
   const { toast } = useToast();
-  const { set: setPending } = usePendingPrompt();
   const [submitting, setSubmitting] = useState(false);
 
   async function handleHeroSubmit(args: HeroPromptSubmitArgs) {
@@ -35,7 +34,29 @@ export function HomePage({ onOpen }: { onOpen: (slug: string) => void }) {
         }
       }
 
-      setPending({ prompt: args.prompt, imagePaths, figmaUrl: args.figmaUrl });
+      // Start the chat turn server-side before navigating so ProjectDetail's
+      // stream subscription latches onto the same turn (including any events
+      // emitted before it mounts). This is the fix for "new project shows
+      // my prompt but no streaming" — the turn is guaranteed to exist in
+      // the registry by the time /api/chat/stream/:slug is hit.
+      const decorated = args.figmaUrl
+        ? decoratePromptWithFigma(args.prompt, args.figmaUrl)
+        : args.prompt;
+      try {
+        await api.startChatTurn(project.slug, decorated, imagePaths);
+      } catch (startErr) {
+        // A failure here (e.g. 409 turn_in_progress for a stale project)
+        // shouldn't block navigation — the user still sees their project
+        // and can retry from the chat pane. Surface a toast instead of
+        // throwing so the project still opens.
+        toast({
+          title: "Couldn't start the first turn",
+          description:
+            startErr instanceof Error ? startErr.message : String(startErr),
+          intent: "alert",
+        });
+      }
+
       void refresh();
       onOpen(project.slug);
     } catch (e) {

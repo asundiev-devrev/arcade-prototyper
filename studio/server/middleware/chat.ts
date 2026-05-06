@@ -9,10 +9,12 @@ import { readGlobalSettings } from "./settings";
 import { chatHistoryPath, lastErrorLogPath, lastStdoutLogPath, projectDir } from "../paths";
 import { runComputerTurn } from "../devrev/computerAgent";
 import type { ChatMessage } from "../types";
+import type { StudioEvent } from "../../src/lib/streamJson";
 import { extractFigmaUrl } from "../../src/lib/figmaUrl";
 import { parseFigmaUrl } from "../figmaCli";
 import { getFigmaIngest } from "../figmaIngest";
 import { buildFigmaContextBlock } from "../figma/promptBlock";
+import { startTurn, subscribe, getTurn } from "../turnRegistry";
 
 // @Computer mention anywhere in the prompt routes to the DevRev agent. The
 // mention is stripped before the prompt is sent to the agent. Per-turn switch:
@@ -71,69 +73,204 @@ async function readFrameSources(slug: string): Promise<string> {
   return parts.join("");
 }
 
+const STREAM_URL = /^\/api\/chat\/stream\/([a-z0-9][a-z0-9-]{0,62})$/i;
+const STATUS_URL = /^\/api\/chat\/status\/([a-z0-9][a-z0-9-]{0,62})$/i;
+
 export function chatMiddleware() {
   return async (req: IncomingMessage, res: ServerResponse, next?: () => void) => {
-    if (!req.url?.startsWith("/api/chat") || req.method !== "POST") return next?.();
+    if (!req.url) return next?.();
 
-    let buf = "";
-    for await (const chunk of req) buf += chunk;
-    const { slug, prompt, images } = JSON.parse(buf) as {
-      slug: string; prompt: string; images?: string[];
-    };
-
-    const project = await getProject(slug);
-    if (!project) {
-      res.writeHead(404, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: { code: "not_found", message: "Project not found" } }));
-      return;
+    if (req.method === "GET") {
+      const streamMatch = req.url.match(STREAM_URL);
+      if (streamMatch) return handleStream(req, res, streamMatch[1].toLowerCase());
+      const statusMatch = req.url.match(STATUS_URL);
+      if (statusMatch) return handleStatus(res, statusMatch[1].toLowerCase());
     }
 
-    const isComputerTurn = COMPUTER_MENTION.test(prompt);
+    if (req.url.startsWith("/api/chat") && req.method === "POST") {
+      return handleStart(req, res);
+    }
 
-    // Bedrock-auth pre-check applies only to Claude (Bedrock) turns; the
-    // Computer agent uses the DevRev PAT. We pass when either (a) a bearer
-    // token is exported for claude CLI to use, or (b) SigV4 credentials
-    // resolve via `aws sts get-caller-identity`. Otherwise we fail fast
-    // instead of spawning claude into a silent hang.
-    if (!isComputerTurn && !(await hasBedrockAuth())) {
-      res.writeHead(200, {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-      });
-      res.write(
-        `event: end\ndata: ${JSON.stringify({
-          kind: "end",
+    return next?.();
+  };
+}
+
+async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  let buf = "";
+  for await (const chunk of req) buf += chunk;
+  let body: { slug: string; prompt: string; images?: string[] };
+  try {
+    body = JSON.parse(buf);
+  } catch {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "bad_request", message: "Invalid JSON" } }));
+    return;
+  }
+  const { slug, prompt, images } = body;
+
+  const project = await getProject(slug);
+  if (!project) {
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "not_found", message: "Project not found" } }));
+    return;
+  }
+
+  const running = getTurn(slug);
+  if (running && running.status === "running") {
+    res.writeHead(409, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({
+      error: { code: "turn_in_progress", message: "A turn is already running for this project." },
+      turnId: running.id,
+    }));
+    return;
+  }
+
+  const isComputerTurn = COMPUTER_MENTION.test(prompt);
+
+  // Bedrock-auth pre-check applies only to Claude (Bedrock) turns; the
+  // Computer agent uses the DevRev PAT. We pass when either (a) a bearer
+  // token is exported for claude CLI to use, or (b) SigV4 credentials
+  // resolve via `aws sts get-caller-identity`. Otherwise we fail fast
+  // instead of spawning claude into a silent hang.
+  if (!isComputerTurn && !(await hasBedrockAuth())) {
+    const turn = startTurn(slug, {
+      prompt,
+      run: ({ end }) => {
+        end({
           ok: false,
           error:
             "No Bedrock auth detected. Export AWS_BEARER_TOKEN_BEDROCK (keychain) or run `aws sso login` in the shell that launched studio, then reload.",
-        })}\n\n`
+        });
+      },
+    });
+    res.writeHead(202, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ turnId: turn.id, slug }));
+    return;
+  }
+
+  // Persist the user message verbatim (with @Computer prefix intact) so
+  // chat history reflects what the user actually typed.
+  await appendHistory(slug, {
+    id: `u-${Date.now()}`,
+    role: "user",
+    content: prompt,
+    images,
+    createdAt: new Date().toISOString(),
+  });
+
+  const turn = startTurn(slug, {
+    prompt,
+    run: ({ emit, end }) => {
+      const task = isComputerTurn
+        ? runComputerBranch({ emit, slug, prompt, project })
+        : runClaudeBranch({ emit, slug, prompt, images, project });
+      task.then(
+        (result) => end(result),
+        (err) => end({ ok: false, error: err?.message ?? String(err) }),
       );
-      res.end();
-      return;
-    }
+    },
+  });
 
-    res.writeHead(200, {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    });
+  res.writeHead(202, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ turnId: turn.id, slug }));
+}
 
-    // Persist the user message verbatim (with @Computer prefix intact) so
-    // chat history reflects what the user actually typed.
-    await appendHistory(slug, {
-      id: `u-${Date.now()}`, role: "user", content: prompt, images,
-      createdAt: new Date().toISOString(),
-    });
+async function handleStream(req: IncomingMessage, res: ServerResponse, slug: string): Promise<void> {
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    // Disable nginx / proxy buffering if anything sits in front of us.
+    "X-Accel-Buffering": "no",
+  });
+  // Flush headers so the browser's EventSource opens the connection even if
+  // we have no events to send yet.
+  (res as any).flushHeaders?.();
 
-    if (isComputerTurn) {
-      await runComputerBranch({ res, slug, prompt, project });
-    } else {
-      await runClaudeBranch({ res, slug, prompt, images, project });
-    }
-
-    res.end();
+  const writeEvent = (ev: StudioEvent) => {
+    res.write(`event: ${ev.kind}\ndata: ${JSON.stringify(ev)}\n\n`);
   };
+
+  const turn = getTurn(slug);
+  if (!turn) {
+    // No turn at all for this slug — emit an idle marker so the client
+    // immediately knows nothing is running, then keep the connection open
+    // in case a turn starts. (Today the client opens /stream only when it
+    // thinks there might be something; if that changes we'll revisit.)
+    res.write(`event: idle\ndata: ${JSON.stringify({ kind: "idle" })}\n\n`);
+    res.end();
+    return;
+  }
+
+  // Replay everything buffered for this turn so a reconnect sees the full
+  // activity from the start. The SSE "event:" field matches ev.kind so
+  // client listeners behave the same for replayed and live events.
+  const sub = subscribe(
+    slug,
+    (ev) => writeEvent(ev),
+    () => {
+      try { res.end(); } catch {}
+    },
+  );
+  if (!sub) {
+    // Race: turn evicted between getTurn and subscribe. Degrade gracefully.
+    res.write(`event: idle\ndata: ${JSON.stringify({ kind: "idle" })}\n\n`);
+    res.end();
+    return;
+  }
+
+  // Send a "turn" header so the client can reset its local state before
+  // the replay — avoids appending replayed events to a stale local buffer.
+  res.write(
+    `event: turn\ndata: ${JSON.stringify({
+      kind: "turn",
+      turnId: turn.id,
+      prompt: turn.prompt,
+      startedAt: turn.startedAt,
+      status: turn.status,
+      endedAt: turn.endedAt,
+      error: turn.error,
+    })}\n\n`,
+  );
+  for (const ev of sub.replay) writeEvent(ev);
+
+  if (sub.status !== "running") {
+    // Already terminal — no live events coming. Close immediately.
+    res.end();
+    return;
+  }
+
+  // Keep the socket alive across long silences (Bedrock first-token
+  // latency can exceed 60s). Comment lines are SSE heartbeats — no event
+  // is dispatched on the client.
+  const heartbeat = setInterval(() => {
+    try { res.write(": heartbeat\n\n"); } catch {}
+  }, 15_000);
+
+  const cleanup = () => {
+    clearInterval(heartbeat);
+    sub.unsubscribe();
+  };
+  req.on("close", cleanup);
+  res.on("close", cleanup);
+}
+
+function handleStatus(res: ServerResponse, slug: string): void {
+  const turn = getTurn(slug);
+  res.writeHead(200, { "Content-Type": "application/json" });
+  if (!turn) {
+    res.end(JSON.stringify({ status: "idle" }));
+    return;
+  }
+  res.end(
+    JSON.stringify({
+      status: turn.status,
+      turnId: turn.id,
+      startedAt: turn.startedAt,
+      endedAt: turn.endedAt,
+      error: turn.error,
+    }),
+  );
 }
 
 async function enrichPromptWithFigmaContext(
@@ -182,29 +319,23 @@ async function enrichPromptWithFigmaContext(
 }
 
 async function runClaudeBranch(ctx: {
-  res: ServerResponse;
+  emit: (ev: StudioEvent) => void;
   slug: string;
   prompt: string;
   images?: string[];
   project: { sessionId?: string };
-}) {
-  const { res, slug, project } = ctx;
+}): Promise<{ ok: boolean; error?: string }> {
+  const { emit, slug, project } = ctx;
   const { prompt, images } = await enrichPromptWithFigmaContext(
     ctx.prompt,
     ctx.images ?? [],
-    (text) => {
-      res.write(`event: narration\n`);
-      res.write(`data: ${JSON.stringify({ kind: "narration", text })}\n\n`);
-    },
+    (text) => emit({ kind: "narration", text }),
   );
   let capturedSessionId: string | undefined;
   const narrationTexts: string[] = [];
   const toolLabels: string[] = [];
-  let pendingEndEvent: { kind: "end"; ok: boolean; error?: string } | null = null;
+  let pendingEnd: { ok: boolean; error?: string } | null = null;
 
-  // Look up the user's model selection (global settings.json). Silently
-  // ignores any read/parse failure — an unset value is fine; claude CLI
-  // will pick its default.
   let model: string | undefined;
   try {
     model = (await readGlobalSettings()).studio?.model;
@@ -223,11 +354,13 @@ async function runClaudeBranch(ctx: {
         if (ev.kind === "narration") narrationTexts.push(ev.text);
         if (ev.kind === "tool_call") toolLabels.push(ev.pretty);
         if (ev.kind === "end") {
-          pendingEndEvent = ev;
+          // Claude CLI's terminal `end` drives the registry's end via the
+          // return value below — don't forward it into the event stream, or
+          // subscribers would see two terminals.
+          pendingEnd = ev.ok ? { ok: true } : { ok: false, error: ev.error };
           return;
         }
-        res.write(`event: ${ev.kind}\n`);
-        res.write(`data: ${JSON.stringify(ev)}\n\n`);
+        emit(ev);
       },
       onCrash: async (info) => {
         const body = [
@@ -256,7 +389,7 @@ async function runClaudeBranch(ctx: {
     });
   } catch (err: any) {
     const msg = err?.message || err?.stack || String(err) || "claude turn threw an unknown error";
-    pendingEndEvent = { kind: "end", ok: false, error: msg };
+    pendingEnd = { ok: false, error: msg };
     try {
       await fs.writeFile(
         lastErrorLogPath(slug),
@@ -265,8 +398,8 @@ async function runClaudeBranch(ctx: {
     } catch {}
   }
 
-  const endEvent = pendingEndEvent as { kind: "end"; ok: boolean; error?: string } | null;
-  if (endEvent?.ok) {
+  const endResult = pendingEnd ?? { ok: false, error: "Claude turn exited without reporting a result." };
+  if (endResult.ok) {
     const content = narrationTexts.join("\n\n").trim();
     if (content || toolLabels.length > 0) {
       await appendHistory(slug, {
@@ -283,18 +416,16 @@ async function runClaudeBranch(ctx: {
     await updateProject(slug, { sessionId: capturedSessionId });
   }
 
-  if (endEvent) {
-    res.write(`event: end\ndata: ${JSON.stringify(endEvent)}\n\n`);
-  }
+  return endResult;
 }
 
 async function runComputerBranch(ctx: {
-  res: ServerResponse;
+  emit: (ev: StudioEvent) => void;
   slug: string;
   prompt: string;
   project: { computerConversationId?: string };
-}) {
-  const { res, slug, prompt, project } = ctx;
+}): Promise<{ ok: boolean; error?: string }> {
+  const { emit, slug, prompt, project } = ctx;
   const wantsFrameContext = FRAME_TRIGGER.test(prompt);
   const cleaned = prompt
     .replace(COMPUTER_MENTION_GLOBAL, "")
@@ -303,14 +434,7 @@ async function runComputerBranch(ctx: {
     .trim();
 
   if (!cleaned) {
-    res.write(
-      `event: end\ndata: ${JSON.stringify({
-        kind: "end",
-        ok: false,
-        error: "Mention Computer with a question or instruction after @Computer.",
-      })}\n\n`,
-    );
-    return;
+    return { ok: false, error: "Mention Computer with a question or instruction after @Computer." };
   }
 
   let finalPrompt = cleaned;
@@ -323,24 +447,23 @@ async function runComputerBranch(ctx: {
 
   // Let the client know this turn is Computer-origin so it renders with the
   // Computer-branded components (thinking shimmer, markdown bubble, etc.).
-  res.write(`event: origin\ndata: ${JSON.stringify({ kind: "origin", source: "computer" })}\n\n`);
+  emit({ kind: "origin", source: "computer" });
 
-  let endEvent: { kind: "end"; ok: boolean; error?: string } | null = null;
+  let endResult: { ok: boolean; error?: string } = { ok: true };
 
   const result = await runComputerTurn({
     prompt: finalPrompt,
     conversationId: project.computerConversationId,
     onEvent: (ev) => {
       if (ev.kind === "end") {
-        endEvent = ev;
+        endResult = ev.ok ? { ok: true } : { ok: false, error: ev.error };
         return;
       }
-      res.write(`event: ${ev.kind}\n`);
-      res.write(`data: ${JSON.stringify(ev)}\n\n`);
+      emit(ev);
     },
   });
 
-  if (endEvent && (endEvent as { ok: boolean }).ok && result.assistantText.trim()) {
+  if (endResult.ok && result.assistantText.trim()) {
     await appendHistory(slug, {
       id: `a-${Date.now()}`,
       role: "assistant",
@@ -354,7 +477,5 @@ async function runComputerBranch(ctx: {
     await updateProject(slug, { computerConversationId: result.conversationId });
   }
 
-  if (endEvent) {
-    res.write(`event: end\ndata: ${JSON.stringify(endEvent)}\n\n`);
-  }
+  return endResult;
 }

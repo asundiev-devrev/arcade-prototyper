@@ -6,3 +6,9 @@ html, body, #root { height: 100%; margin: 0; }
  * triangle so our custom ▸ chevron is the only marker. */
 summary::-webkit-details-marker { display: none; }
 summary { list-style: none; }
+
+/* TurnStatusRow pulse animation for the "Working…" indicator. */
+@keyframes arcade-studio-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.9); }
+  50%      { opacity: 1;    transform: scale(1.1); }
+}

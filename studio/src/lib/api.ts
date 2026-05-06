@@ -31,4 +31,10 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ paths }),
     }).then(j<{ mapping: Record<string, string>; missing: string[] }>),
+  startChatTurn: (slug: string, prompt: string, images: string[]) =>
+    fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug, prompt, images }),
+    }).then(j<{ turnId: string; slug: string }>),
 };

@@ -5,7 +5,6 @@ import { HomePage } from "./routes/HomePage";
 import { ProjectDetail } from "./routes/ProjectDetail";
 import { StartupAuthGate } from "./components/feedback/StartupAuthGate";
 import { UpdateBanner } from "./components/feedback/UpdateBanner";
-import { PendingPromptProvider } from "./hooks/pendingPromptContext";
 
 function readSlugFromHash(): string | null {
   const match = window.location.hash.match(/^#\/project\/([a-z0-9][a-z0-9-]{0,62})$/i);
@@ -77,17 +76,15 @@ export function App() {
       <FrameFontProxy />
       <UpdateBanner />
       <StartupAuthGate>
-        <PendingPromptProvider>
-          {openSlug === null ? (
-            <HomePage onOpen={openProject} />
-          ) : (
-            <ProjectDetail
-              slug={openSlug}
-              onBack={closeProject}
-              onOpenProject={openProject}
-            />
-          )}
-        </PendingPromptProvider>
+        {openSlug === null ? (
+          <HomePage onOpen={openProject} />
+        ) : (
+          <ProjectDetail
+            slug={openSlug}
+            onBack={closeProject}
+            onOpenProject={openProject}
+          />
+        )}
       </StartupAuthGate>
       <Toaster />
     </DevRevThemeProvider>
