@@ -80,6 +80,7 @@ export function App() {
           <HomePage onOpen={openProject} />
         ) : (
           <ProjectDetail
+            key={openSlug}
             slug={openSlug}
             onBack={closeProject}
             onOpenProject={openProject}

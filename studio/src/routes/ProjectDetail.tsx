@@ -19,6 +19,8 @@ const CHAT_WIDTH_MIN = 280;
 const CHAT_WIDTH_MAX = 720;
 const FRAME_WIDTH_STORAGE_KEY = "studio:frameWidth";
 const FRAME_WIDTH_DEFAULT = 1440;
+const ZOOM_STORAGE_PREFIX = "studio:zoom:";
+const ZOOM_DEFAULT = 1.0;
 
 export function ProjectDetail({
   slug,
@@ -37,6 +39,13 @@ export function ProjectDetail({
     const stored = window.localStorage.getItem(FRAME_WIDTH_STORAGE_KEY);
     const parsed = stored ? Number(stored) : NaN;
     if (!Number.isFinite(parsed)) return FRAME_WIDTH_DEFAULT;
+    return parsed;
+  });
+  const [zoom, setZoom] = useState<number>(() => {
+    if (typeof window === "undefined") return ZOOM_DEFAULT;
+    const stored = window.localStorage.getItem(`${ZOOM_STORAGE_PREFIX}${slug}`);
+    const parsed = stored ? Number(stored) : NaN;
+    if (!Number.isFinite(parsed) || parsed <= 0) return ZOOM_DEFAULT;
     return parsed;
   });
   const [chatOpen, setChatOpen] = useState<boolean>(() => {
@@ -65,6 +74,10 @@ export function ProjectDetail({
   useEffect(() => {
     window.localStorage.setItem(FRAME_WIDTH_STORAGE_KEY, String(frameWidth));
   }, [frameWidth]);
+
+  useEffect(() => {
+    window.localStorage.setItem(`${ZOOM_STORAGE_PREFIX}${slug}`, String(zoom));
+  }, [slug, zoom]);
 
   useEffect(() => {
     if (!resizing) return;
@@ -229,6 +242,8 @@ export function ProjectDetail({
             project={project}
             frameWidth={frameWidth}
             onFrameWidthChange={setFrameWidth}
+            zoom={zoom}
+            onZoomChange={setZoom}
           />
         </main>
         {devOpen && <DevModePanel slug={project.slug} />}
