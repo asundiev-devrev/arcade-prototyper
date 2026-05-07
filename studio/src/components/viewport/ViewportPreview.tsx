@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { ZoomIndicator } from "./ZoomIndicator";
 import { nextStep, snapToNearestStep } from "./zoomSteps";
 
@@ -14,6 +14,14 @@ export function ViewportPreview({
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const [contentSize, setContentSize] = useState({ width: 0, height: 0 });
+  const [spaceHeld, setSpaceHeld] = useState(false);
+  const [panning, setPanning] = useState(false);
+  const panStateRef = useRef<{
+    startX: number;
+    startY: number;
+    startScrollLeft: number;
+    startScrollTop: number;
+  } | null>(null);
 
   // Track unscaled content size so the wrapper can expand to match scaled bounds.
   useEffect(() => {
@@ -89,8 +97,9 @@ export function ViewportPreview({
       const el = document.activeElement as HTMLElement | null;
       if (!el) return false;
       const tag = el.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") return true;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "BUTTON" || tag === "SELECT") return true;
       if (el.isContentEditable) return true;
+      if (el.getAttribute("role") === "button") return true;
       return false;
     }
 
@@ -134,17 +143,106 @@ export function ViewportPreview({
     // see the fresh value when `nextStep` is called.
   }, [zoom, onZoomChange, fitToScreen]);
 
+  useEffect(() => {
+    function isTextTargetActive(): boolean {
+      const el = document.activeElement as HTMLElement | null;
+      if (!el) return false;
+      const tag = el.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "BUTTON" || tag === "SELECT") return true;
+      if (el.isContentEditable) return true;
+      if (el.getAttribute("role") === "button") return true;
+      return false;
+    }
+    function onDown(e: KeyboardEvent) {
+      if (e.code !== "Space") return;
+      if (isTextTargetActive()) return;
+      if (!spaceHeld) {
+        e.preventDefault(); // prevent page scroll
+        setSpaceHeld(true);
+      }
+    }
+    function onUp(e: KeyboardEvent) {
+      if (e.code !== "Space") return;
+      setSpaceHeld(false);
+    }
+    function onBlurOrHide() {
+      setSpaceHeld(false);
+      setPanning(false);
+      panStateRef.current = null;
+    }
+    function onVisibilityChange() {
+      if (document.visibilityState !== "visible") onBlurOrHide();
+    }
+    window.addEventListener("keydown", onDown);
+    window.addEventListener("keyup", onUp);
+    window.addEventListener("blur", onBlurOrHide);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("keydown", onDown);
+      window.removeEventListener("keyup", onUp);
+      window.removeEventListener("blur", onBlurOrHide);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [spaceHeld]);
+
+  useEffect(() => {
+    if (!panning) return;
+    function onMove(e: MouseEvent) {
+      const s = scrollRef.current;
+      const st = panStateRef.current;
+      if (!s || !st) return;
+      s.scrollLeft = st.startScrollLeft - (e.clientX - st.startX);
+      s.scrollTop = st.startScrollTop - (e.clientY - st.startY);
+    }
+    function onUp() {
+      setPanning(false);
+      panStateRef.current = null;
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    const prevCursor = document.body.style.cursor;
+    const prevSelect = document.body.style.userSelect;
+    document.body.style.cursor = "grabbing";
+    document.body.style.userSelect = "none";
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = prevCursor;
+      document.body.style.userSelect = prevSelect;
+    };
+  }, [panning]);
+
+  function startPan(e: ReactMouseEvent) {
+    const s = scrollRef.current;
+    if (!s) return;
+    e.preventDefault();
+    panStateRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startScrollLeft: s.scrollLeft,
+      startScrollTop: s.scrollTop,
+    };
+    setPanning(true);
+  }
+
   return (
     <div
       ref={scrollRef}
       role="region"
       aria-label="Design viewport"
+      onMouseDown={(e) => {
+        // Middle mouse → always pan. Space held + primary button → pan.
+        if (e.button === 1 || (e.button === 0 && spaceHeld)) {
+          startPan(e);
+        }
+      }}
       style={{
         display: "block",
         height: "100%",
         position: "relative",
         background: "var(--surface-shallow)",
         overflow: "auto",
+        cursor: panning ? "grabbing" : spaceHeld ? "grab" : undefined,
       }}
     >
       <div
@@ -153,6 +251,7 @@ export function ViewportPreview({
           transformOrigin: "0 0",
           width: contentSize.width * zoom,
           height: contentSize.height * zoom,
+          pointerEvents: panning ? "none" : "auto",
         }}
       >
         <div ref={contentRef} style={{ width: "fit-content", minWidth: "100%" }}>
