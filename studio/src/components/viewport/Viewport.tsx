@@ -9,10 +9,14 @@ export function Viewport({
   project,
   frameWidth,
   onFrameWidthChange,
+  zoom,
+  onZoomChange,
 }: {
   project: Project;
   frameWidth: number;
   onFrameWidthChange: (next: number) => void;
+  zoom: number;
+  onZoomChange: (next: number) => void;
 }) {
   const { frames } = useFrames(project);
 
@@ -47,7 +51,7 @@ export function Viewport({
   if (!frames.length) return <EmptyViewport />;
 
   return (
-    <ViewportPreview>
+    <ViewportPreview zoom={zoom} onZoomChange={onZoomChange}>
       <div
         style={{
           display: "flex",
@@ -67,6 +71,7 @@ export function Viewport({
             frameWidth={frameWidth}
             onFrameWidthChange={onFrameWidthChange}
             projectMode={project.mode}
+            zoom={zoom}
           />
         ))}
       </div>
