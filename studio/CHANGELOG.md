@@ -6,6 +6,11 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.12.0] — 2026-05-07
+
+### Added
+- Viewport zoom and pan: `⌘`/`ctrl`+scroll zooms at the cursor, space-drag or middle-mouse pans. `⌘+=` / `⌘+-` step the zoom, `⌘+0` resets to 100%, `⌘+1` fits to screen (may be intercepted by some browsers — use the zoom pill's "Zoom to fit" menu item as an alternative). Zoom persists per project. A new zoom indicator pill in the bottom-right replaces the old "Preview" label and exposes the same actions via menu.
+
 ## [0.11.1] — 2026-05-07
 
 ### Fixed
