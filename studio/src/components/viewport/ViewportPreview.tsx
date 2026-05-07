@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { ZoomIndicator } from "./ZoomIndicator";
-import { snapToNearestStep } from "./zoomSteps";
+import { nextStep, snapToNearestStep } from "./zoomSteps";
 
 export function ViewportPreview({
   children,
@@ -30,6 +30,40 @@ export function ViewportPreview({
     setContentSize({ width: el.scrollWidth, height: el.scrollHeight });
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    const scroll = scrollRef.current;
+    if (!scroll) return;
+
+    function onWheel(e: WheelEvent) {
+      // Only intercept when ⌘ (mac) or ctrl (other / trackpad pinch) is held.
+      if (!e.metaKey && !e.ctrlKey) return;
+      e.preventDefault();
+
+      const s = scrollRef.current;
+      if (!s) return;
+      const rect = s.getBoundingClientRect();
+      const cursorX = e.clientX - rect.left + s.scrollLeft;
+      const cursorY = e.clientY - rect.top + s.scrollTop;
+      const contentX = cursorX / zoom;
+      const contentY = cursorY / zoom;
+
+      const dir: "in" | "out" = e.deltaY < 0 ? "in" : "out";
+      const next = nextStep(zoom, dir);
+      if (next === zoom) return;
+      onZoomChange(next);
+
+      requestAnimationFrame(() => {
+        const s2 = scrollRef.current;
+        if (!s2) return;
+        s2.scrollLeft = contentX * next - (e.clientX - rect.left);
+        s2.scrollTop = contentY * next - (e.clientY - rect.top);
+      });
+    }
+
+    scroll.addEventListener("wheel", onWheel, { passive: false });
+    return () => scroll.removeEventListener("wheel", onWheel);
+  }, [zoom, onZoomChange]);
 
   const fitToScreen = useCallback(() => {
     const scroll = scrollRef.current;
