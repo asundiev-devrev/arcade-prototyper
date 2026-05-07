@@ -32,7 +32,10 @@ Built the nav and breadcrumb from the kit.
 - Dual sidebar — kit exposes one sidebar slot. Stacked two NavSidebars side by side; cleaner option is to hand-roll the outer shell.
 - Active-pill color — mockup shows neutral gray, kit default is blue. Used neutral.
 - Progress bar — no arcade primitive exists. Hand-rolled with `--bg-neutral-soft` + `--bg-neutral-prominent`. Flag if a primitive is wanted.
+- Unsure if `AvatarCount` accepts a `size` prop — guessed `"sm"`. Verify.
 ```
+
+Uncertainty counts as a deviation. If you don't know whether a prop / token / icon name is right, **list it as uncertain** — do not go grep arcade-gen to prove yourself. The build will fail loudly on a bad import; the designer can correct a prop guess in a follow-up turn.
 
 Keep the summary under 20 words. Keep each deviation bullet under 25 words. A terse, scannable list beats a complete-sentence explanation.
 
@@ -74,6 +77,7 @@ Every tool call costs a Bedrock round-trip. A frame that took 16 tool calls befo
 - **To enumerate icons**, use `Read {{ARCADE}}/src/components/icons/index.ts` — do NOT pipe it through `grep | awk`. Shell-quoting bugs cost 2-3 retries per attempt. `Read` returns the full barrel in one call; scan the names yourself.
 - **Do NOT Read the arcade-gen main index** (`{{ARCADE}}/src/components/index.ts`) to enumerate primitives. The closed list is in the Primitives quick-ref below; that's the API.
 - **Do NOT verify your own output against Figma by re-reading the Figma subtree.** You already have the screenshot/JSON from the initial read. If the frame is wrong, the designer will iterate.
+- **Do NOT verify your own output against arcade-gen or KIT-MANIFEST after writing the frame.** No re-reading the manifest, no `grep` over `{{ARCADE}}/src/components/...` to "confirm" a prop name or an icon exists, no re-reading the file you just wrote to audit yourself. If you're not sure a composite, prop, token, or icon is correct, **list it in your `### Deviations` section as uncertain** and let the build or the designer say so. The Deviations contract exists specifically so you can stop and surface doubt instead of burning tool calls trying to prove yourself right. Uncertainty IS a deviation.
 
 ### A sensible order (not a ritual)
 
