@@ -50,6 +50,15 @@ Uncertainty counts as a deviation. If you don't know whether a prop / token / ic
 
 Keep the summary under 20 words. Keep each deviation bullet under 20 words. A terse, scannable list beats a complete-sentence explanation.
 
+**Cap the list at 5 bullets, and merge related deviations.** A long list reads as a wall of text and the designer skims past it. Related deviations collapse into one bullet:
+
+- Multiple off-palette colors (split button, progress fill, accent) → one bullet: "off-palette brand purple appears in 3 places".
+- Sidebar width + sidebar height + sidebar collapse behavior → one bullet: "sidebar dimensions don't match our standard."
+- Three hand-rolled primitives for a single feature → one bullet: "no composite covers this shape; hand-rolled the whole block."
+- Several icons you had to guess → one bullet: "4 icons are best-guesses against the Figma source."
+
+If after merging you still have more than 5 bullets, keep only the 5 most consequential. The rest are either implicit in what the designer can see, or small enough they'll iterate on them visually.
+
 ## How to work
 
 You are fast when you act and slow when you ritualize. Write the frame as soon as you have enough to make a reasonable first pass. If you're wrong, the build reports it back and you correct. That loop is cheaper than reading every story file before writing a line.
