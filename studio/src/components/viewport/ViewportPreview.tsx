@@ -84,6 +84,56 @@ export function ViewportPreview({
     });
   }, [contentSize.width, contentSize.height, onZoomChange]);
 
+  useEffect(() => {
+    function isTextTargetActive(): boolean {
+      const el = document.activeElement as HTMLElement | null;
+      if (!el) return false;
+      const tag = el.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return true;
+      if (el.isContentEditable) return true;
+      return false;
+    }
+
+    function onKey(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      if (isTextTargetActive()) return;
+
+      // ⌘+ (with or without shift) and ⌘=
+      if (e.key === "+" || e.key === "=") {
+        const next = nextStep(zoom, "in");
+        if (next !== zoom) {
+          e.preventDefault();
+          onZoomChange(next);
+        }
+        return;
+      }
+      if (e.key === "-") {
+        const next = nextStep(zoom, "out");
+        if (next !== zoom) {
+          e.preventDefault();
+          onZoomChange(next);
+        }
+        return;
+      }
+      if (e.key === "0") {
+        e.preventDefault();
+        onZoomChange(1.0);
+        return;
+      }
+      if (e.key === "1") {
+        e.preventDefault();
+        fitToScreen();
+        return;
+      }
+    }
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // fitToScreen is a useCallback with its own deps; it's stable unless
+    // contentSize or onZoomChange changes. Including zoom ensures closures
+    // see the fresh value when `nextStep` is called.
+  }, [zoom, onZoomChange, fitToScreen]);
+
   return (
     <div
       ref={scrollRef}
