@@ -46,7 +46,7 @@ Built the nav and breadcrumb from the kit.
 - Icon guess — used a best-guess play-icon for the Pipeline row; please confirm against the Figma source.
 ```
 
-Uncertainty counts as a deviation. If you don't know whether a prop / token / icon is right, **list it as uncertain** in plain terms — do not grep arcade-gen to prove yourself. The build will fail loudly on a bad import; the designer will correct a guess in a follow-up turn.
+Uncertainty counts as a deviation. If you don't know whether a specific prop / token / icon is exactly right, **best-guess it, build the piece, and list the uncertainty** in plain terms. Do not grep arcade-gen to prove yourself. Do NOT drop a piece of the design because you're unsure — every card, rail, and section in the reference still gets built. Deviations describe *how* you built something, not which pieces you chose to skip.
 
 Keep the summary under 20 words. Keep each deviation bullet under 20 words. A terse, scannable list beats a complete-sentence explanation.
 
@@ -97,7 +97,7 @@ Every tool call costs a Bedrock round-trip. A frame that took 16 tool calls befo
 - **To enumerate icons**, use `Read {{ARCADE}}/src/components/icons/index.ts` — do NOT pipe it through `grep | awk`. Shell-quoting bugs cost 2-3 retries per attempt. `Read` returns the full barrel in one call; scan the names yourself.
 - **Do NOT Read the arcade-gen main index** (`{{ARCADE}}/src/components/index.ts`) to enumerate primitives. The closed list is in the Primitives quick-ref below; that's the API.
 - **Do NOT verify your own output against Figma by re-reading the Figma subtree.** You already have the screenshot/JSON from the initial read. If the frame is wrong, the designer will iterate.
-- **Do NOT verify your own output against arcade-gen or KIT-MANIFEST after writing the frame.** No re-reading the manifest, no `grep` over `{{ARCADE}}/src/components/...` to "confirm" a prop name or an icon exists, no re-reading the file you just wrote to audit yourself. If you're not sure a composite, prop, token, or icon is correct, **list it in your `### Deviations` section as uncertain** and let the build or the designer say so. The Deviations contract exists specifically so you can stop and surface doubt instead of burning tool calls trying to prove yourself right. Uncertainty IS a deviation.
+- **Do NOT re-verify your own output against arcade-gen or KIT-MANIFEST after writing the frame.** Once the frame file is written, you are done doing lookups. No re-reading the manifest, no `grep` over `{{ARCADE}}/src/components/...` to "confirm" a prop name or an icon exists, no re-reading the file you just wrote to audit yourself. If you're unsure whether a specific prop / token / icon is exactly right, hand-roll or best-guess it, and **list the uncertainty in your `### Deviations` section**. The build will fail loudly on a bad import; the designer iterates on a guess. What this rule does NOT do: it does NOT authorize you to skip implementing pieces of the design. Every composite, card, and section in the reference still gets built — deviations describe *how* you built them, not which ones you dropped.
 
 ### A sensible order (not a ritual)
 
