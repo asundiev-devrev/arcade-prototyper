@@ -35,12 +35,14 @@ export function FrameCard({
   frameWidth,
   onFrameWidthChange,
   projectMode,
+  zoom,
 }: {
   projectSlug: string;
   frame: Frame;
   frameWidth: number;
   onFrameWidthChange: (next: number) => void;
   projectMode: "light" | "dark";
+  zoom: number;
 }) {
   const [resizing, setResizing] = useState(false);
   const [hoverHandle, setHoverHandle] = useState(false);
@@ -55,7 +57,8 @@ export function FrameCard({
     function onMove(e: MouseEvent) {
       const s = resizeRef.current;
       if (!s) return;
-      const next = s.startWidth + (e.clientX - s.startX);
+      const zoomSafe = zoom > 0 ? zoom : 1;
+      const next = s.startWidth + (e.clientX - s.startX) / zoomSafe;
       onFrameWidthChange(
         Math.min(FRAME_WIDTH_MAX, Math.max(FRAME_WIDTH_MIN, next)),
       );
@@ -76,7 +79,7 @@ export function FrameCard({
       document.body.style.cursor = prevCursor;
       document.body.style.userSelect = prevSelect;
     };
-  }, [resizing, onFrameWidthChange]);
+  }, [resizing, onFrameWidthChange, zoom]);
 
   useEffect(() => {
     if (!picking) return;
