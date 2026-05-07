@@ -6,6 +6,16 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.11.1] — 2026-05-07
+
+### Fixed
+- Generator no longer re-reads the manifest or greps arcade-gen after writing a frame. The deviations contract had been inadvertently encouraging a post-write self-audit loop that burned through the turn budget and caused timeouts; now uncertainty is surfaced in the Deviations section instead of proved via extra tool calls.
+- Clarified that uncertainty is NOT a license to skip parts of the design. Every card, rail, and section in the reference still gets built — deviations describe how, not what was dropped.
+
+### Changed
+- Deviations bullets now follow a "write for a designer, not an engineer" rule: no raw hex, no Tailwind class fragments, no CSS variable names, no component prop syntax, no internal icon identifiers.
+- Deviations section capped at 5 bullets, with explicit merging rules (related color facets, sidebar dimensions, multiple guessed icons) so the list stays scannable.
+
 ## [0.11.0] — 2026-05-06
 
 ### Added
