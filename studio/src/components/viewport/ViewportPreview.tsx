@@ -93,19 +93,21 @@ export function ViewportPreview({
   }, [contentSize.width, contentSize.height, onZoomChange]);
 
   useEffect(() => {
-    function isTextTargetActive(): boolean {
+    // Narrow predicate for the zoom keys: skip only when focus is in a text
+    // editor. Buttons/selects don't care about ⌘+/-/0/1 and we don't want the
+    // shortcuts to silently no-op after the user clicks a toolbar icon.
+    function isTextEditorActive(): boolean {
       const el = document.activeElement as HTMLElement | null;
       if (!el) return false;
       const tag = el.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "BUTTON" || tag === "SELECT") return true;
+      if (tag === "INPUT" || tag === "TEXTAREA") return true;
       if (el.isContentEditable) return true;
-      if (el.getAttribute("role") === "button") return true;
       return false;
     }
 
     function onKey(e: KeyboardEvent) {
       if (!(e.metaKey || e.ctrlKey)) return;
-      if (isTextTargetActive()) return;
+      if (isTextEditorActive()) return;
 
       // ⌘+ (with or without shift) and ⌘=
       if (e.key === "+" || e.key === "=") {
