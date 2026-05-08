@@ -183,4 +183,42 @@ describe("wsServer integration", () => {
 
     alice.ws.close();
   });
+
+  it("serializes concurrent prompts — second one is rejected with turn_in_flight", async () => {
+    const s = await createSession({ hostDevu: "devu/A", projectSlug: "demo" });
+    await addInvite(s.id, { devu: "devu/A", invitedByDevu: "devu/A" });
+    await addInvite(s.id, { devu: "devu/B", invitedByDevu: "devu/A" });
+
+    const alice = await connect("pat-a", s.id);
+    await receiveUntil(alice, (m) => m.type === "session_state");
+
+    alice.ws.send(JSON.stringify({ type: "prompt", text: "first", turnId: "t-1" }));
+    await receiveUntil(alice, (m) => m.type === "prompt_started");
+
+    // Fire a second prompt while the first is still open.
+    alice.ws.send(JSON.stringify({ type: "prompt", text: "second", turnId: "t-2" }));
+    const err = await receiveUntil(alice, (m) => m.type === "error");
+    expect(err.code).toBe("turn_in_flight");
+
+    alice.ws.close();
+  });
+
+  it("after turn_ended, a subsequent prompt is accepted", async () => {
+    const s = await createSession({ hostDevu: "devu/A", projectSlug: "demo" });
+    await addInvite(s.id, { devu: "devu/A", invitedByDevu: "devu/A" });
+
+    const alice = await connect("pat-a", s.id);
+    await receiveUntil(alice, (m) => m.type === "session_state");
+
+    alice.ws.send(JSON.stringify({ type: "prompt", text: "a", turnId: "t-1" }));
+    await receiveUntil(alice, (m) => m.type === "prompt_started");
+    alice.ws.send(JSON.stringify({ type: "turn_ended", turnId: "t-1", ok: true }));
+    await receiveUntil(alice, (m) => m.type === "turn_ended");
+
+    alice.ws.send(JSON.stringify({ type: "prompt", text: "b", turnId: "t-2" }));
+    const started2 = await receiveUntil(alice, (m) => m.type === "prompt_started");
+    expect(started2.turnId).toBe("t-2");
+
+    alice.ws.close();
+  });
 });
