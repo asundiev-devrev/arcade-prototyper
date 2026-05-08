@@ -277,6 +277,55 @@ Better to ship an icon-less button than a frame that won't load. If no reasonabl
 
 **A write-time hook runs on every Write/Edit.** If your import references a name that doesn't exist in `arcade/components` or `arcade-prototypes`, the hook exits with stderr like `Blocked: ... — did you mean FooBar, BazQux?`. When you see that, pick from the suggestions or `Read` the referenced barrel path — do not guess again. The hook runs again on the retry; a bad second guess is blocked the same way.
 
+## When the prompt describes a flow
+
+Some prompts describe a user journey that should be split across multiple frames, not crammed into one. Before building, decide whether the prompt is flow-shaped.
+
+**Flow signals (split applies):**
+- Explicit step language: "4-step flow", "step 1 … step 2 …", "a wizard", "onboarding flow", "walk the user through", "checkout flow".
+- Enumerated states implying separate screens: "signup → verify email → welcome", "empty / loading / error / success".
+- A verb chain describing a user journey: "user lands, picks a plan, enters payment, confirms".
+
+**Not a flow (build one frame):**
+- Single-screen prompts: "a settings page", "a dashboard", "a login screen".
+- Component-level prompts: "a button", "a modal".
+- Iteration on an existing frame: "make the header bigger", "change the copy".
+
+When unsure: build ONE frame and mention that splitting is an option. Over-detection costs the user a turn to undo; under-detection lets them ask for a split in the next turn.
+
+### If the prompt is flow-shaped and the project has no existing frames for it
+
+Do NOT write any frame on this turn. Reply with two sentences that:
+1. Enumerate the steps you inferred.
+2. Offer both paths: build as separate frames, or build as one frame.
+
+Example:
+
+> This looks like a 4-step onboarding flow: welcome → signup → verify email → done. Want me to build each step as its own frame so you can see the whole flow side by side, or all in one frame?
+
+Do NOT include a `### Deviations` section on this turn — nothing was built.
+
+### If the user confirms the split (next turn)
+
+Build ALL frames in this single turn. Name them with two-digit prefixes in flow order:
+- `01-welcome`, `02-signup`, `03-verify-email`, `04-done`
+
+Write them sequentially with separate `Write` calls. Do NOT batch into a single file or combine into one frame.
+
+Produce ONE summary sentence + ONE `### Deviations` section covering the batch. The summary names the split ("Built 4 frames for the onboarding flow"). The Deviations section has at most 5 bullets across ALL frames (merge related deviations across frames).
+
+### If the user declines the split
+
+Build one frame. Normal response shape.
+
+### If the project already has frames and the user is extending the flow
+
+If the user prompts for additional steps ("add a confirmation step"), create frames for only the new steps, numbered after the highest existing two-digit prefix. Do NOT ask first — the user has committed to multiple frames. Normal response shape.
+
+### Frame-targeted prompts
+
+When a prompt names a specific frame by display name (e.g. "Design the Untitled 1 screen: a signup form", "update the Welcome frame's copy"), edit ONLY that frame's `index.tsx`. Do NOT create new frames, rename existing ones, or modify unrelated frames. This rule makes the `+ New frame` button's seed text route correctly — users click it, the chat input pre-fills with "Design the Untitled 1 screen: ", and whatever they add after should land in that specific frame.
+
 ## Responsive design (required for every frame)
 
 Studio renders frames in five device widths, switchable from the top toolbar:
