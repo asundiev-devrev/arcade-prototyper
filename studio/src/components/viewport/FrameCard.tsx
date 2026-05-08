@@ -244,16 +244,22 @@ export function FrameCard({
         </div>
       </div>
       <div
-        className="arcade-studio-frame-body"
         style={{
           position: "relative",
           width: clampedWidth,
           height: "calc(100vh - 180px)",
           transition: resizing ? "none" : "width 200ms ease-out",
           willChange: "width",
-          borderRadius: 12,
         }}
       >
+        {highlighted && (
+          <span
+            key={`${highlighted}-${frame.slug}-${Date.now()}`}
+            className="arcade-studio-nav-pulse"
+            data-kind={highlighted}
+            aria-hidden="true"
+          />
+        )}
         <div
           style={{
             position: "absolute",

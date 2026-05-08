@@ -13,51 +13,54 @@ summary { list-style: none; }
   50%      { opacity: 1;    transform: scale(1.1); }
 }
 
-/* FrameLink nav highlights. The outer FrameCard div gets `data-nav-highlight`;
- * this renders a pulsing ring around the landed frame. Rendered on the
- * `.arcade-studio-frame-body` wrapper (NOT the inner body that clips the
- * iframe), so the ring paints outside the iframe bounds.
+/* FrameLink nav highlight pulse. An absolutely-positioned overlay inside
+ * the frame body wrapper starts as a small inset outline and expands
+ * outward while fading — an energy-ripple effect. Overlay sits above the
+ * iframe via z-index and pointer-events: none so clicks still reach the
+ * iframe contents.
  *
- * Two layered shadows: a crisp accent-colored ring (20% → 0 opacity) plus
- * a wider softer glow. Both expand outward so the pulse reads as an
- * energy ripple rather than a stroke. */
-@keyframes arcade-studio-nav-highlight-target {
+ * Colors are hard-coded rgba so the animation works regardless of which
+ * theme tokens happen to resolve at render time. Blue = nav target,
+ * red = missing target. */
+@keyframes arcade-studio-nav-pulse-target {
   0% {
-    box-shadow:
-      0 0 0 0 rgba(14, 99, 240, 0.9),
-      0 0 0 0 rgba(14, 99, 240, 0.45);
+    inset: 0;
+    border-color: rgba(14, 99, 240, 0.9);
+    opacity: 1;
   }
-  60% {
-    box-shadow:
-      0 0 0 6px rgba(14, 99, 240, 0.0),
-      0 0 0 18px rgba(14, 99, 240, 0.0);
+  50% {
+    inset: -8px;
+    border-color: rgba(14, 99, 240, 0.7);
+    opacity: 0.9;
   }
   100% {
-    box-shadow:
-      0 0 0 0 rgba(14, 99, 240, 0),
-      0 0 0 0 rgba(14, 99, 240, 0);
+    inset: -16px;
+    border-color: rgba(14, 99, 240, 0);
+    opacity: 0;
   }
 }
-@keyframes arcade-studio-nav-highlight-missing {
+@keyframes arcade-studio-nav-pulse-missing {
   0% {
-    box-shadow:
-      0 0 0 0 rgba(220, 38, 38, 0.9),
-      0 0 0 0 rgba(220, 38, 38, 0.45);
-  }
-  60% {
-    box-shadow:
-      0 0 0 6px rgba(220, 38, 38, 0),
-      0 0 0 18px rgba(220, 38, 38, 0);
+    inset: 0;
+    border-color: rgba(220, 38, 38, 0.9);
+    opacity: 1;
   }
   100% {
-    box-shadow:
-      0 0 0 0 rgba(220, 38, 38, 0),
-      0 0 0 0 rgba(220, 38, 38, 0);
+    inset: -12px;
+    border-color: rgba(220, 38, 38, 0);
+    opacity: 0;
   }
 }
-[data-nav-highlight="target"] .arcade-studio-frame-body {
-  animation: arcade-studio-nav-highlight-target 1100ms cubic-bezier(0.22, 1, 0.36, 1);
+.arcade-studio-nav-pulse {
+  position: absolute;
+  pointer-events: none;
+  border: 2px solid transparent;
+  border-radius: 14px;
+  z-index: 2;
 }
-[data-nav-highlight="missing"] .arcade-studio-frame-body {
-  animation: arcade-studio-nav-highlight-missing 600ms cubic-bezier(0.22, 1, 0.36, 1);
+.arcade-studio-nav-pulse[data-kind="target"] {
+  animation: arcade-studio-nav-pulse-target 900ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.arcade-studio-nav-pulse[data-kind="missing"] {
+  animation: arcade-studio-nav-pulse-missing 600ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
