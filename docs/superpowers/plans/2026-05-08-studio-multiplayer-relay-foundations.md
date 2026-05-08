@@ -988,7 +988,7 @@ describe("protocol.applyCommand", () => {
       connId: "c2",
     });
     expect(nextState.connections.size).toBe(2);
-    expect(events.find((e) => e.type === "user_joined")).toBeTruthy();
+    expect(events.find((e) => e.event.type === "user_joined")).toBeTruthy();
     expect(nextState.driverDevu).toBe(HOST); // unchanged by guest join
   });
 
