@@ -85,8 +85,16 @@ export function Viewport({
       const source = typeof payload.source === "string" ? payload.source : null;
       if (!target) return;
 
+      // Defense-in-depth: frame slugs are constrained to [a-z0-9-]+ server-side
+      // (see projectSchema in server/types.ts), so selector injection isn't
+      // reachable today. Still escape if CSS.escape is available, fall back to
+      // a conservative pattern check otherwise (jsdom lacks CSS.escape).
+      const safeTarget = typeof CSS !== "undefined" && typeof CSS.escape === "function"
+        ? CSS.escape(target)
+        : /^[a-z0-9-]+$/i.test(target) ? target : null;
+      if (!safeTarget) return;
       const targetEl = document.querySelector<HTMLElement>(
-        `[data-frame-slug="${target}"]`,
+        `[data-frame-slug="${safeTarget}"]`,
       );
       if (!targetEl) {
         console.warn(`[Viewport] FrameLink target "${target}" not found`);
