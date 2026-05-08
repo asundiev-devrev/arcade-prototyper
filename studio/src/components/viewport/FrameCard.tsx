@@ -36,6 +36,7 @@ export function FrameCard({
   onFrameWidthChange,
   projectMode,
   zoom,
+  highlighted,
 }: {
   projectSlug: string;
   frame: Frame;
@@ -43,6 +44,9 @@ export function FrameCard({
   onFrameWidthChange: (next: number) => void;
   projectMode: "light" | "dark";
   zoom: number;
+  /** When set, paints a temporary outline: "target" = blue (nav success),
+   *  "missing" = red (nav target not found). `null`/`undefined` = no highlight. */
+  highlighted?: "target" | "missing" | null;
 }) {
   const [resizing, setResizing] = useState(false);
   const [hoverHandle, setHoverHandle] = useState(false);
@@ -155,7 +159,11 @@ export function FrameCard({
     target !== null && target.frameSlug === frame.slug;
 
   return (
-    <div style={{ flex: "none" }}>
+    <div
+      style={{ flex: "none" }}
+      data-frame-slug={frame.slug}
+      data-nav-highlight={highlighted ?? undefined}
+    >
       <div
         style={{
           display: "flex",
@@ -254,8 +262,12 @@ export function FrameCard({
             overflow: "hidden",
             boxShadow: picking
               ? "inset 0 0 0 2px var(--component-button-primary-bg-idle)"
+              : highlighted === "target"
+              ? "inset 0 0 0 2px var(--component-button-primary-bg-idle)"
+              : highlighted === "missing"
+              ? "inset 0 0 0 2px var(--fg-alert-prominent)"
               : undefined,
-            transition: "box-shadow 0.15s ease",
+            transition: "box-shadow 0.4s ease",
           }}
         >
           <iframe

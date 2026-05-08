@@ -24,6 +24,10 @@ export function Viewport({
 }) {
   const { frames } = useFrames(project);
   const [creatingFrame, setCreatingFrame] = useState(false);
+  const [highlight, setHighlight] = useState<{
+    slug: string;
+    kind: "target" | "missing";
+  } | null>(null);
 
   async function handleCreateFrame() {
     if (creatingFrame) return;
@@ -66,6 +70,41 @@ export function Viewport({
     return () => window.removeEventListener("message", onMessage);
   }, [project.slug]);
 
+  useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      const data = e.data;
+      if (
+        !data ||
+        typeof data !== "object" ||
+        (data as { type?: unknown }).type !== "arcade-studio:navigate"
+      ) {
+        return;
+      }
+      const payload = data as { target?: unknown; source?: unknown };
+      const target = typeof payload.target === "string" ? payload.target : null;
+      const source = typeof payload.source === "string" ? payload.source : null;
+      if (!target) return;
+
+      const targetEl = document.querySelector<HTMLElement>(
+        `[data-frame-slug="${target}"]`,
+      );
+      if (!targetEl) {
+        console.warn(`[Viewport] FrameLink target "${target}" not found`);
+        if (source) {
+          setHighlight({ slug: source, kind: "missing" });
+          window.setTimeout(() => setHighlight(null), 600);
+        }
+        return;
+      }
+
+      targetEl.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+      setHighlight({ slug: target, kind: "target" });
+      window.setTimeout(() => setHighlight(null), 1100);
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
   if (!frames.length) return <EmptyViewport onCreateFrame={handleCreateFrame} busy={creatingFrame} />;
 
   return (
@@ -89,6 +128,7 @@ export function Viewport({
             onFrameWidthChange={onFrameWidthChange}
             projectMode={project.mode}
             zoom={zoom}
+            highlighted={highlight?.slug === f.slug ? highlight.kind : null}
           />
         ))}
         <NewFrameCard onClick={handleCreateFrame} busy={creatingFrame} />
