@@ -5,6 +5,7 @@ import {
   type ClipboardEvent,
   type DragEvent,
   type ChangeEvent,
+  type MutableRefObject,
 } from "react";
 import { ChatInput } from "../../../prototype-kit/composites/ChatInput";
 import { extractFigmaUrl } from "../../lib/figmaUrl";
@@ -19,6 +20,7 @@ interface PromptInputProps {
   busy: boolean;
   projectSlug: string;
   onSend: (prompt: string, images: string[]) => void;
+  seedRef?: MutableRefObject<((text: string) => void) | null>;
 }
 
 /**
@@ -52,7 +54,7 @@ function buildTargetPreamble(t: TargetSelection): string {
   ].join("\n");
 }
 
-export function PromptInput({ busy, projectSlug, onSend }: PromptInputProps) {
+export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputProps) {
   const [text, setText] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [imagePaths, setImagePaths] = useState<string[]>([]);
@@ -77,6 +79,20 @@ export function PromptInput({ busy, projectSlug, onSend }: PromptInputProps) {
       if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!seedRef) return;
+    seedRef.current = (seed: string) => {
+      setText(seed);
+      requestAnimationFrame(() => {
+        const el = inputRef.current;
+        if (!el) return;
+        el.focus();
+        try { el.setSelectionRange(seed.length, seed.length); } catch { /* ignore */ }
+      });
+    };
+    return () => { seedRef.current = null; };
+  }, [seedRef]);
 
   useEffect(() => {
     if (!detectedFigmaUrl) return;
