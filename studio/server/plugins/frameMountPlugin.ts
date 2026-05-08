@@ -115,6 +115,7 @@ export function frameMountPlugin(): Plugin {
         import { FrameErrorBoundary } from "arcade-studio/frame/FrameErrorBoundary";
         import { FrameFontProxy } from "arcade-studio/frame/FrameFontProxy";
         import "arcade-studio/frame/picker";
+        import "arcade-studio/frame/gestureForwarder";
         import Frame from "${absFrame}";
 
         ReactDOM.createRoot(document.getElementById("root")).render(

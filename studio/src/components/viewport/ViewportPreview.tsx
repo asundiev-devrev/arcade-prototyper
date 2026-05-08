@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { ZoomIndicator } from "./ZoomIndicator";
-import { nextStep, snapToNearestStep } from "./zoomSteps";
+import { ZOOM_MAX, ZOOM_MIN, nextStep, snapToNearestStep } from "./zoomSteps";
+
+// Wheel zoom is continuous (multiplicative). Each wheel unit multiplies zoom
+// by exp(-deltaY * ZOOM_WHEEL_FACTOR). Clamp per-event delta so a single
+// scroll-wheel notch (deltaY ≈ 100) doesn't blow past several "steps" at once.
+const ZOOM_WHEEL_FACTOR = 0.005;
+const ZOOM_WHEEL_MAX_DELTA = 50;
 
 export function ViewportPreview({
   children,
@@ -34,44 +40,87 @@ export function ViewportPreview({
       });
     });
     observer.observe(el);
-    // Initial measurement.
     setContentSize({ width: el.scrollWidth, height: el.scrollHeight });
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
-    const scroll = scrollRef.current;
-    if (!scroll) return;
-
-    function onWheel(e: WheelEvent) {
-      // Only intercept when ⌘ (mac) or ctrl (other / trackpad pinch) is held.
-      if (!e.metaKey && !e.ctrlKey) return;
-      e.preventDefault();
-
+  /**
+   * Apply a continuous cursor-anchored zoom. `clientX`/`clientY` are
+   * parent-window client coordinates; `deltaY` is the raw wheel delta.
+   *
+   * Zoom is multiplicative so pinch gestures feel proportional: small
+   * delta → small zoom change, regardless of current level. Scroll-up (or
+   * trackpad fingers apart) → negative deltaY → zoom in.
+   */
+  const applyZoomAtPoint = useCallback(
+    (clientX: number, clientY: number, deltaY: number) => {
       const s = scrollRef.current;
       if (!s) return;
+      const clamped = Math.max(-ZOOM_WHEEL_MAX_DELTA, Math.min(ZOOM_WHEEL_MAX_DELTA, deltaY));
+      const factor = Math.exp(-clamped * ZOOM_WHEEL_FACTOR);
+      const next = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoom * factor));
+      if (next === zoom) return;
+
       const rect = s.getBoundingClientRect();
-      const cursorX = e.clientX - rect.left + s.scrollLeft;
-      const cursorY = e.clientY - rect.top + s.scrollTop;
+      const cursorX = clientX - rect.left + s.scrollLeft;
+      const cursorY = clientY - rect.top + s.scrollTop;
       const contentX = cursorX / zoom;
       const contentY = cursorY / zoom;
 
-      const dir: "in" | "out" = e.deltaY < 0 ? "in" : "out";
-      const next = nextStep(zoom, dir);
-      if (next === zoom) return;
       onZoomChange(next);
 
       requestAnimationFrame(() => {
         const s2 = scrollRef.current;
         if (!s2) return;
-        s2.scrollLeft = contentX * next - (e.clientX - rect.left);
-        s2.scrollTop = contentY * next - (e.clientY - rect.top);
+        s2.scrollLeft = contentX * next - (clientX - rect.left);
+        s2.scrollTop = contentY * next - (clientY - rect.top);
       });
-    }
+    },
+    [zoom, onZoomChange],
+  );
 
+  /** Begin a pan. `clientX`/`clientY` are parent-window coordinates. */
+  const beginPan = useCallback((clientX: number, clientY: number) => {
+    const s = scrollRef.current;
+    if (!s) return;
+    panStateRef.current = {
+      startX: clientX,
+      startY: clientY,
+      startScrollLeft: s.scrollLeft,
+      startScrollTop: s.scrollTop,
+    };
+    setPanning(true);
+  }, []);
+
+  const updatePan = useCallback((clientX: number, clientY: number) => {
+    const s = scrollRef.current;
+    const st = panStateRef.current;
+    if (!s || !st) return;
+    s.scrollLeft = st.startScrollLeft - (clientX - st.startX);
+    s.scrollTop = st.startScrollTop - (clientY - st.startY);
+  }, []);
+
+  const endPan = useCallback(() => {
+    setPanning(false);
+    panStateRef.current = null;
+  }, []);
+
+  // Direct wheel handler on the scroll container. Catches ⌘+wheel when the
+  // cursor is over parent DOM (gaps between frames, the background, the
+  // indicator pill). When the cursor is over an iframe, the frame-side
+  // gestureForwarder posts a "canvas-wheel" message and the listener below
+  // runs applyZoomAtPoint with the translated coordinates.
+  useEffect(() => {
+    const scroll = scrollRef.current;
+    if (!scroll) return;
+    function onWheel(e: WheelEvent) {
+      if (!e.metaKey && !e.ctrlKey) return;
+      e.preventDefault();
+      applyZoomAtPoint(e.clientX, e.clientY, e.deltaY);
+    }
     scroll.addEventListener("wheel", onWheel, { passive: false });
     return () => scroll.removeEventListener("wheel", onWheel);
-  }, [zoom, onZoomChange]);
+  }, [applyZoomAtPoint]);
 
   const fitToScreen = useCallback(() => {
     const scroll = scrollRef.current;
@@ -92,10 +141,9 @@ export function ViewportPreview({
     });
   }, [contentSize.width, contentSize.height, onZoomChange]);
 
+  // Keyboard shortcuts: ⌘+/-/0/1. Global so the gesture works whether or not
+  // the viewport is focused.
   useEffect(() => {
-    // Narrow predicate for the zoom keys: skip only when focus is in a text
-    // editor. Buttons/selects don't care about ⌘+/-/0/1 and we don't want the
-    // shortcuts to silently no-op after the user clicks a toolbar icon.
     function isTextEditorActive(): boolean {
       const el = document.activeElement as HTMLElement | null;
       if (!el) return false;
@@ -108,8 +156,6 @@ export function ViewportPreview({
     function onKey(e: KeyboardEvent) {
       if (!(e.metaKey || e.ctrlKey)) return;
       if (isTextEditorActive()) return;
-
-      // ⌘+ (with or without shift) and ⌘=
       if (e.key === "+" || e.key === "=") {
         const next = nextStep(zoom, "in");
         if (next !== zoom) {
@@ -140,13 +186,13 @@ export function ViewportPreview({
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // fitToScreen is a useCallback with its own deps; it's stable unless
-    // contentSize or onZoomChange changes. Including zoom ensures closures
-    // see the fresh value when `nextStep` is called.
   }, [zoom, onZoomChange, fitToScreen]);
 
+  // Space-held tracking for space-drag pan. Broader predicate than the zoom
+  // shortcuts because Space activates focused buttons natively — we must not
+  // preempt that.
   useEffect(() => {
-    function isTextTargetActive(): boolean {
+    function isInteractiveTargetActive(): boolean {
       const el = document.activeElement as HTMLElement | null;
       if (!el) return false;
       const tag = el.tagName;
@@ -157,9 +203,9 @@ export function ViewportPreview({
     }
     function onDown(e: KeyboardEvent) {
       if (e.code !== "Space") return;
-      if (isTextTargetActive()) return;
+      if (isInteractiveTargetActive()) return;
       if (!spaceHeld) {
-        e.preventDefault(); // prevent page scroll
+        e.preventDefault();
         setSpaceHeld(true);
       }
     }
@@ -187,18 +233,16 @@ export function ViewportPreview({
     };
   }, [spaceHeld]);
 
+  // Direct mousemove/mouseup while panning, for pans that started on parent
+  // DOM. The transform wrapper sets pointer-events:none while panning, so
+  // even drags that cross over iframes keep hitting the parent window.
   useEffect(() => {
     if (!panning) return;
     function onMove(e: MouseEvent) {
-      const s = scrollRef.current;
-      const st = panStateRef.current;
-      if (!s || !st) return;
-      s.scrollLeft = st.startScrollLeft - (e.clientX - st.startX);
-      s.scrollTop = st.startScrollTop - (e.clientY - st.startY);
+      updatePan(e.clientX, e.clientY);
     }
     function onUp() {
-      setPanning(false);
-      panStateRef.current = null;
+      endPan();
     }
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -212,19 +256,44 @@ export function ViewportPreview({
       document.body.style.cursor = prevCursor;
       document.body.style.userSelect = prevSelect;
     };
-  }, [panning]);
+  }, [panning, updatePan, endPan]);
+
+  // Forwarded events from frame iframes. Iframes are a hard event boundary,
+  // so the gestureForwarder runs inside each frame and posts parent-window
+  // coordinates back here. We run the same actions the direct handlers do.
+  useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      const data = e.data as { type?: unknown } | null;
+      if (!data || typeof data !== "object" || typeof data.type !== "string") return;
+      const type = data.type;
+      if (type === "arcade-studio:canvas-wheel") {
+        const { parentX, parentY, deltaY } = data as {
+          parentX: number;
+          parentY: number;
+          deltaY: number;
+        };
+        applyZoomAtPoint(parentX, parentY, deltaY);
+      } else if (type === "arcade-studio:canvas-space-down") {
+        setSpaceHeld(true);
+      } else if (type === "arcade-studio:canvas-space-up") {
+        setSpaceHeld(false);
+      } else if (type === "arcade-studio:canvas-pan-start") {
+        const { parentX, parentY } = data as { parentX: number; parentY: number };
+        beginPan(parentX, parentY);
+      } else if (type === "arcade-studio:canvas-pan-move") {
+        const { parentX, parentY } = data as { parentX: number; parentY: number };
+        updatePan(parentX, parentY);
+      } else if (type === "arcade-studio:canvas-pan-end") {
+        endPan();
+      }
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [applyZoomAtPoint, beginPan, updatePan, endPan]);
 
   function startPan(e: ReactMouseEvent) {
-    const s = scrollRef.current;
-    if (!s) return;
     e.preventDefault();
-    panStateRef.current = {
-      startX: e.clientX,
-      startY: e.clientY,
-      startScrollLeft: s.scrollLeft,
-      startScrollTop: s.scrollTop,
-    };
-    setPanning(true);
+    beginPan(e.clientX, e.clientY);
   }
 
   return (
@@ -233,7 +302,6 @@ export function ViewportPreview({
       role="region"
       aria-label="Design viewport"
       onMouseDown={(e) => {
-        // Middle mouse → always pan. Space held + primary button → pan.
         if (e.button === 1 || (e.button === 0 && spaceHeld)) {
           startPan(e);
         }
@@ -242,7 +310,7 @@ export function ViewportPreview({
         display: "block",
         height: "100%",
         position: "relative",
-        background: "var(--surface-shallow)",
+        background: "var(--bg-neutral-soft)",
         overflow: "auto",
         cursor: panning ? "grabbing" : spaceHeld ? "grab" : undefined,
       }}
