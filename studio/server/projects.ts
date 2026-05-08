@@ -418,5 +418,7 @@ async function enqueueThumbnailCapture(slug: string, framesSlugs: string[]): Pro
 }
 
 function titleCase(slug: string): string {
-  return slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  // Strip leading numeric prefix (e.g., "01-untitled-1" → "untitled-1")
+  const withoutPrefix = slug.replace(/^\d+-/, "");
+  return withoutPrefix.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
