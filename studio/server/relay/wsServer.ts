@@ -152,7 +152,7 @@ function onConnection(
       sendEvent(ws, {
         type: "error",
         code: "bad_command",
-        message: result.error.errors[0]?.message ?? "Invalid command shape.",
+        message: result.error.issues[0]?.message ?? "Invalid command shape.",
       });
       return;
     }
