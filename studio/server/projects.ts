@@ -329,7 +329,7 @@ export async function readProjectFile(slug: string, rel: string): Promise<string
 
 /**
  * Compute the next two-digit prefix for a new frame. Scans existing
- * frame slugs for a leading `\d{2,}-` prefix and returns highest+1,
+ * frame slugs for a leading `\d+-` prefix and returns highest+1,
  * padded to two digits (or more if we've gone past 99). Slugs without
  * a numeric prefix are ignored.
  */
