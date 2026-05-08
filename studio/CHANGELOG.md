@@ -6,6 +6,12 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.0] — 2026-05-08
+
+### Added
+- Inter-frame navigation via `<FrameLink target="NN-slug">`. When your prompt names an element that should transition between frames — "clicking the skill card opens the modal", "clicking Edit goes to settings" — the agent wraps that element. Clicking it scrolls the viewport to the target frame and highlights it for about a second. Keyboard-accessible (Tab + Enter/Space).
+- Agent template teaches this wiring only when prompts explicitly name the trigger. If the prompt is silent about interactions, the agent ships three disconnected frames and flags the missing navigation in its Deviations section.
+
 ## [0.13.1] — 2026-05-08
 
 ### Fixed
