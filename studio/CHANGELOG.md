@@ -6,6 +6,14 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.12.1] — 2026-05-08
+
+### Fixed
+- ⌘/ctrl+scroll now zooms the canvas even when the cursor is over a frame (iframes were a hard event boundary and the gesture escaped to the browser's native page zoom). Space-drag and middle-mouse pan also work when starting over a frame.
+- Wheel zoom is now continuous and proportional — trackpad pinch feels smooth instead of jumping several discrete steps per event. Keyboard shortcuts and menu items still snap to the discrete ladder (50% / 100% / 200%).
+- Canvas background is uniform at any zoom level — the darker inner rectangle that appeared when zooming out is gone.
+- Dev-only: stale Vite HMR socket errors no longer red-screen frames after a dev-server restart.
+
 ## [0.12.0] — 2026-05-07
 
 ### Added
