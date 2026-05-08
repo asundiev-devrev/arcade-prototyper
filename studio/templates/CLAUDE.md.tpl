@@ -115,6 +115,7 @@ These are specific failure modes that have burned prior generations. None of the
 | `breadcrumbBar={null}` on `AppShell` while still worrying about a divider | AppShell now handles the null case correctly (no divider above body). Just pass `null` and don't add your own border. | Omit the prop entirely, or pass `null`. The composite does the right thing. |
 | Writing your own `<svg>` for a logo/icon the Figma frame shows | Figma's rendered logo is an exported image asset, not a vector you reconstruct by eyeballing coordinates. | Export from Figma via `figmanage export nodes --format png --scale 2`, save to `shared/`, `<img src="..." />`. Or write a P4 TODO and let the designer supply the asset. |
 | Re-enabling suppressed composite defaults (e.g. passing `workspace=""` to NavSidebar expecting it to hide) | Empty strings are not the same as omission. Composites check truthiness, not emptiness. | Omit the prop entirely: `<NavSidebar>…</NavSidebar>` with no `workspace` prop hides the brand header. |
+| Wrapping every button in `<FrameLink>` because "this is a multi-frame flow" | Navigation is specific to the prompt's instructions, not a general property of flows. | Only wrap elements the prompt names as triggers. If the prompt doesn't name the trigger, don't wrap. |
 
 If you catch yourself writing any of the left-column patterns, stop and revise. These are the exact mistakes the principles exist to prevent.
 
@@ -321,6 +322,37 @@ Build one frame. Normal response shape.
 ### If the project already has frames and the user is extending the flow
 
 If the user prompts for additional steps ("add a confirmation step"), create frames for only the new steps, numbered after the highest existing two-digit prefix. Do NOT ask first — the user has committed to multiple frames. Normal response shape.
+
+### Wiring the flow
+
+A multi-frame prototype without navigation is just three disconnected screens. If the user's prompt names a specific element that should cause a transition between frames, wire it using `<FrameLink>`. Otherwise don't.
+
+**Signal patterns to watch for in the prompt:**
+- "click X and Y happens" — wrap X, target Y's frame.
+- "clicking the card opens the modal" — wrap each card in the list.
+- "pressing Save goes to the confirmation" — wrap the Save button.
+- "the user clicks Edit and sees the settings" — wrap the Edit button.
+
+**Primitive:** `<FrameLink target="NN-slug">…</FrameLink>` from `arcade-prototypes`. Wraps any element and makes clicking it navigate to the target frame. Invisible — no visual styling beyond a pointer cursor.
+
+```tsx
+// Prompt: "Click any skill card → opens the skill modal. Click Edit → settings."
+// Frame 01-skills-gallery writes:
+<FrameLink target="02-skill-modal">
+  <SkillCard name="Research" />
+</FrameLink>
+
+// Frame 02-skill-modal writes:
+<FrameLink target="03-skill-settings">
+  <Button>Edit</Button>
+</FrameLink>
+```
+
+**Slug source:** use the slug you assigned at split time (e.g. `01-skills-gallery`). The target frame's file doesn't need to exist yet — the slug is decided when you split.
+
+**Import:** `import { FrameLink } from "arcade-prototypes";`
+
+**When the prompt is silent about triggers**, do NOT invent them. List "no navigation wired — prompt didn't specify triggers" as a bullet in your `### Deviations` section. Matches the existing "don't invent content" rule.
 
 ### Frame-targeted prompts
 
