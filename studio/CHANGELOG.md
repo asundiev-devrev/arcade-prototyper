@@ -12,6 +12,9 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Agent detects flow-shaped prompts ("4-step onboarding", "wizard", "checkout flow") and proposes splitting them into multiple frames before building. If the user confirms, every frame is generated in a single turn with two-digit filename prefixes.
 - "+ New frame" button in the viewport (end of the frame row) and in the empty state. Clicking it creates a blank frame on disk and focuses the chat with "Design the Untitled N screen: " pre-filled.
 
+### Changed
+- Frame display names now omit the numeric filename prefix (e.g. "Home" instead of "01 Home"). Frame slugs and on-disk paths are unchanged — this only affects how names render in the frame header, share modal, and seeded chat prompt.
+
 ## [0.12.1] — 2026-05-08
 
 ### Fixed
