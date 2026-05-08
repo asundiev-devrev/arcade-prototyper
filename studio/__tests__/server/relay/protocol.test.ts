@@ -300,6 +300,108 @@ describe("protocol.applyCommand", () => {
     });
     expect(nextState.currentTurn).toBeNull();
   });
+
+  it("frame_write from driver broadcasts frame_written with turnId", () => {
+    let s = withHostConnected();
+    s = applyCommand(s, {
+      type: "prompt",
+      connDevu: HOST,
+      connId: "c1",
+      text: "a",
+      turnId: "t-1",
+    }).nextState;
+    const { events } = applyCommand(s, {
+      type: "frame_write",
+      connDevu: HOST,
+      connId: "c1",
+      path: "frames/01-home/index.tsx",
+      content: "export default function Home(){return null;}",
+      turnId: "t-1",
+    });
+    const fan = events.find((e) => e.event.type === "frame_written");
+    expect(fan).toBeTruthy();
+    expect(fan?.recipient).toBe("broadcast");
+    if (fan?.event.type === "frame_written") {
+      expect(fan.event.path).toBe("frames/01-home/index.tsx");
+      expect(fan.event.turnId).toBe("t-1");
+    }
+  });
+
+  it("frame_write from non-driver is rejected", () => {
+    let s = withHostConnected();
+    s = applyCommand(s, {
+      type: "join",
+      sessionId: "sess-1",
+      connDevu: GUEST,
+      connDisplayName: "Guest",
+      connId: "c2",
+    }).nextState;
+    const { events } = applyCommand(s, {
+      type: "frame_write",
+      connDevu: GUEST,
+      connId: "c2",
+      path: "frames/01/index.tsx",
+      content: "",
+      turnId: "t-1",
+    });
+    const err = events.find((e) => e.event.type === "error");
+    expect(err?.event.type === "error" && err.event.code).toBe("not_driver");
+  });
+
+  it("frame_delete from driver broadcasts frame_deleted", () => {
+    const s0 = withHostConnected();
+    const { events } = applyCommand(s0, {
+      type: "frame_delete",
+      connDevu: HOST,
+      connId: "c1",
+      path: "frames/99-old/index.tsx",
+    });
+    const del = events.find((e) => e.event.type === "frame_deleted");
+    expect(del).toBeTruthy();
+    expect(del?.recipient).toBe("broadcast");
+  });
+
+  it("cancel_turn clears currentTurn when turnId matches and broadcasts a turn_ended error", () => {
+    let s = withHostConnected();
+    s = applyCommand(s, {
+      type: "prompt",
+      connDevu: HOST,
+      connId: "c1",
+      text: "a",
+      turnId: "t-1",
+    }).nextState;
+    const { nextState, events } = applyCommand(s, {
+      type: "cancel_turn",
+      connDevu: HOST,
+      connId: "c1",
+      turnId: "t-1",
+    });
+    expect(nextState.currentTurn).toBeNull();
+    const ended = events.find((e) => e.event.type === "turn_ended");
+    expect(ended).toBeTruthy();
+    if (ended?.event.type === "turn_ended") {
+      expect(ended.event.ok).toBe(false);
+      expect(ended.event.error).toBe("cancelled");
+    }
+  });
+
+  it("cancel_turn with mismatched turnId leaves currentTurn intact", () => {
+    let s = withHostConnected();
+    s = applyCommand(s, {
+      type: "prompt",
+      connDevu: HOST,
+      connId: "c1",
+      text: "a",
+      turnId: "t-1",
+    }).nextState;
+    const { nextState } = applyCommand(s, {
+      type: "cancel_turn",
+      connDevu: HOST,
+      connId: "c1",
+      turnId: "t-DIFFERENT",
+    });
+    expect(nextState.currentTurn?.turnId).toBe("t-1");
+  });
 });
 
 describe("protocol.applyDisconnect", () => {
@@ -324,5 +426,55 @@ describe("protocol.applyDisconnect", () => {
     expect(nextState.driverDisconnectedAt).toBeGreaterThan(0);
     // driver devu stays set so a returning host can reclaim without "claim".
     expect(nextState.driverDevu).toBe(HOST);
+  });
+
+  it("uses opts.now when provided for driverDisconnectedAt", () => {
+    const s0 = withHostConnected();
+    const { nextState } = applyDisconnect(s0, "c1", { now: 123_456_000 });
+    expect(nextState.driverDisconnectedAt).toBe(123_456_000);
+  });
+
+  it("does NOT emit user_left when the devu has another active connection", () => {
+    let s = withHostConnected();
+    // Host opens a second tab: another connection with the same devu.
+    s = applyCommand(s, {
+      type: "join",
+      sessionId: "sess-1",
+      connDevu: HOST,
+      connDisplayName: "Host",
+      connId: "c1-tab2",
+    }).nextState;
+    const { nextState, events } = applyDisconnect(s, "c1");
+    expect(nextState.connections.has("c1")).toBe(false);
+    expect(nextState.connections.has("c1-tab2")).toBe(true);
+    expect(events.find((e) => e.event.type === "user_left")).toBeUndefined();
+    // Since another connection for the same devu remains, driverDisconnectedAt also stays null.
+    expect(nextState.driverDisconnectedAt).toBeNull();
+  });
+
+  it("emits user_left only when the last connection for a devu drops", () => {
+    let s = withHostConnected();
+    // Guest joins twice (two tabs).
+    s = applyCommand(s, {
+      type: "join",
+      sessionId: "sess-1",
+      connDevu: GUEST,
+      connDisplayName: "Guest",
+      connId: "c2",
+    }).nextState;
+    s = applyCommand(s, {
+      type: "join",
+      sessionId: "sess-1",
+      connDevu: GUEST,
+      connDisplayName: "Guest",
+      connId: "c2-tab2",
+    }).nextState;
+    // First tab closes — no user_left expected.
+    const first = applyDisconnect(s, "c2");
+    expect(first.events.find((e) => e.event.type === "user_left")).toBeUndefined();
+    // Second tab closes — user_left fires now.
+    const second = applyDisconnect(first.nextState, "c2-tab2");
+    const left = second.events.find((e) => e.event.type === "user_left");
+    expect(left).toBeTruthy();
   });
 });

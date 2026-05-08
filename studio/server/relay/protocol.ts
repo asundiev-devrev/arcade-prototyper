@@ -343,6 +343,12 @@ export function applyCommand(
       });
       return { nextState: s, events };
     }
+
+    default: {
+      const _exhaustive: never = cmd;
+      void _exhaustive;
+      return { nextState: s, events };
+    }
   }
 }
 
@@ -351,19 +357,25 @@ export function applyCommand(
  * and, if the disconnecting user was the driver, records the time so a
  * dormant takeover can be granted after the grace period.
  */
-export function applyDisconnect(state: LiveState, connId: string): ApplyResult {
+export function applyDisconnect(
+  state: LiveState,
+  connId: string,
+  opts: ApplyOptions = {},
+): ApplyResult {
+  const now = opts.now ?? Date.now();
   const s = cloneState(state);
   const conn = s.connections.get(connId);
   if (!conn) return { nextState: s, events: [] };
   s.connections.delete(connId);
-  const events: EmittedEvent[] = [
-    { recipient: "broadcast", event: { type: "user_left", devu: conn.devu } },
-  ];
   const stillConnected = Array.from(s.connections.values()).some(
     (c) => c.devu === conn.devu,
   );
+  const events: EmittedEvent[] = [];
+  if (!stillConnected) {
+    events.push({ recipient: "broadcast", event: { type: "user_left", devu: conn.devu } });
+  }
   if (!stillConnected && s.driverDevu === conn.devu) {
-    s.driverDisconnectedAt = Date.now();
+    s.driverDisconnectedAt = now;
   }
   return { nextState: s, events };
 }
