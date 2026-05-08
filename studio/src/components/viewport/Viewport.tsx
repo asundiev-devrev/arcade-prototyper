@@ -1,9 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { Project } from "../../../server/types";
 import { useFrames } from "../../hooks/useFrames";
 import { FrameCard } from "./FrameCard";
 import { EmptyViewport } from "./EmptyViewport";
 import { ViewportPreview } from "./ViewportPreview";
+import { NewFrameCard } from "./NewFrameCard";
+import { api } from "../../lib/api";
 
 export function Viewport({
   project,
@@ -11,14 +13,30 @@ export function Viewport({
   onFrameWidthChange,
   zoom,
   onZoomChange,
+  onSeedChat,
 }: {
   project: Project;
   frameWidth: number;
   onFrameWidthChange: (next: number) => void;
   zoom: number;
   onZoomChange: (next: number) => void;
+  onSeedChat: (text: string) => void;
 }) {
   const { frames } = useFrames(project);
+  const [creatingFrame, setCreatingFrame] = useState(false);
+
+  async function handleCreateFrame() {
+    if (creatingFrame) return;
+    setCreatingFrame(true);
+    try {
+      const frame = await api.createFrame(project.slug);
+      onSeedChat(`Design the ${frame.name} screen: `);
+    } catch (err) {
+      console.warn("[Viewport] createFrame failed:", err);
+    } finally {
+      setCreatingFrame(false);
+    }
+  }
 
   useEffect(() => {
     function onMessage(e: MessageEvent) {
@@ -48,7 +66,7 @@ export function Viewport({
     return () => window.removeEventListener("message", onMessage);
   }, [project.slug]);
 
-  if (!frames.length) return <EmptyViewport />;
+  if (!frames.length) return <EmptyViewport onCreateFrame={handleCreateFrame} busy={creatingFrame} />;
 
   return (
     <ViewportPreview zoom={zoom} onZoomChange={onZoomChange}>
@@ -73,6 +91,7 @@ export function Viewport({
             zoom={zoom}
           />
         ))}
+        <NewFrameCard onClick={handleCreateFrame} busy={creatingFrame} />
       </div>
     </ViewportPreview>
   );

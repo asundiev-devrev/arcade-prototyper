@@ -245,6 +245,7 @@ export function ProjectDetail({
             onFrameWidthChange={setFrameWidth}
             zoom={zoom}
             onZoomChange={setZoom}
+            onSeedChat={(text) => seedChatRef.current?.(text)}
           />
         </main>
         {devOpen && <DevModePanel slug={project.slug} />}
