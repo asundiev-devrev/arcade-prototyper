@@ -6,6 +6,12 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.13.0] — 2026-05-08
+
+### Added
+- Agent detects flow-shaped prompts ("4-step onboarding", "wizard", "checkout flow") and proposes splitting them into multiple frames before building. If the user confirms, every frame is generated in a single turn with two-digit filename prefixes.
+- "+ New frame" button in the viewport (end of the frame row) and in the empty state. Clicking it creates a blank frame on disk and focuses the chat with "Design the Untitled N screen: " pre-filled.
+
 ## [0.12.1] — 2026-05-08
 
 ### Fixed
