@@ -260,14 +260,22 @@ export function FrameCard({
             border: "1px solid var(--stroke-neutral-subtle)",
             borderRadius: 12,
             overflow: "hidden",
+            // picking uses inset shadow (only fires while the iframe is
+            // overlaid by the picker capture surface, so the shadow is
+            // visible). nav highlights render outside the iframe so we
+            // use `outline` — inset shadows would be painted under the
+            // iframe contents and invisible.
             boxShadow: picking
               ? "inset 0 0 0 2px var(--component-button-primary-bg-idle)"
-              : highlighted === "target"
-              ? "inset 0 0 0 2px var(--component-button-primary-bg-idle)"
-              : highlighted === "missing"
-              ? "inset 0 0 0 2px var(--fg-alert-prominent)"
               : undefined,
-            transition: "box-shadow 0.4s ease",
+            outline:
+              highlighted === "target"
+                ? "3px solid var(--component-button-primary-bg-idle)"
+                : highlighted === "missing"
+                ? "3px solid var(--fg-alert-prominent)"
+                : "3px solid transparent",
+            outlineOffset: 2,
+            transition: "box-shadow 0.4s ease, outline-color 0.2s ease",
           }}
         >
           <iframe
