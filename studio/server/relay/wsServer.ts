@@ -36,11 +36,17 @@ const liveSessions = new Map<string, LiveSession>(); // sessionId → LiveSessio
 const HEARTBEAT_MS = 15_000;
 const PING_TIMEOUT_MS = 40_000;
 
+const attachedServers = new WeakSet<http.Server>();
+
 /**
  * Attach the relay WebSocket handler to an HTTP server. Called from
- * vite.config.ts during `configureServer`.
+ * vite.config.ts during `configureServer`. Idempotent per HTTP server —
+ * repeated calls on the same server are a no-op (prevents listener
+ * accumulation if Vite HMRs the plugin).
  */
 export function attachRelayToHttpServer(server: http.Server): void {
+  if (attachedServers.has(server)) return;
+  attachedServers.add(server);
   const wss = new WebSocketServer({ noServer: true });
 
   server.on("upgrade", async (req, socket, head) => {
@@ -121,6 +127,10 @@ function onConnection(
     connDisplayName: displayName,
     connId,
   });
+
+  // TODO(plan-4): reconnect replay buffer. Per spec §3, the relay should
+  // retain the last ~200 events per session so a guest reconnecting mid-turn
+  // gets a replay of what they missed. Deferred until guests exist (Plan 4).
 
   let alive = true;
   const heartbeat = setInterval(() => {

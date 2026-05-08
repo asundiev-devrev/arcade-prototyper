@@ -162,6 +162,20 @@ describe("protocol.applyCommand", () => {
     expect(changed?.event.type === "control_changed" && changed.event.reason).toBe("granted");
   });
 
+  it("grant_control to a devu with no live connection is rejected", () => {
+    const s0 = withHostConnected();
+    // GUEST is in the invite list but has not joined.
+    const { nextState, events } = applyCommand(s0, {
+      type: "grant_control",
+      connDevu: HOST,
+      connId: "c1",
+      targetDevu: GUEST,
+    });
+    expect(nextState.driverDevu).toBe(HOST);
+    const err = events.find((e) => e.event.type === "error");
+    expect(err?.event.type === "error" && err.event.code).toBe("target_not_connected");
+  });
+
   it("grant_control by non-driver is rejected", () => {
     let s = withHostConnected();
     s = applyCommand(s, {

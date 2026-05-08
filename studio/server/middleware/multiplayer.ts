@@ -38,7 +38,7 @@ export function multiplayerMiddleware() {
     if (req.method === "POST" && invite) return handleInvite(req, res, invite[1]);
 
     const end = url.match(END_URL);
-    if (req.method === "POST" && end) return handleEnd(res, end[1]);
+    if (req.method === "POST" && end) return handleEnd(req, res, end[1]);
 
     return next?.();
   };
@@ -135,11 +135,22 @@ async function handleInvite(req: IncomingMessage, res: ServerResponse, id: strin
   res.end(JSON.stringify({ ok: true }));
 }
 
-async function handleEnd(res: ServerResponse, id: string) {
+async function handleEnd(_req: IncomingMessage, res: ServerResponse, id: string) {
+  const host = await resolveHostDevu();
+  if (!host) {
+    res.writeHead(401, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "DevRev PAT not configured or invalid" }));
+    return;
+  }
   const session = getSession(id);
   if (!session) {
     res.writeHead(404, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Session not found" }));
+    return;
+  }
+  if (session.hostDevu !== host.id) {
+    res.writeHead(403, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Only the host can end" }));
     return;
   }
   await endSession(id);

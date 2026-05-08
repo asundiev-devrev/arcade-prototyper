@@ -144,6 +144,20 @@ describe("multiplayer middleware", () => {
     expect(invite._status).toBe(403);
   });
 
+  it("rejects end from non-host with 403", async () => {
+    const mw = multiplayerMiddleware();
+    const create = res();
+    await mw(req("/api/multiplayer/sessions", "POST", { projectSlug: "demo" }), create);
+    const { sessionId } = JSON.parse(create._body!);
+
+    // Swap to guest PAT
+    getDevRevPatMock.mockResolvedValue("guest-pat");
+
+    const end = res();
+    await mw(req(`/api/multiplayer/sessions/${sessionId}/end`, "POST"), end);
+    expect(end._status).toBe(403);
+  });
+
   it("passes to next() for unrelated URLs", async () => {
     const mw = multiplayerMiddleware();
     const next = vi.fn();

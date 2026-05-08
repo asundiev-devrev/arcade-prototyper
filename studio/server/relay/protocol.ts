@@ -195,6 +195,16 @@ export function applyCommand(
         });
         return { nextState: s, events };
       }
+      const targetConnected = Array.from(s.connections.values()).some(
+        (c) => c.devu === cmd.targetDevu,
+      );
+      if (!targetConnected) {
+        events.push({
+          recipient: cmd.connId,
+          event: { type: "error", code: "target_not_connected", message: "Target is not connected to this session." },
+        });
+        return { nextState: s, events };
+      }
       s.driverDevu = cmd.targetDevu;
       s.driverDisconnectedAt = null;
       s.controlRequest = null;
