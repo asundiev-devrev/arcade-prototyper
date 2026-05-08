@@ -82,3 +82,21 @@ export function stagingSessionDir(sessionId: string): string {
 export function designMdPath(projectSlug: string): string {
   return path.join(projectDir(projectSlug), "DESIGN.md");
 }
+
+/**
+ * Root folder for Studio multiplayer session state. Sibling of `projects/`.
+ * Holds `sessions.json` (persisted session metadata) plus any future
+ * per-session artifacts.
+ */
+export function multiplayerRoot(): string {
+  return path.join(studioRoot(), "multiplayer");
+}
+
+/**
+ * Single JSON file holding all known multiplayer session metadata. Read at
+ * startup, rewritten atomically on every change. SQLite is overkill for the
+ * expected session count in v1.
+ */
+export function sessionsJsonPath(): string {
+  return path.join(multiplayerRoot(), "sessions.json");
+}
