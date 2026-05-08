@@ -1,3 +1,36 @@
+/**
+ * FrameLink — wraps an element and makes clicking (or keyboard-activating)
+ * it navigate to another frame in the same multi-frame prototype.
+ *
+ * The wrapper renders `display: contents`, so the wrapped element's own
+ * layout is preserved. `role="button"` + `tabIndex={0}` give keyboard users
+ * the same affordance as mouse users; Enter and Space trigger navigation.
+ * Styled only with `cursor: pointer` — no visible "this is a link"
+ * affordance. The "click → navigate" relationship is invisible by design.
+ *
+ * When clicked, the wrapper posts
+ * `{ type: "arcade-studio:navigate", target: "<frame-slug>", source: "<current-frame-slug>" }`
+ * to the parent window. The studio viewport handles the scroll + highlight.
+ *
+ * Why this composite exists: multi-frame prototypes (0.13+) render frames
+ * side-by-side but with no inter-frame interactivity. `FrameLink` lets the
+ * agent wire a prompt's explicit transitions ("click X, see Y") without
+ * reinventing navigation in every frame.
+ *
+ * @counterexample Do NOT wrap an element unless the prompt explicitly names
+ *   it as a transition trigger. Navigation is a specific choice the designer
+ *   made, not a general property of multi-frame prototypes. If the prompt is
+ *   silent about what triggers transitions, list "no navigation wired — prompt
+ *   didn't specify triggers" in your Deviations section and ship without.
+ * @counterexample Do NOT wrap entire regions
+ *   (`<FrameLink target="02"><div className="container">…</div></FrameLink>`).
+ *   Wrap the clickable element only — the specific card, button, or control
+ *   the prompt names. Wrapping containers makes every pixel inside them
+ *   trigger navigation.
+ * @counterexample Do NOT use `<FrameLink>` instead of a regular `<Button>`
+ *   for in-frame interactions (opening a dropdown, toggling a switch, showing
+ *   a tooltip). Those are intra-frame; they don't need navigation.
+ */
 import type { ReactNode, KeyboardEvent } from "react";
 
 export interface FrameLinkProps {
@@ -6,14 +39,6 @@ export interface FrameLinkProps {
   children: ReactNode;
 }
 
-/**
- * Wraps an element and makes clicking (or pressing Enter/Space on) the wrapped
- * content navigate to another frame in the same prototype. Uses postMessage to
- * signal the parent viewport; the parent handles scrolling and highlighting.
- *
- * Invisible by design — adds only a pointer cursor. The wrapped element keeps
- * its own appearance.
- */
 export function FrameLink({ target, children }: FrameLinkProps) {
   function navigate() {
     try {

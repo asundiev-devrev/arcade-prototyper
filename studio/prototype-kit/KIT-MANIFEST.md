@@ -495,7 +495,23 @@ Usage tips:
 ## FrameLink (composite)
 _source: `composites/FrameLink.tsx`_
 
-Target frame slug (e.g. "02-skill-modal"). Must exist in the project.
+FrameLink — wraps an element and makes clicking (or keyboard-activating)
+it navigate to another frame in the same multi-frame prototype.
+
+The wrapper renders `display: contents`, so the wrapped element's own
+layout is preserved. `role="button"` + `tabIndex={0}` give keyboard users
+the same affordance as mouse users; Enter and Space trigger navigation.
+Styled only with `cursor: pointer` — no visible "this is a link"
+affordance. The "click → navigate" relationship is invisible by design.
+
+When clicked, the wrapper posts
+`{ type: "arcade-studio:navigate", target: "<frame-slug>", source: "<current-frame-slug>" }`
+to the parent window. The studio viewport handles the scroll + highlight.
+
+Why this composite exists: multi-frame prototypes (0.13+) render frames
+side-by-side but with no inter-frame interactivity. `FrameLink` lets the
+agent wire a prompt's explicit transitions ("click X, see Y") without
+reinventing navigation in every frame.
 
 
 ```ts
@@ -505,6 +521,21 @@ interface FrameLinkProps {
   children: ReactNode;
 }
 ```
+
+**When NOT to use this:**
+- Do NOT wrap an element unless the prompt explicitly names
+  it as a transition trigger. Navigation is a specific choice the designer
+  made, not a general property of multi-frame prototypes. If the prompt is
+  silent about what triggers transitions, list "no navigation wired — prompt
+  didn't specify triggers" in your Deviations section and ship without.
+- Do NOT wrap entire regions
+  (`<FrameLink target="02"><div className="container">…</div></FrameLink>`).
+  Wrap the clickable element only — the specific card, button, or control
+  the prompt names. Wrapping containers makes every pixel inside them
+  trigger navigation.
+- Do NOT use `<FrameLink>` instead of a regular `<Button>`
+  for in-frame interactions (opening a dropdown, toggling a switch, showing
+  a tooltip). Those are intra-frame; they don't need navigation.
 
 ## NavSidebar (composite)
 _source: `composites/NavSidebar.tsx`_
@@ -1041,39 +1072,3 @@ type VistaToolbarProps = {
 **When NOT to use this:**
 - Do NOT inline `<IconButton variant="secondary" size="sm">…</IconButton>` into the `toolbarIcons` slot. Use `<VistaToolbar.IconAction icon={<AtSymbol />} label="Mentions" />` — the subcomponent bakes variant/size so icons in the toolbar match DevRev vista chrome exactly.
 - Do NOT wrap `toolbarIcons` children in your own `<div className="flex gap-*">`. The composite applies the correct inter-icon spacing; your wrapper will either collapse it or double it.
-
-## FrameLink (composite)
-_source: `composites/FrameLink.tsx`_
-
-FrameLink — wraps an element and makes clicking (or keyboard-activating) it navigate to another frame in the same multi-frame prototype.
-
-The wrapper renders `display: contents`, so the wrapped element's own layout is preserved. The wrapper adds `role="button"` + `tabIndex={0}` so keyboard users can Tab to it and press Enter/Space to navigate. Styled only with `cursor: pointer` — no visible "this is a link" affordance. The "click → navigate" relationship is invisible by design.
-
-When clicked, the wrapper posts `{ type: "arcade-studio:navigate", target: "<frame-slug>" }` to the parent window. The studio viewport handles the scroll and highlight.
-
-Usage:
-
-```tsx
-import { FrameLink } from "arcade-prototypes";
-
-<FrameLink target="02-skill-modal">
-  <SkillCard name="Research" />
-</FrameLink>
-
-<FrameLink target="03-skill-settings">
-  <Button>Edit</Button>
-</FrameLink>
-```
-
-```ts
-type FrameLinkProps = {
-  /** Target frame slug (e.g. "02-skill-modal"). */
-  target: string;
-  children: ReactNode;
-}
-```
-
-**When NOT to use this:**
-- Do NOT wrap an element unless the prompt explicitly names it as a transition trigger. Navigation is a specific choice the designer made, not a general property of multi-frame prototypes.
-- Do NOT wrap entire regions (`<FrameLink target="02"><div className="container">…</div></FrameLink>`) — wrap the clickable element only (the card, button, or specific control named in the prompt).
-- Do NOT use `<FrameLink>` instead of a regular `<Button>` for in-frame interactions (opening a dropdown, toggling a switch) — those are intra-frame and don't need navigation.
