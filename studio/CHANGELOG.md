@@ -6,6 +6,12 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.13.1] — 2026-05-08
+
+### Fixed
+- Long turns that used to cut off with "Turn timed out after 420s — claude stopped responding" now auto-resume from where they paused. Multi-frame generations in particular were hitting the old 7-minute ceiling; the limit is now 15 minutes and the turn is auto-continued on timeout. When the retry budget is fully exhausted, the in-chat message tells the user to type "keep going" to continue — no more log-file references in the banner.
+- Fixed a rare case where a killed claude process left its stdio pipes open, stranding the turn indefinitely instead of failing cleanly.
+
 ## [0.13.0] — 2026-05-08
 
 ### Added
