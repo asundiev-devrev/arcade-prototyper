@@ -6,6 +6,15 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- Multiplayer relay foundations (internal). In-process WebSocket relay at
+  `/api/multiplayer/ws` with PAT auth, driver-lock arbitration, and
+  session-persistence. No user-visible UI yet; foundations for
+  multi-user prototype sessions landing in subsequent plans.
+
 ## [0.19.0] — 2026-05-15
 
 ### Changed
