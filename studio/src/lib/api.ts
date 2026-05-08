@@ -1,4 +1,4 @@
-import type { Project } from "../../server/types";
+import type { Project, Frame } from "../../server/types";
 
 async function j<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -31,6 +31,12 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ paths }),
     }).then(j<{ mapping: Record<string, string>; missing: string[] }>),
+  createFrame: (slug: string) =>
+    fetch(`/api/projects/${slug}/frames`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    }).then(j<Frame>),
   startChatTurn: (slug: string, prompt: string, images: string[]) =>
     fetch("/api/chat", {
       method: "POST",
