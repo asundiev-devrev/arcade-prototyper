@@ -57,7 +57,6 @@ export function Viewport({
           display: "flex",
           gap: 64,
           padding: 32,
-          background: "var(--bg-neutral-soft)",
           height: "100%",
           width: "fit-content",
           minWidth: "100%",
