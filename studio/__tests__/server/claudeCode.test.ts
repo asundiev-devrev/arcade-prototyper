@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
-import { runClaudeTurn } from "../../server/claudeCode";
+import { runClaudeTurn, runClaudeTurnWithRetry } from "../../server/claudeCode";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -120,6 +120,62 @@ describe("runClaudeTurn", () => {
     } finally {
       fs.rmSync(spy, { force: true });
       fs.rmSync(logFile, { force: true });
+    }
+  });
+});
+
+describe("runClaudeTurnWithRetry", () => {
+  it("retries after a hard timeout and emits an 'in progress' narration", { timeout: 10_000 }, async () => {
+    // Hanging fake always times out; wrapper should retry up to maxAttempts
+    // and emit the soft retry narration between attempts.
+    const spy = path.join(__dirname, "../fixtures/fake-claude-retry-hang.sh");
+    fs.writeFileSync(spy, `#!/usr/bin/env bash\nsleep 30\n`, { mode: 0o755 });
+    const events: any[] = [];
+    try {
+      await runClaudeTurnWithRetry(
+        {
+          cwd: os.tmpdir(),
+          prompt: "hi",
+          bin: spy,
+          timeoutMs: 100,
+          onEvent: (e) => events.push(e),
+        },
+        { maxAttempts: 2 },
+      );
+      const narration = events.find(
+        (e) => e.kind === "narration" && /picking this up/i.test(e.text),
+      );
+      expect(narration).toBeTruthy();
+      // Terminal end after both attempts — friendly copy, no log-file jargon.
+      const end = events[events.length - 1];
+      expect(end.kind).toBe("end");
+      expect(end.ok).toBe(false);
+      expect(end.error).not.toMatch(/last-error\.log|last-stdout\.log/);
+      expect(end.error).toMatch(/keep going/i);
+    } finally {
+      fs.rmSync(spy, { force: true });
+    }
+  });
+
+  it("does not emit the per-turn timeout end when deferred", async () => {
+    // When deferTimeoutEnd is true (the mode the retry wrapper uses),
+    // the per-turn runner must NOT emit an `end` event on timeout — the
+    // caller owns the terminal event so it can decide to retry.
+    const spy = path.join(__dirname, "../fixtures/fake-claude-defer-hang.sh");
+    fs.writeFileSync(spy, `#!/usr/bin/env bash\nsleep 30\n`, { mode: 0o755 });
+    const events: any[] = [];
+    try {
+      await runClaudeTurn({
+        cwd: os.tmpdir(),
+        prompt: "hi",
+        bin: spy,
+        timeoutMs: 100,
+        deferTimeoutEnd: true,
+        onEvent: (e) => events.push(e),
+      });
+      expect(events.some((e) => e.kind === "end")).toBe(false);
+    } finally {
+      fs.rmSync(spy, { force: true });
     }
   });
 });

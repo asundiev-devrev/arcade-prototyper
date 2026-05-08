@@ -65,6 +65,10 @@ export interface RunTurnOptions {
     timedOut: boolean;
     stalled: boolean;
   }) => void;
+  /** When true, a hard timeout does NOT emit a terminal `end` event —
+   *  `onCrash` still fires with `timedOut: true` and the caller decides
+   *  whether to retry. Default false (back-compat: timeout emits `end`). */
+  deferTimeoutEnd?: boolean;
 }
 
 const DEFAULT_ALLOWED_TOOLS = "Read,Edit,Write,Glob,Grep,Bash";
@@ -160,7 +164,7 @@ export async function runClaudeTurn(opts: RunTurnOptions): Promise<void> {
     const abortHandler = () => proc.kill("SIGTERM");
     opts.signal?.addEventListener("abort", abortHandler);
 
-    const timeoutMs = opts.timeoutMs ?? 420_000;
+    const timeoutMs = opts.timeoutMs ?? 900_000;
     let timedOut = false;
     const timeoutHandle = setTimeout(() => {
       timedOut = true;
@@ -220,7 +224,23 @@ export async function runClaudeTurn(opts: RunTurnOptions): Promise<void> {
       });
       reject(err);
     });
+    // `exit` fires when the child process terminates. `close` fires when its
+    // stdio streams are also flushed and closed — usually the same instant,
+    // but on SIGTERM after a hanging child, `close` occasionally never fires
+    // because the pipes remain referenced by dangling file descriptors. That
+    // would strand our Promise. If exit fires without a timely close,
+    // force-destroy the pipes so `close` fires.
+    let exited = false;
+    proc.on("exit", () => {
+      exited = true;
+      setTimeout(() => {
+        if (!exited) return;
+        try { proc.stdout.destroy(); } catch {}
+        try { proc.stderr.destroy(); } catch {}
+      }, 50).unref();
+    });
     proc.on("close", (code) => {
+      exited = false; // close landed, cancel the force-destroy path
       cleanup();
       opts.signal?.removeEventListener("abort", abortHandler);
       if (stdoutBuf.trim()) {
@@ -238,12 +258,14 @@ export async function runClaudeTurn(opts: RunTurnOptions): Promise<void> {
           stalled: true,
         });
       } else if (timedOut) {
-        const seconds = Math.round(timeoutMs / 1000);
-        opts.onEvent({
-          kind: "end",
-          ok: false,
-          error: `Turn timed out after ${seconds}s — claude stopped responding. See last-error.log and last-stdout.log for raw output.`,
-        });
+        if (!opts.deferTimeoutEnd) {
+          const seconds = Math.round(timeoutMs / 1000);
+          opts.onEvent({
+            kind: "end",
+            ok: false,
+            error: `Turn timed out after ${seconds}s — claude stopped responding. See last-error.log and last-stdout.log for raw output.`,
+          });
+        }
         opts.onCrash?.({
           exitCode: code,
           stderr: stderrBuf,
@@ -269,9 +291,15 @@ export async function runClaudeTurn(opts: RunTurnOptions): Promise<void> {
 
 /**
  * Retry wrapper around `runClaudeTurn` that recovers from Bedrock stalls
- * by re-spawning claude with `--resume <sessionId>`. Transparent to the
- * SSE stream except for a single "auto-retrying" narration between
- * attempts, and a final aggregated error if all attempts stall.
+ * AND hard timeouts by re-spawning claude with `--resume <sessionId>`. A
+ * stall is "no stdout for stallMs". A timeout is "turn running longer than
+ * timeoutMs" — usually a legitimately-busy long turn (e.g. generating
+ * multiple frames) rather than a failure. In both cases the session is
+ * preserved, so the resumed claude picks up where it left off.
+ *
+ * Transparent to the SSE stream except for a single "picking this up…"
+ * narration between attempts, and a final aggregated error if all
+ * attempts exhausted the retry budget.
  */
 export async function runClaudeTurnWithRetry(
   opts: RunTurnOptions,
@@ -284,35 +312,42 @@ export async function runClaudeTurnWithRetry(
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     let didStall = false;
+    let didTimeout = false;
     await runClaudeTurn({
       ...opts,
       sessionId: capturedSessionId,
       stallMs,
+      deferTimeoutEnd: true,
       onEvent: (ev) => {
         if (ev.kind === "session") capturedSessionId = ev.sessionId;
         opts.onEvent(ev);
       },
       onCrash: (info) => {
         if (info.stalled) didStall = true;
+        if (info.timedOut) didTimeout = true;
         // Only forward crash logs on the final attempt, or when the failure
-        // wasn't a stall (hard timeout, non-zero exit — those don't retry).
-        if (!info.stalled || attempt === maxAttempts) {
+        // is not retryable (non-zero exit, not a stall, not a timeout).
+        const retryable = info.stalled || info.timedOut;
+        if (!retryable || attempt === maxAttempts) {
           userOnCrash?.(info);
         }
       },
     });
-    if (!didStall) return;
+    if (!didStall && !didTimeout) return;
     if (attempt < maxAttempts) {
       opts.onEvent({
         kind: "narration",
-        text: `Claude stalled after ${Math.round(stallMs / 1000)}s of silence — auto-retrying (attempt ${attempt + 1} of ${maxAttempts})…`,
+        text: "Still working — picking this up where it left off…",
       });
     } else {
-      opts.onEvent({
-        kind: "end",
-        ok: false,
-        error: `Claude stalled ${maxAttempts} times — Bedrock may be throttling or unreachable. Try again in a minute. See last-error.log / last-stdout.log for details.`,
-      });
+      // All attempts exhausted. Emit a user-facing terminal message that
+      // doesn't reference log files — beta users can't act on those.
+      // Distinguish stall-only failures from timeout exhaustion so the
+      // copy matches the actual failure mode.
+      const error = didStall && !didTimeout
+        ? "Claude kept stalling during this turn. Try sending your prompt again — Bedrock may be throttling."
+        : "This turn ran long enough to hit the retry budget without finishing. Type 'keep going' to continue from where it left off.";
+      opts.onEvent({ kind: "end", ok: false, error });
     }
   }
 }
