@@ -17,8 +17,9 @@ export interface FrameLinkProps {
 export function FrameLink({ target, children }: FrameLinkProps) {
   function navigate() {
     try {
+      const source = currentFrameSlug();
       window.parent?.postMessage(
-        { type: "arcade-studio:navigate", target },
+        { type: "arcade-studio:navigate", target, ...(source ? { source } : {}) },
         "*",
       );
     } catch {
@@ -45,4 +46,18 @@ export function FrameLink({ target, children }: FrameLinkProps) {
       {children}
     </div>
   );
+}
+
+/**
+ * Derive the current frame's slug from the iframe URL. Studio mounts each
+ * frame at `/api/frames/<projectSlug>/<frameSlug>`, so the last non-empty
+ * path segment is the frame slug. Returns undefined if the path doesn't
+ * match (e.g. the component runs outside a mounted frame — during tests,
+ * inside Storybook, etc.).
+ */
+function currentFrameSlug(): string | undefined {
+  const match = window.location.pathname.match(
+    /^\/api\/frames\/[^/]+\/([^/?#]+)\/?$/,
+  );
+  return match?.[1];
 }
