@@ -13,6 +13,9 @@ import { stagingUploadsMiddleware, cleanStaleStagingSessions } from "./server/mi
 import { preflightMiddleware } from "./server/middleware/preflight";
 import { fontsMiddleware } from "./server/middleware/fonts";
 import { devrevMiddleware } from "./server/middleware/devrev";
+import { multiplayerMiddleware } from "./server/middleware/multiplayer";
+import { attachRelayToHttpServer } from "./server/relay/wsServer";
+import { hydrateSessionRegistry } from "./server/relay/sessionRegistry";
 import { settingsMiddleware } from "./server/middleware/settings";
 import { thumbnailsMiddleware } from "./server/middleware/thumbnails";
 import { liftMiddleware } from "./server/middleware/lift";
@@ -35,6 +38,7 @@ function apiPlugin(): import("vite").Plugin {
       server.middlewares.use(versionMiddleware());
       server.middlewares.use(awsLoginMiddleware());
       server.middlewares.use(devrevMiddleware());
+      server.middlewares.use(multiplayerMiddleware());
       server.middlewares.use(settingsMiddleware());
       server.middlewares.use(cloudflareMiddleware());
       server.middlewares.use(projectsMiddleware());
@@ -50,6 +54,21 @@ function apiPlugin(): import("vite").Plugin {
       server.middlewares.use(fontsMiddleware());
       server.middlewares.use(runtimeErrorMiddleware());
       attachBuildErrorReporter(server);
+      // Attach the multiplayer WebSocket handler to Vite's HTTP server.
+      // httpServer is null in middlewareMode; in dev-server mode (the only
+      // way Studio runs) it resolves after `listening`.
+      // Kick off hydration as early as possible, then chain the WS attach
+      // after BOTH the HTTP server is listening AND hydration has settled —
+      // otherwise a guest upgrade landing before hydration finishes would
+      // see an empty registry and get a phantom 404.
+      const hydrated = hydrateSessionRegistry().catch((err) => {
+        console.warn("[studio/multiplayer] hydrate failed:", err);
+      });
+      server.httpServer?.once("listening", () => {
+        const http = server.httpServer;
+        if (!http) return;
+        void hydrated.then(() => attachRelayToHttpServer(http));
+      });
       void logVersionOnBoot();
       void cleanStaleStagingSessions();
       refreshStaleClaudeMd()
