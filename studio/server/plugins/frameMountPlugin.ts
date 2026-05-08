@@ -44,7 +44,25 @@ export function frameMountPlugin(): Plugin {
           (function () {
             var SLUG = ${slugJson};
             var FRAME = ${frameJson};
+            // Errors that originate entirely inside Vite's HMR client are
+            // dev-server noise (stale sockets after a restart, etc.), not
+            // frame bugs. Don't red-screen the frame for those.
+            function isViteClientNoise(err) {
+              var stack = String((err && err.stack) || "");
+              if (!stack) return false;
+              if (stack.indexOf("/@vite/client") === -1) return false;
+              // Only swallow if the stack is ONLY Vite-client frames — if a
+              // real frame error bubbled through Vite we still want to show it.
+              var lines = stack.split("\\n");
+              for (var i = 0; i < lines.length; i++) {
+                var line = lines[i];
+                if (line.indexOf("at ") === -1) continue;
+                if (line.indexOf("/@vite/client") === -1) return false;
+              }
+              return true;
+            }
             function showFatal(label, err) {
+              if (isViteClientNoise(err)) return;
               var msg = String((err && err.message) || err || "Unknown error");
               var stack = String((err && err.stack) || "");
               try {
