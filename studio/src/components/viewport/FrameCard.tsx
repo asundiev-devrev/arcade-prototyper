@@ -244,12 +244,14 @@ export function FrameCard({
         </div>
       </div>
       <div
+        className="arcade-studio-frame-body"
         style={{
           position: "relative",
           width: clampedWidth,
           height: "calc(100vh - 180px)",
           transition: resizing ? "none" : "width 200ms ease-out",
           willChange: "width",
+          borderRadius: 12,
         }}
       >
         <div
@@ -260,22 +262,10 @@ export function FrameCard({
             border: "1px solid var(--stroke-neutral-subtle)",
             borderRadius: 12,
             overflow: "hidden",
-            // picking uses inset shadow (only fires while the iframe is
-            // overlaid by the picker capture surface, so the shadow is
-            // visible). nav highlights render outside the iframe so we
-            // use `outline` — inset shadows would be painted under the
-            // iframe contents and invisible.
             boxShadow: picking
               ? "inset 0 0 0 2px var(--component-button-primary-bg-idle)"
               : undefined,
-            outline:
-              highlighted === "target"
-                ? "3px solid var(--component-button-primary-bg-idle)"
-                : highlighted === "missing"
-                ? "3px solid var(--fg-alert-prominent)"
-                : "3px solid transparent",
-            outlineOffset: 2,
-            transition: "box-shadow 0.4s ease, outline-color 0.2s ease",
+            transition: "box-shadow 0.2s ease",
           }}
         >
           <iframe
