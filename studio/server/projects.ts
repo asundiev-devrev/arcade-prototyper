@@ -327,6 +327,24 @@ export async function readProjectFile(slug: string, rel: string): Promise<string
   return fs.readFile(full, "utf-8");
 }
 
+/**
+ * Compute the next two-digit prefix for a new frame. Scans existing
+ * frame slugs for a leading `\d+-` prefix and returns highest+1,
+ * padded to two digits (or more if we've gone past 99). Slugs without
+ * a numeric prefix are ignored.
+ */
+export function nextFramePrefix(existingSlugs: string[]): string {
+  let max = 0;
+  for (const slug of existingSlugs) {
+    const m = slug.match(/^(\d+)-/);
+    if (!m) continue;
+    const n = Number(m[1]);
+    if (Number.isFinite(n) && n > max) max = n;
+  }
+  const next = max + 1;
+  return next.toString().padStart(2, "0");
+}
+
 const reconcileInFlight = new Map<string, Promise<Frame[]>>();
 
 export async function reconcileFrames(slug: string): Promise<Frame[]> {
@@ -400,5 +418,7 @@ async function enqueueThumbnailCapture(slug: string, framesSlugs: string[]): Pro
 }
 
 function titleCase(slug: string): string {
-  return slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  // Strip leading numeric prefix (e.g., "01-untitled-1" → "untitled-1")
+  const withoutPrefix = slug.replace(/^\d+-/, "");
+  return withoutPrefix.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }

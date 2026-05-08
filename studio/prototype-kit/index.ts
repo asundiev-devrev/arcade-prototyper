@@ -24,6 +24,7 @@ export { VistaRow } from "./composites/VistaRow.js";
 export type { StageTone, PriorityValue } from "./composites/VistaRow.js";
 export { VistaFilterPill } from "./composites/VistaFilterPill.js";
 export { VistaPagination } from "./composites/VistaPagination.js";
+export { FrameLink } from "./composites/FrameLink.js";
 
 // Templates
 export { SettingsPage } from "./templates/SettingsPage.js";

@@ -62,6 +62,7 @@ export function ProjectDetail({
   });
   const [resizing, setResizing] = useState(false);
   const resizeStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const seedChatRef = useRef<((text: string) => void) | null>(null);
 
   useEffect(() => {
     window.localStorage.setItem(CHAT_OPEN_STORAGE_KEY, String(chatOpen));
@@ -204,7 +205,7 @@ export function ProjectDetail({
             position: "relative",
           }}
         >
-          <ChatPane projectSlug={project.slug} />
+          <ChatPane projectSlug={project.slug} seedRef={seedChatRef} />
           {chatOpen && (
             <div
               role="separator"
@@ -244,6 +245,7 @@ export function ProjectDetail({
             onFrameWidthChange={setFrameWidth}
             zoom={zoom}
             onZoomChange={setZoom}
+            onSeedChat={(text) => seedChatRef.current?.(text)}
           />
         </main>
         {devOpen && <DevModePanel slug={project.slug} />}

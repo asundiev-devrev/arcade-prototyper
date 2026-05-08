@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type MutableRefObject } from "react";
 import { MessageList } from "./MessageList";
 import { PromptInput } from "./PromptInput";
 import { useChatStreamContext } from "../../hooks/chatStreamContext";
@@ -8,7 +8,13 @@ import { extractFigmaUrl, decoratePromptWithFigma } from "../../lib/figmaUrl";
 import { ErrorBanner } from "../feedback/ErrorBanner";
 import { AuthExpiredNotice } from "../feedback/AuthExpiredNotice";
 
-export function ChatPane({ projectSlug }: { projectSlug: string }) {
+export function ChatPane({
+  projectSlug,
+  seedRef,
+}: {
+  projectSlug: string;
+  seedRef?: MutableRefObject<((text: string) => void) | null>;
+}) {
   const [history, setHistory] = useState<ChatMessage[]>([]);
   const { state, send, retry } = useChatStreamContext();
 
@@ -72,7 +78,7 @@ export function ChatPane({ projectSlug }: { projectSlug: string }) {
           onRetry={state.phase !== "running" && state.lastPrompt ? retry : undefined}
         />
       )}
-      <PromptInput busy={state.phase === "running"} projectSlug={projectSlug} onSend={enhancedSend} />
+      <PromptInput busy={state.phase === "running"} projectSlug={projectSlug} onSend={enhancedSend} seedRef={seedRef} />
     </div>
   );
 }

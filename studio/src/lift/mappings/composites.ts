@@ -218,4 +218,14 @@ export const COMPOSITE_MAPPINGS: MappingEntry[] = [
     ],
     translationClass: "mechanical",
   },
+  // --- Multi-frame navigation (prototype-only) --------------------------
+  {
+    studio: { source: "arcade-prototypes", name: "FrameLink" },
+    production: { source: "n/a", name: "n/a" },
+    propDeltas: [],
+    slotNotes: [],
+    translationClass: "judgment",
+    judgmentNote:
+      "FrameLink is a prototype-only primitive for inter-frame navigation (multi-frame flows). In production, this becomes either a react-router Link/navigate call or a button with onClick handler. Replace with the appropriate routing primitive for the target app.",
+  },
 ];

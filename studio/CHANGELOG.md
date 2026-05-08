@@ -6,6 +6,27 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.0] — 2026-05-08
+
+### Added
+- Inter-frame navigation via `<FrameLink target="NN-slug">`. When your prompt names an element that should transition between frames — "clicking the skill card opens the modal", "clicking Edit goes to settings" — the agent wraps that element. Clicking it scrolls the viewport to the target frame and highlights it for about a second. Keyboard-accessible (Tab + Enter/Space).
+- Agent template teaches this wiring only when prompts explicitly name the trigger. If the prompt is silent about interactions, the agent ships three disconnected frames and flags the missing navigation in its Deviations section.
+
+## [0.13.1] — 2026-05-08
+
+### Fixed
+- Long turns that used to cut off with "Turn timed out after 420s — claude stopped responding" now auto-resume from where they paused. Multi-frame generations in particular were hitting the old 7-minute ceiling; the limit is now 15 minutes and the turn is auto-continued on timeout. When the retry budget is fully exhausted, the in-chat message tells the user to type "keep going" to continue — no more log-file references in the banner.
+- Fixed a rare case where a killed claude process left its stdio pipes open, stranding the turn indefinitely instead of failing cleanly.
+
+## [0.13.0] — 2026-05-08
+
+### Added
+- Agent detects flow-shaped prompts ("4-step onboarding", "wizard", "checkout flow") and proposes splitting them into multiple frames before building. If the user confirms, every frame is generated in a single turn with two-digit filename prefixes.
+- "+ New frame" button in the viewport (end of the frame row) and in the empty state. Clicking it creates a blank frame on disk and focuses the chat with "Design the Untitled N screen: " pre-filled.
+
+### Changed
+- Frame display names now omit the numeric filename prefix (e.g. "Home" instead of "01 Home"). Frame slugs and on-disk paths are unchanged — this only affects how names render in the frame header, share modal, and seeded chat prompt.
+
 ## [0.12.1] — 2026-05-08
 
 ### Fixed
