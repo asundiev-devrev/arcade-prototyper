@@ -73,13 +73,19 @@ function postProcess(
     ...sources.variables.color.map((v) => v.hex),
   ].filter(Boolean));
 
+  // Provenance: every color value must come from the Figma file's styles or
+  // variables. When the file has no published styles/variables at all, the
+  // allow-list is empty and no LLM-proposed color passes through — DESIGN.md
+  // will honestly show an empty Colors section rather than LLM-invented
+  // hexes. The Identity paragraph, grounded in sample PNGs, still describes
+  // visual character for such files.
   const colors = {
     entries: parsed.colors.entries.flatMap((e) => {
       if (!COLOR_ROLES.has(e.role)) {
         warnings.push(`dropped color "${e.name}" with unknown role "${e.role}"`);
         return [];
       }
-      if (allowedColorValues.size > 0 && !allowedColorValues.has(e.value)) {
+      if (!allowedColorValues.has(e.value)) {
         warnings.push(`dropped color "${e.name}" with unsourced value "${e.value}"`);
         return [];
       }

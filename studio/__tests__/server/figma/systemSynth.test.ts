@@ -117,6 +117,38 @@ describe("synthesizeSystem — provenance + role coercion", () => {
     expect(out.warnings.filter((w) => /unknown role/.test(w))).toHaveLength(2);
   });
 
+  it("drops all color entries when sources have no paint styles or color variables", async () => {
+    // Regression guard: previously an empty allow-list short-circuited the
+    // provenance check, letting the LLM's invented hexes slip into DESIGN.md.
+    const emptySources: SystemSources = {
+      styles: { paint: [], text: [], effect: [] },
+      variables: { color: [], number: [] },
+      components: [],
+      sampleFrames: [],
+      warnings: [],
+    };
+    const spawn = vi.fn().mockResolvedValue({
+      text: JSON.stringify({
+        identity: "Dense, cool, utilitarian feel inferred from PNGs.",
+        colors: { entries: [
+          { name: "bg/guess", value: "#F0F0F0", role: "background" },
+          { name: "accent/guess", value: "#2563EB", role: "accent" },
+        ], warnings: [] },
+        typography: { entries: [], warnings: [] },
+        spacing: { scale: [] },
+        radii: { scale: [] },
+        shadows: { items: [] },
+        components: [],
+        warnings: [],
+      }),
+      exitCode: 0,
+    });
+    const out = await synthesizeSystem(emptySources, { spawn });
+    expect(out.colors.entries).toEqual([]);
+    expect(out.warnings.filter((w) => /unsourced value/.test(w))).toHaveLength(2);
+    expect(out.identity).toContain("inferred from PNGs");
+  });
+
   it("dedupes + sorts components", async () => {
     const spawn = vi.fn().mockResolvedValue({
       text: JSON.stringify({
@@ -191,5 +223,41 @@ describe("synthesizeSystem — image handling", () => {
     await synthesizeSystem(minimalSources(), { spawn });
     expect(capturedPrompt).not.toMatch(/Sample frames are rendered as PNGs/);
     expect(capturedPrompt).not.toMatch(/Read/);
+  });
+});
+
+describe("synthesizeSystem — empty-allow-list provenance", () => {
+  function emptySources(): SystemSources {
+    return {
+      styles: { paint: [], text: [], effect: [] },
+      variables: { color: [], number: [] },
+      components: [],
+      sampleFrames: [],
+      warnings: [],
+    };
+  }
+
+  it("drops every LLM-proposed color when the file has no published styles or variables", async () => {
+    const spawn = vi.fn().mockResolvedValue({
+      text: JSON.stringify({
+        identity: "Dense utilitarian surfaces.",
+        colors: { entries: [
+          { name: "brand/primary", value: "#1234AB", role: "accent" },
+          { name: "bg/surface", value: "#FAFAFA", role: "surface" },
+        ], warnings: [] },
+        typography: { entries: [], warnings: [] },
+        spacing: { scale: [] },
+        radii: { scale: [] },
+        shadows: { items: [] },
+        components: [],
+        warnings: [],
+      }),
+      exitCode: 0,
+    });
+    const out = await synthesizeSystem(emptySources(), { spawn });
+    expect(out.colors.entries).toEqual([]);
+    expect(out.warnings.filter((w) => /unsourced value/.test(w))).toHaveLength(2);
+    // Identity still comes through — personality is the LLM's domain, tokens aren't.
+    expect(out.identity).toContain("utilitarian");
   });
 });
