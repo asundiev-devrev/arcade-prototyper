@@ -1,0 +1,31 @@
+{
+  "identity": "A dense, utilitarian internal tool with flat surfaces and sparse accent use. Neutral grays dominate; brand blue appears only on primary actions. Tight 8px rhythm, 2px radii, no drop shadows on surfaces. Feels engineered rather than consumer-facing.",
+  "colors": {
+    "entries": [
+      { "name": "bg/canvas", "value": "#F6F7F9", "role": "background" },
+      { "name": "bg/surface", "value": "#FFFFFF", "role": "surface" },
+      { "name": "fg/neutral-strong", "value": "#111827", "role": "text" },
+      { "name": "fg/neutral-muted", "value": "#6B7280", "role": "text" },
+      { "name": "accent/primary", "value": "#2563EB", "role": "accent" },
+      { "name": "status/danger", "value": "#DC2626", "role": "status" }
+    ],
+    "warnings": []
+  },
+  "typography": {
+    "entries": [
+      { "name": "display/lg", "value": "Inter 32/40 600", "role": "heading" },
+      { "name": "body/md", "value": "Inter 14/20 400", "role": "body" },
+      { "name": "caption/sm", "value": "Inter 12/16 500", "role": "caption" }
+    ],
+    "warnings": []
+  },
+  "spacing": { "scale": [4, 8, 12, 16, 24, 32, 48] },
+  "radii": { "scale": [0, 2, 4, 8] },
+  "shadows": {
+    "items": [
+      { "name": "elevation-1", "css": "0 1px 2px rgba(0,0,0,0.05)" }
+    ]
+  },
+  "components": ["AppShell", "BreadcrumbBar", "KpiCard", "NavSidebar", "PageBody"],
+  "warnings": []
+}
