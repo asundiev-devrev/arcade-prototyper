@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { createProject, listProjects, getProject, renameProject, deleteProject, reconcileFrames } from "../../server/projects";
+import { createProject, listProjects, getProject, renameProject, deleteProject, reconcileFrames, refreshStaleClaudeMd } from "../../server/projects";
 
 let tmp: string;
 let fakeHome: string;
@@ -247,5 +247,47 @@ describe("reconcileFrames", () => {
     expect(a.map((f) => f.slug)).toEqual(["only"]);
     expect(b.map((f) => f.slug)).toEqual(["only"]);
     expect(c.map((f) => f.slug)).toEqual(["only"]);
+  });
+});
+
+describe("refreshStaleClaudeMd backup behavior", () => {
+  it("writes .bak with the prior contents before overwriting a stale CLAUDE.md", async () => {
+    const p = await createProject({ name: "Backup", theme: "arcade", mode: "light" });
+    const file = path.join(tmp, "projects", p.slug, "CLAUDE.md");
+    const bakFile = `${file}.bak`;
+    const userEdit = "# USER EDITS — HANDS OFF\n\nDo not overwrite this!\n";
+    fs.writeFileSync(file, userEdit);
+
+    const refreshed = await refreshStaleClaudeMd();
+
+    expect(refreshed).toBe(1);
+    expect(fs.existsSync(bakFile)).toBe(true);
+    expect(fs.readFileSync(bakFile, "utf-8")).toBe(userEdit);
+    const currentRendered = fs.readFileSync(file, "utf-8");
+    expect(currentRendered).not.toBe(userEdit);
+    expect(currentRendered).toContain("## Design system");
+  });
+
+  it("does not create .bak when CLAUDE.md is absent entirely", async () => {
+    const p = await createProject({ name: "Fresh", theme: "arcade", mode: "light" });
+    const file = path.join(tmp, "projects", p.slug, "CLAUDE.md");
+    const bakFile = `${file}.bak`;
+    fs.rmSync(file);
+
+    await refreshStaleClaudeMd();
+
+    expect(fs.existsSync(file)).toBe(true);
+    expect(fs.existsSync(bakFile)).toBe(false);
+  });
+
+  it("does not touch CLAUDE.md when it already matches the template", async () => {
+    const p = await createProject({ name: "Current", theme: "arcade", mode: "light" });
+    const file = path.join(tmp, "projects", p.slug, "CLAUDE.md");
+    const bakFile = `${file}.bak`;
+
+    const refreshed = await refreshStaleClaudeMd();
+
+    expect(refreshed).toBe(0);
+    expect(fs.existsSync(bakFile)).toBe(false);
   });
 });
