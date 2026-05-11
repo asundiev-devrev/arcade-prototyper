@@ -1,0 +1,48 @@
+{
+  "styles": {
+    "styles": [
+      { "node_id": "1:1", "name": "bg/canvas", "style_type": "FILL" },
+      { "node_id": "1:2", "name": "body/md", "style_type": "TEXT" }
+    ]
+  },
+  "variables": null,
+  "components": {
+    "components": [
+      { "node_id": "10:1", "name": "Button", "is_component_set": false }
+    ]
+  },
+  "file": {
+    "name": "Test file",
+    "document": {
+      "id": "0:0",
+      "type": "DOCUMENT",
+      "children": [
+        {
+          "id": "0:1",
+          "type": "CANVAS",
+          "name": "Page 1",
+          "children": [
+            {
+              "id": "2:1",
+              "type": "FRAME",
+              "name": "Home",
+              "absoluteBoundingBox": { "x": 0, "y": 0, "width": 1440, "height": 900 }
+            },
+            {
+              "id": "2:2",
+              "type": "FRAME",
+              "name": "Icon",
+              "absoluteBoundingBox": { "x": 0, "y": 0, "width": 24, "height": 24 }
+            },
+            {
+              "id": "2:3",
+              "type": "FRAME",
+              "name": "Settings",
+              "absoluteBoundingBox": { "x": 0, "y": 0, "width": 800, "height": 600 }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
