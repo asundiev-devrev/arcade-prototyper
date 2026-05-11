@@ -188,6 +188,11 @@ function defaultSpawner(modelOpt: string | undefined, timeoutMs: number) {
         ?? process.env.ARCADE_STUDIO_SYNTH_MODEL?.trim()
         ?? "sonnet";
       const bin = resolveClaudeBin();
+      // Pipe the prompt via stdin rather than as a positional arg.
+      // Passing the prompt as argv after `--allowed-tools Read --add-dir …`
+      // makes the CLI's argparser swallow the prompt as a trailing value of
+      // the preceding multi-value flag, and it errors with "Input must be
+      // provided either through stdin or as a prompt argument."
       const args = ["--bare", "--model", model, "--print"];
       if (imagePaths.length > 0) {
         args.push("--allowed-tools", "Read");
@@ -198,13 +203,18 @@ function defaultSpawner(modelOpt: string | undefined, timeoutMs: number) {
         for (const p of imagePaths) dirs.add(path.dirname(p));
         for (const dir of dirs) { args.push("--add-dir", dir); }
       }
-      args.push(prompt);
-      const proc = spawnChild(bin, args, { stdio: ["ignore", "pipe", "pipe"] });
+      const proc = spawnChild(bin, args, { stdio: ["pipe", "pipe", "pipe"] });
       let text = "";
       proc.stdout.on("data", (c) => { text += c.toString(); });
       proc.stderr.on("data", () => {});
       const timer = setTimeout(() => { try { proc.kill("SIGTERM"); } catch {} }, timeoutMs);
       proc.on("close", (exitCode) => { clearTimeout(timer); resolve({ text, exitCode }); });
       proc.on("error", () => resolve({ text: "", exitCode: -1 }));
+      try {
+        proc.stdin!.write(prompt);
+        proc.stdin!.end();
+      } catch {
+        // Write errors surface via the close handler above.
+      }
     });
 }
