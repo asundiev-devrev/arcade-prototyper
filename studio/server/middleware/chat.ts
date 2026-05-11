@@ -14,6 +14,9 @@ import { extractFigmaUrl } from "../../src/lib/figmaUrl";
 import { parseFigmaUrl } from "../figmaCli";
 import { getFigmaIngest } from "../figmaIngest";
 import { buildFigmaContextBlock } from "../figma/promptBlock";
+import { getFigmaSystemIngest, type FigmaSystemIngest } from "../figmaSystemIngest";
+import { renderDesignMd } from "../figma/systemRender";
+import { designMdPath } from "../paths";
 import { startTurn, subscribe, getTurn } from "../turnRegistry";
 import { hasDeviationsSection, DEVIATIONS_MISSING_TRAILER } from "../deviationsContract";
 
@@ -317,6 +320,57 @@ async function enrichPromptWithFigmaContext(
   onNarration?.(parts.join(" · "));
 
   return { prompt: `${prompt}\n\n${block}`, images: nextImages };
+}
+
+export interface SeedDesignMdInput {
+  slug: string;
+  fileKey: string | null;
+  emit: (text: string) => void;
+  ingest?: FigmaSystemIngest;
+}
+
+/**
+ * On the first turn that references a Figma file in a project without a
+ * DESIGN.md, scan the whole file once, synthesize sections, and write the
+ * result. Never overwrites an existing file — DESIGN.md is user-owned
+ * after creation. Failures are emitted as narration lines; never thrown.
+ */
+export async function maybeSeedProjectDesignMd(input: SeedDesignMdInput): Promise<void> {
+  const { slug, fileKey, emit } = input;
+  if (!fileKey) return;
+
+  const targetPath = designMdPath(slug);
+  try {
+    await fs.stat(targetPath);
+    // File exists — user owns it. Do nothing.
+    return;
+  } catch {
+    // Not present; proceed.
+  }
+
+  const ingest = input.ingest ?? (await getFigmaSystemIngest());
+  const outcome = await ingest.ingest(fileKey);
+  if (!outcome.ok) {
+    emit(`Design system sync skipped (${outcome.reason})`);
+    return;
+  }
+
+  const markdown = renderDesignMd(outcome.sections, outcome.source);
+  const tmpPath = `${targetPath}.tmp`;
+  try {
+    await fs.writeFile(tmpPath, markdown);
+    await fs.rename(tmpPath, targetPath);
+  } catch (err: any) {
+    emit(`Design system sync skipped (write error: ${err?.message ?? String(err)})`);
+    try { await fs.unlink(tmpPath); } catch {}
+    return;
+  }
+
+  const counts = [
+    `${outcome.sections.colors.entries.length} colors`,
+    `${outcome.sections.components.length} components`,
+  ];
+  emit(`Synced design system · ${counts.join(" · ")}`);
 }
 
 async function runClaudeBranch(ctx: {
