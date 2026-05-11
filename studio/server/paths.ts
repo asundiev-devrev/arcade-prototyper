@@ -78,3 +78,7 @@ function requireSessionId(id: string): string {
 export function stagingSessionDir(sessionId: string): string {
   return path.join(stagingRoot(), requireSessionId(sessionId));
 }
+
+export function designMdPath(projectSlug: string): string {
+  return path.join(projectDir(projectSlug), "DESIGN.md");
+}

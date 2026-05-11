@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import path from "node:path";
 import os from "node:os";
-import { studioRoot, projectsRoot, projectDir, frameDir } from "../../server/paths";
+import { studioRoot, projectsRoot, projectDir, frameDir, designMdPath } from "../../server/paths";
 
 describe("paths", () => {
   it("studioRoot defaults to Application Support on darwin", () => {
@@ -26,5 +26,16 @@ describe("paths", () => {
 
   it("projectDir rejects path traversal", () => {
     expect(() => projectDir("../escape")).toThrow();
+  });
+});
+
+describe("designMdPath", () => {
+  it("returns DESIGN.md inside projectDir", () => {
+    const p = designMdPath("my-project");
+    expect(p.endsWith("/my-project/DESIGN.md")).toBe(true);
+  });
+
+  it("rejects invalid slugs via requireSlug", () => {
+    expect(() => designMdPath("../etc")).toThrow(/Invalid slug/);
   });
 });
