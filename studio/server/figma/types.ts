@@ -85,3 +85,46 @@ export interface IngestFailure {
 }
 
 export type IngestOutcome = ({ ok: true } & IngestResult) | IngestFailure;
+
+// --- System-wide ingest (file-level scan) ---
+
+export type ColorRole = "background" | "surface" | "text" | "accent" | "status" | "other";
+export type TypoRole  = "heading" | "body" | "caption" | "code" | "other";
+
+export interface TokenEntry {
+  name: string;
+  value: string;
+  role: ColorRole | TypoRole;
+}
+
+export interface TokenSection {
+  entries: TokenEntry[];
+  warnings: string[];
+}
+
+export interface SynthesizedSections {
+  identity: string;
+  colors: TokenSection;
+  typography: TokenSection;
+  spacing: { scale: number[]; notes?: string };
+  radii: { scale: number[]; notes?: string };
+  shadows: { items: { name: string; css: string }[] };
+  components: string[];
+  warnings: string[];
+}
+
+export interface SystemIngestSource {
+  fileKey: string;
+  fileName?: string;
+  scannedAt: string;
+}
+
+export interface SystemIngestResult {
+  source: SystemIngestSource;
+  sections: SynthesizedSections;
+  diagnostics: { warnings: string[]; elapsedMs: number };
+}
+
+export type SystemIngestOutcome =
+  | ({ ok: true } & SystemIngestResult)
+  | { ok: false; reason: string };
