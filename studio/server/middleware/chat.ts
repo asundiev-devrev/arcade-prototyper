@@ -381,11 +381,20 @@ async function runClaudeBranch(ctx: {
   project: { sessionId?: string };
 }): Promise<{ ok: boolean; error?: string }> {
   const { emit, slug, project } = ctx;
-  const { prompt, images } = await enrichPromptWithFigmaContext(
-    ctx.prompt,
-    ctx.images ?? [],
-    (text) => emit({ kind: "narration", text }),
-  );
+  const figmaUrl = extractFigmaUrl(ctx.prompt);
+  const parsed = figmaUrl ? parseFigmaUrl(figmaUrl) : null;
+
+  const narrate = (text: string) => emit({ kind: "narration", text });
+
+  const [enriched] = await Promise.all([
+    enrichPromptWithFigmaContext(ctx.prompt, ctx.images ?? [], narrate),
+    maybeSeedProjectDesignMd({
+      slug,
+      fileKey: parsed?.fileId ?? null,
+      emit: narrate,
+    }),
+  ]);
+  const { prompt, images } = enriched;
   let capturedSessionId: string | undefined;
   const narrationTexts: string[] = [];
   const toolLabels: string[] = [];
