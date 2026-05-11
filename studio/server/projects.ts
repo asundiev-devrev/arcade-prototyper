@@ -255,6 +255,15 @@ export async function refreshStaleClaudeMd(): Promise<number> {
     let current = "";
     try { current = await fs.readFile(file, "utf-8"); } catch {}
     if (current === rendered) continue;
+    // Preserve the prior contents before we overwrite — users who edited
+    // CLAUDE.md inline (rare but happens) can recover from `.bak` on the
+    // next launch. Single rolling backup; last refresh wins.
+    if (current) {
+      try { await fs.writeFile(`${file}.bak`, current); }
+      catch (err) {
+        console.warn(`[studio] CLAUDE.md backup skipped for ${p.slug}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
     await fs.writeFile(file, rendered);
     if (p.sessionId) await updateProject(p.slug, { sessionId: undefined });
     refreshed += 1;

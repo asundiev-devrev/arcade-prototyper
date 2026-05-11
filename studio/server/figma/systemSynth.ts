@@ -1,0 +1,226 @@
+import { spawn as spawnChild } from "node:child_process";
+import path from "node:path";
+import { z } from "zod";
+import type { SynthesizedSections } from "./types";
+import type { SystemSources } from "./systemSources";
+import { resolveClaudeBin } from "../claudeBin";
+
+export interface SynthSpawnResult { text: string; exitCode: number | null }
+export interface SynthDeps {
+  spawn?: (prompt: string, imagePaths: string[]) => Promise<SynthSpawnResult>;
+  model?: string;
+  timeoutMs?: number;
+}
+
+const TokenEntrySchema = z.object({
+  name: z.string(),
+  value: z.string(),
+  role: z.string(),
+});
+
+const TokenSectionSchema = z.object({
+  entries: z.array(TokenEntrySchema),
+  warnings: z.array(z.string()).default([]),
+});
+
+const SectionsSchema = z.object({
+  identity: z.string(),
+  colors: TokenSectionSchema,
+  typography: TokenSectionSchema,
+  spacing: z.object({ scale: z.array(z.number()), notes: z.string().optional() }),
+  radii: z.object({ scale: z.array(z.number()), notes: z.string().optional() }),
+  shadows: z.object({ items: z.array(z.object({ name: z.string(), css: z.string() })) }),
+  components: z.array(z.string()),
+  warnings: z.array(z.string()).default([]),
+});
+
+const COLOR_ROLES = new Set(["background", "surface", "text", "accent", "status", "other"]);
+const TYPO_ROLES = new Set(["heading", "body", "caption", "code", "other"]);
+
+export async function synthesizeSystem(
+  sources: SystemSources,
+  deps: SynthDeps = {},
+): Promise<SynthesizedSections> {
+  const spawner = deps.spawn ?? defaultSpawner(deps.model, deps.timeoutMs ?? 60_000);
+  const images = sources.sampleFrames.map((f) => f.pngPath);
+  const prompt = buildPrompt(sources, images);
+  const reply = await spawner(prompt, images);
+  if (reply.exitCode !== 0) {
+    throw new Error(`synthesizer exited ${reply.exitCode}`);
+  }
+
+  let parsed: unknown;
+  try { parsed = JSON.parse(extractJson(reply.text)); }
+  catch { throw new Error("synthesizer reply parse failed"); }
+
+  const check = SectionsSchema.safeParse(parsed);
+  if (!check.success) {
+    const issue = check.error.issues[0];
+    throw new Error(`synthesizer schema mismatch: ${issue.path.join(".")} — ${issue.message}`);
+  }
+
+  return postProcess(check.data, sources);
+}
+
+function postProcess(
+  parsed: z.infer<typeof SectionsSchema>,
+  sources: SystemSources,
+): SynthesizedSections {
+  const warnings = [...parsed.warnings];
+
+  const allowedColorValues = new Set([
+    ...sources.styles.paint.map((p) => p.hex),
+    ...sources.variables.color.map((v) => v.hex),
+  ].filter(Boolean));
+
+  // Provenance: every color value must come from the Figma file's styles or
+  // variables. When the file has no published styles/variables at all, the
+  // allow-list is empty and no LLM-proposed color passes through — DESIGN.md
+  // will honestly show an empty Colors section rather than LLM-invented
+  // hexes. The Identity paragraph, grounded in sample PNGs, still describes
+  // visual character for such files.
+  const colors = {
+    entries: parsed.colors.entries.flatMap((e) => {
+      if (!COLOR_ROLES.has(e.role)) {
+        warnings.push(`dropped color "${e.name}" with unknown role "${e.role}"`);
+        return [];
+      }
+      if (!allowedColorValues.has(e.value)) {
+        warnings.push(`dropped color "${e.name}" with unsourced value "${e.value}"`);
+        return [];
+      }
+      return [{ name: e.name, value: e.value, role: e.role as any }];
+    }),
+    warnings: parsed.colors.warnings,
+  };
+
+  const typography = {
+    entries: parsed.typography.entries.flatMap((e) => {
+      if (!TYPO_ROLES.has(e.role)) {
+        warnings.push(`dropped typo "${e.name}" with unknown role "${e.role}"`);
+        return [];
+      }
+      return [{ name: e.name, value: e.value, role: e.role as any }];
+    }),
+    warnings: parsed.typography.warnings,
+  };
+
+  const components = [...new Set(parsed.components.filter(Boolean))].sort((a, b) => a.localeCompare(b));
+
+  return {
+    identity: parsed.identity.trim(),
+    colors,
+    typography,
+    spacing: { scale: uniqueSortedNumbers(parsed.spacing.scale), notes: parsed.spacing.notes },
+    radii: { scale: uniqueSortedNumbers(parsed.radii.scale), notes: parsed.radii.notes },
+    shadows: parsed.shadows,
+    components,
+    warnings,
+  };
+}
+
+function uniqueSortedNumbers(xs: number[]): number[] {
+  return [...new Set(xs)].sort((a, b) => a - b);
+}
+
+function extractJson(text: string): string {
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const stripped = fence ? fence[1] : text;
+  const m = stripped.match(/\{[\s\S]*\}/);
+  return m ? m[0] : stripped.trim();
+}
+
+function buildPrompt(s: SystemSources, imagePaths: string[]): string {
+  const digest = {
+    paint: s.styles.paint.map((p) => ({ name: p.name, hex: p.hex })),
+    text: s.styles.text.map((t) => ({
+      name: t.name, family: t.family, size: t.size, weight: t.weight,
+      lineHeight: t.lineHeight, letterSpacing: t.letterSpacing,
+    })),
+    effect: s.styles.effect.map((e) => ({ name: e.name, css: e.css })),
+    variables: {
+      color: s.variables.color.map((v) => ({ name: v.name, hex: v.hex })),
+      number: s.variables.number.map((v) => ({ name: v.name, value: v.value })),
+    },
+    components: s.components.map((c) => c.name),
+  };
+
+  const sections = [
+    "You are analyzing a Figma design system. Output ONE JSON object matching the schema below.",
+    "No prose, no markdown fences. Just the JSON.",
+    "",
+  ];
+
+  if (imagePaths.length > 0) {
+    sections.push("Sample frames are rendered as PNGs you should Read to understand visual personality:");
+    for (const p of imagePaths) {
+      sections.push(`- ${p}`);
+    }
+    sections.push("");
+  }
+
+  const sampleFramesRules = imagePaths.length > 0
+    ? [
+        "- When sample frames are provided, the PNGs are the PRIMARY grounding for identity. The token digest is supplementary context, not required. Describe what you SEE in the frames — density of UI, temperature of neutrals, corner radius character, use of color, ornamentation level. NEVER say 'no identity could be extracted' or 'the digest is empty' when sample frames exist; you have the rendered frames.",
+        "- Only when BOTH sample frames AND token digest are empty should identity describe 'no data available'.",
+      ]
+    : [];
+
+  sections.push(
+    "Rules:",
+    "- `identity` is 50-80 words, describing visual personality (density, ornamentation, temperature, formality).",
+    ...sampleFramesRules,
+    "- For each color entry, pick role from: background, surface, text, accent, status, other. The `value` MUST be one of the hex values I passed you verbatim — do not alter hexes.",
+    "- For each typography entry, pick role from: heading, body, caption, code, other. Encode `value` as \"<family> <size>/<lineHeight> <weight>\" (e.g. \"Inter 14/20 400\").",
+    "- `spacing.scale` and `radii.scale` are sorted ascending, unique numbers observed across the input.",
+    "- `components` is the list of component names, sorted alphabetically, deduped.",
+    "",
+    "Schema:",
+    '{ identity: string, colors: { entries: [{name, value, role}], warnings: string[] }, typography: { entries: [{name, value, role}], warnings: string[] }, spacing: { scale: number[] }, radii: { scale: number[] }, shadows: { items: [{name, css}] }, components: string[], warnings: string[] }',
+    "",
+    "Input digest:",
+    "```json",
+    JSON.stringify(digest),
+    "```",
+  );
+
+  return sections.join("\n");
+}
+
+function defaultSpawner(modelOpt: string | undefined, timeoutMs: number) {
+  return (prompt: string, imagePaths: string[]) =>
+    new Promise<SynthSpawnResult>((resolve) => {
+      const model = modelOpt
+        ?? process.env.ARCADE_STUDIO_SYNTH_MODEL?.trim()
+        ?? "sonnet";
+      const bin = resolveClaudeBin();
+      // Pipe the prompt via stdin rather than as a positional arg.
+      // Passing the prompt as argv after `--allowed-tools Read --add-dir …`
+      // makes the CLI's argparser swallow the prompt as a trailing value of
+      // the preceding multi-value flag, and it errors with "Input must be
+      // provided either through stdin or as a prompt argument."
+      const args = ["--bare", "--model", model, "--print"];
+      if (imagePaths.length > 0) {
+        args.push("--allowed-tools", "Read");
+        // Grant the CLI read access to every directory that holds a sample PNG.
+        // Dedupe in case multiple samples share a directory (the common case —
+        // figmaIngestRoot).
+        const dirs = new Set<string>();
+        for (const p of imagePaths) dirs.add(path.dirname(p));
+        for (const dir of dirs) { args.push("--add-dir", dir); }
+      }
+      const proc = spawnChild(bin, args, { stdio: ["pipe", "pipe", "pipe"] });
+      let text = "";
+      proc.stdout.on("data", (c) => { text += c.toString(); });
+      proc.stderr.on("data", () => {});
+      const timer = setTimeout(() => { try { proc.kill("SIGTERM"); } catch {} }, timeoutMs);
+      proc.on("close", (exitCode) => { clearTimeout(timer); resolve({ text, exitCode }); });
+      proc.on("error", () => resolve({ text: "", exitCode: -1 }));
+      try {
+        proc.stdin!.write(prompt);
+        proc.stdin!.end();
+      } catch {
+        // Write errors surface via the close handler above.
+      }
+    });
+}
