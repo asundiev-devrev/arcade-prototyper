@@ -141,7 +141,7 @@ async function getFile(fileKey: string): Promise<any | null> {
     let stderr = "";
     let proc;
     try {
-      proc = spawnChild("figmanage", ["reading", "get-file", fileKey, "--json"], {
+      proc = spawnChild("figmanage", ["reading", "get-file", fileKey, "--depth", "2", "--json"], {
         stdio: ["ignore", "pipe", "pipe"],
       });
     } catch {
