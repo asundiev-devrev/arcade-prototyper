@@ -153,9 +153,17 @@ function buildPrompt(s: SystemSources, imagePaths: string[]): string {
     sections.push("");
   }
 
+  const sampleFramesRules = imagePaths.length > 0
+    ? [
+        "- When sample frames are provided, the PNGs are the PRIMARY grounding for identity. The token digest is supplementary context, not required. Describe what you SEE in the frames — density of UI, temperature of neutrals, corner radius character, use of color, ornamentation level. NEVER say 'no identity could be extracted' or 'the digest is empty' when sample frames exist; you have the rendered frames.",
+        "- Only when BOTH sample frames AND token digest are empty should identity describe 'no data available'.",
+      ]
+    : [];
+
   sections.push(
     "Rules:",
-    "- `identity` is 50-80 words, describing visual personality (density, ornamentation, temperature, formality). Grounded in the sample frames if provided; concrete not generic.",
+    "- `identity` is 50-80 words, describing visual personality (density, ornamentation, temperature, formality).",
+    ...sampleFramesRules,
     "- For each color entry, pick role from: background, surface, text, accent, status, other. The `value` MUST be one of the hex values I passed you verbatim — do not alter hexes.",
     "- For each typography entry, pick role from: heading, body, caption, code, other. Encode `value` as \"<family> <size>/<lineHeight> <weight>\" (e.g. \"Inter 14/20 400\").",
     "- `spacing.scale` and `radii.scale` are sorted ascending, unique numbers observed across the input.",
