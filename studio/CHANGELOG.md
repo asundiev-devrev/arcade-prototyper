@@ -6,6 +6,14 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.15.0] — 2026-05-11
+
+### Added
+- Figma design-system sync: the first time you reference a new Figma file, Studio now scans the whole file for styles, variables, components, and a handful of representative frames. It synthesizes a natural-language **Identity** paragraph plus six token sections into a `DESIGN.md` at your project root. The project's CLAUDE.md imports it via `@DESIGN.md` so the generator sees cross-frame design-system context on every turn — anchoring visual personality and the full available token vocabulary, not just what's on the current frame. Your `DESIGN.md` is never overwritten; edit it freely.
+
+### Fixed
+- Runtime glue for the Figma design-system scan: the claude CLI doesn't support `--attach` for images (fixed to use the Read tool + `--add-dir`); `figmanage reading get-file` times out on large files (fixed with `--depth 2`); prompt was being swallowed by the CLI's variadic `--add-dir` argparser when passed positionally (fixed by piping via stdin).
+
 ## [0.14.0] — 2026-05-08
 
 ### Added
