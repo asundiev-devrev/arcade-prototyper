@@ -228,3 +228,26 @@ export async function getVariables(fileKey: string): Promise<any | null> {
   try { return JSON.parse(r.stdout); }
   catch { return null; }
 }
+
+/**
+ * Fetch the file's published paint/text/effect styles. Returns `null` on
+ * non-zero exit — styles are best-effort input to system-scan, same posture
+ * as getVariables.
+ */
+export async function getStyles(fileKey: string): Promise<any | null> {
+  const r = await runFigmanage(["components", "list-file-styles", fileKey, "--json"]);
+  if (r.code !== 0) return null;
+  try { return JSON.parse(r.stdout); }
+  catch { return null; }
+}
+
+/**
+ * Fetch the file's published components and component sets. Returns `null`
+ * on non-zero exit.
+ */
+export async function getComponents(fileKey: string): Promise<any | null> {
+  const r = await runFigmanage(["components", "list-file-components", fileKey, "--json"]);
+  if (r.code !== 0) return null;
+  try { return JSON.parse(r.stdout); }
+  catch { return null; }
+}

@@ -169,3 +169,57 @@ describe("exportNodePng (array shape from figmanage)", () => {
     }
   });
 });
+
+describe("getStyles", () => {
+  beforeEach(() => {
+    spawnMock.mockClear();
+  });
+
+  it("returns parsed JSON when figmanage succeeds", async () => {
+    const mockResponse = JSON.stringify({ styles: [{ node_id: "1:1", name: "bg/canvas" }] });
+    spawnMock.mockImplementation(() => mockSpawn(mockResponse, 0) as any);
+    const { getStyles } = await import("../../server/figmaCli");
+    const out = await getStyles("fk");
+    expect(Array.isArray(out?.styles)).toBe(true);
+    expect(out.styles[0].name).toBe("bg/canvas");
+    expect(spawnMock).toHaveBeenCalledWith(
+      "figmanage",
+      ["components", "list-file-styles", "fk", "--json"],
+      expect.anything(),
+    );
+  });
+
+  it("returns null on non-zero exit (best-effort)", async () => {
+    spawnMock.mockImplementation(() => mockSpawn("error", 1) as any);
+    const { getStyles } = await import("../../server/figmaCli");
+    const out = await getStyles("fk");
+    expect(out).toBeNull();
+  });
+});
+
+describe("getComponents", () => {
+  beforeEach(() => {
+    spawnMock.mockClear();
+  });
+
+  it("returns parsed JSON when figmanage succeeds", async () => {
+    const mockResponse = JSON.stringify({ components: [{ node_id: "2:2", name: "Button/Primary" }] });
+    spawnMock.mockImplementation(() => mockSpawn(mockResponse, 0) as any);
+    const { getComponents } = await import("../../server/figmaCli");
+    const out = await getComponents("fk");
+    expect(Array.isArray(out?.components)).toBe(true);
+    expect(out.components[0].name).toBe("Button/Primary");
+    expect(spawnMock).toHaveBeenCalledWith(
+      "figmanage",
+      ["components", "list-file-components", "fk", "--json"],
+      expect.anything(),
+    );
+  });
+
+  it("returns null on non-zero exit", async () => {
+    spawnMock.mockImplementation(() => mockSpawn("error", 1) as any);
+    const { getComponents } = await import("../../server/figmaCli");
+    const out = await getComponents("fk");
+    expect(out).toBeNull();
+  });
+});
