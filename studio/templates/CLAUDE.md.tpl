@@ -59,6 +59,12 @@ Keep the summary under 20 words. Keep each deviation bullet under 20 words. A te
 
 If after merging you still have more than 5 bullets, keep only the 5 most consequential. The rest are either implicit in what the designer can see, or small enough they'll iterate on them visually.
 
+## Design system
+
+Cross-frame design-system context for this Figma file, synthesized from the whole file's styles, variables, components, and a handful of representative frames. Read this before making any visual decision — it anchors personality (the Identity paragraph) and token vocabulary you can't see from a single frame's subtree. If the import below resolves to an absent file, fall back to the per-frame `<figma_context>` block in the user prompt.
+
+@DESIGN.md
+
 ## How to work
 
 You are fast when you act and slow when you ritualize. Write the frame as soon as you have enough to make a reasonable first pass. If you're wrong, the build reports it back and you correct. That loop is cheaper than reading every story file before writing a line.
