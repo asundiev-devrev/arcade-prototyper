@@ -1,4 +1,5 @@
 import { spawn as spawnChild } from "node:child_process";
+import path from "node:path";
 import { z } from "zod";
 import type { SynthesizedSections } from "./types";
 import type { SystemSources } from "./systemSources";
@@ -41,8 +42,8 @@ export async function synthesizeSystem(
   deps: SynthDeps = {},
 ): Promise<SynthesizedSections> {
   const spawner = deps.spawn ?? defaultSpawner(deps.model, deps.timeoutMs ?? 60_000);
-  const prompt = buildPrompt(sources);
   const images = sources.sampleFrames.map((f) => f.pngPath);
+  const prompt = buildPrompt(sources, images);
   const reply = await spawner(prompt, images);
   if (reply.exitCode !== 0) {
     throw new Error(`synthesizer exited ${reply.exitCode}`);
@@ -123,7 +124,7 @@ function extractJson(text: string): string {
   return m ? m[0] : stripped.trim();
 }
 
-function buildPrompt(s: SystemSources): string {
+function buildPrompt(s: SystemSources, imagePaths: string[]): string {
   const digest = {
     paint: s.styles.paint.map((p) => ({ name: p.name, hex: p.hex })),
     text: s.styles.text.map((t) => ({
@@ -137,10 +138,22 @@ function buildPrompt(s: SystemSources): string {
     },
     components: s.components.map((c) => c.name),
   };
-  return [
+
+  const sections = [
     "You are analyzing a Figma design system. Output ONE JSON object matching the schema below.",
     "No prose, no markdown fences. Just the JSON.",
     "",
+  ];
+
+  if (imagePaths.length > 0) {
+    sections.push("Sample frames are rendered as PNGs you should Read to understand visual personality:");
+    for (const p of imagePaths) {
+      sections.push(`- ${p}`);
+    }
+    sections.push("");
+  }
+
+  sections.push(
     "Rules:",
     "- `identity` is 50-80 words, describing visual personality (density, ornamentation, temperature, formality). Grounded in the sample frames if provided; concrete not generic.",
     "- For each color entry, pick role from: background, surface, text, accent, status, other. The `value` MUST be one of the hex values I passed you verbatim — do not alter hexes.",
@@ -155,7 +168,9 @@ function buildPrompt(s: SystemSources): string {
     "```json",
     JSON.stringify(digest),
     "```",
-  ].join("\n");
+  );
+
+  return sections.join("\n");
 }
 
 function defaultSpawner(modelOpt: string | undefined, timeoutMs: number) {
@@ -166,7 +181,15 @@ function defaultSpawner(modelOpt: string | undefined, timeoutMs: number) {
         ?? "sonnet";
       const bin = resolveClaudeBin();
       const args = ["--bare", "--model", model, "--print"];
-      for (const p of imagePaths) args.push("--attach", p);
+      if (imagePaths.length > 0) {
+        args.push("--allowed-tools", "Read");
+        // Grant the CLI read access to every directory that holds a sample PNG.
+        // Dedupe in case multiple samples share a directory (the common case —
+        // figmaIngestRoot).
+        const dirs = new Set<string>();
+        for (const p of imagePaths) dirs.add(path.dirname(p));
+        for (const dir of dirs) { args.push("--add-dir", dir); }
+      }
       args.push(prompt);
       const proc = spawnChild(bin, args, { stdio: ["ignore", "pipe", "pipe"] });
       let text = "";

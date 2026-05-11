@@ -136,3 +136,60 @@ describe("synthesizeSystem — provenance + role coercion", () => {
     expect(out.spacing.scale).toEqual([4, 8, 16]);
   });
 });
+
+describe("synthesizeSystem — image handling", () => {
+  it("includes image read instructions in the prompt when sample frames are present", async () => {
+    let capturedPrompt = "";
+    const spawn = vi.fn().mockImplementation((prompt: string, images: string[]) => {
+      capturedPrompt = prompt;
+      expect(images).toEqual(["/tmp/a.png", "/tmp/b.png"]);
+      return Promise.resolve({
+        text: JSON.stringify({
+          identity: "x",
+          colors: { entries: [], warnings: [] },
+          typography: { entries: [], warnings: [] },
+          spacing: { scale: [] },
+          radii: { scale: [] },
+          shadows: { items: [] },
+          components: [],
+          warnings: [],
+        }),
+        exitCode: 0,
+      });
+    });
+    const sources = {
+      ...minimalSources(),
+      sampleFrames: [
+        { nodeId: "2:1", name: "Home", pngPath: "/tmp/a.png", widthPx: 1440, heightPx: 900 },
+        { nodeId: "2:3", name: "Settings", pngPath: "/tmp/b.png", widthPx: 800, heightPx: 600 },
+      ],
+    };
+    await synthesizeSystem(sources, { spawn });
+    expect(capturedPrompt).toMatch(/Read/);
+    expect(capturedPrompt).toContain("/tmp/a.png");
+    expect(capturedPrompt).toContain("/tmp/b.png");
+  });
+
+  it("omits image-read block when no sample frames", async () => {
+    let capturedPrompt = "";
+    const spawn = vi.fn().mockImplementation((prompt: string) => {
+      capturedPrompt = prompt;
+      return Promise.resolve({
+        text: JSON.stringify({
+          identity: "x",
+          colors: { entries: [], warnings: [] },
+          typography: { entries: [], warnings: [] },
+          spacing: { scale: [] },
+          radii: { scale: [] },
+          shadows: { items: [] },
+          components: [],
+          warnings: [],
+        }),
+        exitCode: 0,
+      });
+    });
+    await synthesizeSystem(minimalSources(), { spawn });
+    expect(capturedPrompt).not.toMatch(/Sample frames are rendered as PNGs/);
+    expect(capturedPrompt).not.toMatch(/Read/);
+  });
+});
