@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { chatMiddleware } from "../../../server/middleware/chat";
 import { createProject } from "../../../server/projects";
 import * as ingestModule from "../../../server/figmaIngest";
+import * as systemIngestModule from "../../../server/figmaSystemIngest";
 import { __resetTurnRegistryForTests } from "../../../server/turnRegistry";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -106,6 +107,49 @@ describe("/api/chat with Figma structured context", () => {
     await drainStream(p.slug);
     const sent = fs.readFileSync(process.env.ARCADE_TEST_PROMPT_OUT!, "utf-8");
     expect(sent).not.toContain("<figma_context");
+  });
+
+  it("main claude turn does not block on the design-system sync", async () => {
+    // Regression: before 2026-05-12, runClaudeBranch awaited the seeder in
+    // Promise.all alongside enrichPromptWithFigmaContext, so a slow
+    // getFigmaSystemIngest().ingest() (minutes on large files) kept the
+    // claude subprocess from being spawned at all. Beta tester saw "Working…
+    // 10m 6s" with no output. Now the seeder fires and forgets.
+    vi.spyOn(ingestModule, "getFigmaIngest").mockResolvedValue({
+      ingest: vi.fn(),
+      ingestPhase1: vi.fn(),
+      getCached: vi.fn().mockReturnValue({
+        source: { fileKey: "k", nodeId: "1:2", url: "u", fetchedAt: "t" },
+        png: null, tree: { id: "0", type: "frame", name: "App" },
+        tokens: { colors: {}, typography: {}, spacing: {} },
+        composites: [], diagnostics: { warnings: [] },
+      }),
+      getPhase1Pending: vi.fn().mockReturnValue(undefined),
+    });
+    // Install a design-system ingest that never resolves. If the main turn
+    // awaited it (old behavior), the assertions below would time out.
+    vi.spyOn(systemIngestModule, "getFigmaSystemIngest").mockResolvedValue({
+      ingest: vi.fn().mockImplementation(() => new Promise(() => { /* hang forever */ })),
+      getCached: vi.fn().mockReturnValue(undefined),
+      getPending: vi.fn().mockReturnValue(undefined),
+    });
+
+    const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
+    const res = await fetch(`http://localhost:${port}/api/chat`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        slug: p.slug,
+        prompt: "build this https://www.figma.com/design/k/x?node-id=1-2",
+      }),
+    });
+    expect(res.status).toBe(202);
+    // Draining completes only when the fake-claude subprocess finishes. If
+    // the seeder blocked the turn, this would hang and vitest's per-test
+    // timeout would fire instead of this assertion.
+    await drainStream(p.slug);
+    const sent = fs.readFileSync(process.env.ARCADE_TEST_PROMPT_OUT!, "utf-8");
+    // Main-turn side effects happened despite the stalled seeder.
+    expect(sent).toContain("<figma_context");
   });
 
   it("injects phase-1-only context (composites=[]) when phase 2 is still pending", async () => {

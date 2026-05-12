@@ -134,11 +134,13 @@ export async function getFigmaSystemIngest(): Promise<FigmaSystemIngest> {
   return singleton;
 }
 
-async function getFile(fileKey: string): Promise<any | null> {
+async function getFile(fileKey: string, timeoutMs = 45_000): Promise<any | null> {
   // figmanage reading get-file <fk> --json returns the full document tree.
+  // --depth 2 keeps the payload tractable (see 29d6581). A wall-clock kill
+  // prevents a hung figmanage (network stall, throttle, or figma-api hiccup)
+  // from blocking the design-system sync forever.
   return new Promise((resolve) => {
     let stdout = "";
-    let stderr = "";
     let proc;
     try {
       proc = spawnChild("figmanage", ["reading", "get-file", fileKey, "--depth", "2", "--json"], {
@@ -147,13 +149,24 @@ async function getFile(fileKey: string): Promise<any | null> {
     } catch {
       resolve(null); return;
     }
+    let settled = false;
+    const settle = (val: any | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(val);
+    };
+    const timer = setTimeout(() => {
+      try { proc.kill("SIGTERM"); } catch {}
+      settle(null);
+    }, timeoutMs);
     proc.stdout!.on("data", (c) => { stdout += c.toString(); });
-    proc.stderr!.on("data", (c) => { stderr += c.toString(); });
-    proc.on("error", () => resolve(null));
+    proc.stderr!.on("data", () => {});
+    proc.on("error", () => settle(null));
     proc.on("close", (code) => {
-      if (code !== 0) { resolve(null); return; }
-      try { resolve(JSON.parse(stdout)); }
-      catch { resolve(null); }
+      if (code !== 0) { settle(null); return; }
+      try { settle(JSON.parse(stdout)); }
+      catch { settle(null); }
     });
   });
 }

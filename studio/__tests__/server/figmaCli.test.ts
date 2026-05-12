@@ -140,6 +140,51 @@ describe("figmaCli (figmanage bridge)", () => {
   });
 });
 
+describe("runFigmanage timeout", () => {
+  beforeEach(() => {
+    spawnMock.mockClear();
+  });
+
+  it("SIGTERMs the child and returns null (via getVariables) when figmanage hangs past its wall clock", async () => {
+    // Root cause of 0.15.0 "Working… with no output" hangs: figmanage reads
+    // (get-variables, get-styles, get-components, get-file) had no per-call
+    // timeout. A stuck subprocess held the design-system sync forever —
+    // which in turn held the chat turn. Every caller now inherits a
+    // 30-second wall clock via runFigmanage. This test exercises the kill
+    // path for getVariables; the other runFigmanage-backed calls share the
+    // same implementation branch.
+    vi.useFakeTimers();
+    try {
+      let killed = false;
+      spawnMock.mockImplementation(() => {
+        const proc = new EventEmitter() as ChildProcess;
+        (proc as any).stdout = new EventEmitter();
+        (proc as any).stderr = new EventEmitter();
+        (proc as any).kill = (_sig?: string) => {
+          killed = true;
+          // Production: SIGTERM → close with 143. Simulate the close event
+          // so runFigmanage's close handler runs (but settle() has already
+          // been called by the timeout, so this is a no-op).
+          queueMicrotask(() => proc.emit("close", 143));
+          return true;
+        };
+        // Never emit anything on our own — the timer is the only exit.
+        return proc;
+      });
+      const { getVariables } = await import("../../server/figmaCli");
+      const pending = getVariables("fk");
+      // Fast-forward past the 30s default timeout.
+      await vi.advanceTimersByTimeAsync(31_000);
+      const r = await pending;
+      expect(killed).toBe(true);
+      // getVariables returns null on any non-zero exit; timeout counts.
+      expect(r).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("exportNodePng (array shape from figmanage)", () => {
   beforeEach(() => {
     spawnMock.mockClear();

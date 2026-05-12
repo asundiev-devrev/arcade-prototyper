@@ -327,16 +327,32 @@ export interface SeedDesignMdInput {
   fileKey: string | null;
   emit: (text: string) => void;
   ingest?: FigmaSystemIngest;
+  /** Wall-clock cap for the whole sync. Defaults to 90s. */
+  timeoutMs?: number;
 }
+
+/** Max wall-clock for a single design-system sync attempt. Covers
+ *  fetchSources (4 figmanage reads + up to 8 PNG exports) + synthesize
+ *  (LLM call, already timed out internally at 60s). If figmanage or the
+ *  network is having a bad day, we skip the sync rather than hang the
+ *  turn narration indefinitely. */
+const DEFAULT_SEED_TIMEOUT_MS = 90_000;
 
 /**
  * On the first turn that references a Figma file in a project without a
  * DESIGN.md, scan the whole file once, synthesize sections, and write the
  * result. Never overwrites an existing file — DESIGN.md is user-owned
  * after creation. Failures are emitted as narration lines; never thrown.
+ *
+ * Safe to fire-and-forget from the chat middleware: the main Claude turn
+ * does NOT need DESIGN.md to be present to start — CLAUDE.md's
+ * `@DESIGN.md` import is consulted by the next turn once this one finishes.
+ * Blocking the main turn on this sync was the cause of multi-minute
+ * "Working… with no output" hangs on large Figma files.
  */
 export async function maybeSeedProjectDesignMd(input: SeedDesignMdInput): Promise<void> {
   const { slug, fileKey, emit } = input;
+  const timeoutMs = input.timeoutMs ?? DEFAULT_SEED_TIMEOUT_MS;
   if (!fileKey) return;
 
   const targetPath = designMdPath(slug);
@@ -348,8 +364,22 @@ export async function maybeSeedProjectDesignMd(input: SeedDesignMdInput): Promis
     // Not present; proceed.
   }
 
+  emit("Scanning Figma design system…");
+
   const ingest = input.ingest ?? (await getFigmaSystemIngest());
-  const outcome = await ingest.ingest(fileKey);
+  let timedOut = false;
+  const timeoutSignal = new Promise<{ ok: false; reason: string }>((resolve) => {
+    const t = setTimeout(() => {
+      timedOut = true;
+      resolve({ ok: false, reason: `timed out after ${Math.round(timeoutMs / 1000)}s` });
+    }, timeoutMs);
+    t.unref?.();
+  });
+  const outcome = await Promise.race([ingest.ingest(fileKey), timeoutSignal]);
+  if (timedOut) {
+    emit(`Design system sync skipped (${(outcome as { reason: string }).reason})`);
+    return;
+  }
   if (!outcome.ok) {
     emit(`Design system sync skipped (${outcome.reason})`);
     return;
@@ -386,14 +416,22 @@ async function runClaudeBranch(ctx: {
 
   const narrate = (text: string) => emit({ kind: "narration", text });
 
-  const [enriched] = await Promise.all([
-    enrichPromptWithFigmaContext(ctx.prompt, ctx.images ?? [], narrate),
-    maybeSeedProjectDesignMd({
-      slug,
-      fileKey: parsed?.fileId ?? null,
-      emit: narrate,
-    }),
-  ]);
+  // The design-system sync seeds DESIGN.md for FUTURE turns via CLAUDE.md's
+  // `@DESIGN.md` import — it does NOT need to complete before the current
+  // turn starts. Launching it concurrently (fire-and-forget) keeps a slow
+  // figmanage read or LLM synth call from blocking "Working…" for minutes.
+  // maybeSeedProjectDesignMd has its own 90s wall-clock + narrates its own
+  // progress/skip events; if the Claude turn ends before the sync finishes,
+  // the emit calls become no-ops (turnRegistry drops events after terminal).
+  void maybeSeedProjectDesignMd({
+    slug,
+    fileKey: parsed?.fileId ?? null,
+    emit: narrate,
+  }).catch((err) => {
+    console.warn("[studio] unexpected seeder rejection:", err);
+  });
+
+  const enriched = await enrichPromptWithFigmaContext(ctx.prompt, ctx.images ?? [], narrate);
   const { prompt, images } = enriched;
   let capturedSessionId: string | undefined;
   const narrationTexts: string[] = [];

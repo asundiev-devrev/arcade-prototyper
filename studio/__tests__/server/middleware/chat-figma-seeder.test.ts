@@ -95,4 +95,43 @@ describe("maybeSeedProjectDesignMd", () => {
     expect(entries).toContain("DESIGN.md");
     expect(entries.filter((e) => e.endsWith(".tmp"))).toEqual([]);
   });
+
+  it("emits 'Scanning…' progress narration before ingest work starts", async () => {
+    // Without this, a slow sync looks indistinguishable from the main claude
+    // turn silently thinking — beta tester reported "10m 6s, no output".
+    const ing = mockIngest({ ok: true, ...okResult() });
+    const narrations: string[] = [];
+    await maybeSeedProjectDesignMd({
+      slug, fileKey: "fk",
+      emit: (t) => narrations.push(t),
+      ingest: ing,
+    });
+    expect(narrations[0]).toMatch(/Scanning/);
+    // And "Synced" comes later — progress narration is additive, not a replacement.
+    expect(narrations.some((n) => /Synced design system/.test(n))).toBe(true);
+  });
+
+  it("skips with 'timed out' reason when ingest never resolves within timeoutMs", async () => {
+    // Root cause of the bug this test guards: fetchSystemSources spawns
+    // four figmanage subprocesses + up to 8 PNG exports with no timeouts.
+    // A hung figmanage means ingest.ingest() never returns. Before this
+    // fix, the whole chat turn waited silently for minutes. Now the seeder
+    // gives up after its own wall clock and narrates "skipped".
+    const ing: FigmaSystemIngest = {
+      ingest: vi.fn().mockImplementation(() => new Promise(() => { /* never resolves */ })),
+      getCached: () => undefined,
+      getPending: () => undefined,
+    };
+    const narrations: string[] = [];
+    await maybeSeedProjectDesignMd({
+      slug, fileKey: "fk",
+      emit: (t) => narrations.push(t),
+      ingest: ing,
+      timeoutMs: 30,
+    });
+    expect(narrations.some((n) => /sync skipped.*timed out/i.test(n))).toBe(true);
+    // And the file was NOT written.
+    const entries = await fs.readdir(path.join(tmpRoot, "projects", slug));
+    expect(entries).not.toContain("DESIGN.md");
+  });
 });

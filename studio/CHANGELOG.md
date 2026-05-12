@@ -6,6 +6,11 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.15.1] — 2026-05-12
+
+### Fixed
+- The 0.15.0 design-system sync could block the main chat turn for minutes on large Figma files, showing "Working… 10m" with no narration and no frames. Root cause was twofold: the sync ran *before* the Claude turn (inside `Promise.all`), and the subprocesses it spawned (four `figmanage` reads, up to eight PNG exports, one synthesizer) had no per-call wall clock. The sync now fires concurrently with the Claude turn (DESIGN.md seeds *future* turns, so there's no reason to block on it), a 90-second cap wraps the whole sync, every `figmanage` call self-terminates after 30s, and `get-file` self-terminates after 45s. Beta testers see "Scanning Figma design system…" narrate immediately; slow scans skip with "Design system sync skipped (timed out after 90s)" instead of hanging.
+
 ## [0.15.0] — 2026-05-11
 
 ### Added

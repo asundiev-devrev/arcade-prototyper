@@ -22,8 +22,19 @@ export function parseFigmaUrl(url: string): ParsedFigmaUrl | null {
  * cascades into a 500 response from the middleware, which the
  * FigmaConnectButton renders as "Figma error — retry" — misleading
  * when the real state is "figmanage is just not installed on PATH."
+ *
+ * Callers pass `timeoutMs` for long-running reads (get-file on large
+ * libraries, exports). On timeout we SIGTERM the child and resolve with
+ * `code: -1` and a "timed out" stderr so the caller's existing non-zero
+ * branch kicks in — no new exception shape to propagate.
  */
-async function runFigmanage(args: string[]): Promise<{ stdout: string; stderr: string; code: number }> {
+const DEFAULT_FIGMANAGE_TIMEOUT_MS = 30_000;
+
+async function runFigmanage(
+  args: string[],
+  opts: { timeoutMs?: number } = {},
+): Promise<{ stdout: string; stderr: string; code: number }> {
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_FIGMANAGE_TIMEOUT_MS;
   return new Promise((resolve) => {
     let stdout = "";
     let stderr = "";
@@ -34,12 +45,27 @@ async function runFigmanage(args: string[]): Promise<{ stdout: string; stderr: s
       resolve({ stdout: "", stderr: `spawn failed: ${err?.message ?? String(err)}`, code: -1 });
       return;
     }
+    let settled = false;
+    const settle = (r: { stdout: string; stderr: string; code: number }) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(r);
+    };
+    const timer = setTimeout(() => {
+      try { proc.kill("SIGTERM"); } catch {}
+      settle({
+        stdout,
+        stderr: stderr + `\nfigmanage ${args[0] ?? "(no-cmd)"} timed out after ${timeoutMs}ms`,
+        code: -1,
+      });
+    }, timeoutMs);
     proc.stdout!.on("data", (c) => { stdout += c.toString(); });
     proc.stderr!.on("data", (c) => { stderr += c.toString(); });
     proc.on("error", (err: any) => {
-      resolve({ stdout, stderr: stderr + `\nspawn error: ${err?.message ?? String(err)}`, code: -1 });
+      settle({ stdout, stderr: stderr + `\nspawn error: ${err?.message ?? String(err)}`, code: -1 });
     });
-    proc.on("close", (code) => resolve({ stdout, stderr, code: code ?? 0 }));
+    proc.on("close", (code) => settle({ stdout, stderr, code: code ?? 0 }));
   });
 }
 
