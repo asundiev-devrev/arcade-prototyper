@@ -6,6 +6,22 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.16.0] — 2026-05-12
+
+### Changed
+- The **Copy Lift Manifest** button now emits a substantially richer manifest. When a beta tester pastes it into Claude Code to translate a Studio frame into a production codebase, the downstream agent has dramatically more context to work with — fewer hallucinations, fewer silent drops, fewer "this is what I guessed, reviewer please confirm" TODOs. Validated against two real frames across three fresh-agent lift runs: the same five-to-six TODOs the agent leaves now represent genuine reviewer decisions rather than gaps the manifest itself introduced.
+
+  Under the hood this was a multi-step refactor of the lift subsystem (eight small PRs documented in `studio/docs/plans/2026-05-11-lift-manifest-rules-over-tables.md` and the follow-up PR-6 revision), shifting from a pure component-mapping table toward a small **conventions** layer plus targeted data edits. The manifest now carries:
+  - `<icon_convention>` teaching the agent to grep `ICON_TYPES` for icon matches (absorbs what was previously dozens of unmapped icons — the single biggest win), plus `<chrome_convention>` (drop `NavSidebar` / top-bar at the page boundary — the router owns Nav), `<overlay_convention>` (lift hand-rolled `fixed inset-0` overlays to production `<Modal>` instead of preserving raw divs), and a `<default_mapping_convention>` safety net for anything the table didn't cover.
+  - `<prior_art>` anchors pointing at real devrev-web files that demonstrate each structural mapping in use — the agent reads the example before writing code, short-circuiting most shape questions.
+  - `<dropped_props>` explicitly listing Studio props with no production equivalent (e.g. `Chip.appearance`), so the downstream stops silently dropping them.
+  - `<tokens alignment="patching">` with self-sunsetting patches for arcade-gen tokens and Tailwind utilities that don't resolve in devrev-web yet (`--surface-overlay` → `--bg-surface-overlay`, `rounded-square-x2` → `rounded-lg`, etc.).
+  - Splits the `settings-form` shape into `settings-form` (has form inputs) and `settings-list` (has `SettingsPage` but no form inputs) so scaffolding checklists match reality.
+  - Fixes several mapping-table bugs surfaced by a new drift-audit script: the previous table claimed production exports for `VistaRow`, `VistaPagination`, `VistaGroupRail`, and `SettingsRow` that don't actually exist in devrev-web (now honestly classified as judgment+n/a with reviewer notes), and `Tabs` was pointing at a `TabList` export that was really named `Tabs` (corrected).
+
+### Added
+- `pnpm run studio:audit` runs the new lift-manifest drift audit against a local devrev-web clone (`DEVREV_WEB_ROOT`, defaults to `~/devrev-web`). Verifies every mapping's production specifier resolves, every named export exists, every `<prior_art>` path still lives on disk, every icon anchor is still in `ICON_TYPES`, and every token patch is still needed. Exits non-zero on drift. Skipped by default in the regular test suite so contributors without the clone stay green.
+
 ## [0.15.1] — 2026-05-12
 
 ### Fixed
