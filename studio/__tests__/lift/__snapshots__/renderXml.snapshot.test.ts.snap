@@ -5,6 +5,14 @@ exports[`renderXml > marks n/a composites with equivalent="none" 1`] = `
   <generated_by>Arcade Studio</generated_by>
   <frame_path>/abs/computer-frame.tsx</frame_path>
   <intent>Computer app chrome.</intent>
+  <default_mapping_convention>
+    <rule>For any arcade primitive with no explicit mapping entry, the default assumption is that the same symbol is exported from '@devrev-web/design-system/shared/raw-design-system'. Verify by grep; if absent, surface to the reviewer.</rule>
+    <lookup>From a devrev-web checkout: grep -rE "^export .*\\b&lt;Name&gt;\\b" libs/design-system/shared/raw-design-system/src/components. If the export exists, use it. If not, it may live in a sibling package (settings, pages, agent, side-panel) — widen the grep, or surface to the reviewer. Prop names usually match; treat non-trivial prop differences as the reviewer's decision.</lookup>
+    <anchors>
+      <anchor>Switch → raw-design-system Switch (direct match; confirm with grep)</anchor>
+      <anchor>TextArea → raw-design-system TextArea (direct match; confirm with grep)</anchor>
+    </anchors>
+  </default_mapping_convention>
   <frame_inventory>
     <mapping class="judgment" studio_source="arcade-prototypes" studio_name="ChatInput" equivalent="none">
       <judgment_note>Studio provides a chat-input composite. In devrev-web chat inputs live inside specific features (Support, Timeline) and are bespoke. Map against the host feature's input component.</judgment_note>
@@ -16,12 +24,11 @@ exports[`renderXml > marks n/a composites with equivalent="none" 1`] = `
       <judgment_note>Studio-specific UI (chat sidebar for the Computer app). Treat like ComputerHeader.</judgment_note>
     </mapping>
     <mapping class="mechanical" studio_source="arcade" studio_name="Button" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Button">
-      <prop_delta from="size" value_map="md-&gt;M, lg-&gt;L">Studio narrows to md|lg; production accepts S|M|L. A Studio frame never uses sm.</prop_delta>
-      <prop_delta from="variant" value_map="primary-&gt;primary, secondary-&gt;secondary, tertiary-&gt;tertiary, destructive-&gt;destructive"/>
+      <prop_delta from="size" value_map="sm-&gt;S, md-&gt;M, lg-&gt;L"/>
+      <prop_delta from="variant"/>
       <slot_note>Children are identical. Leading/trailing icons move from raw children to \`start\` / \`end\` slots in production.</slot_note>
     </mapping>
   </frame_inventory>
-  <tokens alignment="aligned">Tokens are aligned between arcade-gen and arcade-theme. CSS custom property names carry across. No token remap is required.</tokens>
   <scaffolding shape="ad-hoc">
     <description>These are the things a Studio frame never covers by itself. Engineer and agent divide between them.</description>
     <item status="required">Consider whether this fits an existing Tier-2/3 template (PageLayout, ListViewPage, SettingsPage)</item>
@@ -38,7 +45,7 @@ exports[`renderXml > marks n/a composites with equivalent="none" 1`] = `
     <screenshot_url>/api/projects/demo/thumbnails/computer-frame.png</screenshot_url>
   </grounding>
   <agent_directives>
-    You are lifting an Arcade Studio frame into devrev-web. Apply MECHANICAL rewrites directly. For STRUCTURAL rewrites, write the new production shape and leave brief comments explaining what changed. For JUDGMENT entries, leave a // TODO: comment carrying the judgment note verbatim and ask the user before deciding. Do NOT invent production equivalents for &lt;unmapped/&gt; entries — surface them back to the user.
+    You are lifting an Arcade Studio frame into devrev-web. Read the CONVENTIONS first — they tell you HOW to translate classes of Studio construct (icons, chrome, unmapped components). Then walk the frame inventory: apply MECHANICAL rewrites directly, write the production shape for STRUCTURAL ones with a brief comment on what changed, and leave // TODO comments with the judgment_note verbatim for JUDGMENT entries. When a mapping includes &lt;prior_art&gt;, OPEN the first example file before writing code — it's a real consumer and will resolve most shape questions faster than slot_notes can. When a mapping lists &lt;dropped_props&gt;, those Studio props have no production equivalent — don't guess a replacement; drop them with the reason as a TODO comment. For each icon under &lt;icons&gt;, resolve via the icon_convention (grep ICON_TYPES). For each &lt;unmapped/&gt; entry, apply the default_mapping_convention — verify the assumed target exists by grep before using it.
   </agent_directives>
 </lift_manifest>
 "
@@ -49,27 +56,46 @@ exports[`renderXml > renders a detail frame 1`] = `
   <generated_by>Arcade Studio</generated_by>
   <frame_path>/abs/detail-frame.tsx</frame_path>
   <intent>Ticket detail with tabs.</intent>
+  <chrome_convention>
+    <rule>App-shell chrome (NavSidebar, TitleBar, AppShell, top-bar Search/Bell/Avatar clusters) belongs to the ROUTER LAYOUT in devrev-web, not to the page. Drop it at the page boundary during the lift.</rule>
+    <lookup>Production features mount their Nav at the feature router, not inside the page component. Before discarding Studio's sidebar data, confirm the host router already provides a Nav by reading e.g. libs/settings/feature/computer-settings/src/computer-settings-router.tsx.</lookup>
+    <anchors>
+      <anchor>Studio \`&lt;SettingsPage sidebar={&lt;NavSidebar/&gt;}&gt;\` → keep the &lt;SettingsPage&gt; children, drop the sidebar prop; the host router's Nav renders the sidebar.</anchor>
+      <anchor>Studio's top-bar \`actions\` cluster (Search + Bell + Avatar) → drop entirely; that chrome lives in the shell, not the page.</anchor>
+      <anchor>Studio's \`pageActions\` (Create / Delete / Add) → keep; these go in &lt;SettingsPage.Header.Actions&gt;.</anchor>
+    </anchors>
+  </chrome_convention>
+  <default_mapping_convention>
+    <rule>For any arcade primitive with no explicit mapping entry, the default assumption is that the same symbol is exported from '@devrev-web/design-system/shared/raw-design-system'. Verify by grep; if absent, surface to the reviewer.</rule>
+    <lookup>From a devrev-web checkout: grep -rE "^export .*\\b&lt;Name&gt;\\b" libs/design-system/shared/raw-design-system/src/components. If the export exists, use it. If not, it may live in a sibling package (settings, pages, agent, side-panel) — widen the grep, or surface to the reviewer. Prop names usually match; treat non-trivial prop differences as the reviewer's decision.</lookup>
+    <anchors>
+      <anchor>Switch → raw-design-system Switch (direct match; confirm with grep)</anchor>
+      <anchor>TextArea → raw-design-system TextArea (direct match; confirm with grep)</anchor>
+    </anchors>
+  </default_mapping_convention>
   <frame_inventory>
     <mapping class="structural" studio_source="arcade-prototypes" studio_name="AppShell" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Page">
       <slot_note>AppShell wraps the whole app in a sidebar+content flex layout. In devrev-web, features compose this inline: \`&lt;div className="flex h-screen"&gt;&lt;aside&gt;{sidebar}&lt;/aside&gt;&lt;div className="flex-1"&gt;{children}&lt;/div&gt;&lt;/div&gt;\` alongside &lt;Page&gt;. There is no single-component equivalent. Unroll into inline flex + Page.</slot_note>
     </mapping>
     <mapping class="mechanical" studio_source="arcade-prototypes" studio_name="BreadcrumbBar" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Breadcrumbs"/>
-    <mapping class="mechanical" studio_source="arcade-prototypes" studio_name="PageBody" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Page.Content"/>
-    <mapping class="structural" studio_source="arcade-prototypes" studio_name="TitleBar" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Page.Header">
-      <slot_note>Production pages use Page.Header for the top bar; traffic-lights/window-chrome elements from Studio's TitleBar do not exist in production (they are Studio's own chrome).</slot_note>
+    <mapping class="structural" studio_source="arcade-prototypes" studio_name="PageBody" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Page">
+      <slot_note>Compose as \`&lt;Page.Content&gt;\` inside \`&lt;Page&gt;\`. Page.Content is a subcomponent attachment on the \`Page\` export.</slot_note>
+    </mapping>
+    <mapping class="structural" studio_source="arcade-prototypes" studio_name="TitleBar" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Page">
+      <slot_note>Compose with \`&lt;Page.Header&gt;\` under \`&lt;Page&gt;\`. Production \`Page.Header\` is a subcomponent attachment, not a standalone export.</slot_note>
+      <slot_note>Traffic-lights/window-chrome elements from Studio's TitleBar do not exist in production (they are Studio's own chrome); drop them.</slot_note>
     </mapping>
     <mapping class="mechanical" studio_source="arcade" studio_name="Button" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Button">
-      <prop_delta from="size" value_map="md-&gt;M, lg-&gt;L">Studio narrows to md|lg; production accepts S|M|L. A Studio frame never uses sm.</prop_delta>
-      <prop_delta from="variant" value_map="primary-&gt;primary, secondary-&gt;secondary, tertiary-&gt;tertiary, destructive-&gt;destructive"/>
+      <prop_delta from="size" value_map="sm-&gt;S, md-&gt;M, lg-&gt;L"/>
+      <prop_delta from="variant"/>
       <slot_note>Children are identical. Leading/trailing icons move from raw children to \`start\` / \`end\` slots in production.</slot_note>
     </mapping>
-    <mapping class="mechanical" studio_source="arcade" studio_name="Tabs" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="TabList">
+    <mapping class="mechanical" studio_source="arcade" studio_name="Tabs" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Tabs">
       <prop_delta from="value"/>
       <prop_delta from="onChange" to="onValueChange"/>
-      <slot_note>Production names the component TabList; subcomponent shape is similar.</slot_note>
+      <slot_note>Studio Tabs.Root / Tabs.Trigger → production Tabs / Tabs.Item. Tabs.List is identical.</slot_note>
     </mapping>
   </frame_inventory>
-  <tokens alignment="aligned">Tokens are aligned between arcade-gen and arcade-theme. CSS custom property names carry across. No token remap is required.</tokens>
   <scaffolding shape="detail">
     <description>These are the things a Studio frame never covers by itself. Engineer and agent divide between them.</description>
     <item status="required" path="libs/&lt;domain&gt;/shared/data-layer/src/use-&lt;entity&gt;.ts">Data-layer hook (useDL&lt;Entity&gt; query)</item>
@@ -85,7 +111,7 @@ exports[`renderXml > renders a detail frame 1`] = `
     <screenshot_url>/api/projects/demo/thumbnails/detail-frame.png</screenshot_url>
   </grounding>
   <agent_directives>
-    You are lifting an Arcade Studio frame into devrev-web. Apply MECHANICAL rewrites directly. For STRUCTURAL rewrites, write the new production shape and leave brief comments explaining what changed. For JUDGMENT entries, leave a // TODO: comment carrying the judgment note verbatim and ask the user before deciding. Do NOT invent production equivalents for &lt;unmapped/&gt; entries — surface them back to the user.
+    You are lifting an Arcade Studio frame into devrev-web. Read the CONVENTIONS first — they tell you HOW to translate classes of Studio construct (icons, chrome, unmapped components). Then walk the frame inventory: apply MECHANICAL rewrites directly, write the production shape for STRUCTURAL ones with a brief comment on what changed, and leave // TODO comments with the judgment_note verbatim for JUDGMENT entries. When a mapping includes &lt;prior_art&gt;, OPEN the first example file before writing code — it's a real consumer and will resolve most shape questions faster than slot_notes can. When a mapping lists &lt;dropped_props&gt;, those Studio props have no production equivalent — don't guess a replacement; drop them with the reason as a TODO comment. For each icon under &lt;icons&gt;, resolve via the icon_convention (grep ICON_TYPES). For each &lt;unmapped/&gt; entry, apply the default_mapping_convention — verify the assumed target exists by grep before using it.
   </agent_directives>
 </lift_manifest>
 "
@@ -96,6 +122,14 @@ exports[`renderXml > renders a list-view frame 1`] = `
   <generated_by>Arcade Studio</generated_by>
   <frame_path>/abs/list-frame.tsx</frame_path>
   <intent>List of tickets with filters and pagination.</intent>
+  <default_mapping_convention>
+    <rule>For any arcade primitive with no explicit mapping entry, the default assumption is that the same symbol is exported from '@devrev-web/design-system/shared/raw-design-system'. Verify by grep; if absent, surface to the reviewer.</rule>
+    <lookup>From a devrev-web checkout: grep -rE "^export .*\\b&lt;Name&gt;\\b" libs/design-system/shared/raw-design-system/src/components. If the export exists, use it. If not, it may live in a sibling package (settings, pages, agent, side-panel) — widen the grep, or surface to the reviewer. Prop names usually match; treat non-trivial prop differences as the reviewer's decision.</lookup>
+    <anchors>
+      <anchor>Switch → raw-design-system Switch (direct match; confirm with grep)</anchor>
+      <anchor>TextArea → raw-design-system TextArea (direct match; confirm with grep)</anchor>
+    </anchors>
+  </default_mapping_convention>
   <frame_inventory>
     <mapping class="structural" studio_source="arcade-prototypes" studio_name="VistaFilterPill" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Chip">
       <slot_note>Production uses Chip with a close-button slot; Studio's VistaFilterPill bundles behaviour into one component.</slot_note>
@@ -103,11 +137,16 @@ exports[`renderXml > renders a list-view frame 1`] = `
     <mapping class="structural" studio_source="arcade-prototypes" studio_name="VistaPage" production_source="@devrev-web/shared/part-work-components" production_name="ListViewPage">
       <slot_note>VistaPage composes AppShell + VistaHeader + VistaToolbar + content. Production wraps these behaviours in ListViewPage: pass tableProps, filterProps, headerProps.</slot_note>
       <slot_note>The \`primaryAction\`, \`count\`, \`toolbarIcons\`, \`filters\` slots from VistaPage map onto headerProps.actions, headerProps.count, toolbarProps.actions, toolbarProps.filters respectively.</slot_note>
+      <prior_art>
+        <example path="libs/commerce/features/skus/src/pages/skus-page.tsx" covers="ListViewPage with tableProps, filters, headerProps"/>
+      </prior_art>
     </mapping>
-    <mapping class="mechanical" studio_source="arcade-prototypes" studio_name="VistaPagination" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Pagination"/>
+    <mapping class="judgment" studio_source="arcade-prototypes" studio_name="VistaPagination" equivalent="none">
+      <judgment_note>2026-05-12 drift audit: no \`Pagination\` export exists in raw-design-system. ListViewPage owns pagination itself; if the frame uses VistaPagination standalone, ask the reviewer whether to use the ListViewPage-owned behavior or inline a bespoke control.</judgment_note>
+    </mapping>
     <mapping class="mechanical" studio_source="arcade" studio_name="Button" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Button">
-      <prop_delta from="size" value_map="md-&gt;M, lg-&gt;L">Studio narrows to md|lg; production accepts S|M|L. A Studio frame never uses sm.</prop_delta>
-      <prop_delta from="variant" value_map="primary-&gt;primary, secondary-&gt;secondary, tertiary-&gt;tertiary, destructive-&gt;destructive"/>
+      <prop_delta from="size" value_map="sm-&gt;S, md-&gt;M, lg-&gt;L"/>
+      <prop_delta from="variant"/>
       <slot_note>Children are identical. Leading/trailing icons move from raw children to \`start\` / \`end\` slots in production.</slot_note>
     </mapping>
     <mapping class="structural" studio_source="arcade" studio_name="Input" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="TextInput">
@@ -118,7 +157,6 @@ exports[`renderXml > renders a list-view frame 1`] = `
       <slot_note>Studio exposes \`start\` / \`end\` as children-like nodes. Production uses explicit \`start\` / \`end\` slot props.</slot_note>
     </mapping>
   </frame_inventory>
-  <tokens alignment="aligned">Tokens are aligned between arcade-gen and arcade-theme. CSS custom property names carry across. No token remap is required.</tokens>
   <scaffolding shape="list-view">
     <description>These are the things a Studio frame never covers by itself. Engineer and agent divide between them.</description>
     <item status="required" path="libs/&lt;domain&gt;/shared/data-layer/src/use-&lt;entity&gt;s.ts">Data-layer hook (useDL&lt;Entity&gt;s list query)</item>
@@ -134,7 +172,7 @@ exports[`renderXml > renders a list-view frame 1`] = `
     <screenshot_url>/api/projects/demo/thumbnails/list-frame.png</screenshot_url>
   </grounding>
   <agent_directives>
-    You are lifting an Arcade Studio frame into devrev-web. Apply MECHANICAL rewrites directly. For STRUCTURAL rewrites, write the new production shape and leave brief comments explaining what changed. For JUDGMENT entries, leave a // TODO: comment carrying the judgment note verbatim and ask the user before deciding. Do NOT invent production equivalents for &lt;unmapped/&gt; entries — surface them back to the user.
+    You are lifting an Arcade Studio frame into devrev-web. Read the CONVENTIONS first — they tell you HOW to translate classes of Studio construct (icons, chrome, unmapped components). Then walk the frame inventory: apply MECHANICAL rewrites directly, write the production shape for STRUCTURAL ones with a brief comment on what changed, and leave // TODO comments with the judgment_note verbatim for JUDGMENT entries. When a mapping includes &lt;prior_art&gt;, OPEN the first example file before writing code — it's a real consumer and will resolve most shape questions faster than slot_notes can. When a mapping lists &lt;dropped_props&gt;, those Studio props have no production equivalent — don't guess a replacement; drop them with the reason as a TODO comment. For each icon under &lt;icons&gt;, resolve via the icon_convention (grep ICON_TYPES). For each &lt;unmapped/&gt; entry, apply the default_mapping_convention — verify the assumed target exists by grep before using it.
   </agent_directives>
 </lift_manifest>
 "
@@ -145,17 +183,44 @@ exports[`renderXml > renders a settings-form frame 1`] = `
   <generated_by>Arcade Studio</generated_by>
   <frame_path>/abs/settings-frame.tsx</frame_path>
   <intent>Profile settings form.</intent>
+  <default_mapping_convention>
+    <rule>For any arcade primitive with no explicit mapping entry, the default assumption is that the same symbol is exported from '@devrev-web/design-system/shared/raw-design-system'. Verify by grep; if absent, surface to the reviewer.</rule>
+    <lookup>From a devrev-web checkout: grep -rE "^export .*\\b&lt;Name&gt;\\b" libs/design-system/shared/raw-design-system/src/components. If the export exists, use it. If not, it may live in a sibling package (settings, pages, agent, side-panel) — widen the grep, or surface to the reviewer. Prop names usually match; treat non-trivial prop differences as the reviewer's decision.</lookup>
+    <anchors>
+      <anchor>Switch → raw-design-system Switch (direct match; confirm with grep)</anchor>
+      <anchor>TextArea → raw-design-system TextArea (direct match; confirm with grep)</anchor>
+    </anchors>
+  </default_mapping_convention>
   <frame_inventory>
     <mapping class="mechanical" studio_source="arcade-prototypes" studio_name="SettingsCard" production_source="@devrev-web/design-system/shared/settings" production_name="SettingsSection">
       <slot_note>Card heading + body → SettingsSection with \`title\` + children.</slot_note>
     </mapping>
-    <mapping class="mechanical" studio_source="arcade-prototypes" studio_name="SettingsPage" production_source="@devrev-web/design-system/shared/settings" production_name="SettingsPage">
-      <slot_note>Production SettingsPage is the exact production template engineers use for settings routes. Near-mechanical at the page level.</slot_note>
+    <mapping class="structural" studio_source="arcade-prototypes" studio_name="SettingsPage" production_source="@devrev-web/design-system/shared/settings" production_name="SettingsPage">
+      <slot_note>Studio's SettingsPage takes \`sidebar\`, \`breadcrumb\`, \`actions\`, \`pageActions\` as PROPS. Production takes children only.</slot_note>
+      <slot_note>Production shape:
+  &lt;SettingsPage&gt;
+    &lt;SettingsPage.Header&gt;
+      &lt;SettingsPage.Header.Title breadcrumbs={&lt;Breadcrumbs&gt;...}&gt;{title}&lt;/SettingsPage.Header.Title&gt;
+      &lt;SettingsPage.Header.Description&gt;{subtitle}&lt;/SettingsPage.Header.Description&gt;
+      &lt;SettingsPage.Header.Actions&gt;{actions}&lt;/SettingsPage.Header.Actions&gt;
+    &lt;/SettingsPage.Header&gt;
+    &lt;SettingsPage.Content&gt;{children}&lt;/SettingsPage.Content&gt;
+  &lt;/SettingsPage&gt;</slot_note>
+      <slot_note>Studio's \`sidebar\` slot has no destination on the production page — in devrev-web the Nav is mounted at the router layout level, not the page (see e.g. libs/settings/feature/computer-settings/src/computer-settings-router.tsx). Drop the sidebar at the page boundary.</slot_note>
+      <slot_note>Studio's \`actions\` slot (top-bar Search/Bell/Avatar chrome) belongs to the app shell in production, not the settings page. Drop unless the reviewer explicitly wants a bespoke page header.</slot_note>
+      <slot_note>Studio's \`pageActions\` slot maps to \`&lt;SettingsPage.Header.Actions&gt;\`.</slot_note>
+      <prior_art>
+        <example path="libs/settings/feature/computer-settings/src/pages/preferences/preferences-page.tsx" covers="SettingsPage + Header.Title + Breadcrumbs + Content"/>
+        <example path="libs/agent-platform/feature/customize-computer/src/pages/computer-skills-settings.tsx" covers="SettingsPage + Header.Actions + Tabs inside Content"/>
+        <example path="libs/settings/feature/computer-settings/src/computer-settings-router.tsx" covers="where the router mounts Nav — the sidebar SettingsPage does NOT own"/>
+      </prior_art>
     </mapping>
-    <mapping class="mechanical" studio_source="arcade-prototypes" studio_name="SettingsRow" production_source="@devrev-web/design-system/shared/settings" production_name="SettingsRow"/>
+    <mapping class="judgment" studio_source="arcade-prototypes" studio_name="SettingsRow" equivalent="none">
+      <judgment_note>No SettingsRow component in production. Compose rows inline inside \`&lt;SettingsSection&gt;\` using label + input markup. See libs/settings/feature/computer-settings/src/pages/preferences/preferences-page.tsx for the house style.</judgment_note>
+    </mapping>
     <mapping class="mechanical" studio_source="arcade" studio_name="Button" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Button">
-      <prop_delta from="size" value_map="md-&gt;M, lg-&gt;L">Studio narrows to md|lg; production accepts S|M|L. A Studio frame never uses sm.</prop_delta>
-      <prop_delta from="variant" value_map="primary-&gt;primary, secondary-&gt;secondary, tertiary-&gt;tertiary, destructive-&gt;destructive"/>
+      <prop_delta from="size" value_map="sm-&gt;S, md-&gt;M, lg-&gt;L"/>
+      <prop_delta from="variant"/>
       <slot_note>Children are identical. Leading/trailing icons move from raw children to \`start\` / \`end\` slots in production.</slot_note>
     </mapping>
     <mapping class="structural" studio_source="arcade" studio_name="Input" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="TextInput">
@@ -166,7 +231,6 @@ exports[`renderXml > renders a settings-form frame 1`] = `
       <slot_note>Studio exposes \`start\` / \`end\` as children-like nodes. Production uses explicit \`start\` / \`end\` slot props.</slot_note>
     </mapping>
   </frame_inventory>
-  <tokens alignment="aligned">Tokens are aligned between arcade-gen and arcade-theme. CSS custom property names carry across. No token remap is required.</tokens>
   <scaffolding shape="settings-form">
     <description>These are the things a Studio frame never covers by itself. Engineer and agent divide between them.</description>
     <item status="required" path="libs/&lt;domain&gt;/shared/data-layer/src/use-&lt;entity&gt;.ts">Data-layer hook (useDL&lt;Entity&gt; query)</item>
@@ -184,7 +248,7 @@ exports[`renderXml > renders a settings-form frame 1`] = `
     <screenshot_url>/api/projects/demo/thumbnails/settings-frame.png</screenshot_url>
   </grounding>
   <agent_directives>
-    You are lifting an Arcade Studio frame into devrev-web. Apply MECHANICAL rewrites directly. For STRUCTURAL rewrites, write the new production shape and leave brief comments explaining what changed. For JUDGMENT entries, leave a // TODO: comment carrying the judgment note verbatim and ask the user before deciding. Do NOT invent production equivalents for &lt;unmapped/&gt; entries — surface them back to the user.
+    You are lifting an Arcade Studio frame into devrev-web. Read the CONVENTIONS first — they tell you HOW to translate classes of Studio construct (icons, chrome, unmapped components). Then walk the frame inventory: apply MECHANICAL rewrites directly, write the production shape for STRUCTURAL ones with a brief comment on what changed, and leave // TODO comments with the judgment_note verbatim for JUDGMENT entries. When a mapping includes &lt;prior_art&gt;, OPEN the first example file before writing code — it's a real consumer and will resolve most shape questions faster than slot_notes can. When a mapping lists &lt;dropped_props&gt;, those Studio props have no production equivalent — don't guess a replacement; drop them with the reason as a TODO comment. For each icon under &lt;icons&gt;, resolve via the icon_convention (grep ICON_TYPES). For each &lt;unmapped/&gt; entry, apply the default_mapping_convention — verify the assumed target exists by grep before using it.
   </agent_directives>
 </lift_manifest>
 "
@@ -195,10 +259,18 @@ exports[`renderXml > renders an ad-hoc frame 1`] = `
   <generated_by>Arcade Studio</generated_by>
   <frame_path>/abs/adhoc-frame.tsx</frame_path>
   <intent>Confirmation modal.</intent>
+  <default_mapping_convention>
+    <rule>For any arcade primitive with no explicit mapping entry, the default assumption is that the same symbol is exported from '@devrev-web/design-system/shared/raw-design-system'. Verify by grep; if absent, surface to the reviewer.</rule>
+    <lookup>From a devrev-web checkout: grep -rE "^export .*\\b&lt;Name&gt;\\b" libs/design-system/shared/raw-design-system/src/components. If the export exists, use it. If not, it may live in a sibling package (settings, pages, agent, side-panel) — widen the grep, or surface to the reviewer. Prop names usually match; treat non-trivial prop differences as the reviewer's decision.</lookup>
+    <anchors>
+      <anchor>Switch → raw-design-system Switch (direct match; confirm with grep)</anchor>
+      <anchor>TextArea → raw-design-system TextArea (direct match; confirm with grep)</anchor>
+    </anchors>
+  </default_mapping_convention>
   <frame_inventory>
     <mapping class="mechanical" studio_source="arcade" studio_name="Button" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Button">
-      <prop_delta from="size" value_map="md-&gt;M, lg-&gt;L">Studio narrows to md|lg; production accepts S|M|L. A Studio frame never uses sm.</prop_delta>
-      <prop_delta from="variant" value_map="primary-&gt;primary, secondary-&gt;secondary, tertiary-&gt;tertiary, destructive-&gt;destructive"/>
+      <prop_delta from="size" value_map="sm-&gt;S, md-&gt;M, lg-&gt;L"/>
+      <prop_delta from="variant"/>
       <slot_note>Children are identical. Leading/trailing icons move from raw children to \`start\` / \`end\` slots in production.</slot_note>
     </mapping>
     <mapping class="mechanical" studio_source="arcade" studio_name="Modal" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Modal">
@@ -207,7 +279,6 @@ exports[`renderXml > renders an ad-hoc frame 1`] = `
       <slot_note>Both use compound subcomponents. Rename Modal.Root → Modal.Root, Modal.Content → Modal.Content, etc. API shape matches closely; mechanical.</slot_note>
     </mapping>
   </frame_inventory>
-  <tokens alignment="aligned">Tokens are aligned between arcade-gen and arcade-theme. CSS custom property names carry across. No token remap is required.</tokens>
   <scaffolding shape="ad-hoc">
     <description>These are the things a Studio frame never covers by itself. Engineer and agent divide between them.</description>
     <item status="required">Consider whether this fits an existing Tier-2/3 template (PageLayout, ListViewPage, SettingsPage)</item>
@@ -224,7 +295,7 @@ exports[`renderXml > renders an ad-hoc frame 1`] = `
     <screenshot_url>/api/projects/demo/thumbnails/adhoc-frame.png</screenshot_url>
   </grounding>
   <agent_directives>
-    You are lifting an Arcade Studio frame into devrev-web. Apply MECHANICAL rewrites directly. For STRUCTURAL rewrites, write the new production shape and leave brief comments explaining what changed. For JUDGMENT entries, leave a // TODO: comment carrying the judgment note verbatim and ask the user before deciding. Do NOT invent production equivalents for &lt;unmapped/&gt; entries — surface them back to the user.
+    You are lifting an Arcade Studio frame into devrev-web. Read the CONVENTIONS first — they tell you HOW to translate classes of Studio construct (icons, chrome, unmapped components). Then walk the frame inventory: apply MECHANICAL rewrites directly, write the production shape for STRUCTURAL ones with a brief comment on what changed, and leave // TODO comments with the judgment_note verbatim for JUDGMENT entries. When a mapping includes &lt;prior_art&gt;, OPEN the first example file before writing code — it's a real consumer and will resolve most shape questions faster than slot_notes can. When a mapping lists &lt;dropped_props&gt;, those Studio props have no production equivalent — don't guess a replacement; drop them with the reason as a TODO comment. For each icon under &lt;icons&gt;, resolve via the icon_convention (grep ICON_TYPES). For each &lt;unmapped/&gt; entry, apply the default_mapping_convention — verify the assumed target exists by grep before using it.
   </agent_directives>
 </lift_manifest>
 "

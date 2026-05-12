@@ -1,0 +1,9 @@
+{
+  "decisionPoints": 1,
+  "unmapped": 0,
+  "judgment": 1,
+  "naMappings": 1,
+  "needsReviewerProps": 0,
+  "note": "After PR6e dedup: SettingsRow (judgment+n/a) counts as one reviewer decision, not two. Honest count: 1. Per-bucket breakdown still shows judgment=1 + naMappings=1.",
+  "iconsAbsorbed": 0
+}

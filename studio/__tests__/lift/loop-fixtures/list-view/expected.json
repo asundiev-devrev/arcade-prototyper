@@ -1,0 +1,9 @@
+{
+  "decisionPoints": 2,
+  "unmapped": 0,
+  "judgment": 2,
+  "naMappings": 2,
+  "needsReviewerProps": 0,
+  "note": "After PR6e dedup: judgment+n/a on the same entry counts once. VistaRow + VistaPagination are two distinct reviewer decisions (2), down from 4 under the old double-counting rule. Icons still absorbed (3). Per-bucket breakdown still shows judgment=2 + naMappings=2.",
+  "iconsAbsorbed": 3
+}

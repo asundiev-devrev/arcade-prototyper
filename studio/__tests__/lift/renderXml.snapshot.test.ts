@@ -59,4 +59,52 @@ describe("renderXml", () => {
     expect(open).toHaveLength(1);
     expect(close).toHaveLength(1);
   });
+
+  // Convention regression guards. These hold even when the snapshots are
+  // regenerated — verifies the rules-over-tables architecture stays intact.
+  it("always emits the default_mapping_convention", () => {
+    // Even the ad-hoc frame with only Button + Modal gets the fallback.
+    const rendered = snap("adhoc-frame.tsx", "confirm modal");
+    expect(rendered).toContain(`<default_mapping_convention>`);
+  });
+
+  it("emits the icon_convention when the frame has icon imports", () => {
+    // list-frame.tsx has no icon imports today; construct an inline frame
+    // that does, so this test stays stable even if the fixture changes.
+    const source = `import { MagnifyingGlass } from "arcade/components";
+                    import { Button } from "arcade";`;
+    const rendered = renderXml(
+      buildManifest({
+        projectSlug: "p",
+        frameSlug: "icons",
+        frameAbsPath: "/abs/icons.tsx",
+        frameSource: source,
+        intentSummary: "",
+      }),
+    );
+    expect(rendered).toContain(`<icon_convention>`);
+    expect(rendered).toContain(`<icons resolve_via="icon_convention">`);
+    expect(rendered).toContain(`<icon studio_name="MagnifyingGlass"/>`);
+  });
+
+  it("emits the chrome_convention when a chrome primitive is imported", () => {
+    const source = `import { SettingsPage, NavSidebar } from "arcade-prototypes";`;
+    const rendered = renderXml(
+      buildManifest({
+        projectSlug: "p",
+        frameSlug: "chrome",
+        frameAbsPath: "/abs/chrome.tsx",
+        frameSource: source,
+        intentSummary: "",
+      }),
+    );
+    expect(rendered).toContain(`<chrome_convention>`);
+  });
+
+  it("omits icon_convention and chrome_convention when neither trigger fires", () => {
+    // adhoc-frame.tsx imports only Button + Modal — no icons, no chrome.
+    const rendered = snap("adhoc-frame.tsx", "confirm modal");
+    expect(rendered).not.toContain(`<icon_convention>`);
+    expect(rendered).not.toContain(`<chrome_convention>`);
+  });
 });
