@@ -23,6 +23,18 @@ describe("scaffoldingFor", () => {
     expect(items.find((i) => i.label === "Query keys entry")?.status).toBe("required");
   });
 
+  it("settings-list includes list-query scaffolding without mutation or form hooks", () => {
+    // A settings page that displays a list reads data but doesn't author
+    // it. The checklist should reflect that — mutation + form hooks would
+    // be cross-off noise for a skills gallery or similar.
+    const items = scaffoldingFor("settings-list");
+    const labels = items.map((i) => i.label);
+    expect(labels).toContain("Data-layer hook (useDL<Entity>s list query)");
+    expect(labels).toContain("Adapter (API list response → UI shape)");
+    expect(labels).not.toContain("Data-layer hook (useDL<Entity> mutation)");
+    expect(labels).not.toContain("Form hook (validation + submission)");
+  });
+
   it("ad-hoc surfaces the generic checklist with a 'consider a template' note item", () => {
     const items = scaffoldingFor("ad-hoc");
     const labels = items.map((i) => i.label);
@@ -32,7 +44,13 @@ describe("scaffoldingFor", () => {
   });
 
   it("every item has a status of required or n/a", () => {
-    for (const shape of ["list-view", "settings-form", "detail", "ad-hoc"] as const) {
+    for (const shape of [
+      "list-view",
+      "settings-form",
+      "settings-list",
+      "detail",
+      "ad-hoc",
+    ] as const) {
       for (const item of scaffoldingFor(shape)) {
         expect(["required", "n/a", "done"]).toContain(item.status);
       }

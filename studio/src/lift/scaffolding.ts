@@ -103,6 +103,19 @@ export function scaffoldingFor(shape: FrameShape): ScaffoldingItem[] {
         ITEM_FEATURE_FLAG,
         ITEM_TELEMETRY,
       ];
+    case "settings-list":
+      // A settings page that displays a list (e.g. skills gallery) reads
+      // data but doesn't author it. No mutation hook, no form hook —
+      // those would be checklist noise the engineer has to cross off.
+      return [
+        ITEM_LIST_HOOK,
+        ITEM_ADAPTER_LIST,
+        ITEM_QUERY_KEYS,
+        ITEM_STALE_TIME,
+        ITEM_ROUTE,
+        ITEM_FEATURE_FLAG,
+        ITEM_TELEMETRY,
+      ];
     case "detail":
       return [
         ITEM_DATA_HOOK,
