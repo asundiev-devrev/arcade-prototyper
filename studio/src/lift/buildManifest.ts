@@ -8,6 +8,9 @@ import { parseImports } from "./parseImports";
 import { detectShape } from "./detectShape";
 import { scaffoldingFor } from "./scaffolding";
 import { ALL_MAPPINGS, findMapping } from "./mappings";
+import { isIcon } from "./icons";
+import { applicablePatches } from "./tokens";
+import { hasOverlayMarkup } from "./conventions";
 import type { Manifest, MappingEntry } from "./types";
 
 export interface BuildManifestInput {
@@ -27,13 +30,28 @@ export function buildManifest(input: BuildManifestInput): Manifest {
 
   const mappings: MappingEntry[] = [];
   const unmapped: Array<{ source: string; name: string }> = [];
+  const iconImports: Array<{ source: string; name: string }> = [];
   for (const imp of imports) {
     for (const name of imp.names) {
       const entry = findMapping(imp.source, name);
-      if (entry) mappings.push(entry);
-      else unmapped.push({ source: imp.source, name });
+      if (entry) {
+        mappings.push(entry);
+        continue;
+      }
+      // An arcade-gen export with no mapping entry. If it looks like an
+      // icon, route it to iconImports (absorbed by the icon convention).
+      // Otherwise, surface as unmapped — the default-mapping convention
+      // gives the agent a fallback strategy, but non-icon unmapped still
+      // counts as a decision point.
+      if (imp.source === "arcade" && isIcon(name)) {
+        iconImports.push({ source: imp.source, name });
+      } else {
+        unmapped.push({ source: imp.source, name });
+      }
     }
   }
+
+  const { tokenPatches, classPatches } = applicablePatches(input.frameSource);
 
   return {
     projectSlug: input.projectSlug,
@@ -43,6 +61,18 @@ export function buildManifest(input: BuildManifestInput): Manifest {
     imports,
     mappings,
     unmapped,
+    iconImports,
+    tokenPatches: tokenPatches.map((p) => ({
+      studio: p.studio,
+      production: p.production,
+      reason: p.reason,
+    })),
+    classPatches: classPatches.map((p) => ({
+      studio: p.studio,
+      production: p.production,
+      reason: p.reason,
+    })),
+    hasOverlay: hasOverlayMarkup(input.frameSource),
     shape,
     scaffolding,
     figmaUrl: input.figmaUrl,

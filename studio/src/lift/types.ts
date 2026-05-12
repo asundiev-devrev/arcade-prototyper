@@ -17,6 +17,13 @@ export interface PropDelta {
   note?: string;
 }
 
+export interface PriorArtEntry {
+  /** Repo-relative path to a real devrev-web file that demonstrates this mapping. */
+  path: string;
+  /** Short note about what the file illustrates (1–5 words). */
+  covers: string;
+}
+
 export interface MappingEntry {
   /** What the frame code imports. */
   studio: {
@@ -41,9 +48,43 @@ export interface MappingEntry {
   translationClass: TranslationClass;
   /** One-line note surfaced in the manifest when class is "judgment". */
   judgmentNote?: string;
+  /**
+   * Repo-relative paths to real devrev-web files that demonstrate this
+   * mapping in production. Surfaced as `<prior_art>` in the rendered
+   * manifest; the agent is instructed to read the first example before
+   * writing the lift output. Leave empty when no canonical example exists
+   * or when the mapping is mechanical enough that a reference is noise.
+   *
+   * These paths MUST exist in the target repo. A follow-up PR adds a
+   * drift audit that fails loud on stale paths.
+   */
+  priorArt?: PriorArtEntry[];
+  /**
+   * Studio props the mapping author has considered. Props in arcade-gen's
+   * type definition that are NOT in this list AND NOT in
+   * `droppedStudioProps` are coverage holes: the lint in
+   * __tests__/lift/propCoverage.test.ts flags them.
+   *
+   * Empty (or omitted) means "coverage not yet declared" — the lint
+   * ignores those entries so mapping authors can fill them in
+   * incrementally.
+   */
+  knownStudioProps?: string[];
+  /**
+   * Studio props that exist in arcade-gen but have no production
+   * equivalent. Surfaced to the downstream agent as a TODO comment so
+   * they don't get dropped silently (Chip.appearance was dropped twice
+   * during the 2026-05-12 live-lift validation runs).
+   */
+  droppedStudioProps?: Array<{ prop: string; reason: string }>;
 }
 
-export type FrameShape = "list-view" | "settings-form" | "detail" | "ad-hoc";
+export type FrameShape =
+  | "list-view"
+  | "settings-form"
+  | "settings-list"
+  | "detail"
+  | "ad-hoc";
 
 export interface ScaffoldingItem {
   /** Short label shown in the checklist. */
@@ -63,6 +104,13 @@ export interface FrameImport {
   names: string[];
 }
 
+/** Per-frame match of a token or utility-class patch from src/lift/tokens.ts. */
+export interface TokenPatchMatch {
+  studio: string;
+  production: string;
+  reason?: string;
+}
+
 export interface Manifest {
   projectSlug: string;
   frameSlug: string;
@@ -71,8 +119,30 @@ export interface Manifest {
   intentSummary: string;
   imports: FrameImport[];
   mappings: MappingEntry[];
-  /** Entries in `imports` that had no mapping-table match. Surface in the manifest as "unmapped". */
+  /**
+   * Imports with no mapping-table match AND not classified as icons.
+   * The icon convention absorbs icon imports; see `iconImports`. Rendered
+   * as `<unmapped/>` entries and fed into the default-mapping convention.
+   */
   unmapped: Array<{ source: string; name: string }>;
+  /**
+   * Imports classified as icons by src/lift/icons.ts. Surfaced in a
+   * dedicated `<icons>` block alongside the icon convention; absorbed by
+   * that convention so they don't count as decision points. Separate from
+   * `unmapped` so the renderer and the metric can treat them distinctly.
+   */
+  iconImports: Array<{ source: string; name: string }>;
+  /** CSS custom property patches that actually appear in this frame. */
+  tokenPatches: TokenPatchMatch[];
+  /** Tailwind utility-class patches that actually appear in this frame. */
+  classPatches: TokenPatchMatch[];
+  /**
+   * True when the frame source contains hand-rolled overlay markup
+   * (fixed inset-0 + backdrop). Triggers the `overlay_convention` which
+   * tells the agent to use production `<Modal>` instead of preserving
+   * the raw divs.
+   */
+  hasOverlay: boolean;
   shape: FrameShape;
   scaffolding: ScaffoldingItem[];
   figmaUrl?: string;

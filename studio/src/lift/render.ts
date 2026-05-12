@@ -8,6 +8,7 @@
 // prompt context; Claude extracts named sections from XML more reliably
 // than from markdown headings. Section order matches spec §4.2.
 
+import { applicableConventions, type Convention } from "./conventions";
 import type { Manifest, MappingEntry, ScaffoldingItem } from "./types";
 
 export function renderXml(m: Manifest): string {
@@ -23,22 +24,68 @@ export function renderXml(m: Manifest): string {
   // 1. Intent
   push(`  <intent>${text(m.intentSummary || "(no prompt recorded — intent is implicit from frame code.)")}</intent>`);
 
-  // 2. Frame inventory
-  if (m.mappings.length === 0 && m.unmapped.length === 0) {
+  // 2. Conventions — the "rules" side of the rules-over-tables architecture.
+  // Emitted BEFORE the inventory so the agent reads the translation
+  // strategy before scanning specific mappings.
+  const importedNames = new Set<string>();
+  for (const i of m.imports) for (const n of i.names) importedNames.add(n);
+  const conventions = applicableConventions({
+    hasIcons: m.iconImports.length > 0,
+    importedNames,
+    hasOverlay: m.hasOverlay,
+  });
+  for (const c of conventions) push(renderConvention(c));
+
+  // 3. Frame inventory — mappings + non-icon unmapped. Icons get their own
+  // block below because the icon convention absorbs them and mixing would
+  // make the dead-end "surface to reviewer" text leak back into the output.
+  const hasInventory = m.mappings.length > 0 || m.unmapped.length > 0;
+  if (!hasInventory) {
     push(`  <frame_inventory empty="true"/>`);
   } else {
     push(`  <frame_inventory>`);
     for (const e of m.mappings) push(renderMapping(e));
     for (const u of m.unmapped) {
       push(`    <unmapped studio_source="${attr(u.source)}" studio_name="${attr(u.name)}">`);
-      push(`      <note>No mapping entry — surface to reviewer; add to mapping table after lift.</note>`);
+      push(`      <note>No mapping entry. Apply the default_mapping_convention above; if the symbol is absent from the target, surface to reviewer.</note>`);
       push(`    </unmapped>`);
     }
     push(`  </frame_inventory>`);
   }
 
-  // 4. Tokens
-  push(`  <tokens alignment="aligned">Tokens are aligned between arcade-gen and arcade-theme. CSS custom property names carry across. No token remap is required.</tokens>`);
+  // 3b. Icons. Listed verbatim; the icon_convention tells the agent how to
+  // resolve each via ICON_TYPES. No per-icon mapping table — that's the
+  // point of the conventions architecture.
+  if (m.iconImports.length > 0) {
+    push(`  <icons resolve_via="icon_convention">`);
+    for (const i of m.iconImports) {
+      push(`    <icon studio_name="${attr(i.name)}"/>`);
+    }
+    push(`  </icons>`);
+  }
+
+  // 4. Tokens — emitted ONLY when at least one patch matched the frame
+  // source. When arcade-gen and devrev-web finally converge, these all
+  // sunset and the element disappears entirely, which is the point.
+  if (m.tokenPatches.length > 0 || m.classPatches.length > 0) {
+    push(`  <tokens alignment="patching">`);
+    push(
+      `    <note>Some arcade-gen names don't resolve in devrev-web yet. Rewrite the following when lifting:</note>`,
+    );
+    for (const p of m.tokenPatches) {
+      const reason = p.reason ? ` reason="${attr(p.reason)}"` : "";
+      push(
+        `    <patch kind="css_var" studio="${attr(p.studio)}" production="${attr(p.production)}"${reason}/>`,
+      );
+    }
+    for (const p of m.classPatches) {
+      const reason = p.reason ? ` reason="${attr(p.reason)}"` : "";
+      push(
+        `    <patch kind="class" studio="${attr(p.studio)}" production="${attr(p.production)}"${reason}/>`,
+      );
+    }
+    push(`  </tokens>`);
+  }
 
   // 5. Scaffolding
   push(`  <scaffolding shape="${attr(m.shape)}">`);
@@ -57,16 +104,40 @@ export function renderXml(m: Manifest): string {
   // 8. Agent directives
   push(`  <agent_directives>`);
   push(
-    `    You are lifting an Arcade Studio frame into devrev-web. Apply MECHANICAL rewrites ` +
-      `directly. For STRUCTURAL rewrites, write the new production shape and leave brief ` +
-      `comments explaining what changed. For JUDGMENT entries, leave a // TODO: comment ` +
-      `carrying the judgment note verbatim and ask the user before deciding. Do NOT invent ` +
-      `production equivalents for &lt;unmapped/&gt; entries — surface them back to the user.`,
+    `    You are lifting an Arcade Studio frame into devrev-web. Read the ` +
+      `CONVENTIONS first — they tell you HOW to translate classes of Studio ` +
+      `construct (icons, chrome, unmapped components). Then walk the frame ` +
+      `inventory: apply MECHANICAL rewrites directly, write the production ` +
+      `shape for STRUCTURAL ones with a brief comment on what changed, and ` +
+      `leave // TODO comments with the judgment_note verbatim for JUDGMENT ` +
+      `entries. When a mapping includes &lt;prior_art&gt;, OPEN the first example ` +
+      `file before writing code — it's a real consumer and will resolve most ` +
+      `shape questions faster than slot_notes can. When a mapping lists ` +
+      `&lt;dropped_props&gt;, those Studio props have no production equivalent — ` +
+      `don't guess a replacement; drop them with the reason as a TODO comment. ` +
+      `For each icon under &lt;icons&gt;, resolve via the icon_convention (grep ` +
+      `ICON_TYPES). For each &lt;unmapped/&gt; entry, apply the ` +
+      `default_mapping_convention — verify the assumed target exists by grep ` +
+      `before using it.`,
   );
   push(`  </agent_directives>`);
 
   push(`</lift_manifest>`);
   return lines.join("\n") + "\n";
+}
+
+function renderConvention(c: Convention): string {
+  const lines: string[] = [];
+  lines.push(`  <${c.tag}>`);
+  lines.push(`    <rule>${text(c.rule)}</rule>`);
+  lines.push(`    <lookup>${text(c.lookup)}</lookup>`);
+  if (c.anchors.length > 0) {
+    lines.push(`    <anchors>`);
+    for (const a of c.anchors) lines.push(`      <anchor>${text(a)}</anchor>`);
+    lines.push(`    </anchors>`);
+  }
+  lines.push(`  </${c.tag}>`);
+  return lines.join("\n");
 }
 
 function renderMapping(e: MappingEntry): string {
@@ -78,11 +149,16 @@ function renderMapping(e: MappingEntry): string {
 
   const children: string[] = [];
   for (const d of e.propDeltas) {
-    const valueMap = d.valueMap
-      ? Object.entries(d.valueMap)
-          .map(([k, v]) => `${k}->${v}`)
-          .join(", ")
-      : null;
+    // Identity entries (foo->foo) carry no translation information; strip
+    // them before rendering. An entry that's entirely identity collapses to
+    // no value_map attribute at all. Follow-up #3 from the 2026-05-05 doc.
+    const nonIdentityEntries = d.valueMap
+      ? Object.entries(d.valueMap).filter(([k, v]) => k !== v)
+      : [];
+    const valueMap =
+      nonIdentityEntries.length > 0
+        ? nonIdentityEntries.map(([k, v]) => `${k}->${v}`).join(", ")
+        : null;
     const deltaAttrs = [
       `from="${attr(d.from)}"`,
       d.from !== d.to ? `to="${attr(d.to)}"` : null,
@@ -101,6 +177,29 @@ function renderMapping(e: MappingEntry): string {
   }
   if (e.judgmentNote) {
     children.push(`      <judgment_note>${text(e.judgmentNote)}</judgment_note>`);
+  }
+  if (e.priorArt && e.priorArt.length > 0) {
+    // Anchor(s) in real devrev-web files. The agent directive instructs
+    // the reader to open the first one before translating.
+    children.push(`      <prior_art>`);
+    for (const ex of e.priorArt) {
+      children.push(
+        `        <example path="${attr(ex.path)}" covers="${attr(ex.covers)}"/>`,
+      );
+    }
+    children.push(`      </prior_art>`);
+  }
+  if (e.droppedStudioProps && e.droppedStudioProps.length > 0) {
+    // Props that exist in Studio but have no production equivalent.
+    // Surfaced so the agent doesn't drop them silently (live-lift
+    // validation caught this twice on Chip.appearance).
+    children.push(`      <dropped_props>`);
+    for (const d of e.droppedStudioProps) {
+      children.push(
+        `        <prop name="${attr(d.prop)}">${text(d.reason)}</prop>`,
+      );
+    }
+    children.push(`      </dropped_props>`);
   }
 
   // Mappings with no children (pure 1:1 renames) collapse to a self-closing
