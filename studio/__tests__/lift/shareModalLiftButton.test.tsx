@@ -49,16 +49,21 @@ describe("ShareModal — Copy Lift Manifest", () => {
     expect(screen.getByRole("button", { name: /Copy Lift Manifest/i })).toBeTruthy();
   });
 
-  it("fetches the XML manifest and writes it to clipboard on click", async () => {
+  it("fetches the XML manifest and writes a paste-ready prompt to clipboard", async () => {
     render(<ShareModal open={true} onClose={() => {}} projectSlug="demo" frames={frames} />);
     fireEvent.click(screen.getByRole("radio", { name: /Hello/ }));
     fireEvent.click(screen.getByRole("button", { name: /Copy Lift Manifest/i }));
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith("/api/projects/demo/lift/hello.xml");
       const [clipboardArg] = (navigator.clipboard.writeText as any).mock.calls[0];
+      // The raw manifest is still in the payload...
       expect(clipboardArg).toContain(`<lift_manifest`);
       expect(clipboardArg).toContain(`project="demo"`);
       expect(clipboardArg).toContain(`frame="hello"`);
+      // ...but now wrapped in a prompt (0.16.1).
+      expect(clipboardArg).toContain("lift an Arcade Studio frame");
+      expect(clipboardArg).toContain("```xml");
+      expect(clipboardArg).toContain("tmp/lift/hello.tsx");
     });
   });
 });

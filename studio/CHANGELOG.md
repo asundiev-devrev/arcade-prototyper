@@ -6,6 +6,11 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.16.1] — 2026-05-12
+
+### Changed
+- **Copy Lift Manifest** now clipboards a ready-to-paste prompt with the manifest embedded inside — not just the raw XML. Paste it directly into a Claude Code chat and run; no more copy-paste-then-hand-write-the-instructions. The prompt tells the agent how to walk the manifest (conventions first, then inventory, then icons, etc.), where to write the output (`tmp/lift/<frame>.tsx` by default), and what to report when done. Codebase-agnostic — works against any target repo that has the production components the manifest points at.
+
 ## [0.16.0] — 2026-05-12
 
 ### Changed

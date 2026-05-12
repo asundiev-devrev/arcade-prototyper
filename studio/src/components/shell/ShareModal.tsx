@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Modal, Button } from "@xorkavi/arcade-gen";
 import type { Frame } from "../../../server/types";
+import { wrapManifestWithPrompt } from "../../lift/wrapPrompt";
 
 interface ShareModalProps {
   open: boolean;
@@ -22,8 +23,12 @@ export function ShareModal({ open, onClose, projectSlug, frames }: ShareModalPro
     try {
       const res = await fetch(`/api/projects/${projectSlug}/lift/${selectedFrame}.xml`);
       if (!res.ok) throw new Error(`Manifest fetch failed: ${res.status}`);
-      const text = await res.text();
-      await navigator.clipboard.writeText(text);
+      const manifestXml = await res.text();
+      // 0.16.1: ship the prompt alongside the manifest so the user can
+      // paste it straight into Claude Code instead of hand-writing the
+      // instructions themselves every time.
+      const payload = wrapManifestWithPrompt({ manifestXml, frameSlug: selectedFrame });
+      await navigator.clipboard.writeText(payload);
       setManifestCopied(true);
       setTimeout(() => setManifestCopied(false), 2000);
     } catch (err: any) {
