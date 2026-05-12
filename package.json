@@ -5,7 +5,8 @@
   "scripts": {
     "studio": "vite --config studio/vite.config.ts",
     "studio:test": "vitest run --config studio/vitest.config.ts",
-    "studio:pack": "bash studio/packaging/build.sh && bash studio/packaging/dmg.sh"
+    "studio:pack": "bash studio/packaging/build.sh && bash studio/packaging/dmg.sh",
+    "studio:audit": "DRIFT_AUDIT=1 vitest run --config studio/vitest.config.ts __tests__/lift/drift --reporter=verbose"
   },
   "dependencies": {
     "@tailwindcss/node": "^4.2.4",
