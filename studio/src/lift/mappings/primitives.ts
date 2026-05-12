@@ -207,12 +207,23 @@ export const PRIMITIVE_MAPPINGS: MappingEntry[] = [
     production: { source: PROD_SOURCE, name: "Tabs" },
     propDeltas: [
       { from: "value", to: "value" },
-      { from: "onChange", to: "onValueChange" },
+      {
+        from: "onChange",
+        to: "onValueChange",
+        // 2026-05-12: real typecheck of v3 lifted skills-gallery failed on
+        // `<Tabs value={activeTab} onValueChange={setActiveTab}>` because
+        // production Tabs types onValueChange as `(value?: string) => void`
+        // (optional string arg inherited from Radix internals), while a
+        // plain `useState<string>` setter rejects `undefined`. Call sites
+        // MUST wrap: `onValueChange={(v) => setActiveTab(v ?? "")}`.
+        note: "Production onValueChange signature is `(value?: string) => void` — the arg is optional. A bare useState<string> setter will NOT typecheck. Wrap: `onValueChange={(v) => setState(v ?? \"\")}` (or narrow with a type guard).",
+      },
     ],
     slotNotes: [
       "Studio Tabs.Root / Tabs.Trigger → production Tabs / Tabs.Item. Tabs.List is identical.",
+      "Controlled usage: `value` is required; `onValueChange` receives `string | undefined`, not `string`. Bare setState won't typecheck — always wrap.",
     ],
-    translationClass: "mechanical",
+    translationClass: "structural",
   },
   // --- Misc --------------------------------------------------------------
   {

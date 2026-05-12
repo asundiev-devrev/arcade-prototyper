@@ -90,10 +90,11 @@ exports[`renderXml > renders a detail frame 1`] = `
       <prop_delta from="variant"/>
       <slot_note>Children are identical. Leading/trailing icons move from raw children to \`start\` / \`end\` slots in production.</slot_note>
     </mapping>
-    <mapping class="mechanical" studio_source="arcade" studio_name="Tabs" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Tabs">
+    <mapping class="structural" studio_source="arcade" studio_name="Tabs" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Tabs">
       <prop_delta from="value"/>
-      <prop_delta from="onChange" to="onValueChange"/>
+      <prop_delta from="onChange" to="onValueChange">Production onValueChange signature is \`(value?: string) =&gt; void\` — the arg is optional. A bare useState&lt;string&gt; setter will NOT typecheck. Wrap: \`onValueChange={(v) =&gt; setState(v ?? "")}\` (or narrow with a type guard).</prop_delta>
       <slot_note>Studio Tabs.Root / Tabs.Trigger → production Tabs / Tabs.Item. Tabs.List is identical.</slot_note>
+      <slot_note>Controlled usage: \`value\` is required; \`onValueChange\` receives \`string | undefined\`, not \`string\`. Bare setState won't typecheck — always wrap.</slot_note>
     </mapping>
   </frame_inventory>
   <scaffolding shape="detail">
