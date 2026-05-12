@@ -150,6 +150,25 @@ fixture set, all silent now.
   negative cases). Metric unchanged.
 - **PR 7 (pending).** Origin annotations. Pure hygiene.
 
+## 2026-05-12 — First real typecheck against devrev-web
+
+Ran `nx run agent-platform-feature-customize-computer:typecheck-strict` with the v3 lifted files dropped into `libs/agent-platform/feature/customize-computer/src/pages/`.
+
+**Result: 1 error across 728 lines of lifted code (0 in skill-modal, 1 in skills-gallery).**
+
+The one error — [`__lift_v3_skills_gallery.tsx:158`](file:///Users/andrey.sundiev/devrev-web/libs/agent-platform/feature/customize-computer/src/pages/__lift_v3_skills_gallery.tsx#L158):
+
+```
+TS2322: Type 'Dispatch<SetStateAction<string>>' is not assignable
+to type '(value?: string | undefined) => void'.
+```
+
+The agent wrote `<Tabs value={activeTab} onValueChange={setActiveTab}>`. Tabs' `onValueChange` arg is typed `string | undefined`; a plain `useState<string>` setter won't accept that. Fix shape: `onValueChange={(v) => setActiveTab(v ?? "")}`.
+
+**Classification: manifest was silent.** The Tabs mapping's slot-note said "controlled: `value` + `onValueChange`" but didn't flag the optional-arg quirk. Worth addressing in the next revision pass (bundle with the other known gaps — user chose not to ship a 0.16.2 for one finding).
+
+**What got validated:** every other manifest claim the previous session flagged as speculative — `Breadcrumbs.Item href=` (polymorphic), `<Toggle initialChecked/>`, `<Modal size="480">`, `Avatar size="16"`, `Chip variant="neutral"`, `SettingsPage.Header.*` compound shape, `ICON_TYPES.*` enum references — all compile clean. Token patches (`rounded-square-x2 → rounded-lg`, `--surface-overlay → --bg-surface-overlay`) produce valid CSS/utility classes.
+
 Plan target from the doc: *"unnecessary-TODO count < 3 per archetype"*.
 All five fixtures now meet it. settings-list is at the ceiling (3), carried
 entirely by genuine reviewer calls.

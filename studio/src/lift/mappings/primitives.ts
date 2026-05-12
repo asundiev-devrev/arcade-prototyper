@@ -116,6 +116,68 @@ export const PRIMITIVE_MAPPINGS: MappingEntry[] = [
     slotNotes: [],
     translationClass: "mechanical",
   },
+  {
+    // Added 2026-05-12. Prior live-lift runs of 02-skill-modal derived
+    // `Switch → Toggle` independently via default_mapping_convention TWO
+    // times (v2 and v3), and the agent guessed `initialChecked` for the
+    // defaultChecked→initial rename — that turned out to be correct, but
+    // one-shot lifts shouldn't have to re-derive it. Both arcade Switch
+    // and production Toggle wrap @radix-ui/react-switch, so prop shapes
+    // align cleanly — identity renames plus two drops.
+    studio: { source: "arcade", name: "Switch" },
+    production: { source: PROD_SOURCE, name: "Toggle" },
+    propDeltas: [
+      { from: "checked", to: "checked" },
+      // Studio Switch inherits Radix's `defaultChecked`; production Toggle
+      // renames it to `initialChecked` (verified against toggle.types.tsx
+      // in devrev-web — the prop surface is literally {initialChecked}).
+      { from: "defaultChecked", to: "initialChecked" },
+      // Radix's onCheckedChange becomes Toggle's `onChange`. Same
+      // signature: (value: boolean) => void. The narrower name reads as
+      // React's default onChange(event) — it isn't; it's value-based.
+      { from: "onCheckedChange", to: "onChange", note: "Toggle's onChange receives the new boolean directly (NOT a React ChangeEvent). Same shape as Radix onCheckedChange." },
+      { from: "disabled", to: "disabled" },
+      { from: "required", to: "required" },
+      { from: "id", to: "id" },
+      { from: "value", to: "value" },
+    ],
+    slotNotes: [
+      "Both arcade Switch and production Toggle wrap @radix-ui/react-switch under the hood; API shapes align with two renames (defaultChecked → initialChecked, onCheckedChange → onChange).",
+      "Toggle has no built-in label slot. If the Studio Switch had `label`, render the label as a sibling (<span> + Toggle) per prior art.",
+    ],
+    translationClass: "structural",
+    knownStudioProps: [
+      "checked",
+      "defaultChecked",
+      "onCheckedChange",
+      "label",
+      "size",
+      "disabled",
+      "required",
+      "name",
+      "value",
+      "id",
+      "className",
+    ],
+    droppedStudioProps: [
+      {
+        prop: "label",
+        reason:
+          "Production Toggle does not accept a label prop — render the label as a sibling element (see prior art in agent-guardrails/edit-guardrail-modal.tsx where a `<span>` sits next to `<Toggle>` inside the same flex row).",
+      },
+      {
+        prop: "size",
+        reason:
+          "Production Toggle exposes no size variant — there is a single size. If the design requires a scaled toggle, surface to the reviewer; there is no honest translation.",
+      },
+    ],
+    priorArt: [
+      {
+        path: "libs/agent-platform/feature/agent-studio/src/apps/build/components/agent-guardrails/edit-guardrail-modal.tsx",
+        covers: "Toggle with checked + onChange + disabled, rendered next to a label span",
+      },
+    ],
+  },
   // --- Surfaces ----------------------------------------------------------
   {
     studio: { source: "arcade", name: "Modal" },
