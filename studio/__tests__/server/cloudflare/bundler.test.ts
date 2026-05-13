@@ -30,7 +30,7 @@ describe("buildFrameBundle", () => {
       // react/react-dom/@xorkavi/arcade-gen and fails with:
       //   "Could not resolve 'react'"
       // This was a production bug reported by a beta tester deploying a
-      // frame to Vercel.
+      // frame to the share host.
       const studioRootTmp = fs.mkdtempSync(path.join(os.tmpdir(), "arcade-bundler-"));
       const frameDir = path.join(studioRootTmp, "frame");
       fs.mkdirSync(frameDir, { recursive: true });
@@ -38,7 +38,7 @@ describe("buildFrameBundle", () => {
       process.env.ARCADE_STUDIO_ROOT = studioRootTmp;
 
       try {
-        const { buildFrameBundle } = await import("../../../server/vercel/bundler");
+        const { buildFrameBundle } = await import("../../../server/cloudflare/bundler");
         await buildFrameBundle({
           projectSlug: "p",
           frameSlug: "f",
@@ -90,7 +90,7 @@ describe("buildFrameBundle", () => {
     process.env.ARCADE_STUDIO_ROOT = studioRootTmp;
 
     try {
-      const { buildFrameBundle } = await import("../../../server/vercel/bundler");
+      const { buildFrameBundle } = await import("../../../server/cloudflare/bundler");
       const result = await buildFrameBundle({
         projectSlug: "p",
         frameSlug: "f",
@@ -141,7 +141,7 @@ describe("buildFrameBundle", () => {
       });
 
       try {
-        const { buildFrameBundle } = await import("../../../server/vercel/bundler");
+        const { buildFrameBundle } = await import("../../../server/cloudflare/bundler");
         await buildFrameBundle({
           projectSlug: "p",
           frameSlug: "f",

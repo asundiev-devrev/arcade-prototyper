@@ -1,0 +1,28 @@
+# Cloudflare Worker that proxies Studio share deploys to the Pages Direct
+# Upload API. The Worker holds the real Cloudflare API token as a secret so
+# it never leaves the Cloudflare edge — Studio clients send a per-user
+# share key (hex string from 1Password) and the Worker authenticates the
+# key, then forwards the deploy to Pages using its own credentials.
+#
+# Secrets (set via `wrangler secret put <NAME>`):
+#   CF_API_TOKEN   — Cloudflare API token with Account→Pages→Edit scope.
+#                    This is the credential we originally tried to give
+#                    every beta user; now only the Worker has it.
+#   ALLOWED_KEYS   — comma-separated list of per-user hex keys. Add a new
+#                    user by appending a key; revoke by removing it and
+#                    re-running `wrangler deploy` (deploy is a no-op if
+#                    nothing else changed).
+#
+# Vars (committed, non-secret):
+#   CF_ACCOUNT_ID  — the team Cloudflare account that owns the Pages
+#                    projects. Not sensitive on its own, but paired with
+#                    CF_API_TOKEN it's everything an attacker needs.
+
+name = "arcade-studio-share"
+main = "src/index.ts"
+compatibility_date = "2025-05-01"
+
+# Bind the account ID as a plain var; CF_API_TOKEN and ALLOWED_KEYS live
+# in `wrangler secret` (see README).
+[vars]
+CF_ACCOUNT_ID = "1e913847a5861b7fd371db148d4da92c"

@@ -81,7 +81,7 @@ export function ShareModal({ open, onClose, projectSlug, frames }: ShareModalPro
         <Modal.Header>
           <Modal.Title>Share Frame</Modal.Title>
           <Modal.Description>
-            Deploy a frame as a standalone preview on Vercel.
+            Deploy a frame as a standalone preview on Cloudflare Pages.
           </Modal.Description>
         </Modal.Header>
 
@@ -215,7 +215,7 @@ export function ShareModal({ open, onClose, projectSlug, frames }: ShareModalPro
                 onClick={handleDeploy}
                 disabled={!selectedFrame || loading || frames.length === 0}
               >
-                {loading ? "Deploying…" : "Deploy to Vercel"}
+                {loading ? "Deploying…" : "Deploy to Cloudflare"}
               </Button>
             </>
           )}

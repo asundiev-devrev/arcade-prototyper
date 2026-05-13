@@ -16,7 +16,7 @@ import { devrevMiddleware } from "./server/middleware/devrev";
 import { settingsMiddleware } from "./server/middleware/settings";
 import { thumbnailsMiddleware } from "./server/middleware/thumbnails";
 import { liftMiddleware } from "./server/middleware/lift";
-import { vercelMiddleware } from "./server/middleware/vercel";
+import { cloudflareMiddleware } from "./server/middleware/cloudflare";
 import { runtimeErrorMiddleware } from "./server/middleware/runtimeError";
 import { versionMiddleware, logVersionOnBoot } from "./server/middleware/version";
 import { awsLoginMiddleware } from "./server/middleware/awsLogin";
@@ -36,7 +36,7 @@ function apiPlugin(): import("vite").Plugin {
       server.middlewares.use(awsLoginMiddleware());
       server.middlewares.use(devrevMiddleware());
       server.middlewares.use(settingsMiddleware());
-      server.middlewares.use(vercelMiddleware());
+      server.middlewares.use(cloudflareMiddleware());
       server.middlewares.use(projectsMiddleware());
       server.middlewares.use(framesMiddleware());
       server.middlewares.use(adoptUploadsMiddleware());

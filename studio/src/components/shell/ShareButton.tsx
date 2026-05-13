@@ -29,31 +29,31 @@ interface ShareButtonProps {
 
 export function ShareButton({ project }: ShareButtonProps) {
   const [showModal, setShowModal] = useState(false);
-  const [vercelConfigured, setVercelConfigured] = useState(false);
+  const [cfConfigured, setCfConfigured] = useState(false);
 
   useEffect(() => {
-    async function checkVercelConfig() {
+    async function checkCloudflareConfig() {
       try {
         const res = await fetch("/api/settings");
         if (res.ok) {
           const settings = await res.json();
-          setVercelConfigured(!!settings.vercel?.token);
+          setCfConfigured(!!settings.cloudflare?.shareKey);
         }
       } catch {
-        setVercelConfigured(false);
+        setCfConfigured(false);
       }
     }
-    void checkVercelConfig();
+    void checkCloudflareConfig();
   }, []);
 
   const hasFrames = project && project.frames.length > 0;
-  const disabled = !hasFrames || !vercelConfigured;
+  const disabled = !hasFrames || !cfConfigured;
 
-  const tooltipContent = !vercelConfigured
-    ? "Configure Vercel token in Settings"
+  const tooltipContent = !cfConfigured
+    ? "Paste your Studio share key in Settings"
     : !hasFrames
     ? "No frames to share"
-    : "Share frame to Vercel";
+    : "Share frame to the web";
 
   return (
     <>

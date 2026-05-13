@@ -14,7 +14,8 @@ Everything the user calls "the studio" is this app. Production is the packaged `
 studio/
 ├── src/                 React shell (shell UI, chat pane, viewport, settings modal)
 ├── server/              Vite middleware (API handlers under server/middleware/*)
-├── server/vercel/       Share-to-Vercel bundler (esbuild + Tailwind v4 per frame)
+├── server/cloudflare/   Share-to-Cloudflare-Pages bundler (esbuild + Tailwind v4 per frame) + Worker client
+├── worker/              Cloudflare Worker that proxies share deploys (holds the real CF API token)
 ├── server/plugins/      Vite plugins (frame mount, project watch, etc.)
 ├── prototype-kit/       Composites + templates the generator is told to use
 ├── packaging/           DMG build: download-node, download-awscli, build.sh, dmg.sh, launcher.sh
@@ -59,8 +60,8 @@ The version is stamped into `Info.plist`, `Contents/Resources/version.json`, the
 ## Things that cost debugging time last session — be wary
 
 - **Vite middleware does NOT hot-reload.** Changes to anything under `server/middleware/*` or `vite.config.ts` require a full restart (quit the app or kill `pnpm run studio` and rerun). Every "it's not working on my machine" that's actually "you didn't restart" traces to this.
-- **Settings PATs follow one pattern.** DevRev, Vercel, and Figma all have a section in `AppSettingsModal.tsx` with: password `Input`, Save/Replace/Remove buttons, Connected `Badge`, inline error. When adding a new integration, mirror the existing sections — don't invent a new shape.
-- **Tailwind v4 needs explicit `@source` globs for every consumer root** (studio, prototype-kit, user's frames dir). `studio/src/styles/tailwind.css` sets the static ones; the Vite plugin `injectStudioSourcePlugin` appends the projects root at dev time; `server/vercel/bundler.ts` does the same for Vercel share bundles. Missing any one of these → classes silently drop in that environment. See auto-memory `tailwind-v4-source-scanning.md`.
+- **Settings PATs follow one pattern.** DevRev, Cloudflare, and Figma all have a section in `AppSettingsModal.tsx` with: password `Input`, Save/Replace/Remove buttons, Connected `Badge`, inline error. When adding a new integration, mirror the existing sections — don't invent a new shape.
+- **Tailwind v4 needs explicit `@source` globs for every consumer root** (studio, prototype-kit, user's frames dir). `studio/src/styles/tailwind.css` sets the static ones; the Vite plugin `injectStudioSourcePlugin` appends the projects root at dev time; `server/cloudflare/bundler.ts` does the same for Cloudflare share bundles. Missing any one of these → classes silently drop in that environment. See auto-memory `tailwind-v4-source-scanning.md`.
 - **`@xorkavi/arcade-gen/styles.css` is a pre-compiled subset.** It alone is never enough — always pair with Tailwind scanning of the consumer tree.
 - **Radix Select forbids `value=""`.** Use a non-empty sentinel and translate at save/load. Static test at `__tests__/components/select-item-empty-value.test.ts` catches violations.
 - **Claude CLI emits `{type:"result", subtype:"success", is_error:true}` on Bedrock auth failures.** Our parser (`src/lib/streamJson.ts`) honors `is_error` over `subtype` specifically for this. Don't "simplify" that check.
@@ -71,7 +72,7 @@ The version is stamped into `Info.plist`, `Contents/Resources/version.json`, the
 | Integration | Storage | Server side | UI |
 |---|---|---|---|
 | DevRev PAT | `settings.json` + keytar/plaintext | `secrets/keychain.ts`, `middleware/devrev.ts` | AppSettingsModal DevRev section |
-| Vercel | `settings.json` | `middleware/vercel.ts`, `server/vercel/*.ts` | AppSettingsModal Vercel section + ShareModal |
+| Cloudflare Pages (share) | `settings.json` (`cloudflare.shareKey`) — per-user key; real CF API token lives only in the share Worker | `middleware/cloudflare.ts` → `server/cloudflare/deploy.ts` (Worker client) → `worker/` (proxy) → Cloudflare Pages API | AppSettingsModal "Share to web" section + ShareModal |
 | Figma PAT | `figmanage` CLI config | `figmaCli.ts`, `middleware/figma.ts` | AppSettingsModal Figma section |
 | AWS Bedrock | `~/.aws/` (CLI-native) | `middleware/awsLogin.ts`, `middleware/chat.ts` preflight | AuthExpiredNotice banner |
 

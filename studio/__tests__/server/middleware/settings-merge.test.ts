@@ -4,9 +4,12 @@ import { mergeSettings } from "../../../server/middleware/settings";
 
 describe("mergeSettings", () => {
   it("preserves top-level keys that are absent from the patch", () => {
-    const base = { vercel: { token: "v" }, studio: { mode: "dark" } };
+    const base = {
+      cloudflare: { shareKey: "k" },
+      studio: { mode: "dark" },
+    };
     expect(mergeSettings(base, { devrev: { user: { id: "u" } } })).toEqual({
-      vercel: { token: "v" },
+      cloudflare: { shareKey: "k" },
       studio: { mode: "dark" },
       devrev: { user: { id: "u" } },
     });
@@ -26,8 +29,11 @@ describe("mergeSettings", () => {
   });
 
   it("null at top level deletes the whole nested object", () => {
-    const base = { studio: { mode: "dark" }, vercel: { token: "v" } };
-    expect(mergeSettings(base, { vercel: null })).toEqual({
+    const base = {
+      studio: { mode: "dark" },
+      cloudflare: { shareKey: "k" },
+    };
+    expect(mergeSettings(base, { cloudflare: null })).toEqual({
       studio: { mode: "dark" },
     });
   });

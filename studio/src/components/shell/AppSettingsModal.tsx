@@ -4,10 +4,8 @@ import ReactMarkdown from "react-markdown";
 import { savePat, getPatStatus, clearPat, type DevRevPatStatus } from "../../lib/devrev";
 
 interface AppSettings {
-  vercel?: {
-    token?: string;
-    teamId?: string;
-    projectName?: string;
+  cloudflare?: {
+    shareKey?: string;
   };
   studio?: {
     mode?: "light" | "dark";
@@ -62,32 +60,30 @@ export function AppSettingsModal({
   const [versionLabel, setVersionLabel] = useState<string | null>(null);
   const [changelogOpen, setChangelogOpen] = useState(false);
 
-  // Vercel state
-  const [vercelToken, setVercelToken] = useState("");
-  const [vercelTeamId, setVercelTeamId] = useState("");
-  const [vercelProjectName, setVercelProjectName] = useState("");
-  const [hasVercelToken, setHasVercelToken] = useState(false);
+  // Cloudflare state — a single per-user share key. The Worker holds the
+  // real Cloudflare API token; this key is what the Worker's ALLOWED_KEYS
+  // secret checks against.
+  const [cfShareKey, setCfShareKey] = useState("");
+  const [hasCfToken, setHasCfToken] = useState(false);
   const [studioMode, setStudioMode] = useState<"light" | "dark">("light");
   // studioModel is the Select's current value — a sentinel when the user
   // has picked "Default (Sonnet)", otherwise one of the alias strings.
   // NEVER let this be "" — Radix Select throws on empty-string items.
   const [studioModel, setStudioModel] = useState<string>(MODEL_DEFAULT_SENTINEL);
-  const [vercelSaving, setVercelSaving] = useState(false);
-  const [vercelError, setVercelError] = useState<string | null>(null);
+  const [cfSaving, setCfSaving] = useState(false);
+  const [cfError, setCfError] = useState<string | null>(null);
 
   const fetchSettings = useCallback(async () => {
     try {
       const res = await fetch("/api/settings");
       if (res.ok) {
         const data: AppSettings = await res.json();
-        setHasVercelToken(!!data.vercel?.token);
+        setHasCfToken(!!data.cloudflare?.shareKey);
         if (data.studio?.mode === "dark" || data.studio?.mode === "light") {
           setStudioMode(data.studio.mode);
         }
         // Missing/empty in settings → show the Default row (sentinel).
         setStudioModel(data.studio?.model || MODEL_DEFAULT_SENTINEL);
-        setVercelTeamId(data.vercel?.teamId || "");
-        setVercelProjectName(data.vercel?.projectName || "");
       }
     } catch {
       // non-critical
@@ -197,28 +193,42 @@ export function AppSettingsModal({
     }
   }
 
-  async function handleSaveVercel() {
-    setVercelSaving(true);
-    setVercelError(null);
+  async function handleSaveCloudflare() {
+    if (!cfShareKey.trim()) return;
+    setCfSaving(true);
+    setCfError(null);
     try {
       const res = await fetch("/api/settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          vercel: {
-            token: vercelToken.trim() || undefined,
-            teamId: vercelTeamId.trim() || undefined,
-            projectName: vercelProjectName.trim() || undefined,
-          },
+          cloudflare: { shareKey: cfShareKey.trim() },
         }),
       });
-      if (!res.ok) throw new Error("Failed to save Vercel settings");
+      if (!res.ok) throw new Error("Failed to save share key");
       await fetchSettings();
-      setVercelToken("");
+      setCfShareKey("");
     } catch (e) {
-      setVercelError(e instanceof Error ? e.message : "Failed to save settings");
+      setCfError(e instanceof Error ? e.message : "Failed to save settings");
     } finally {
-      setVercelSaving(false);
+      setCfSaving(false);
+    }
+  }
+
+  async function handleRemoveCloudflare() {
+    setCfError(null);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        // Top-level null deletes the whole key via mergeSettings.
+        body: JSON.stringify({ cloudflare: null }),
+      });
+      if (!res.ok) throw new Error("Failed to remove share key");
+      setCfShareKey("");
+      setHasCfToken(false);
+    } catch (e) {
+      setCfError(e instanceof Error ? e.message : "Failed to remove settings");
     }
   }
 
@@ -454,7 +464,7 @@ export function AppSettingsModal({
               )}
             </section>
 
-            {/* Vercel */}
+            {/* Cloudflare */}
             <section
               style={{
                 display: "flex",
@@ -465,57 +475,46 @@ export function AppSettingsModal({
               }}
             >
               <div>
-                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 540 }}>Vercel integration</h3>
+                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 540 }}>Share to web</h3>
                 <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--fg-neutral-subtle)" }}>
-                  Deploy frames as shareable previews. Create a token at vercel.com/account/tokens.
+                  Deploy frames as shareable previews on the DevRev Product &
+                  Design Cloudflare account. Paste the share key you received
+                  from 1Password — the service handles the rest.
                 </p>
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <label htmlFor="vercel-token" style={{ fontSize: 12, fontWeight: 540 }}>
-                  Access token
+                <label htmlFor="cf-share-key" style={{ fontSize: 12, fontWeight: 540 }}>
+                  Studio share key
                 </label>
                 <Input
-                  id="vercel-token"
+                  id="cf-share-key"
                   type="password"
-                  value={vercelToken}
-                  onChange={(e) => setVercelToken(e.target.value)}
-                  placeholder={hasVercelToken ? "Enter new token to replace" : "vercel_..."}
+                  value={cfShareKey}
+                  onChange={(e) => setCfShareKey(e.target.value)}
+                  placeholder={hasCfToken ? "Enter new key to replace" : "64-char hex string"}
                 />
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <label htmlFor="vercel-team" style={{ fontSize: 12, fontWeight: 540 }}>
-                  Team ID (optional)
-                </label>
-                <Input
-                  id="vercel-team"
-                  value={vercelTeamId}
-                  onChange={(e) => setVercelTeamId(e.target.value)}
-                  placeholder="team_... (leave empty for personal account)"
-                />
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={handleSaveCloudflare}
+                  disabled={!cfShareKey.trim() || cfSaving}
+                >
+                  {cfSaving ? "Saving…" : hasCfToken ? "Replace" : "Save"}
+                </Button>
+                {hasCfToken && (
+                  <Button size="sm" variant="tertiary" onClick={handleRemoveCloudflare}>
+                    Remove
+                  </Button>
+                )}
+                {hasCfToken && <Badge variant="emphasis">Key configured</Badge>}
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <label htmlFor="vercel-project" style={{ fontSize: 12, fontWeight: 540 }}>
-                  Project name (optional)
-                </label>
-                <Input
-                  id="vercel-project"
-                  value={vercelProjectName}
-                  onChange={(e) => setVercelProjectName(e.target.value)}
-                  placeholder="arcade-studio"
-                />
-              </div>
-
-              {hasVercelToken && (
-                <div>
-                  <Badge variant="emphasis">Token configured</Badge>
-                </div>
-              )}
-
-              {vercelError && (
-                <div style={{ color: "var(--fg-alert-prominent)", fontSize: 12 }}>{vercelError}</div>
+              {cfError && (
+                <div style={{ color: "var(--fg-alert-prominent)", fontSize: 12 }}>{cfError}</div>
               )}
             </section>
 
@@ -559,15 +558,8 @@ export function AppSettingsModal({
           </div>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={onClose} disabled={vercelSaving || devrevSaving}>
+          <Button variant="primary" onClick={onClose} disabled={cfSaving || devrevSaving}>
             Close
-          </Button>
-          <Button
-            variant="primary"
-            onClick={handleSaveVercel}
-            disabled={vercelSaving || (!vercelToken.trim() && !hasVercelToken)}
-          >
-            {vercelSaving ? "Saving…" : "Save Vercel settings"}
           </Button>
         </Modal.Footer>
       </Modal.Content>

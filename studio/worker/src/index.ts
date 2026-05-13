@@ -1,0 +1,218 @@
+// Arcade Studio share Worker.
+//
+// Proxies deploy requests from Studio clients to the Cloudflare Pages
+// Direct Upload API. The Worker holds the real Cloudflare API token as a
+// secret so it never leaves the Cloudflare edge.
+//
+// Request contract (from studio/server/cloudflare/deploy.ts):
+//
+//   POST /share
+//   Authorization: Bearer <per-user hex key>
+//   Content-Type: application/json
+//   {
+//     "projectSlug": string,                 // studio slug, used as branch
+//     "pagesProjectName": string,            // normalized Pages project
+//     "files": [{ "file": "index.html", "data": "<utf-8 text>" }, ...]
+//   }
+//
+// Response (success):
+//   200 { "url": "https://<branch>.<project>.pages.dev", "deployId": "..." }
+//
+// Response (failure):
+//   4xx/5xx { "error": { "code": "...", "message": "..." } }
+
+export interface Env {
+  CF_API_TOKEN: string;     // secret
+  ALLOWED_KEYS: string;     // secret, comma-separated hex strings
+  CF_ACCOUNT_ID: string;    // var
+}
+
+interface ShareRequest {
+  projectSlug: string;
+  pagesProjectName: string;
+  branch: string;
+  files: Array<{ file: string; data: string }>;
+}
+
+const CF_API = "https://api.cloudflare.com/client/v4";
+
+export default {
+  async fetch(req: Request, env: Env): Promise<Response> {
+    // CORS preflight — Studio runs on http://localhost:5556 and talks to
+    // the Worker directly from the browser via fetch. Without this,
+    // browsers reject the actual POST with a CORS error before it ever
+    // hits the Worker.
+    if (req.method === "OPTIONS") return cors(new Response(null, { status: 204 }));
+
+    if (req.method !== "POST" || new URL(req.url).pathname !== "/share") {
+      return cors(json(404, { error: { code: "not_found", message: "POST /share only" } }));
+    }
+
+    // ---- auth -------------------------------------------------------------
+    const authHeader = req.headers.get("authorization") ?? "";
+    const match = /^Bearer\s+(.+)$/i.exec(authHeader);
+    if (!match) {
+      return cors(json(401, { error: { code: "missing_key", message: "Missing Authorization: Bearer <key>" } }));
+    }
+    const providedKey = match[1].trim();
+
+    const allowed = new Set(
+      (env.ALLOWED_KEYS ?? "")
+        .split(",")
+        .map((k) => k.trim())
+        .filter(Boolean),
+    );
+    // Constant-time-ish check: Set.has is O(1) and doesn't short-circuit
+    // on first char mismatch. Hex keys are fixed-length so timing leaks
+    // there are already minimal, but this is the right default.
+    if (!allowed.has(providedKey)) {
+      return cors(json(401, { error: { code: "invalid_key", message: "Share key is not recognized" } }));
+    }
+
+    // ---- body -------------------------------------------------------------
+    let body: ShareRequest;
+    try {
+      body = (await req.json()) as ShareRequest;
+    } catch {
+      return cors(json(400, { error: { code: "bad_json", message: "Request body is not valid JSON" } }));
+    }
+
+    if (!body?.pagesProjectName || !body?.branch || !Array.isArray(body?.files) || body.files.length === 0) {
+      return cors(json(400, {
+        error: {
+          code: "bad_request",
+          message: "pagesProjectName, branch, and non-empty files[] are required",
+        },
+      }));
+    }
+
+    if (!env.CF_API_TOKEN || !env.CF_ACCOUNT_ID) {
+      return cors(json(500, {
+        error: {
+          code: "worker_misconfigured",
+          message: "Worker is missing CF_API_TOKEN or CF_ACCOUNT_ID",
+        },
+      }));
+    }
+
+    // ---- ensure project --------------------------------------------------
+    // Pages projects are cheap and idempotent — create on every request,
+    // swallow 409 "already exists". Keeping this in the Worker means
+    // Studio clients never need to know whether a project exists yet.
+    const createRes = await fetch(
+      `${CF_API}/accounts/${env.CF_ACCOUNT_ID}/pages/projects`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${env.CF_API_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: body.pagesProjectName,
+          production_branch: "main",
+        }),
+      },
+    );
+    if (!createRes.ok && createRes.status !== 409) {
+      const raw = await createRes.text().catch(() => "");
+      return cors(json(502, {
+        error: {
+          code: "project_create_failed",
+          message: `Cloudflare project create failed: ${createRes.status} ${raw}`,
+        },
+      }));
+    }
+
+    // ---- deploy ----------------------------------------------------------
+    // Build the multipart body: `manifest` (JSON map of path → sha256) +
+    // one `file` entry per file. Pages deduplicates by hash on its side so
+    // sending every file every time is fine for our bundle sizes.
+    const manifest: Record<string, string> = {};
+    for (const f of body.files) {
+      manifest[`/${f.file}`] = await sha256Hex(f.data);
+    }
+
+    const form = new FormData();
+    form.append("manifest", JSON.stringify(manifest));
+    form.append("branch", body.branch);
+    for (const f of body.files) {
+      form.append("file", new Blob([f.data], { type: guessMime(f.file) }), f.file);
+    }
+
+    const deployRes = await fetch(
+      `${CF_API}/accounts/${env.CF_ACCOUNT_ID}/pages/projects/${body.pagesProjectName}/deployments`,
+      {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${env.CF_API_TOKEN}` },
+        body: form,
+      },
+    );
+
+    if (!deployRes.ok) {
+      const raw = await deployRes.text().catch(() => "");
+      return cors(json(502, {
+        error: {
+          code: "deploy_failed",
+          message: `Cloudflare deploy failed: ${deployRes.status} ${raw}`,
+        },
+      }));
+    }
+
+    const payload: any = await deployRes.json().catch(() => ({}));
+    if (payload?.success !== true) {
+      return cors(json(502, {
+        error: {
+          code: "deploy_failed",
+          message: `Cloudflare deploy failed: ${JSON.stringify(payload?.errors ?? payload)}`,
+        },
+      }));
+    }
+
+    const result = payload.result;
+    // Prefer the stable branch alias so re-shares of the same frame hit the
+    // same URL. The per-deploy URL (`<hash>.<project>.pages.dev`) is our
+    // fallback for deploys that somehow come back without aliases.
+    const aliasUrl: string | undefined = Array.isArray(result?.aliases)
+      ? result.aliases[0]
+      : undefined;
+    const rawUrl = aliasUrl ?? String(result?.url ?? "");
+    const url = rawUrl.startsWith("http") ? rawUrl : `https://${rawUrl}`;
+
+    return cors(json(200, { url, deployId: String(result?.id ?? "") }));
+  },
+};
+
+function json(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+function cors(res: Response): Response {
+  // Studio is a localhost desktop app; nobody else should be calling this
+  // Worker from a browser. We still echo the origin so the dev server's
+  // fetches work and so we could tighten this later (e.g. by checking
+  // against a specific origin) without re-deploying clients.
+  res.headers.set("Access-Control-Allow-Origin", "*");
+  res.headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type");
+  return res;
+}
+
+async function sha256Hex(text: string): Promise<string> {
+  const buf = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", buf);
+  return [...new Uint8Array(digest)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function guessMime(filename: string): string {
+  if (filename.endsWith(".html")) return "text/html";
+  if (filename.endsWith(".js")) return "application/javascript";
+  if (filename.endsWith(".css")) return "text/css";
+  if (filename.endsWith(".json")) return "application/json";
+  if (filename.endsWith(".xml")) return "application/xml";
+  return "application/octet-stream";
+}

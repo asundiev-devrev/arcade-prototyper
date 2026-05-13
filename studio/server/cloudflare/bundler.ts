@@ -8,11 +8,12 @@ import { studioRoot } from "../paths";
 import { generateDevRevStubs } from "./stubDevRev";
 
 // The DevRev font CDN Referer-whitelists its origins. Browsers loading a
-// Vercel-deployed frame hit 403 because `*.vercel.app` isn't whitelisted, so
-// @xorkavi/arcade-gen's @font-face URLs never resolve and headings render in
-// system sans-serif. Node's fetch omits Referer by default, so we can pull
-// the fonts server-side at bundle time, base64-inline them into the CSS, and
-// avoid any runtime dependency on the CDN.
+// deployed frame hit 403 because the preview host (`*.pages.dev`,
+// `*.vercel.app`, etc.) isn't whitelisted, so @xorkavi/arcade-gen's
+// @font-face URLs never resolve and headings render in system sans-serif.
+// Node's fetch omits Referer by default, so we can pull the fonts
+// server-side at bundle time, base64-inline them into the CSS, and avoid any
+// runtime dependency on the CDN.
 const FONT_CDN = "https://files.dev.devrev-eng.ai/fonts";
 const FONT_FAMILIES: Array<{
   name: string;
@@ -29,13 +30,13 @@ const FONT_FAMILIES: Array<{
 //
 // Why we need this: studio's dev server runs @tailwindcss/vite which scans
 // studio/src, studio/prototype-kit AND the generated frame's source for
-// utility classes and generates CSS for every one it finds. The Vercel
+// utility classes and generates CSS for every one it finds. The share
 // bundler historically only shipped arcade-gen's pre-compiled styles.css —
 // the subset of classes arcade-gen itself happened to use. Any class in the
 // generated frame that arcade-gen doesn't also use (pt-12, text-title-3,
 // arbitrary values like max-w-[832px], responsive variants, etc.) silently
-// didn't exist on Vercel, so spacing, typography and layout diverged from
-// what the user saw in studio.
+// didn't exist in the deployed bundle, so spacing, typography and layout
+// diverged from what the user saw in studio.
 //
 // Fix: mirror the studio pipeline. Read the same tailwind.css entry, append
 // an @source for the frame directory + prototype-kit so frame-scoped
@@ -96,7 +97,7 @@ async function buildInlineFontFaceCss(): Promise<string> {
     if (!res.ok) {
       // Soft-fail: skip the missing font, headings fall back to system stack.
       // Better than blowing up the whole deploy.
-      console.warn(`[vercel] font fetch ${f.name} failed: ${res.status}`);
+      console.warn(`[cloudflare] font fetch ${f.name} failed: ${res.status}`);
       continue;
     }
     const buf = Buffer.from(await res.arrayBuffer());
@@ -109,10 +110,10 @@ async function buildInlineFontFaceCss(): Promise<string> {
 }
 
 // Resolve the arcade-prototyper repo root from this file's own location:
-//   <repo>/studio/server/vercel/bundler.ts → two "../" lands at <repo>/studio/
-//   server, three more lands at <repo>. This is where the repo's node_modules
-//   actually lives, both in dev checkouts and inside the packaged .app bundle
-//   (Contents/Resources/app/node_modules/).
+//   <repo>/studio/server/cloudflare/bundler.ts → one "../" lands at
+//   studio/server, two more lands at <repo>. This is where the repo's
+//   node_modules actually lives, both in dev checkouts and inside the
+//   packaged .app bundle (Contents/Resources/app/node_modules/).
 const STUDIO_SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(STUDIO_SERVER_DIR, "..", "..", "..");
 const REPO_NODE_MODULES = path.join(REPO_ROOT, "node_modules");
@@ -247,8 +248,9 @@ if (root) {
     // 1. Tailwind v4 output compiled from studio/src/styles/tailwind.css
     //    with @source pointing at this frame's dir. Without this, classes
     //    the frame uses but arcade-gen didn't happen to use are missing.
-    // 2. Inlined @font-face rules (CDN Referer-blocks .vercel.app origins,
-    //    so the browser can't fetch fonts at runtime).
+    // 2. Inlined @font-face rules (CDN Referer-blocks preview hosts like
+    //    *.pages.dev / *.vercel.app, so the browser can't fetch fonts at
+    //    runtime).
     //
     // Order matters for @font-face override: ours come after arcade-gen's
     // so "last matching family wins" picks ours.

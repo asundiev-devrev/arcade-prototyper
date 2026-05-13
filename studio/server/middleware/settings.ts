@@ -23,10 +23,11 @@ function send(res: ServerResponse, status: number, body?: unknown) {
 const SETTINGS_FILE = "settings.json";
 
 interface GlobalSettings {
-  vercel?: {
-    token?: string;
-    teamId?: string;
-    projectName?: string;
+  cloudflare?: {
+    /** Per-user share key authorized by the share Worker's
+     *  ALLOWED_KEYS secret. Minted by the Worker operator and
+     *  distributed via 1Password. */
+    shareKey?: string;
   };
   devrev?: {
     user?: { id: string; display_name: string };

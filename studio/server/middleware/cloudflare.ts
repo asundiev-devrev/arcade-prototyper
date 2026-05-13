@@ -1,13 +1,13 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { buildFrameBundle } from "../vercel/bundler";
+import { buildFrameBundle } from "../cloudflare/bundler";
 import {
-  deployToVercel,
-  ensureUnprotectedProject,
-  validateVercelToken,
-} from "../vercel/deploy";
-import { projectDir, projectJsonPath } from "../paths";
+  deployViaWorker,
+  normalizeBranchName,
+  normalizeProjectName,
+} from "../cloudflare/deploy";
+import { projectJsonPath } from "../paths";
 import type { Project } from "../types";
 
 async function readJson(req: IncomingMessage): Promise<any> {
@@ -32,7 +32,7 @@ async function readSettings(): Promise<any> {
   }
 }
 
-export function vercelMiddleware() {
+export function cloudflareMiddleware() {
   return async (req: IncomingMessage, res: ServerResponse, next?: () => void) => {
     const url = req.url ?? "/";
 
@@ -49,18 +49,14 @@ export function vercelMiddleware() {
         }
 
         const settings = await readSettings();
-        const vercelToken = settings.vercel?.token;
+        const shareKey = settings.cloudflare?.shareKey;
 
-        if (!vercelToken) {
+        if (!shareKey) {
           return send(res, 400, {
-            error: { code: "no_token", message: "Vercel token not configured in settings" },
-          });
-        }
-
-        const tokenValid = await validateVercelToken(vercelToken);
-        if (!tokenValid) {
-          return send(res, 401, {
-            error: { code: "invalid_token", message: "Vercel token is invalid" },
+            error: {
+              code: "no_share_key",
+              message: "Studio share key must be configured in Settings",
+            },
           });
         }
 
@@ -83,25 +79,15 @@ export function vercelMiddleware() {
           mode: projectJson.mode,
         });
 
-        const projectName = `arcade-${slug}-${frameSlug}`;
+        // One Pages project per studio project; each frame becomes a branch
+        // deploy inside it. Preview URL shape: <frameSlug>.<slug>.pages.dev.
+        // Normalize defensively — studio slugs are already kebab-case, but
+        // the helpers enforce Cloudflare's leading-digit ban and length
+        // limits.
+        const pagesProjectName = normalizeProjectName(slug);
+        const branch = normalizeBranchName(frameSlug);
 
-        // Ensure the project exists and has protection disabled BEFORE the
-        // deploy. Team plans enable SSO protection on new projects by
-        // default — disabling it after deploy races the protection kicking
-        // in on the fresh deployment. Doing it first means the deployment
-        // is born under an already-unprotected project.
-        await ensureUnprotectedProject({
-          projectName,
-          token: vercelToken,
-          teamId: settings.vercel?.teamId,
-        });
-
-        // Vercel's v13 deployments API treats the `data` field as raw UTF-8
-        // when no `encoding` is specified. Passing base64 without also
-        // setting `encoding: "base64"` makes Vercel store the literal
-        // base64 string as the file contents — which served `PCFET0NU...`
-        // as our homepage. Text files go through as plain strings.
-        const files: Array<{ file: string; data: string }> = [
+        const files = [
           { file: "index.html", data: bundle.html },
           { file: "assets/bundle.js", data: bundle.js },
           { file: "assets/bundle.css", data: bundle.css },
@@ -109,16 +95,28 @@ export function vercelMiddleware() {
         if (bundle.liftXml) files.push({ file: `lift/${frameSlug}.xml`, data: bundle.liftXml });
         if (bundle.liftJson) files.push({ file: `lift/${frameSlug}.json`, data: bundle.liftJson });
 
-        const deployment = await deployToVercel({
-          name: projectName,
-          files,
-          token: vercelToken,
-          teamId: settings.vercel?.teamId,
-        });
-
-        if (!projectJson.deployments) {
-          projectJson.deployments = [];
+        let deployment;
+        try {
+          deployment = await deployViaWorker({
+            shareKey,
+            pagesProjectName,
+            branch,
+            projectSlug: slug,
+            files,
+          });
+        } catch (err: any) {
+          // Surface the Worker's auth/validation errors as the same HTTP
+          // status Studio's UI expects. Anything else (503, 5xx from the
+          // Pages API) falls through to the generic 500 below.
+          if (err.code === "invalid_key" || err.code === "missing_key") {
+            return send(res, 401, {
+              error: { code: err.code, message: err.message },
+            });
+          }
+          throw err;
         }
+
+        if (!projectJson.deployments) projectJson.deployments = [];
 
         projectJson.deployments.push({
           frameSlug,
@@ -128,9 +126,9 @@ export function vercelMiddleware() {
 
         await fs.writeFile(projectPath, JSON.stringify(projectJson, null, 2));
 
-        return send(res, 200, { url: `https://${deployment.url}`, deployId: deployment.id });
+        return send(res, 200, { url: deployment.url, deployId: deployment.deployId });
       } catch (err: any) {
-        console.error("[vercel] Share failed:", err);
+        console.error("[cloudflare] Share failed:", err);
         return send(res, 500, {
           error: { code: "deploy_failed", message: err.message },
         });

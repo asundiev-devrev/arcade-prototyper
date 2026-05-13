@@ -6,10 +6,10 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.17.0] — 2026-05-13
 
 ### Changed
-- **Share-to-web replaced: Vercel → Cloudflare Pages (via a team share Worker).** Studio now deploys frames to the shared DevRev Product & Design Cloudflare account through a small Cloudflare Worker (`studio/worker/`) that holds the real Cloudflare API token as a secret. Teammates paste a per-user share key — not a Cloudflare token — into Settings → "Share to web", so no one has to create their own Cloudflare account and the raw API token never leaves the Worker. Keys are minted with `openssl rand -hex 32`, distributed via 1Password, and revoked by removing them from the Worker's `ALLOWED_KEYS` secret. See `studio/worker/README.md` for the operator runbook and `studio/docs/cloudflare-setup.md` for the 30-second teammate setup. Existing `vercel.*` settings are ignored; the `deployments` array in `project.json` is preserved as-is (old Vercel URLs stay as historical data).
+- **Share-to-web replaced: Vercel → Cloudflare Pages (via a team share Worker).** Studio now deploys frames to the shared DevRev Product & Design Cloudflare account through a small Cloudflare Worker (`studio/worker/`) that holds the real Cloudflare API token as a secret. Teammates paste a per-user share key — not a Cloudflare token — into Settings → "Share to web", so no one has to create their own Cloudflare account and the raw API token never leaves the Worker. The operator keeps the master list of keys in macOS Keychain and uses three scripts to onboard/offboard teammates: `./bin/add-teammate.sh <name>`, `./bin/revoke-teammate.sh <name>`, `./bin/list-teammates.sh`. Each script rebuilds the Worker's `ALLOWED_KEYS` secret from Keychain and redeploys. Newly generated keys are distributed via one-time-paste URLs (e.g. password.link) over Slack DM. See `studio/worker/README.md` for the operator runbook and `studio/docs/cloudflare-setup.md` for the 30-second teammate setup. Existing `vercel.*` settings are ignored; the `deployments` array in `project.json` is preserved as-is (old Vercel URLs stay as historical data).
 
 ## [0.16.2] — 2026-05-13
 
