@@ -19,7 +19,7 @@ function makeFakeProc(): FakeProc {
   const emitter = new EventEmitter() as unknown as FakeProc;
   emitter.stdout = new PassThrough();
   emitter.stderr = new PassThrough();
-  emitter.kill = vi.fn();
+  emitter.kill = vi.fn() as unknown as FakeProc["kill"];
   return emitter;
 }
 

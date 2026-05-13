@@ -104,7 +104,7 @@ export function JoinSessionGate({ sessionId, relayUrl, onJoined, onDismiss }: Pr
           </div>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="ghost" onClick={onDismiss} disabled={status === "connecting"}>
+          <Button variant="tertiary" onClick={onDismiss} disabled={status === "connecting"}>
             Not now
           </Button>
           <Button

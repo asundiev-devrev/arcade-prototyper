@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
+import type { Server as HttpServer } from "node:http";
 import { studioRoot } from "./server/paths";
 import { projectsMiddleware } from "./server/middleware/projects";
 import { framesMiddleware } from "./server/middleware/frames";
@@ -69,7 +70,7 @@ function apiPlugin(): import("vite").Plugin {
       server.httpServer?.once("listening", () => {
         const http = server.httpServer;
         if (!http) return;
-        void hydrated.then(() => attachRelayToHttpServer(http));
+        void hydrated.then(() => attachRelayToHttpServer(http as HttpServer));
       });
       void logVersionOnBoot();
       void cleanStaleStagingSessions();
