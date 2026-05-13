@@ -123,6 +123,28 @@ export default {
       }));
     }
 
+    // ---- ensure Access application --------------------------------------
+    // Gate every deployed URL behind an OTP wall that only @devrev.ai can
+    // pass through. We don't own the pages.dev zone, so a single
+    // *.pages.dev app isn't allowed — we create one Access Application
+    // per Pages project instead, scoped to `<project>.pages.dev` and
+    // `*.<project>.pages.dev` (for branch aliases). Idempotent: match by
+    // name, skip the create if it already exists.
+    //
+    // Failure here is non-fatal — we log and continue to deploy. A broken
+    // Access call shouldn't prevent shares from going out; the URL just
+    // stays public in that window. The Worker operator notices in the
+    // dashboard at leisure.
+    try {
+      await ensureAccessApp({
+        accountId: env.CF_ACCOUNT_ID,
+        token: env.CF_API_TOKEN,
+        pagesProjectName: body.pagesProjectName,
+      });
+    } catch (err: any) {
+      console.warn(`[access] ensureAccessApp failed: ${err?.message ?? err}`);
+    }
+
     // ---- deploy ----------------------------------------------------------
     // Cloudflare Pages Direct Upload is a THREE-step flow. An earlier
     // version of this Worker tried to send everything in one multipart
@@ -306,4 +328,102 @@ function guessMime(filename: string): string {
   if (filename.endsWith(".json")) return "application/json";
   if (filename.endsWith(".xml")) return "application/xml";
   return "application/octet-stream";
+}
+
+// Idempotently ensures a Cloudflare Access Application (self-hosted,
+// one-time-PIN-gated, @devrev.ai-only) sits in front of the given Pages
+// project's `pages.dev` hostnames. Matches by a deterministic app name
+// so re-running is a no-op once created.
+//
+// Why per-project: Cloudflare won't let us register `*.pages.dev` as an
+// Access app domain because we don't own the pages.dev zone (it returns
+// `access.api.error.invalid_request: domain does not belong to zone`).
+// The per-project pattern is what Cloudflare's own docs suggest for
+// gating individual Pages sites, and it matches what's already in the
+// account for other apps.
+async function ensureAccessApp({
+  accountId,
+  token,
+  pagesProjectName,
+}: {
+  accountId: string;
+  token: string;
+  pagesProjectName: string;
+}): Promise<void> {
+  const appName = `Arcade Studio frames — ${pagesProjectName}`;
+
+  // Step 1: look up existing Access apps by name. We page once with a big
+  // per_page since this account has < 50 apps; if Studio adoption grows
+  // past that we can follow `result_info.total_pages`.
+  const listRes = await fetch(
+    `${CF_API}/accounts/${accountId}/access/apps?per_page=100`,
+    { headers: { "Authorization": `Bearer ${token}` } },
+  );
+  if (!listRes.ok) {
+    const raw = await listRes.text().catch(() => "");
+    throw new Error(`Access list failed: ${listRes.status} ${raw}`);
+  }
+  const listBody: any = await listRes.json();
+  const apps: Array<{ id: string; name: string }> = listBody?.result ?? [];
+  if (apps.find((a) => a.name === appName)) return;
+
+  // Step 2: create the Access app covering both the apex alias host
+  // (`<project>.pages.dev` — Cloudflare's stable URL) and the branch
+  // wildcard (`*.<project>.pages.dev` — where our per-frame alias URLs
+  // live, e.g. `01-signin.<project>.pages.dev`).
+  const createAppRes = await fetch(
+    `${CF_API}/accounts/${accountId}/access/apps`,
+    {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: appName,
+        type: "self_hosted",
+        session_duration: "24h",
+        domain: `${pagesProjectName}.pages.dev`,
+        self_hosted_domains: [
+          `${pagesProjectName}.pages.dev`,
+          `*.${pagesProjectName}.pages.dev`,
+        ],
+        // Leave identity providers empty → Cloudflare uses all account
+        // providers, which at minimum includes the One-time PIN method
+        // already configured on this account. That's what produces the
+        // OTP email flow without us having to wire up a specific IdP id.
+      }),
+    },
+  );
+  if (!createAppRes.ok) {
+    const raw = await createAppRes.text().catch(() => "");
+    throw new Error(`Access app create failed: ${createAppRes.status} ${raw}`);
+  }
+  const createAppBody: any = await createAppRes.json();
+  const appId: string = createAppBody?.result?.id;
+  if (!appId) throw new Error("Access app create returned no id");
+
+  // Step 3: attach the policy. Without a policy, an Access app defaults
+  // to "deny everyone" — we want "allow anyone with an @devrev.ai
+  // email, via OTP". The `include` rule is OR-semantics within itself,
+  // so if we ever add external reviewers, just append another entry.
+  const policyRes = await fetch(
+    `${CF_API}/accounts/${accountId}/access/apps/${appId}/policies`,
+    {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: "Allow DevRev team via OTP",
+        decision: "allow",
+        include: [{ email_domain: { domain: "devrev.ai" } }],
+      }),
+    },
+  );
+  if (!policyRes.ok) {
+    const raw = await policyRes.text().catch(() => "");
+    throw new Error(`Access policy create failed: ${policyRes.status} ${raw}`);
+  }
 }

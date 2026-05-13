@@ -23,6 +23,18 @@ You'll see **Key configured** next to the field when it's stored.
 
 That URL is stable for that frame. Re-deploying the same frame updates the same URL — no need to re-share the link.
 
+## Who can view the link
+
+Every shared frame is protected by **Cloudflare Access one-time PIN** and scoped to `@devrev.ai` emails. When someone opens a shared link:
+
+1. They land on a `devrev-product.cloudflareaccess.com` sign-in page.
+2. They enter their email → Cloudflare emails them a 6-digit code.
+3. They enter the code → they see the frame. Session lasts 24 hours.
+
+Viewers whose email doesn't end in `@devrev.ai` are rejected — no amount of valid email pickup will let them through. If you need to share with someone outside DevRev (e.g. a contractor), ping Andrey to add them to the Access policy.
+
+You don't need to do anything special in Studio — every deploy automatically gets the OTP gate.
+
 ## Troubleshooting
 
 **"Paste your Studio share key in Settings" tooltip on the Share button**

@@ -190,6 +190,41 @@ The master list lives in Keychain, which **doesn't auto-sync** between Macs unle
 
 Rotating on laptop loss is the safer default anyway.
 
+## Access OTP gate (per-project)
+
+Every `/share` call creates (or reuses) a Cloudflare Access Application in front of the Pages project's `*.pages.dev` hostnames. The app is self-hosted, one-time-PIN-gated, and scoped to `@devrev.ai` emails. Viewers hit a sign-in page at `devrev-product.cloudflareaccess.com`, enter their email, receive a 6-digit code, and get a 24h session.
+
+The Worker's `ensureAccessApp()` helper:
+
+1. Lists Access apps for the account (paged, 100 at a time).
+2. If an app named `Arcade Studio frames — <project>` already exists, returns early (idempotent no-op for every deploy after the first).
+3. Otherwise creates the app covering `<project>.pages.dev` + `*.<project>.pages.dev`, and attaches one policy: `decision: allow, include: [{ email_domain: { domain: "devrev.ai" } }]`.
+
+Failure during `ensureAccessApp` is logged as a warning but does NOT fail the deploy. An unprotected share is better than a broken share — the gate gets added the next time that project is shared.
+
+### Why per-project instead of one `*.pages.dev` app
+
+Cloudflare rejects apps scoped to `*.pages.dev` with `domain does not belong to zone` — that zone is owned by Cloudflare, not us. One Access Application per Pages project is Cloudflare's recommended pattern for internal-team Pages protection and matches the other apps on this account.
+
+### Changing the policy
+
+If you need to allow external emails, the easiest path is manual: open **Zero Trust → Access → Applications**, find `Arcade Studio frames — <project>`, edit the policy, add the external address under `include`. Repeat per project.
+
+For a durable fix — allow a fixed external list across all projects — add a second `include` entry to the policy payload in `src/index.ts` (`ensureAccessApp`), then redeploy the Worker AND rotate every existing app (the Worker's idempotency check skips the policy update). The cleanest way to "rotate" is to delete the old app from the dashboard and re-share once from Studio — the next call recreates it with the new policy.
+
+### Retroactively gating a project
+
+Projects created before the Access code landed are ungated. To fix: open Studio, share any frame in that project. The Worker's `ensureAccessApp` call runs on every deploy, creates the app, and Access immediately applies to all existing URLs of that project (it's an edge-layer gate, not a build-time one).
+
+### Required Cloudflare API token scope
+
+The Worker's `CF_API_TOKEN` secret needs both:
+
+- Account → Cloudflare Pages → Edit
+- Account → Access: Apps and Policies → Edit
+
+If `ensureAccessApp` starts failing with 403, the token likely has only the Pages scope. Either edit the existing token in the dashboard (**Profile → API Tokens → Arcade Studio → Edit**) to add the Access scope, or mint a new token with both and `wrangler secret put CF_API_TOKEN`.
+
 ## Rotating the Cloudflare API token
 
 Do this quarterly, or immediately if you suspect the token leaked (e.g. a laptop with an untrusted process holding it briefly).
@@ -213,6 +248,7 @@ Teammates' share keys are unaffected by this rotation.
 | `401 invalid_key` | Teammate's key isn't in `ALLOWED_KEYS` | Check they pasted the right key; re-add it if you removed it by mistake. **If every teammate 401s at once**, you probably uploaded an empty `ALLOWED_KEYS` — re-run `bin/add-teammate.sh <any-existing-name>` which rebuilds + re-uploads the full list, or run the bulk snippet above with an empty `NAMES=()` array |
 | `401 missing_key` | Studio sent no `Authorization` header | Usually a stale Studio build; rebuild `.dmg` |
 | `502 project_create_failed` | Cloudflare API token is wrong, expired, or missing the Pages scope | Rotate token; confirm scope = `Account → Cloudflare Pages → Edit` |
+| Deploy succeeds but viewers see no Access gate | `ensureAccessApp` is failing silently (by design — non-fatal). Check `wrangler tail` for `[access] ensureAccessApp failed: ...`. Most likely: token lacks `Access: Apps and Policies → Edit` scope. | Add the scope to the existing token (**Cloudflare dashboard → Profile → API Tokens → Arcade Studio → Edit**). Next share re-runs the helper and creates the app. |
 | `500 worker_misconfigured` | Forgot to set `CF_API_TOKEN` or `CF_ACCOUNT_ID` | Re-run step 3 and step 4 of setup |
 
 ## Files

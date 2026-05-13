@@ -8,6 +8,9 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0.17.0] — 2026-05-13
 
+### Added (server-side, no client update needed)
+- **Shared frames are now gated by Cloudflare Access one-time PIN, `@devrev.ai`-only.** Every `/share` call in the Worker creates (or reuses) a Cloudflare Access Application covering that project's `*.pages.dev` hostnames, with one policy: allow anyone whose email ends in `@devrev.ai`, via the account's default One-time PIN provider. Session TTL = 24 hours. Per-project pattern — we don't own the `pages.dev` zone, so a single `*.pages.dev` app isn't allowed; one Access app per Pages project is the canonical workaround and matches the other 6 apps on the account. Requires the Worker's `CF_API_TOKEN` to carry `Account → Access: Apps and Policies → Edit` in addition to the existing Pages scope. Operator runbook documents retroactive gating (just re-share any frame) and policy customization.
+
 ### Fixed (server-side, no client update needed)
 - **Share Worker was using the wrong Cloudflare API shape.** The first cut tried to POST files + manifest in one multipart request to `/pages/projects/:name/deployments`. Cloudflare returned 200 and a deployment ID, but the actual assets never landed in their asset store — every `pages.dev` URL then served HTTP 500 on read. Fixed by moving to the documented three-step Direct Upload flow: (1) GET `/pages/projects/:name/upload-token` for a short-lived JWT, (2) POST content-addressed base64 payloads to `/pages/assets/upload`, (3) POST the manifest (just `{path: hash}`) to `/pages/projects/:name/deployments` to wire the assets into a new deployment. Worker redeployed — no client rebuild required; existing 0.17.0 installs work immediately against the updated Worker.
 
