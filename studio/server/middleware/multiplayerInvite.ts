@@ -21,13 +21,6 @@ import { startTunnel, currentTunnelUrl } from "../relay/tunnel";
 const INVITE_URL = /^\/api\/multiplayer\/invite\/?$/;
 const STUDIO_PORT = 5556;
 
-// Module-level cache of the tunnel URL. We rely on `currentTunnelUrl()` from
-// relay/tunnel as the primary source, but in tests the mock returns null
-// and we still want to avoid starting a second tunnel after the first succeeds.
-// This cache bridges that: once we successfully start a tunnel (or see one
-// running), we remember the URL here.
-let cachedTunnelUrl: string | null = null;
-
 export function multiplayerInviteMiddleware() {
   return async (req: IncomingMessage, res: ServerResponse, next?: () => void) => {
     const url = req.url ?? "/";
@@ -70,11 +63,15 @@ export function multiplayerInviteMiddleware() {
       return;
     }
 
-    let tunnelUrl = currentTunnelUrl() || cachedTunnelUrl;
+    // `currentTunnelUrl()` is the single source of truth for whether a tunnel
+    // is live. When cloudflared dies mid-session it clears itself there, so
+    // the next invite falls through to startTunnel and recovers automatically.
+    // Keeping a separate module-level cache would reintroduce a staleness bug
+    // where a dead URL gets posted into a DM.
+    let tunnelUrl = currentTunnelUrl();
     if (!tunnelUrl) {
       try {
         tunnelUrl = await startTunnel({ port: STUDIO_PORT });
-        cachedTunnelUrl = tunnelUrl;
       } catch (err: any) {
         res.writeHead(502, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: `Tunnel failed: ${err?.message ?? err}` }));
@@ -117,9 +114,4 @@ export function multiplayerInviteMiddleware() {
       dmId,
     }));
   };
-}
-
-/** Test-only: clear the cached tunnel URL so tests start from a clean slate. */
-export function __resetMultiplayerInviteForTests(): void {
-  cachedTunnelUrl = null;
 }

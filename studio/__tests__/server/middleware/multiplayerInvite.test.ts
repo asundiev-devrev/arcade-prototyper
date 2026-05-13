@@ -17,13 +17,25 @@ vi.mock("../../../server/devrev/dm", () => ({
   createOrFetchDm: createOrFetchDmMock,
   postToDm: postToDmMock,
 }));
+// Track tunnel state the way the real `relay/tunnel` module does: once a
+// tunnel starts, `currentTunnelUrl()` returns its URL until stopTunnel is
+// called (or the process dies). The middleware relies on this being the
+// single source of truth, so the mock has to reflect that contract.
+let __tunnelState: string | null = null;
+startTunnelMock.mockImplementation(async () => {
+  __tunnelState = "https://brave-squirrel-42.trycloudflare.com";
+  return __tunnelState;
+});
+
 vi.mock("../../../server/relay/tunnel", () => ({
-  startTunnel: startTunnelMock,
-  currentTunnelUrl: () => null,
-  stopTunnel: vi.fn(),
+  startTunnel: (...args: any[]) => startTunnelMock(...args),
+  currentTunnelUrl: () => __tunnelState,
+  stopTunnel: vi.fn(() => {
+    __tunnelState = null;
+  }),
 }));
 
-const { multiplayerInviteMiddleware, __resetMultiplayerInviteForTests } = await import(
+const { multiplayerInviteMiddleware } = await import(
   "../../../server/middleware/multiplayerInvite"
 );
 const { __resetSessionRegistryForTests } = await import(
@@ -53,14 +65,18 @@ beforeEach(() => {
   createOrFetchDmMock.mockReset();
   postToDmMock.mockReset();
   startTunnelMock.mockReset();
+  __tunnelState = null;
   __resetSessionRegistryForTests();
-  __resetMultiplayerInviteForTests();
   getDevRevPatMock.mockResolvedValue("host-pat");
   resolveDevuMock.mockResolvedValue({
     id: "don:identity:dvrv-us-1:devo/0:devu/HOST",
     displayName: "Host",
   });
-  startTunnelMock.mockResolvedValue("https://brave-squirrel-42.trycloudflare.com");
+  // Re-install the stateful implementation after mockReset wipes it.
+  startTunnelMock.mockImplementation(async () => {
+    __tunnelState = "https://brave-squirrel-42.trycloudflare.com";
+    return __tunnelState;
+  });
   createOrFetchDmMock.mockResolvedValue("don:core:dvrv-us-1:devo/0:dm/ABC");
   postToDmMock.mockResolvedValue(undefined);
 });
