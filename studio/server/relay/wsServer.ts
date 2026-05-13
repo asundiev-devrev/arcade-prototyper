@@ -54,7 +54,9 @@ export function attachRelayToHttpServer(server: http.Server): void {
       if (!req.url?.startsWith("/api/multiplayer/ws")) return;
       const url = new URL(req.url, "http://localhost");
       const sessionId = url.searchParams.get("sessionId");
-      const pat = req.headers.authorization ?? "";
+      const headerPat = req.headers.authorization ?? "";
+      const queryPat = url.searchParams.get("pat") ?? "";
+      const pat = headerPat || queryPat;
 
       if (!sessionId) {
         socket.write("HTTP/1.1 400 Bad Request\r\n\r\n");

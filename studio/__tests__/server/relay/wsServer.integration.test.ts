@@ -221,4 +221,41 @@ describe("wsServer integration", () => {
 
     alice.ws.close();
   });
+
+  it("accepts pat via ?pat= query when Authorization header is absent", async () => {
+    const s = await createSession({ hostDevu: "devu/A", projectSlug: "demo" });
+    await addInvite(s.id, { devu: "devu/A", invitedByDevu: "devu/A" });
+
+    // Connect WITHOUT the Authorization header — use ?pat=pat-a instead.
+    // The existing connect() helper sets Authorization; for this test we build
+    // the WebSocket inline so we can omit it.
+    const pending = new Promise<ConnectedWs>((resolve, reject) => {
+      const ws = new WebSocket(
+        `ws://127.0.0.1:${port}/api/multiplayer/ws?sessionId=${s.id}&pat=pat-a`,
+      );
+      const pendingMsgs: any[] = [];
+      const listeners = new Set<(msg: any) => void>();
+      ws.on("message", (raw) => {
+        const msg = JSON.parse(raw.toString());
+        if (listeners.size === 0) pendingMsgs.push(msg);
+        else for (const fn of listeners) fn(msg);
+      });
+      ws.once("open", () =>
+        resolve({
+          ws,
+          pending: pendingMsgs,
+          onMessage(cb) {
+            for (const m of pendingMsgs.splice(0)) cb(m);
+            listeners.add(cb);
+            return () => listeners.delete(cb);
+          },
+        }),
+      );
+      ws.once("error", reject);
+    });
+    const alice = await pending;
+    const state = await receiveUntil(alice, (m) => m.type === "session_state");
+    expect(state.driverDevu).toBe("devu/A");
+    alice.ws.close();
+  });
 });
