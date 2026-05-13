@@ -124,27 +124,118 @@ export default {
     }
 
     // ---- deploy ----------------------------------------------------------
-    // Build the multipart body: `manifest` (JSON map of path → sha256) +
-    // one `file` entry per file. Pages deduplicates by hash on its side so
-    // sending every file every time is fine for our bundle sizes.
-    const manifest: Record<string, string> = {};
-    for (const f of body.files) {
-      manifest[`/${f.file}`] = await sha256Hex(f.data);
+    // Cloudflare Pages Direct Upload is a THREE-step flow. An earlier
+    // version of this Worker tried to send everything in one multipart
+    // POST to `/pages/projects/:name/deployments` — the API returned 200
+    // and a deployment ID, but the assets never actually landed in
+    // Cloudflare's asset store, so every URL served HTTP 500 when you
+    // opened it. The correct sequence:
+    //
+    //   1. POST /accounts/:acct/pages/projects/:name/upload-token
+    //      → returns { jwt } good for ~5 minutes.
+    //   2. For each file, compute a content hash (sha256, hex, first 32
+    //      chars — that's what Cloudflare keys its asset store by), then
+    //      POST the base64 payloads to:
+    //         POST https://api.cloudflare.com/client/v4/pages/assets/upload
+    //         Authorization: Bearer <jwt from step 1>
+    //         Content-Type: application/json
+    //         Body: [{ key, value (base64), metadata: { contentType },
+    //                  base64: true }]
+    //      The response includes `result.successful_key_ids` — the hashes
+    //      Cloudflare accepted.
+    //   3. POST /accounts/:acct/pages/projects/:name/deployments with the
+    //      manifest as multipart form data, where manifest is
+    //      { "/path": hash } using the SAME hash we uploaded under.
+    //
+    // Keys are content-addressed, so re-deploying an unchanged bundle is
+    // cheap (step 2 returns fast because Cloudflare sees the hash is
+    // already present) and Pages dedupes across projects.
+
+    // Step 1: get the asset upload JWT.
+    const tokenRes = await fetch(
+      `${CF_API}/accounts/${env.CF_ACCOUNT_ID}/pages/projects/${body.pagesProjectName}/upload-token`,
+      {
+        method: "GET",
+        headers: { "Authorization": `Bearer ${env.CF_API_TOKEN}` },
+      },
+    );
+    if (!tokenRes.ok) {
+      const raw = await tokenRes.text().catch(() => "");
+      return cors(json(502, {
+        error: {
+          code: "upload_token_failed",
+          message: `Cloudflare upload-token failed: ${tokenRes.status} ${raw}`,
+        },
+      }));
+    }
+    const tokenPayload: any = await tokenRes.json();
+    const jwt: string = tokenPayload?.result?.jwt;
+    if (!jwt) {
+      return cors(json(502, {
+        error: {
+          code: "upload_token_missing",
+          message: "Cloudflare returned no JWT on upload-token",
+        },
+      }));
     }
 
-    const form = new FormData();
-    form.append("manifest", JSON.stringify(manifest));
-    form.append("branch", body.branch);
+    // Build content-addressed keys and the manifest in one pass. The
+    // "key" Cloudflare uses is a 32-character hex hash of the file
+    // contents. We use sha256 and truncate — this matches what the
+    // wrangler CLI does when it talks to the same endpoint.
+    const manifest: Record<string, string> = {};
+    const uploads: Array<{
+      key: string;
+      value: string;            // base64 of the file body
+      metadata: { contentType: string };
+      base64: true;
+    }> = [];
     for (const f of body.files) {
-      form.append("file", new Blob([f.data], { type: guessMime(f.file) }), f.file);
+      const key = (await sha256Hex(f.data)).slice(0, 32);
+      manifest[`/${f.file}`] = key;
+      uploads.push({
+        key,
+        value: btoa(unescape(encodeURIComponent(f.data))),
+        metadata: { contentType: guessMime(f.file) },
+        base64: true,
+      });
     }
+
+    // Step 2: upload the assets. Pages accepts up to 5000 files per call
+    // but caps payload size per request — our bundles are tiny (usually
+    // 4–6 files, < 1 MB total) so a single POST is always enough.
+    const assetsRes = await fetch(`${CF_API}/pages/assets/upload`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${jwt}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(uploads),
+    });
+    if (!assetsRes.ok) {
+      const raw = await assetsRes.text().catch(() => "");
+      return cors(json(502, {
+        error: {
+          code: "asset_upload_failed",
+          message: `Cloudflare asset upload failed: ${assetsRes.status} ${raw}`,
+        },
+      }));
+    }
+
+    // Step 3: create the deployment. The `manifest` form field carries
+    // the { path: hash } map — Cloudflare reads the hashes, looks them
+    // up in the asset store populated by step 2, and wires them into a
+    // new deployment. `branch` produces the stable alias URL.
+    const deployForm = new FormData();
+    deployForm.append("manifest", JSON.stringify(manifest));
+    deployForm.append("branch", body.branch);
 
     const deployRes = await fetch(
       `${CF_API}/accounts/${env.CF_ACCOUNT_ID}/pages/projects/${body.pagesProjectName}/deployments`,
       {
         method: "POST",
         headers: { "Authorization": `Bearer ${env.CF_API_TOKEN}` },
-        body: form,
+        body: deployForm,
       },
     );
 
