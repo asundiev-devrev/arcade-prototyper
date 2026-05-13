@@ -190,31 +190,38 @@ The master list lives in Keychain, which **doesn't auto-sync** between Macs unle
 
 Rotating on laptop loss is the safer default anyway.
 
-## Access OTP gate (per-project)
+## Access OTP gate
 
-Every `/share` call creates (or reuses) a Cloudflare Access Application in front of the Pages project's `*.pages.dev` hostnames. The app is self-hosted, one-time-PIN-gated, and scoped to `@devrev.ai` emails. Viewers hit a sign-in page at `devrev-product.cloudflareaccess.com`, enter their email, receive a 6-digit code, and get a 24h session.
+Every `/share` call attaches a Cloudflare Access Application to the Pages project's `*.pages.dev` hostnames. The app is self-hosted, one-time-PIN-gated, and references a shared reusable policy that currently allows `@devrev.ai` emails. Viewers hit a sign-in page at `devrev-product.cloudflareaccess.com`, enter their email, receive a 6-digit code, and get a 24h session.
 
-The Worker's `ensureAccessApp()` helper:
+### Why per-project apps, one shared policy
+
+- **Per-project apps:** Cloudflare rejects apps scoped to `*.pages.dev` with `domain does not belong to zone` — that zone is owned by Cloudflare, not us. One Access Application per Pages project is the canonical workaround.
+- **Shared reusable policy:** Every per-project app references the same reusable policy by ID (`ACCESS_POLICY_ID` in `wrangler.toml`). Editing the policy in the Zero Trust dashboard propagates to every current and future project *immediately* — no redeploy, no per-project clicks, no Worker changes.
+
+The policy is named **"Arcade Studio viewers"** in the Zero Trust dashboard. Find it under **Access controls → Policies**.
+
+### What `ensureAccessApp()` does
 
 1. Lists Access apps for the account (paged, 100 at a time).
-2. If an app named `Arcade Studio frames — <project>` already exists, returns early (idempotent no-op for every deploy after the first).
-3. Otherwise creates the app covering `<project>.pages.dev` + `*.<project>.pages.dev`, and attaches one policy: `decision: allow, include: [{ email_domain: { domain: "devrev.ai" } }]`.
+2. **If an app named `Arcade Studio frames — <project>` already exists:** GETs the app, checks whether `policies` already equals `[ACCESS_POLICY_ID]`. If yes, done. If no (e.g. an app created before the shared-policy migration with an inline policy attached), PUTs the app with the corrected `policies` list. No dashboard cleanup needed.
+3. **Otherwise:** creates the app covering `<project>.pages.dev` + `*.<project>.pages.dev`, with `policies: [ACCESS_POLICY_ID]`.
 
 Failure during `ensureAccessApp` is logged as a warning but does NOT fail the deploy. An unprotected share is better than a broken share — the gate gets added the next time that project is shared.
 
-### Why per-project instead of one `*.pages.dev` app
+### Adding an external reviewer
 
-Cloudflare rejects apps scoped to `*.pages.dev` with `domain does not belong to zone` — that zone is owned by Cloudflare, not us. One Access Application per Pages project is Cloudflare's recommended pattern for internal-team Pages protection and matches the other apps on this account.
+Open **Access controls → Policies → Arcade Studio viewers** in the Zero Trust dashboard. Under **Include**, add a new rule: `Emails → reviewer@example.com`. Save. Every shared frame — current and future — immediately allows that email. No code, no redeploy, no Worker round-trip.
 
-### Changing the policy
-
-If you need to allow external emails, the easiest path is manual: open **Zero Trust → Access → Applications**, find `Arcade Studio frames — <project>`, edit the policy, add the external address under `include`. Repeat per project.
-
-For a durable fix — allow a fixed external list across all projects — add a second `include` entry to the policy payload in `src/index.ts` (`ensureAccessApp`), then redeploy the Worker AND rotate every existing app (the Worker's idempotency check skips the policy update). The cleanest way to "rotate" is to delete the old app from the dashboard and re-share once from Studio — the next call recreates it with the new policy.
+To remove them later: same path, delete the `include` entry.
 
 ### Retroactively gating a project
 
 Projects created before the Access code landed are ungated. To fix: open Studio, share any frame in that project. The Worker's `ensureAccessApp` call runs on every deploy, creates the app, and Access immediately applies to all existing URLs of that project (it's an edge-layer gate, not a build-time one).
+
+### Migrating from inline policies (one-time, backfill)
+
+Early shares created Access apps with inline policies rather than a reference to the shared reusable policy. The Worker's reconcile path (see step 2 above) handles this automatically: the next time any such project is shared, its app's `policies` list is PUT to `[ACCESS_POLICY_ID]`. No manual intervention. The orphaned inline policies stay in the dashboard under **Access controls → Policies** as unused entries; delete them at your leisure.
 
 ### Required Cloudflare API token scope
 

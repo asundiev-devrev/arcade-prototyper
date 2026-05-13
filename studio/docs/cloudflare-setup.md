@@ -31,7 +31,7 @@ Every shared frame is protected by **Cloudflare Access one-time PIN** and scoped
 2. They enter their email → Cloudflare emails them a 6-digit code.
 3. They enter the code → they see the frame. Session lasts 24 hours.
 
-Viewers whose email doesn't end in `@devrev.ai` are rejected — no amount of valid email pickup will let them through. If you need to share with someone outside DevRev (e.g. a contractor), ping Andrey to add them to the Access policy.
+Viewers whose email doesn't end in `@devrev.ai` are rejected — no amount of valid email pickup will let them through. If you need to share with someone outside DevRev (e.g. a contractor), ping Andrey; one edit to the shared Access policy in the dashboard adds them to every existing and future shared frame.
 
 You don't need to do anything special in Studio — every deploy automatically gets the OTP gate.
 

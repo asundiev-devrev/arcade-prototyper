@@ -25,6 +25,7 @@ export interface Env {
   CF_API_TOKEN: string;     // secret
   ALLOWED_KEYS: string;     // secret, comma-separated hex strings
   CF_ACCOUNT_ID: string;    // var
+  ACCESS_POLICY_ID: string; // var — reusable Access policy, allowlist for shared frames
 }
 
 interface ShareRequest {
@@ -139,6 +140,7 @@ export default {
       await ensureAccessApp({
         accountId: env.CF_ACCOUNT_ID,
         token: env.CF_API_TOKEN,
+        policyId: env.ACCESS_POLICY_ID,
         pagesProjectName: body.pagesProjectName,
       });
     } catch (err: any) {
@@ -331,23 +333,29 @@ function guessMime(filename: string): string {
 }
 
 // Idempotently ensures a Cloudflare Access Application (self-hosted,
-// one-time-PIN-gated, @devrev.ai-only) sits in front of the given Pages
-// project's `pages.dev` hostnames. Matches by a deterministic app name
-// so re-running is a no-op once created.
+// OTP-gated) sits in front of the given Pages project's `pages.dev`
+// hostnames, attached to a shared reusable policy. Matches by a
+// deterministic app name so re-running is a no-op once created.
 //
-// Why per-project: Cloudflare won't let us register `*.pages.dev` as an
-// Access app domain because we don't own the pages.dev zone (it returns
-// `access.api.error.invalid_request: domain does not belong to zone`).
-// The per-project pattern is what Cloudflare's own docs suggest for
-// gating individual Pages sites, and it matches what's already in the
-// account for other apps.
+// Why per-project apps: Cloudflare won't let us register `*.pages.dev`
+// as an Access app domain because we don't own the pages.dev zone
+// (returns `access.api.error.invalid_request: domain does not belong to
+// zone`). One Access app per Pages project is the canonical workaround.
+//
+// Why a shared reusable policy: without it, adding an external reviewer
+// would mean editing the allowlist on every project's app one-by-one.
+// With it, the operator edits ONE policy in the Zero Trust dashboard
+// and every current and future project picks up the change immediately
+// — no redeploy, no per-project clicks.
 async function ensureAccessApp({
   accountId,
   token,
+  policyId,
   pagesProjectName,
 }: {
   accountId: string;
   token: string;
+  policyId: string;
   pagesProjectName: string;
 }): Promise<void> {
   const appName = `Arcade Studio frames — ${pagesProjectName}`;
@@ -365,12 +373,55 @@ async function ensureAccessApp({
   }
   const listBody: any = await listRes.json();
   const apps: Array<{ id: string; name: string }> = listBody?.result ?? [];
-  if (apps.find((a) => a.name === appName)) return;
+  const existing = apps.find((a) => a.name === appName);
+  if (existing) {
+    // App already exists — re-PUT it to reconcile its `policies` list to
+    // the current policy ID. Catches the case where we migrated from
+    // inline policies to a shared reusable policy: the app was created
+    // under the old scheme, but its next share now updates it to point
+    // at the shared policy without any manual dashboard cleanup.
+    // Cloudflare's apps API is strict about which fields a PUT expects,
+    // so we fetch the current shape first and just overwrite `policies`.
+    const getRes = await fetch(
+      `${CF_API}/accounts/${accountId}/access/apps/${existing.id}`,
+      { headers: { "Authorization": `Bearer ${token}` } },
+    );
+    if (!getRes.ok) return; // Non-fatal; try again next share.
+    const getBody: any = await getRes.json();
+    const app = getBody?.result;
+    if (!app) return;
+
+    const currentPolicyIds: string[] = Array.isArray(app.policies)
+      ? app.policies.map((p: any) => (typeof p === "string" ? p : p?.id)).filter(Boolean)
+      : [];
+    if (currentPolicyIds.length === 1 && currentPolicyIds[0] === policyId) return;
+
+    await fetch(
+      `${CF_API}/accounts/${accountId}/access/apps/${existing.id}`,
+      {
+        method: "PUT",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: app.name,
+          type: app.type,
+          session_duration: app.session_duration,
+          domain: app.domain,
+          self_hosted_domains: app.self_hosted_domains,
+          policies: [policyId],
+        }),
+      },
+    );
+    return;
+  }
 
   // Step 2: create the Access app covering both the apex alias host
   // (`<project>.pages.dev` — Cloudflare's stable URL) and the branch
   // wildcard (`*.<project>.pages.dev` — where our per-frame alias URLs
-  // live, e.g. `01-signin.<project>.pages.dev`).
+  // live, e.g. `01-signin.<project>.pages.dev`). `policies` references
+  // the shared reusable policy so we don't embed a copy on each app.
   const createAppRes = await fetch(
     `${CF_API}/accounts/${accountId}/access/apps`,
     {
@@ -388,6 +439,7 @@ async function ensureAccessApp({
           `${pagesProjectName}.pages.dev`,
           `*.${pagesProjectName}.pages.dev`,
         ],
+        policies: [policyId],
         // Leave identity providers empty → Cloudflare uses all account
         // providers, which at minimum includes the One-time PIN method
         // already configured on this account. That's what produces the
@@ -398,32 +450,5 @@ async function ensureAccessApp({
   if (!createAppRes.ok) {
     const raw = await createAppRes.text().catch(() => "");
     throw new Error(`Access app create failed: ${createAppRes.status} ${raw}`);
-  }
-  const createAppBody: any = await createAppRes.json();
-  const appId: string = createAppBody?.result?.id;
-  if (!appId) throw new Error("Access app create returned no id");
-
-  // Step 3: attach the policy. Without a policy, an Access app defaults
-  // to "deny everyone" — we want "allow anyone with an @devrev.ai
-  // email, via OTP". The `include` rule is OR-semantics within itself,
-  // so if we ever add external reviewers, just append another entry.
-  const policyRes = await fetch(
-    `${CF_API}/accounts/${accountId}/access/apps/${appId}/policies`,
-    {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name: "Allow DevRev team via OTP",
-        decision: "allow",
-        include: [{ email_domain: { domain: "devrev.ai" } }],
-      }),
-    },
-  );
-  if (!policyRes.ok) {
-    const raw = await policyRes.text().catch(() => "");
-    throw new Error(`Access policy create failed: ${policyRes.status} ${raw}`);
   }
 }

@@ -26,3 +26,10 @@ compatibility_date = "2025-05-01"
 # in `wrangler secret` (see README).
 [vars]
 CF_ACCOUNT_ID = "1e913847a5861b7fd371db148d4da92c"
+# Cloudflare Access reusable-policy UUID that `ensureAccessApp` attaches to
+# every Pages-project Access application it creates. Points at an
+# "Arcade Studio viewers" policy that allows `@devrev.ai` emails plus any
+# manually-added external reviewers. Editing the policy in the Zero Trust
+# dashboard propagates to every current and future share — no Worker
+# redeploy needed, no per-project dashboard clicks.
+ACCESS_POLICY_ID = "6d62b014-e9d2-47fe-960d-52b8dbdaa9ae"
