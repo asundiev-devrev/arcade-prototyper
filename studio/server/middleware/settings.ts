@@ -135,6 +135,28 @@ export function settingsMiddleware() {
         return send(res, 200, { configured: true, valid: true, user });
       }
 
+      if (req.method === "GET" && url === "/api/settings/devrev-pat/raw") {
+        // Only expose the raw PAT to the local client. This endpoint is explicitly
+        // NOT reachable over the multiplayer tunnel — the guest's Studio queries
+        // its own local settings, never the host's. The check uses remoteAddress
+        // to enforce this rather than relying on URL routing, since Vite's
+        // middleware chain doesn't distinguish tunnel vs. localhost.
+        const remote = req.socket?.remoteAddress ?? "";
+        const isLocal =
+          remote === "127.0.0.1" ||
+          remote === "::1" ||
+          remote === "::ffff:127.0.0.1";
+        if (!isLocal) {
+          res.writeHead(403, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "raw PAT read is localhost-only" }));
+          return;
+        }
+        const pat = (await getDevRevPat()) || process.env.DEVREV_PAT || "";
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ pat: pat || null }));
+        return;
+      }
+
       // DevRev PAT remove
       if (url === "/api/settings/devrev-pat" && req.method === "DELETE") {
         await deleteDevRevPat();
