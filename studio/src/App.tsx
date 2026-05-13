@@ -5,6 +5,8 @@ import { HomePage } from "./routes/HomePage";
 import { ProjectDetail } from "./routes/ProjectDetail";
 import { StartupAuthGate } from "./components/feedback/StartupAuthGate";
 import { UpdateBanner } from "./components/feedback/UpdateBanner";
+import { useDeepLinkRoute, clearDeepLink } from "./hooks/useDeepLinkRoute";
+import { JoinSessionGate } from "./components/multiplayer/JoinSessionGate";
 
 function readSlugFromHash(): string | null {
   const match = window.location.hash.match(/^#\/project\/([a-z0-9][a-z0-9-]{0,62})$/i);
@@ -21,6 +23,11 @@ function writeSlugToHash(slug: string | null) {
 export function App() {
   const [openSlug, setOpenSlug] = useState<string | null>(() => readSlugFromHash());
   const [studioMode, setStudioMode] = useState<"light" | "dark">("light");
+  const deepLink = useDeepLinkRoute();
+  const [joinedSession, setJoinedSession] = useState<null | {
+    sessionObject: string;
+    driverDevu: string | null;
+  }>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,6 +95,17 @@ export function App() {
         )}
       </StartupAuthGate>
       <Toaster />
+      {deepLink && !joinedSession ? (
+        <JoinSessionGate
+          sessionId={deepLink.sessionId}
+          relayUrl={deepLink.relayUrl}
+          onJoined={(info) => {
+            setJoinedSession(info);
+            clearDeepLink();
+          }}
+          onDismiss={() => clearDeepLink()}
+        />
+      ) : null}
     </DevRevThemeProvider>
   );
 }
