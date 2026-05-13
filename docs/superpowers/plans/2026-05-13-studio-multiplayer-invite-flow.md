@@ -22,9 +22,6 @@
 - `studio/server/middleware/multiplayerInvite.ts` — `POST /api/multiplayer/invite` (one-shot: create tunnel, create session, create DM, return session id).
 
 **New client files:**
-- `studio/src/lib/multiplayer.ts` — typed client calls (start session, join session, fetch user list).
-- `studio/src/components/chat/UserMentionList.ts` — pull DevRev user list for mention popover.
-- `studio/src/components/multiplayer/InvitePreviewModal.tsx` — "You're about to invite Konstantin to this session — confirm?" step.
 - `studio/src/components/multiplayer/JoinSessionGate.tsx` — guest-side "You've been invited" screen with a Join button.
 - `studio/src/hooks/useDeepLinkRoute.ts` — parses deep-link params from URL hash on boot.
 
@@ -32,7 +29,6 @@
 - `studio/__tests__/server/relay/tunnel.test.ts`
 - `studio/__tests__/server/devrev/dm.test.ts`
 - `studio/__tests__/server/middleware/multiplayerInvite.test.ts`
-- `studio/__tests__/components/multiplayer/InvitePreviewModal.test.tsx`
 - `studio/__tests__/components/multiplayer/JoinSessionGate.test.tsx`
 - `studio/__tests__/hooks/useDeepLinkRoute.test.ts`
 
@@ -47,8 +43,10 @@
 **Why this split:**
 - `tunnel.ts` and `dm.ts` are pure integrations — testable with mocked fetch/spawn.
 - `multiplayerInvite.ts` is orchestration-only (calls the two integrations + Plan 1's session registry) — the thin layer where failures compose.
-- UI concerns (`InvitePreviewModal`, `JoinSessionGate`) are separate from the mention-popover extension so the mention UX keeps working for `@Computer` without regression.
+- `JoinSessionGate` lives in `src/components/multiplayer/` rather than inside chat so the mention UX keeps working for `@Computer` without regression.
 - Deep-link handling is isolated to `useDeepLinkRoute` so it's trivially unit-testable without mounting the full app.
+
+**Note on scope trim (applied at execution time):** An earlier draft of this plan proposed `InvitePreviewModal`, a separate `UserMentionList`, and a `src/lib/multiplayer.ts` client module. These are intentionally dropped — `filterMentions()` already does the filtering, the two `fetch` helpers are inlined in PromptInput (~20 lines total, not worth a separate module), and no confirmation modal is needed (@-mention + Enter is already deliberate). The result: Task 4 (Vite wire) folds into Task 3, and Task 5 (client lib) is dropped — dispatch plan goes 1 → 2 → 3(+4) → 6 → 7 → 8 → 9 → 10a → 10b → 11 → 12.
 
 ---
 
