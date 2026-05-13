@@ -7,12 +7,14 @@ import {
   type ChangeEvent,
   type MutableRefObject,
 } from "react";
+import { useToast } from "@xorkavi/arcade-gen";
 import { ChatInput } from "../../../prototype-kit/composites/ChatInput";
 import { extractFigmaUrl } from "../../lib/figmaUrl";
 import {
   MentionPopover,
   filterMentions,
   type MentionOption,
+  type UserMentionInput,
 } from "./MentionPopover";
 import { useTargetSelection, type TargetSelection } from "../../hooks/targetSelectionContext";
 
@@ -61,6 +63,8 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
   const [detectedFigmaUrl, setDetectedFigmaUrl] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const { target, clear: clearTarget } = useTargetSelection();
+  const { toast } = useToast();
+  const [users, setUsers] = useState<UserMentionInput[]>([]);
   const [mention, setMention] = useState<{
     query: string;
     atIdx: number;
@@ -78,6 +82,42 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
       mountedRef.current = false;
       if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
     };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        // Resolve the current user's devu id (so we can exclude self from the list).
+        const settingsRes = await fetch("/api/settings");
+        const settings = await settingsRes.json().catch(() => ({}));
+        const me = (settings as { devrev?: { user?: { id?: string } } })?.devrev?.user?.id;
+
+        // Fetch the full dev-users list via the existing DevRev proxy.
+        const res = await fetch("/api/devrev/dev-users.list", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ limit: 200 }),
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          dev_users?: { id: string; display_name: string; email: string }[];
+        };
+        if (cancelled) return;
+        const list = (data.dev_users ?? [])
+          .filter((u) => !me || u.id !== me)
+          .map((u) => ({
+            id: u.id,
+            displayName: u.display_name,
+            email: u.email,
+          }));
+        setUsers(list);
+      } catch {
+        // fall back to empty list — popover will still show @Computer
+      }
+    }
+    void load();
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -190,12 +230,63 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
     fileInputRef.current?.click();
   };
 
-  const submit = () => {
+  const submit = async () => {
     // Never fire a turn while the mention popover is open — Enter belongs to
     // the popover in that state.
     if (mention) return;
     const p = text.trim();
     if (!p || busy) return;
+
+    // Detect user @-mentions in the current text against our known users list.
+    // Token form is @<handle> where handle is the user's email prefix (per
+    // MentionPopover's token generation).
+    const userMentionTargets: { devu: string; displayName: string }[] = [];
+    for (const u of users) {
+      const handle = u.email.split("@")[0];
+      // Escape regex special chars in the handle (dots, hyphens).
+      const escaped = handle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const re = new RegExp(`@${escaped}\\b`, "i");
+      if (re.test(text)) {
+        userMentionTargets.push({ devu: u.id, displayName: u.displayName });
+      }
+    }
+
+    if (userMentionTargets.length > 0) {
+      // Invite first; only fire the turn if the invite succeeds. We invite only
+      // the first mentioned user in v1 — multi-invite is out of scope.
+      const guest = userMentionTargets[0];
+      try {
+        const inviteRes = await fetch("/api/multiplayer/invite", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            projectSlug,
+            guestDevu: guest.devu,
+            guestDisplayName: guest.displayName,
+            promptPreview: text.trim().slice(0, 120),
+          }),
+        });
+        if (!inviteRes.ok) {
+          const data = await inviteRes.json().catch(() => ({}));
+          toast({
+            title: `Invite failed: ${(data as { error?: string })?.error ?? inviteRes.status}`,
+            intent: "alert",
+          });
+          return; // do not fire the turn
+        }
+        toast({
+          title: `Invited ${guest.displayName}`,
+          intent: "success",
+        });
+      } catch (err) {
+        toast({
+          title: `Invite failed: ${(err as Error).message}`,
+          intent: "alert",
+        });
+        return;
+      }
+    }
+
     const finalPrompt = target ? `${buildTargetPreamble(target)}${p}` : p;
     onSend(finalPrompt, imagePaths);
     setText("");
@@ -210,7 +301,7 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
     if (!el) { setMention(null); return; }
     const caret = el.selectionStart ?? next.length;
     const detected = detectMentionAtCaret(next, caret);
-    if (!detected || filterMentions(detected.query, []).length === 0) {
+    if (!detected || filterMentions(detected.query, users).length === 0) {
       setMention(null);
       return;
     }
@@ -309,7 +400,7 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
         onSubmit={() => {
           // If the mention popover is open and has results, let it handle Enter.
           if (mention) return;
-          submit();
+          void submit();
         }}
         placeholder="Ask me anything"
         attachments={
@@ -345,7 +436,7 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
         trailing={
           <>
             <ChatInput.AddAttachmentButton onClick={handlePickImage} />
-            <ChatInput.SendButton onClick={submit} disabled={!text.trim() || busy} />
+            <ChatInput.SendButton onClick={() => void submit()} disabled={!text.trim() || busy} />
           </>
         }
       />
@@ -353,7 +444,7 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
         <MentionPopover
           query={mention.query}
           anchor={mention.anchor}
-          users={[]}
+          users={users}
           onSelect={insertMention}
           onDismiss={() => setMention(null)}
         />
