@@ -24,7 +24,8 @@ export interface Convention {
     | "icon_convention"
     | "chrome_convention"
     | "default_mapping_convention"
-    | "overlay_convention";
+    | "overlay_convention"
+    | "style_attribute_convention";
   /** One-sentence translation rule. */
   rule: string;
   /** Grep/read instruction for resolving specifics. */
@@ -106,6 +107,42 @@ export const OVERLAY_CONVENTION: Convention = {
   ],
 };
 
+export const STYLE_ATTRIBUTE_CONVENTION: Convention = {
+  tag: "style_attribute_convention",
+  rule:
+    "Inline `style={{ ... }}` that references a theme CSS variable via " +
+    "`var(--bg-*)`, `var(--fg-*)`, `var(--stroke-*)`, `var(--border-*)`, " +
+    "or `var(--color-*)` is NOT portable to devrev-web. Many of these " +
+    "tokens are stored as raw HSL channel triples (e.g. `--bg-surface-" +
+    "overlay: 0 0% 100%`) — used directly they produce an invalid " +
+    "color, fall back to `currentColor`, and render near-black. " +
+    "Rewrite every such inline style to a Tailwind utility class " +
+    "(preferred) or, if no utility resolves correctly, to a bracket " +
+    "arbitrary-value class that wraps the token in `hsl(...)`.",
+  lookup:
+    "The target codebase registers utilities by token-prefix scanning in " +
+    "its Tailwind config (devrev-web: tailwind.config.base.js). The " +
+    "reliable mapping from `style` property to utility is: " +
+    "`color: 'var(--fg-X)'` → className `fg-X`; " +
+    "`backgroundColor: 'var(--bg-X)'` → `bg-X`; " +
+    "`borderColor: 'var(--stroke-X)' | 'var(--border-X)'` → " +
+    "`border-[hsl(var(--stroke-X))]` (the `border-X` auto-generated " +
+    "utilities sometimes double-wrap `hsl()` and break — arbitrary value " +
+    "is safer). For `borderBottom: '1px solid var(--X)'` use " +
+    "`className=\"border-b border-[hsl(var(--X))]\"`. Before committing, " +
+    "open the rendered page in a browser — a transparent background or " +
+    "a black border means a token fell through; swap to the arbitrary-" +
+    "value form.",
+  anchors: [
+    'style={{ background: \'var(--bg-surface-overlay)\' }} → className="bg-surface-overlay"',
+    'style={{ background: \'var(--bg-neutral-soft)\' }} → className="bg-neutral-soft"',
+    'style={{ color: \'var(--fg-neutral-prominent)\' }} → className="fg-neutral-prominent"',
+    'style={{ color: \'var(--fg-neutral-subtle)\' }} → className="fg-neutral-subtle"',
+    'style={{ borderColor: \'var(--stroke-neutral-subtle)\' }} → className="border-[hsl(var(--stroke-neutral-subtle))]" (auto border-* utility is unreliable; use the arbitrary value)',
+    'style={{ borderBottom: \'1px solid var(--stroke-neutral-subtle)\' }} → className="border-b border-[hsl(var(--stroke-neutral-subtle))]"',
+  ],
+};
+
 export const DEFAULT_MAPPING_CONVENTION: Convention = {
   tag: "default_mapping_convention",
   rule:
@@ -159,6 +196,26 @@ export function hasOverlayMarkup(frameSource: string): boolean {
 }
 
 /**
+ * Detect inline `style={{ … }}` attributes that reference theme CSS
+ * variables. The trigger is intentionally broad: any `style={` containing
+ * `var(--<prefix>-…)` where prefix is one of bg/fg/stroke/border/color.
+ * A false positive (e.g. someone wrote `var(--foo)` inside a non-style
+ * context caught by the regex) costs the agent one ignorable convention
+ * block; a false negative leaves the live-render token-fallthrough bug
+ * in place.
+ *
+ * We look for the `var(--<prefix>-` token INSIDE a `style={` attribute
+ * value, not anywhere in the file — otherwise JSX `className` with
+ * arbitrary values like `border-[hsl(var(--stroke-…))]` would trip it.
+ */
+const INLINE_STYLE_TOKEN_RE =
+  /style=\{\{[^}]*?\bvar\(--(?:bg|fg|stroke|border|color)-[a-z0-9-]+\)/;
+
+export function hasInlineStyleTokens(frameSource: string): boolean {
+  return INLINE_STYLE_TOKEN_RE.test(frameSource);
+}
+
+/**
  * Decide which conventions apply to a given set of imports. Called by the
  * renderer.
  *
@@ -173,6 +230,7 @@ export function applicableConventions(opts: {
   hasIcons: boolean;
   importedNames: Iterable<string>;
   hasOverlay?: boolean;
+  hasInlineStyleTokens?: boolean;
 }): Convention[] {
   const out: Convention[] = [];
   if (opts.hasIcons) out.push(ICON_CONVENTION);
@@ -181,6 +239,7 @@ export function applicableConventions(opts: {
     out.push(CHROME_CONVENTION);
   }
   if (opts.hasOverlay) out.push(OVERLAY_CONVENTION);
+  if (opts.hasInlineStyleTokens) out.push(STYLE_ATTRIBUTE_CONVENTION);
   out.push(DEFAULT_MAPPING_CONVENTION);
   return out;
 }

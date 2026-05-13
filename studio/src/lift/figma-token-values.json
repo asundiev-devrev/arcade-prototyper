@@ -1,0 +1,8 @@
+{
+  "$schema": "Keys are devrev-web CSS custom property names; values are the Figma variable hex value (normalized to lowercase). Populated from Figma Variables export — see docs in drift.ts. Pass --refresh-figma to regenerate if Studio grows that capability; for now this is hand-curated from the 2026-05-12 skill-modal render loop.",
+  "--border-outline-00": "#e9e9ec",
+  "--bg-surface-overlay": "#ffffff",
+  "--bg-surface-shallow": "#f9fafa",
+  "--fg-neutral-prominent": "#302e2f",
+  "--fg-neutral-subtle": "#717384"
+}

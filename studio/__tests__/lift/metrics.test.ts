@@ -27,10 +27,17 @@ describe("computeMetrics", () => {
     expect(metrics).toEqual({
       decisionPoints: 0,
       unmapped: 0,
+      // Tabs moved from `mechanical` → `close-but-not-identity` on
+      // 2026-05-13 because `onValueChange` has an optional-arg gotcha
+      // that a bare rename silently miscompiles. The mapping still
+      // contributes zero decision points (the convention spells the
+      // fix out), but the counter reflects that it's no longer a pure
+      // identity rename.
       judgment: 0,
       naMappings: 0,
       needsReviewerProps: 0,
       iconsAbsorbed: 0,
+      closeButNotIdentity: 1,
     });
   });
 
@@ -106,6 +113,7 @@ describe("computeMetrics", () => {
       naMappings: 2,
       needsReviewerProps: 0,
       iconsAbsorbed: 0,
+      closeButNotIdentity: 0,
     });
   });
 });

@@ -5,5 +5,6 @@
   "naMappings": 1,
   "needsReviewerProps": 0,
   "note": "Real source of 01-skills-gallery. After PR6e dedup: FrameLink (judgment+n/a) counts as one decision, Link (unmapped) counts as one — total 2. Matches the 2 TODOs the agent left in tmp/lift-experiment-v2/skills-gallery.tsx. 7 icons absorbed.",
-  "iconsAbsorbed": 7
+  "iconsAbsorbed": 7,
+  "closeButNotIdentity": 1
 }

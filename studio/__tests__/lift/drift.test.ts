@@ -10,7 +10,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { runDriftAudit, formatDriftResult } from "../../src/lift/drift";
+import {
+  runDriftAudit,
+  formatDriftResult,
+  AUDITED_TOKENS,
+} from "../../src/lift/drift";
 import { ALL_MAPPINGS } from "../../src/lift/mappings";
 import { ICON_ANCHORS } from "../../src/lift/icons";
 
@@ -74,6 +78,43 @@ function buildFakeDevrevWeb(): string {
   fs.writeFileSync(
     path.join(root, "tsconfig.base.json"),
     JSON.stringify({ compilerOptions: { paths } }, null, 2),
+  );
+
+  // Fake theme CSS: define every audited token with a real color so the
+  // token-resolution category passes. Drift audit scans a specific set
+  // of well-known devrev-web CSS locations; we write the light-mode file
+  // because that's the one in every env. For tokens present in the
+  // Figma-token-values snapshot, we echo the Figma hex directly so the
+  // figma-value-drift category also stays quiet — the tree is meant to
+  // represent a "everything in sync" baseline. Tokens not in the
+  // snapshot get an arbitrary valid color.
+  const snapshotFile = path.join(
+    __dirname,
+    "..",
+    "..",
+    "src",
+    "lift",
+    "figma-token-values.json",
+  );
+  const figmaValues: Record<string, string> = fs.existsSync(snapshotFile)
+    ? JSON.parse(fs.readFileSync(snapshotFile, "utf-8"))
+    : {};
+  const lightCssPath = path.join(
+    root,
+    "apps/product/styles/light-styles.css",
+  );
+  fs.mkdirSync(path.dirname(lightCssPath), { recursive: true });
+  fs.writeFileSync(
+    lightCssPath,
+    ":root {\n" +
+      AUDITED_TOKENS.map((t, i) => {
+        const figmaHex = figmaValues[t];
+        if (figmaHex && /^#[0-9a-f]{6}$/i.test(figmaHex)) {
+          return `  ${t}: ${figmaHex};`;
+        }
+        return `  ${t}: hsl(0, 0%, ${95 - i}%);`;
+      }).join("\n") +
+      "\n}\n",
   );
 
   return root;
@@ -173,6 +214,69 @@ describe("runDriftAudit — synthetic tree", () => {
 
     fs.writeFileSync(iconTypesPath, original);
   });
+
+  it("flags a token defined only as raw HSL channels (token-resolution)", () => {
+    // Overwrite the fake light-styles.css so one audited token's only
+    // definition is a raw HSL triple. That's the class of drift that
+    // causes inline `style={{ … var(--X) … }}` to silently invalidate.
+    const lightCss = path.join(fakeRoot, "apps/product/styles/light-styles.css");
+    const original = fs.readFileSync(lightCss, "utf-8");
+    fs.writeFileSync(
+      lightCss,
+      `:root {\n  ${AUDITED_TOKENS[0]}: 0 0% 98%;\n}\n`,
+    );
+    const result = runDriftAudit(fakeRoot);
+    expect(
+      result.findings.some(
+        (f) =>
+          f.category === "token-resolution" &&
+          f.subject === AUDITED_TOKENS[0],
+      ),
+    ).toBe(true);
+    fs.writeFileSync(lightCss, original);
+  });
+
+  it("flags a figma-value-drift when a token's resolved color diverges from the Figma snapshot", () => {
+    // Overwrite the fake light-styles.css so the first Figma-snapshot
+    // token resolves to a DIFFERENT hex than the snapshot claims. The
+    // actually-used snapshot token is read back so the test stays in
+    // sync with whatever is committed in figma-token-values.json.
+    const snapshotFile = path.join(
+      __dirname,
+      "..",
+      "..",
+      "src",
+      "lift",
+      "figma-token-values.json",
+    );
+    const figmaValues: Record<string, string> = JSON.parse(
+      fs.readFileSync(snapshotFile, "utf-8"),
+    );
+    const snapshotToken = Object.keys(figmaValues).find(
+      (k) => k.startsWith("--") && /^#[0-9a-f]{6}$/i.test(figmaValues[k]),
+    );
+    if (!snapshotToken) {
+      // If nobody has populated a real snapshot yet, skip rather than
+      // bake a false-positive expectation into the test suite.
+      return;
+    }
+    const lightCss = path.join(fakeRoot, "apps/product/styles/light-styles.css");
+    const original = fs.readFileSync(lightCss, "utf-8");
+    // Pick a hex that cannot possibly equal the Figma value.
+    const deliberatelyWrong = figmaValues[snapshotToken] === "#000000" ? "#ffffff" : "#000000";
+    fs.writeFileSync(
+      lightCss,
+      `:root {\n  ${snapshotToken}: ${deliberatelyWrong};\n}\n`,
+    );
+    const result = runDriftAudit(fakeRoot);
+    expect(
+      result.findings.some(
+        (f) =>
+          f.category === "figma-value-drift" && f.subject === snapshotToken,
+      ),
+    ).toBe(true);
+    fs.writeFileSync(lightCss, original);
+  });
 });
 
 describe("runDriftAudit — real devrev-web (opt-in)", () => {
@@ -186,8 +290,19 @@ describe("runDriftAudit — real devrev-web (opt-in)", () => {
     fs.existsSync(path.join(root, "tsconfig.base.json"));
   const t = enabled ? it : it.skip;
 
-  t("produces no findings against the live clone", () => {
+  t("produces no hard findings against the live clone", () => {
+    // Hard findings are mapping-table / prior-art / icon-anchor /
+    // stale-patch drifts: they always indicate a bug in THIS codebase's
+    // mapping data. token-resolution and figma-value-drift findings
+    // reflect the target codebase's own theme state (tokens stored as
+    // raw HSL channels, Figma values out of sync with CSS). Those are
+    // real and the agent must see them in the manifest, but they don't
+    // fail the mapping-table audit.
     const result = runDriftAudit(root);
-    expect(result.findings, formatDriftResult(result)).toEqual([]);
+    const hard = result.findings.filter(
+      (f) =>
+        f.category !== "token-resolution" && f.category !== "figma-value-drift",
+    );
+    expect(hard, formatDriftResult(result)).toEqual([]);
   });
 });

@@ -10,7 +10,7 @@ import { scaffoldingFor } from "./scaffolding";
 import { ALL_MAPPINGS, findMapping } from "./mappings";
 import { isIcon } from "./icons";
 import { applicablePatches } from "./tokens";
-import { hasOverlayMarkup } from "./conventions";
+import { hasOverlayMarkup, hasInlineStyleTokens } from "./conventions";
 import type { Manifest, MappingEntry } from "./types";
 
 export interface BuildManifestInput {
@@ -73,6 +73,7 @@ export function buildManifest(input: BuildManifestInput): Manifest {
       reason: p.reason,
     })),
     hasOverlay: hasOverlayMarkup(input.frameSource),
+    hasInlineStyleTokens: hasInlineStyleTokens(input.frameSource),
     shape,
     scaffolding,
     figmaUrl: input.figmaUrl,

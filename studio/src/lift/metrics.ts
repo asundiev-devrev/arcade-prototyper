@@ -42,6 +42,14 @@ export interface LiftMetrics {
    * tying that count to the pass/fail gate.
    */
   iconsAbsorbed: number;
+  /**
+   * Informational: mappings flagged `close-but-not-identity`. These are
+   * NOT reviewer decisions — the manifest's per-delta notes tell the
+   * agent exactly how to wrap / adapt. Counted for visibility so a
+   * regression (e.g. a formerly mechanical mapping quietly growing
+   * wrapper-required notes) is obvious in BASELINE.md. Added 2026-05-13.
+   */
+  closeButNotIdentity: number;
 }
 
 export function computeMetrics(m: Manifest): LiftMetrics {
@@ -50,6 +58,7 @@ export function computeMetrics(m: Manifest): LiftMetrics {
   let judgment = 0;
   let naMappings = 0;
   let needsReviewerProps = 0;
+  let closeButNotIdentity = 0;
   // Track distinct entries that contribute AT LEAST ONE reviewer decision
   // (judgment class, no production equivalent, or both). A single entry
   // that is both judgment AND n/a is still one decision — the agent reads
@@ -66,8 +75,11 @@ export function computeMetrics(m: Manifest): LiftMetrics {
   for (const entry of uniqueMappings) {
     const isJudgment = entry.translationClass === "judgment";
     const isNa = entry.production.source === "n/a";
+    const isCloseButNotIdentity =
+      entry.translationClass === "close-but-not-identity";
     if (isJudgment) judgment++;
     if (isNa) naMappings++;
+    if (isCloseButNotIdentity) closeButNotIdentity++;
     if (isJudgment || isNa) decisionEntries.add(entry);
   }
   for (const entry of m.mappings) {
@@ -89,5 +101,6 @@ export function computeMetrics(m: Manifest): LiftMetrics {
     naMappings,
     needsReviewerProps,
     iconsAbsorbed,
+    closeButNotIdentity,
   };
 }

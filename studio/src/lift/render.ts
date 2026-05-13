@@ -9,6 +9,7 @@
 // than from markdown headings. Section order matches spec §4.2.
 
 import { applicableConventions, type Convention } from "./conventions";
+import { buildRenderHarness } from "./renderHarness";
 import type { Manifest, MappingEntry, ScaffoldingItem } from "./types";
 
 export function renderXml(m: Manifest): string {
@@ -33,6 +34,7 @@ export function renderXml(m: Manifest): string {
     hasIcons: m.iconImports.length > 0,
     importedNames,
     hasOverlay: m.hasOverlay,
+    hasInlineStyleTokens: m.hasInlineStyleTokens,
   });
   for (const c of conventions) push(renderConvention(c));
 
@@ -101,24 +103,53 @@ export function renderXml(m: Manifest): string {
     push(`  </grounding>`);
   }
 
+  // 7b. Render harness — agent-facing checklist for a live-render verify
+  // pass. Always emitted; conditional checks inside adapt to which
+  // conventions fired. Added 2026-05-13 after a live render loop on
+  // 01-skills-gallery showed typecheck alone can't catch token-fallthrough
+  // bugs that only appear in computed styles.
+  const harness = buildRenderHarness(m);
+  push(`  <render_harness>`);
+  push(`    <target_path>${text(harness.targetPath)}</target_path>`);
+  push(`    <iframe_url>${text(harness.iframeUrl)}</iframe_url>`);
+  push(`    <backdrop_note>${text(harness.backdropNote)}</backdrop_note>`);
+  push(`    <checks>`);
+  for (const c of harness.checks) {
+    push(`      <check>${text(c)}</check>`);
+  }
+  push(`    </checks>`);
+  push(`  </render_harness>`);
+
   // 8. Agent directives
   push(`  <agent_directives>`);
   push(
     `    You are lifting an Arcade Studio frame into devrev-web. Read the ` +
       `CONVENTIONS first — they tell you HOW to translate classes of Studio ` +
-      `construct (icons, chrome, unmapped components). Then walk the frame ` +
-      `inventory: apply MECHANICAL rewrites directly, write the production ` +
-      `shape for STRUCTURAL ones with a brief comment on what changed, and ` +
-      `leave // TODO comments with the judgment_note verbatim for JUDGMENT ` +
-      `entries. When a mapping includes &lt;prior_art&gt;, OPEN the first example ` +
-      `file before writing code — it's a real consumer and will resolve most ` +
-      `shape questions faster than slot_notes can. When a mapping lists ` +
-      `&lt;dropped_props&gt;, those Studio props have no production equivalent — ` +
-      `don't guess a replacement; drop them with the reason as a TODO comment. ` +
-      `For each icon under &lt;icons&gt;, resolve via the icon_convention (grep ` +
+      `construct (icons, chrome, unmapped components, inline style tokens). ` +
+      `Then walk the frame inventory: apply MECHANICAL rewrites directly; ` +
+      `for CLOSE-BUT-NOT-IDENTITY entries treat the propDeltas and slotNotes ` +
+      `as load-bearing — the surface looks identity-1:1 but a bare rename ` +
+      `will not compile or will render wrong, so follow the per-delta note ` +
+      `verbatim (wrap the callback, reach for the arbitrary-value class, ` +
+      `etc.); write the production shape for STRUCTURAL ones with a brief ` +
+      `comment on what changed; and leave // TODO comments with the ` +
+      `judgment_note verbatim for JUDGMENT entries. When a mapping includes ` +
+      `&lt;prior_art&gt;, OPEN the first example file before writing code — ` +
+      `it's a real consumer and will resolve most shape questions faster ` +
+      `than slot_notes can. When a mapping lists &lt;dropped_props&gt;, those ` +
+      `Studio props have no production equivalent — don't guess a ` +
+      `replacement; drop them with the reason as a TODO comment. For each ` +
+      `icon under &lt;icons&gt;, resolve via the icon_convention (grep ` +
       `ICON_TYPES). For each &lt;unmapped/&gt; entry, apply the ` +
       `default_mapping_convention — verify the assumed target exists by grep ` +
-      `before using it.`,
+      `before using it. If &lt;style_attribute_convention&gt; fired, every ` +
+      `inline style={{ ... var(--...) ... }} in the frame source must be ` +
+      `rewritten per that convention's anchors — leaving them intact will ` +
+      `produce black borders or transparent backgrounds at render time. If ` +
+      `&lt;render_harness&gt; is present, after writing the lift drop the ` +
+      `output under the target path, navigate to the iframe URL, and ` +
+      `verify the live computed styles against the directive's checklist ` +
+      `before declaring the lift done.`,
   );
   push(`  </agent_directives>`);
 

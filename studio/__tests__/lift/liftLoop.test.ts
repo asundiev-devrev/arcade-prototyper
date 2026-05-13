@@ -76,6 +76,7 @@ describe("lift-loop decision-point gate", () => {
         naMappings: expected.naMappings,
         needsReviewerProps: expected.needsReviewerProps,
         iconsAbsorbed: expected.iconsAbsorbed,
+        closeButNotIdentity: expected.closeButNotIdentity ?? 0,
       };
 
       // Per-bucket comparison gives readable failures ("judgment dropped by 2")

@@ -4,6 +4,7 @@
   "judgment": 0,
   "naMappings": 0,
   "needsReviewerProps": 0,
-  "note": "After PR1: ChevronRightSmall + PlusSmall absorbed by icon_convention. Zero decision points.",
-  "iconsAbsorbed": 2
+  "note": "After PR1: ChevronRightSmall + PlusSmall absorbed by icon_convention. Zero decision points. 2026-05-13: fixture imports Tabs, now close-but-not-identity (onValueChange optional-arg wrap); no impact on decisionPoints.",
+  "iconsAbsorbed": 2,
+  "closeButNotIdentity": 1
 }

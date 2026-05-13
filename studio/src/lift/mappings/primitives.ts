@@ -223,7 +223,14 @@ export const PRIMITIVE_MAPPINGS: MappingEntry[] = [
       "Studio Tabs.Root / Tabs.Trigger → production Tabs / Tabs.Item. Tabs.List is identical.",
       "Controlled usage: `value` is required; `onValueChange` receives `string | undefined`, not `string`. Bare setState won't typecheck — always wrap.",
     ],
-    translationClass: "structural",
+    // Reclassified 2026-05-13 from `structural` to `close-but-not-identity`:
+    // the subcomponent shape IS near-identity, but `onValueChange` has a
+    // signature gotcha that silently compiles in many host codebases yet
+    // fails strict typecheck in devrev-web. `structural` implied the agent
+    // should write a production-shape with "brief comment on what changed"
+    // — not enough to force the wrap. The new class tells the agent to
+    // treat the per-delta note as load-bearing.
+    translationClass: "close-but-not-identity",
   },
   // --- Misc --------------------------------------------------------------
   {

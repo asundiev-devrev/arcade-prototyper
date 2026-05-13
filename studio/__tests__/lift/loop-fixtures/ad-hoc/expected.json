@@ -5,5 +5,6 @@
   "naMappings": 0,
   "needsReviewerProps": 0,
   "note": "After PR1: CrossSmall absorbed by icon_convention. Zero decision points.",
-  "iconsAbsorbed": 1
+  "iconsAbsorbed": 1,
+  "closeButNotIdentity": 0
 }

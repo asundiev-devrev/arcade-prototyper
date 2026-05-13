@@ -4,7 +4,27 @@
 // "node:fs", or anywhere else with side effects — keep this file importable
 // from unit tests, the plugin, the middleware, and the renderer alike.
 
-export type TranslationClass = "mechanical" | "structural" | "judgment";
+export type TranslationClass =
+  | "mechanical"
+  | "structural"
+  | "judgment"
+  /**
+   * Shape looks identity-1:1 on the surface (same tag, same children, prop
+   * names that rhyme) but the target has a gotcha the agent only learns
+   * about at compile/render time — an optional-arg callback signature, a
+   * renamed prop whose value semantics changed, a "drop-in" replacement
+   * whose theming only works through a specific wrapper class. Added
+   * 2026-05-13 after a live render loop surfaced the Tabs.onValueChange /
+   * Switch.defaultChecked / inline-style-token class of bugs.
+   *
+   * Practical rule for authors: if `mechanical` tempts you but the
+   * propDeltas or slotNotes carry "actually you have to wrap this" text,
+   * it belongs here instead. The renderer emits a `class` attribute the
+   * agent can gate on, and the directive copy tells the agent to treat
+   * close-but-not-identity entries as "read the propDeltas / slotNotes
+   * carefully — a bare rename will not compile or will render wrong."
+   */
+  | "close-but-not-identity";
 
 export interface PropDelta {
   /** Studio prop name. */
@@ -143,10 +163,51 @@ export interface Manifest {
    * the raw divs.
    */
   hasOverlay: boolean;
+  /**
+   * True when the frame source contains inline `style={{ … }}` that
+   * references a theme CSS variable (background, color, borderColor,
+   * etc. via `var(--bg-*)` / `var(--fg-*)` / `var(--stroke-*)`). Triggers
+   * the `style_attribute_convention`, which rewrites those references to
+   * Tailwind utility classes (or `[hsl(var(--X))]` arbitrary values) so
+   * the render doesn't silently fall through to `currentColor`. Added
+   * 2026-05-13 after a live render loop exposed that devrev-web stores
+   * many tokens as raw HSL channels that need `hsl()` wrapping at the
+   * use site.
+   */
+  hasInlineStyleTokens: boolean;
   shape: FrameShape;
   scaffolding: ScaffoldingItem[];
   figmaUrl?: string;
   screenshotUrl?: string;
   /** Schema version of the emitted manifest. Bump when breaking consumers. */
   schemaVersion: 1;
+}
+
+/**
+ * Agent-facing checklist for verifying a lift renders correctly. Emitted
+ * as <render_harness> in the XML. Generated rather than stored — values
+ * depend on the frame shape and which conventions fired.
+ */
+export interface RenderHarness {
+  /**
+   * Where the agent should drop the lifted file for a first-pass render.
+   * Defaults to a "stories under a validation folder" pattern; consumers
+   * running the lift against a non-Storybook target can ignore this.
+   */
+  targetPath: string;
+  /** URL pattern for the rendered story; `{frameSlug}` interpolated. */
+  iframeUrl: string;
+  /**
+   * Short instructions for wrapping the story in a backdrop so card
+   * borders have something to sit on. Many DS tokens use near-white
+   * values that disappear against a pure-white iframe.
+   */
+  backdropNote: string;
+  /**
+   * Checks the agent must run BEFORE declaring the lift done. Open the
+   * rendered page in a browser, use devtools / evaluate, confirm each
+   * item. A negative answer means a convention fell through and the
+   * lift needs another pass.
+   */
+  checks: string[];
 }
