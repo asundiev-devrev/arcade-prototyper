@@ -61,6 +61,16 @@ fi
 # their shell stays untouched so their other CLI tools aren't affected.
 export AWS_PROFILE="${AWS_PROFILE:-dev}"
 
+# macOS passes deep-link URLs as the first argument when the app is
+# launched via a registered scheme. If present, forward it to the running
+# dev server by appending a hash fragment to the open URL.
+DEEP_LINK=""
+if [ $# -gt 0 ]; then
+  case "$1" in
+    arcade-studio://*) DEEP_LINK="$1" ;;
+  esac
+fi
+
 LOG_DIR="$HOME/Library/Logs"
 LOG_FILE="$LOG_DIR/arcade-studio.log"
 mkdir -p "$LOG_DIR"
@@ -78,7 +88,14 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"; }
 if lsof -nP -iTCP:5556 -sTCP:LISTEN >/dev/null 2>&1; then
   if curl -sfo /dev/null --max-time 2 "http://localhost:5556/"; then
     log "Port 5556 responding — opening existing server"
-    open "http://localhost:5556"
+    if [ -n "$DEEP_LINK" ]; then
+      # URL-encode the deep link and pass as hash fragment. The front end's
+      # useDeepLinkRoute hook reads the hash on boot.
+      HASH=$(printf '%s' "$DEEP_LINK" | python3 -c 'import sys,urllib.parse; print("#join=" + urllib.parse.quote(sys.stdin.read().strip(), safe=""))')
+      open "http://localhost:5556/$HASH"
+    else
+      open "http://localhost:5556"
+    fi
     exit 0
   fi
   log "Port 5556 bound but not responding — killing zombie and restarting"
@@ -120,7 +137,14 @@ VITE_PID=$!
 # Wait up to 30s for the port to be ready, then open the browser defensively.
 for _ in $(seq 1 60); do
   if lsof -nP -iTCP:5556 -sTCP:LISTEN >/dev/null 2>&1; then
-    open "http://localhost:5556"
+    if [ -n "$DEEP_LINK" ]; then
+      # URL-encode the deep link and pass as hash fragment. The front end's
+      # useDeepLinkRoute hook reads the hash on boot.
+      HASH=$(printf '%s' "$DEEP_LINK" | python3 -c 'import sys,urllib.parse; print("#join=" + urllib.parse.quote(sys.stdin.read().strip(), safe=""))')
+      open "http://localhost:5556/$HASH"
+    else
+      open "http://localhost:5556"
+    fi
     break
   fi
   sleep 0.5

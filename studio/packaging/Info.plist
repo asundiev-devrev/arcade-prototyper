@@ -39,5 +39,16 @@
   -->
   <key>NSSupportsAutomaticGraphicsSwitching</key>
   <true/>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>com.devrev.arcade-studio.session</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>arcade-studio</string>
+      </array>
+    </dict>
+  </array>
 </dict>
 </plist>
