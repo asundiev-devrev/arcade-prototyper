@@ -6,6 +6,11 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.17.1] — 2026-05-13
+
+### Changed
+- **DMG installer window is now branded and instructional.** The installer window opens at a fixed 800×500 size with the app icon pinned to the left and the `/Applications` shortcut on the right, matching the conventional left-to-right drag-install direction (previously Finder auto-arranged alphabetically, putting `Applications` on the left and forcing a right-to-left drag). A peachy-cream background (`#fceade`, pulled from the Onboarding 3.0 sign-in canvas) sits behind the two icons, with a subtle grey curved arrow between them and a two-line Chip Display Bold caption "Drag Arcade Studio to / Applications to install" in jabuticaba purple. Implemented by building an intermediate UDRW DMG, scripting Finder's window layout via AppleScript, hiding the `.background/` asset directory via `chflags hidden`, and converting to the final compressed UDZO. Source SVG lives at `studio/packaging/dmg-background.svg`; the PNG is regenerated via `rsvg-convert` when the SVG changes.
+
 ## [0.17.0] — 2026-05-13
 
 ### Added (server-side, no client update needed)

@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Background image for the Arcade Studio DMG window.
+  Logical coordinate space matches the 800x500 Finder window interior set by
+  dmg.sh (hdiutil → AppleScript `bounds of container window`). Rasterized at 2x
+  and tagged 144 DPI so Finder treats the PNG as Retina-native.
+
+  Visual reference: DevRev Onboarding 3.0 sign-in screen — peachy cream canvas
+  (#fceade), Chip Display Bold in jabuticaba (#5800e6) for the headline-like
+  caption. Keeps the installer visually on-brand with the rest of the product.
+
+  Layout notes (changing these requires matching updates in dmg.sh):
+   - Icon centers: (200, 200) and (600, 200); icon glyph is 128px square.
+   - Glyph vertical extent: y=136 to y=264.
+   - Finder renders the icon label below the glyph in a band starting ~y=272.
+   - Arrow sits horizontally BETWEEN the two icon glyphs (x=280..520) and
+     vertically at the glyphs' midline (y=200), not over the labels.
+   - Caption uses Chip Display Bold (brand headline face). Installed in
+     ~/Library/Fonts, so fontconfig/rsvg-convert finds it on this machine.
+
+  Regenerate:
+    rsvg-convert -w 1600 -h 1000 dmg-background.svg -o dmg-background.png
+    sips -s dpiHeight 144.0 -s dpiWidth 144.0 dmg-background.png >/dev/null
+-->
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="800" height="500" viewBox="0 0 800 500">
+  <!-- Brand peachy cream canvas. Matches the Onboarding 3.0 sign-in backdrop. -->
+  <rect width="800" height="500" fill="#fceade"/>
+
+  <defs>
+    <!-- Arrowhead sized to match the 1.5px stroke — small, discreet. -->
+    <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8E8E93"/>
+    </marker>
+  </defs>
+
+  <!-- Subtle curved arrow centered between the two icon glyphs. Shorter
+       than the full icon-to-icon span so it reads as a gesture hint rather
+       than a literal rail — starts at x=330 and ends at x=470 (140px span
+       centered on the window midline at x=400). Gentle upward bow so it
+       feels like a physical drag. -->
+  <path d="M 330 200 Q 400 178 470 200"
+        fill="none"
+        stroke="#8E8E93"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        marker-end="url(#arrowhead)"/>
+
+  <!-- Caption in Chip Display Bold, jabuticaba purple. Sits below the icon
+       label band (which ends near y=300) with extra breathing room so the
+       Finder-drawn labels and the PNG-drawn caption don't crowd each other.
+       Broken onto two center-aligned lines so the caption reads as a
+       headline rather than one long rail of text. -->
+  <text text-anchor="middle"
+        font-family="Chip Display, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif"
+        font-weight="700"
+        font-size="22"
+        letter-spacing="-0.4"
+        fill="#5800e6">
+    <tspan x="400" y="395">Drag Arcade Studio to</tspan>
+    <tspan x="400" y="425">Applications to install</tspan>
+  </text>
+</svg>
