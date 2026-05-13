@@ -6,6 +6,27 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Changed
+- **Share-to-web replaced: Vercel → Cloudflare Pages (via a team share Worker).** Studio now deploys frames to the shared DevRev Product & Design Cloudflare account through a small Cloudflare Worker (`studio/worker/`) that holds the real Cloudflare API token as a secret. Teammates paste a per-user share key — not a Cloudflare token — into Settings → "Share to web", so no one has to create their own Cloudflare account and the raw API token never leaves the Worker. Keys are minted with `openssl rand -hex 32`, distributed via 1Password, and revoked by removing them from the Worker's `ALLOWED_KEYS` secret. See `studio/worker/README.md` for the operator runbook and `studio/docs/cloudflare-setup.md` for the 30-second teammate setup. Existing `vercel.*` settings are ignored; the `deployments` array in `project.json` is preserved as-is (old Vercel URLs stay as historical data).
+
+## [0.16.2] — 2026-05-13
+
+### Changed
+- **Lift-manifest improvements informed by the first live render loop.** A 2026-05-12 round trip through typecheck + browser render of a real Studio frame (`01-skills-gallery`) against a real devrev-web checkout exposed three classes of bug that text-level review had missed. Five manifest updates follow:
+  - New **`style_attribute_convention`** fires when a frame uses inline `style={{ ... var(--bg-*) / --fg-* / --stroke-* / --border-* / --color-* ... }}` references. Teaches the downstream agent to rewrite those to Tailwind utility classes (preferred) or `border-[hsl(var(--X))]` bracket arbitrary-value form. Leaving them as inline `style` tokens produces black borders and transparent backgrounds at render time because several devrev-web tokens are stored as raw HSL channel triples and silently invalidate when used as a bare `var(--X)` in a CSS color property.
+  - New **`<render_harness>`** block emitted on every manifest. Always includes a target-path suggestion, an iframe URL pattern, a backdrop hint (many DS border tokens resolve to near-white and vanish against a pure-white iframe), and a verification checklist the agent runs AFTER writing code — open the page in a browser, read computed styles, confirm real colors instead of `currentColor` fallback. Checks adapt to which conventions fired (inline-style rewrite verify, overlay Modal conversion, icon-enum consumption, etc.).
+  - New translation class **`close-but-not-identity`** for mappings that look identity-1:1 on the surface but carry load-bearing propDelta / slotNote guidance (optional-arg callback wraps, signature narrowing, etc.). Tabs moved from `structural` (which implied "write production shape with a brief comment") to this class, so the agent treats per-delta notes verbatim — the `Tabs.onValueChange` optional-arg wrap is no longer a bug waiting to happen. Tracked in a new `closeButNotIdentity` metric bucket that doesn't inflate the decision-points gate.
+  - **Drift-audit `token-resolution` category.** For every audited token (fg/bg/stroke/border families), the audit walks the `var(--X)` chain through the target's theme CSS — including multi-level indirections and embedded `var()` substitutions like `--neutral-920: var(--neutral-h) var(--neutral-s) 92%` — and reports any token that terminates in raw HSL channels. Against the live devrev-web clone this correctly fires on five fg/stroke tokens.
+  - **Drift-audit `figma-value-drift` category** with a new optional snapshot file at `studio/src/lift/figma-token-values.json` mapping CSS var names to Figma hex values. When populated, the audit cross-checks the target theme's resolved hex against the Figma source and reports divergence — Figma `Border/Outline/00 = #E9E9EC` vs devrev-web `#E9E9ED` is the canonical example. Reported as "platform drift, no manifest change available" rather than as a mapping-table bug.
+
+### Added
+- Explicit **`Switch → Toggle` primitive mapping** (prop deltas verified against devrev-web's `toggle.types.tsx`: `defaultChecked → initialChecked`, `onCheckedChange → onChange`). Prior-art anchor at `agent-platform/feature/agent-studio/.../edit-guardrail-modal.tsx`. Two prior live-lift runs of the same modal both re-derived this via `default_mapping_convention`; now encoded once.
+
+### Fixed
+- **`Tabs` mapping now warns about the optional-arg `onValueChange` signature.** A live typecheck of the v3 lifted `skills-gallery.tsx` against devrev-web failed with TS2322 on `<Tabs value={activeTab} onValueChange={setActiveTab}>` because production `Tabs.onValueChange` is typed `(value?: string) => void` — a bare `useState<string>` setter won't accept the optional `undefined`. The mapping now instructs the lift to wrap: `onValueChange={(v) => setState(v ?? "")}`.
+
 ## [0.16.1] — 2026-05-12
 
 ### Changed
