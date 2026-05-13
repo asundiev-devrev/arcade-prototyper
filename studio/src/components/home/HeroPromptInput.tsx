@@ -113,7 +113,7 @@ export function HeroPromptInput({ onSubmit, disabled }: HeroPromptInputProps) {
     if (!el) { setMention(null); return; }
     const caret = el.selectionStart ?? next.length;
     const detected = detectMentionAtCaret(next, caret);
-    if (!detected || filterMentions(detected.query).length === 0) {
+    if (!detected || filterMentions(detected.query, []).length === 0) {
       setMention(null);
       return;
     }
@@ -361,6 +361,7 @@ export function HeroPromptInput({ onSubmit, disabled }: HeroPromptInputProps) {
         <MentionPopover
           query={mention.query}
           anchor={mention.anchor}
+          users={[]}
           onSelect={insertMention}
           onDismiss={() => setMention(null)}
         />

@@ -210,7 +210,7 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
     if (!el) { setMention(null); return; }
     const caret = el.selectionStart ?? next.length;
     const detected = detectMentionAtCaret(next, caret);
-    if (!detected || filterMentions(detected.query).length === 0) {
+    if (!detected || filterMentions(detected.query, []).length === 0) {
       setMention(null);
       return;
     }
@@ -353,6 +353,7 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
         <MentionPopover
           query={mention.query}
           anchor={mention.anchor}
+          users={[]}
           onSelect={insertMention}
           onDismiss={() => setMention(null)}
         />

@@ -7,36 +7,67 @@ export interface MentionOption {
   token: string;
   label: string;
   description?: string;
-  icon?: "computer";
+  icon?: "computer" | "user";
+  /** Populated for user mentions. The devu DON. */
+  devu?: string;
 }
 
-export const MENTION_OPTIONS: MentionOption[] = [
-  {
-    id: "computer",
-    token: "Computer",
-    label: "Computer",
-    description: "DevRev agent",
-    icon: "computer",
-  },
-];
+export const COMPUTER_OPTION: MentionOption = {
+  id: "computer",
+  token: "Computer",
+  label: "Computer",
+  description: "DevRev agent",
+  icon: "computer",
+};
+
+export interface UserMentionInput {
+  id: string;
+  displayName: string;
+  email: string;
+}
+
+const USER_RESULT_CAP = 8;
+
+export function filterMentions(query: string, users: UserMentionInput[]): MentionOption[] {
+  const q = query.toLowerCase();
+  const out: MentionOption[] = [];
+
+  if (!q || COMPUTER_OPTION.token.toLowerCase().startsWith(q) || COMPUTER_OPTION.label.toLowerCase().startsWith(q)) {
+    out.push(COMPUTER_OPTION);
+  }
+
+  if (q) {
+    const handle = (u: UserMentionInput) => u.email.split("@")[0];
+    const matches = users.filter((u) =>
+      u.displayName.toLowerCase().startsWith(q) ||
+      handle(u).toLowerCase().startsWith(q),
+    );
+    for (const u of matches.slice(0, USER_RESULT_CAP)) {
+      out.push({
+        id: u.id,
+        token: handle(u),
+        label: u.displayName,
+        description: u.email,
+        icon: "user",
+        devu: u.id,
+      });
+    }
+  }
+
+  return out;
+}
 
 interface MentionPopoverProps {
   query: string;
   anchor: { left: number; bottom: number } | null;
+  users: UserMentionInput[];
   onSelect: (option: MentionOption) => void;
   onDismiss: () => void;
 }
 
-export function filterMentions(query: string): MentionOption[] {
-  const q = query.toLowerCase();
-  return MENTION_OPTIONS.filter((o) =>
-    o.token.toLowerCase().startsWith(q) || o.label.toLowerCase().startsWith(q),
-  );
-}
-
-export function MentionPopover({ query, anchor, onSelect, onDismiss }: MentionPopoverProps) {
+export function MentionPopover({ query, anchor, users, onSelect, onDismiss }: MentionPopoverProps) {
   const [activeIdx, setActiveIdx] = useState(0);
-  const options = filterMentions(query);
+  const options = filterMentions(query, users);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setActiveIdx(0); }, [query]);
@@ -51,8 +82,6 @@ export function MentionPopover({ query, anchor, onSelect, onDismiss }: MentionPo
         e.preventDefault();
         setActiveIdx((i) => (i - 1 + options.length) % options.length);
       } else if (e.key === "Enter" || e.key === "Tab") {
-        // Prevent the same Enter from also reaching the textarea's submit
-        // handler (which would send the half-written message).
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
@@ -63,8 +92,6 @@ export function MentionPopover({ query, anchor, onSelect, onDismiss }: MentionPo
         onDismiss();
       }
     }
-    // Capture phase so we win over ChatInput's textarea handler (which also
-    // binds Enter).
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, [options, activeIdx, onSelect, onDismiss]);
@@ -79,7 +106,7 @@ export function MentionPopover({ query, anchor, onSelect, onDismiss }: MentionPo
         position: "fixed",
         left: anchor.left,
         bottom: anchor.bottom,
-        minWidth: 220,
+        minWidth: 260,
         background: "var(--surface-overlay)",
         border: "1px solid var(--stroke-neutral-subtle)",
         borderRadius: 8,
@@ -111,7 +138,20 @@ export function MentionPopover({ query, anchor, onSelect, onDismiss }: MentionPo
           }}
         >
           <span style={{ display: "flex", width: 16, height: 16 }}>
-            {o.icon === "computer" ? <Computer size={16} /> : null}
+            {o.icon === "computer" ? <Computer size={16} /> : (
+              <span
+                aria-hidden
+                style={{
+                  width: 16, height: 16, borderRadius: 8,
+                  background: "var(--bg-neutral-soft)",
+                  fontSize: 10, fontWeight: 600,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  color: "var(--fg-neutral-subtle)",
+                }}
+              >
+                {(o.label[0] ?? "?").toUpperCase()}
+              </span>
+            )}
           </span>
           <span style={{ fontSize: 13, fontWeight: 500 }}>{o.label}</span>
           {o.description ? (
