@@ -14,6 +14,10 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `/api/multiplayer/ws` with PAT auth, driver-lock arbitration, and
   session-persistence. No user-visible UI yet; foundations for
   multi-user prototype sessions landing in subsequent plans.
+- Multiplayer invite flow. `@`-mention a DevRev teammate in Studio chat and
+  they receive a real Computer DM with a deep link. Clicking the link
+  launches Studio and prompts them to join the session. Live viewing comes
+  in a follow-up.
 
 ## [0.19.0] — 2026-05-15
 
