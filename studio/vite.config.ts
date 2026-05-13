@@ -14,6 +14,7 @@ import { preflightMiddleware } from "./server/middleware/preflight";
 import { fontsMiddleware } from "./server/middleware/fonts";
 import { devrevMiddleware } from "./server/middleware/devrev";
 import { multiplayerMiddleware } from "./server/middleware/multiplayer";
+import { multiplayerInviteMiddleware } from "./server/middleware/multiplayerInvite";
 import { attachRelayToHttpServer } from "./server/relay/wsServer";
 import { hydrateSessionRegistry } from "./server/relay/sessionRegistry";
 import { settingsMiddleware } from "./server/middleware/settings";
@@ -39,6 +40,7 @@ function apiPlugin(): import("vite").Plugin {
       server.middlewares.use(awsLoginMiddleware());
       server.middlewares.use(devrevMiddleware());
       server.middlewares.use(multiplayerMiddleware());
+      server.middlewares.use(multiplayerInviteMiddleware());
       server.middlewares.use(settingsMiddleware());
       server.middlewares.use(cloudflareMiddleware());
       server.middlewares.use(projectsMiddleware());
