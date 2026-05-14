@@ -5,6 +5,7 @@ import { createSession, addInvite } from "../relay/sessionRegistry";
 import { createOrFetchDm, postToDm } from "../devrev/dm";
 import { startTunnel, currentTunnelUrl } from "../relay/tunnel";
 import { SHARE_WORKER_URL } from "../cloudflare/deploy";
+import { listMentionableUsers } from "../devrev/devUsers";
 
 /**
  * One-shot HTTP endpoint for starting a multiplayer invite. Composes:
@@ -20,11 +21,26 @@ import { SHARE_WORKER_URL } from "../cloudflare/deploy";
  */
 
 const INVITE_URL = /^\/api\/multiplayer\/invite\/?$/;
+const MENTION_USERS_URL = /^\/api\/multiplayer\/mention-users\/?$/;
 const STUDIO_PORT = 5556;
 
 export function multiplayerInviteMiddleware() {
   return async (req: IncomingMessage, res: ServerResponse, next?: () => void) => {
     const url = req.url ?? "/";
+
+    if (req.method === "GET" && MENTION_USERS_URL.test(url)) {
+      try {
+        const users = await listMentionableUsers();
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ users }));
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        res.writeHead(502, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: msg }));
+      }
+      return;
+    }
+
     if (req.method !== "POST" || !INVITE_URL.test(url)) return next?.();
 
     let body: any;

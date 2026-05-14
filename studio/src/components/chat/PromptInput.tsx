@@ -93,45 +93,17 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
         const settings = await settingsRes.json().catch(() => ({}));
         const me = (settings as { devrev?: { user?: { id?: string } } })?.devrev?.user?.id;
 
-        // Fetch the full dev-users list via the existing DevRev proxy.
-        // 500 is a generous limit — DevRev's org fits comfortably. If we
-        // ever outgrow it, switch to cursor-paginated fetching.
-        const res = await fetch("/api/devrev/dev-users.list", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ limit: 500 }),
-        });
+        // Fetch the pre-filtered, cached mentionable-users list from our
+        // own server. Pagination + state filtering + gmail/contractor
+        // exclusion all happen server-side because DevRev's full org is
+        // ~4k rows and requires cursor pagination across ~8 pages.
+        const res = await fetch("/api/multiplayer/mention-users");
         if (!res.ok) return;
         const data = (await res.json()) as {
-          dev_users?: { id: string; display_name: string; email: string; state?: string }[];
+          users?: { id: string; displayName: string; email: string }[];
         };
         if (cancelled) return;
-        // Filter to active DevRev employees only. Empirically against the
-        // live org (2026-05-14) the full list returns 500 rows, of which
-        // only ~80 are mentionable humans. Filters:
-        //   - @devrev.ai emails — drop gmail/external users; we can't DM them.
-        //   - state === "active" — drops ~120 `shadow` rows (role mailboxes
-        //     like `dpo@`, `sales-apj@`, contractor `c-*` accounts, test
-        //     accounts with `+suffix` emails) and all `deactivated` rows.
-        //   - exclude the current user.
-        //
-        // IMPORTANT: we intentionally KEEP `i-*@devrev.ai` entries. They
-        // look like imported-identity duplicates, but they are the sole
-        // dev_users row for ~30 real employees (e.g. `i-arnav.andem`,
-        // `i-arvind.bhushan`). Dropping them would hide those people.
-        const list = (data.dev_users ?? [])
-          .filter((u) => {
-            const email = u.email ?? "";
-            if (!email.endsWith("@devrev.ai")) return false;
-            if (u.state && u.state !== "active") return false;
-            if (me && u.id === me) return false;
-            return true;
-          })
-          .map((u) => ({
-            id: u.id,
-            displayName: u.display_name,
-            email: u.email,
-          }));
+        const list = (data.users ?? []).filter((u) => !me || u.id !== me);
         setUsers(list);
       } catch {
         // fall back to empty list — popover will still show @Computer

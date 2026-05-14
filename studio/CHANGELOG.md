@@ -6,6 +6,11 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.18.2] — 2026-05-14
+
+### Fixed
+- **Mention popover now sees the whole org.** DevRev's `dev-users.list` API returns ~4,000 rows across 8 cursor pages; the previous code grabbed only the first 500 and silently truncated, which hid anyone past `K` alphabetically (Konstantin, Athila, etc. were invisible). New server-side helper paginates all pages once, filters to active @devrev.ai humans (~200 people out of 4k), and caches the result for 10 minutes — the popover stays instant after first open. Exposed via `GET /api/multiplayer/mention-users`.
+
 ## [0.18.1] — 2026-05-14
 
 ### Fixed
