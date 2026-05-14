@@ -6,6 +6,12 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.18.3] — 2026-05-14
+
+### Fixed
+- **Invite flow no longer crashes Studio when cloudflared is missing.** Spawning a missing binary on macOS doesn't throw synchronously — it returns a ChildProcess and emits an asynchronous 'error' event. Our tunnel manager didn't have an 'error' handler attached, so the ENOENT took down the whole Vite process on the first invite attempt. The invite now rejects cleanly with a descriptive error.
+- **DMG now bundles cloudflared.** Users no longer need to `brew install cloudflared` themselves — the binary (~23 MB, Darwin-native for the DMG's target arch) is fetched during build and shipped alongside node + awscli. Host-installed cloudflared still wins in $PATH for anyone who prefers their own version.
+
 ## [0.18.2] — 2026-05-14
 
 ### Fixed

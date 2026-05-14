@@ -24,13 +24,23 @@ export async function startTunnel(opts: StartTunnelOptions): Promise<string> {
     throw new Error("Tunnel already running — stopTunnel() first");
   }
 
+  // Spawn returns a ChildProcess even when the binary doesn't exist —
+  // ENOENT is delivered asynchronously via the 'error' event, NOT thrown
+  // synchronously. We must attach an error handler on the returned proc
+  // BEFORE Node gets a chance to raise it as an unhandled event (which
+  // would kill the Vite process and take all of Studio down with it).
+  //
+  // The synchronous try/catch below is kept as belt-and-suspenders for
+  // platforms/paths where spawn does throw; empirically on macOS it
+  // doesn't.
   let proc: ChildProcess;
   try {
     proc = spawn("cloudflared", ["tunnel", "--url", `http://localhost:${opts.port}`], {
       stdio: ["ignore", "pipe", "pipe"],
     });
-  } catch (err: any) {
-    if (err?.code === "ENOENT") {
+  } catch (err: unknown) {
+    const errno = (err as NodeJS.ErrnoException | undefined)?.code;
+    if (errno === "ENOENT") {
       throw new Error(
         "cloudflared not found. Install with `brew install cloudflared` or bundle with the DMG.",
       );
@@ -62,6 +72,23 @@ export async function startTunnel(opts: StartTunnelOptions): Promise<string> {
 
     proc.stdout?.on("data", onChunk);
     proc.stderr?.on("data", onChunk);
+
+    // Must attach an 'error' handler — on macOS, a missing binary produces
+    // an async 'error' event (ENOENT) rather than a synchronous throw. An
+    // unhandled 'error' event on a ChildProcess is fatal to the Node process.
+    proc.on("error", (err: NodeJS.ErrnoException) => {
+      if (resolved) return;
+      resolved = true;
+      clearTimeout(timer);
+      currentProc = null;
+      if (err.code === "ENOENT") {
+        reject(new Error(
+          "cloudflared not found. Install it with `brew install cloudflared` and restart Studio.",
+        ));
+      } else {
+        reject(new Error(`cloudflared spawn failed: ${err.message}`));
+      }
+    });
 
     proc.on("exit", (code) => {
       if (!resolved) {

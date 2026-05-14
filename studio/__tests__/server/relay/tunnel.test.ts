@@ -60,7 +60,7 @@ describe("tunnel", () => {
     await expect(promise).rejects.toThrow(/cloudflared exited/);
   });
 
-  it("rejects with a clear message if spawn throws ENOENT", async () => {
+  it("rejects with a clear message if spawn throws ENOENT synchronously", async () => {
     mockSpawn.mockImplementation(() => {
       const err: NodeJS.ErrnoException = new Error("spawn cloudflared ENOENT");
       err.code = "ENOENT";
@@ -69,6 +69,22 @@ describe("tunnel", () => {
     await expect(startTunnel({ port: 5556 })).rejects.toThrow(
       /cloudflared not found/,
     );
+  });
+
+  it("rejects cleanly when spawn emits an async ENOENT 'error' event (real macOS behavior)", async () => {
+    // On macOS, spawn("cloudflared", …) for a missing binary does NOT throw
+    // synchronously — it returns a ChildProcess, then emits 'error' on the
+    // next tick. This was the bug: the returned proc had no error handler,
+    // so the unhandled 'error' event crashed the entire Node process.
+    const proc = makeFakeProc();
+    mockSpawn.mockReturnValue(proc);
+    const promise = startTunnel({ port: 5556 });
+    setTimeout(() => {
+      const err: NodeJS.ErrnoException = new Error("spawn cloudflared ENOENT");
+      err.code = "ENOENT";
+      (proc as unknown as EventEmitter).emit("error", err);
+    }, 0);
+    await expect(promise).rejects.toThrow(/cloudflared not found/);
   });
 
   it("stopTunnel SIGTERMs the running proc and is idempotent", async () => {
