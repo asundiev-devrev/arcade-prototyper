@@ -94,18 +94,39 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
         const me = (settings as { devrev?: { user?: { id?: string } } })?.devrev?.user?.id;
 
         // Fetch the full dev-users list via the existing DevRev proxy.
+        // 500 is a generous limit — DevRev's org fits comfortably. If we
+        // ever outgrow it, switch to cursor-paginated fetching.
         const res = await fetch("/api/devrev/dev-users.list", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ limit: 200 }),
+          body: JSON.stringify({ limit: 500 }),
         });
         if (!res.ok) return;
         const data = (await res.json()) as {
-          dev_users?: { id: string; display_name: string; email: string }[];
+          dev_users?: { id: string; display_name: string; email: string; state?: string }[];
         };
         if (cancelled) return;
+        // Filter to active DevRev employees only. Empirically against the
+        // live org (2026-05-14) the full list returns 500 rows, of which
+        // only ~80 are mentionable humans. Filters:
+        //   - @devrev.ai emails — drop gmail/external users; we can't DM them.
+        //   - state === "active" — drops ~120 `shadow` rows (role mailboxes
+        //     like `dpo@`, `sales-apj@`, contractor `c-*` accounts, test
+        //     accounts with `+suffix` emails) and all `deactivated` rows.
+        //   - exclude the current user.
+        //
+        // IMPORTANT: we intentionally KEEP `i-*@devrev.ai` entries. They
+        // look like imported-identity duplicates, but they are the sole
+        // dev_users row for ~30 real employees (e.g. `i-arnav.andem`,
+        // `i-arvind.bhushan`). Dropping them would hide those people.
         const list = (data.dev_users ?? [])
-          .filter((u) => !me || u.id !== me)
+          .filter((u) => {
+            const email = u.email ?? "";
+            if (!email.endsWith("@devrev.ai")) return false;
+            if (u.state && u.state !== "active") return false;
+            if (me && u.id === me) return false;
+            return true;
+          })
           .map((u) => ({
             id: u.id,
             displayName: u.display_name,
@@ -238,11 +259,13 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
     if (!p || busy) return;
 
     // Detect user @-mentions in the current text against our known users list.
-    // Token form is @<handle> where handle is the user's email prefix (per
-    // MentionPopover's token generation).
+    // Token form is @<handle>. The handle is the email local-part with the
+    // `i-` prefix stripped for DevRev imported-identity accounts — keeps
+    // this in sync with MentionPopover's token generation.
     const userMentionTargets: { devu: string; displayName: string }[] = [];
     for (const u of users) {
-      const handle = u.email.split("@")[0];
+      const local = u.email.split("@")[0];
+      const handle = local.startsWith("i-") ? local.slice(2) : local;
       // Escape regex special chars in the handle (dots, hyphens).
       const escaped = handle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const re = new RegExp(`@${escaped}\\b`, "i");

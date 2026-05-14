@@ -37,7 +37,15 @@ export function filterMentions(query: string, users: UserMentionInput[]): Mentio
   }
 
   if (q) {
-    const handle = (u: UserMentionInput) => u.email.split("@")[0];
+    // Use the email local-part as the mention handle. Strip the `i-` prefix
+    // that DevRev's imported-identity accounts carry (e.g. `i-arnav.andem`
+    // becomes `arnav.andem`) — otherwise the token the user types is ugly
+    // and non-obvious. PromptInput's send-time detector does the same
+    // stripping so the two stay in sync.
+    const handle = (u: UserMentionInput) => {
+      const local = u.email.split("@")[0];
+      return local.startsWith("i-") ? local.slice(2) : local;
+    };
     const matches = users.filter((u) =>
       u.displayName.toLowerCase().startsWith(q) ||
       handle(u).toLowerCase().startsWith(q),

@@ -6,6 +6,12 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.18.1] — 2026-05-14
+
+### Fixed
+- **Mention popover shows far fewer users.** The `@` popover previously listed all 400 rows DevRev's API returns — including gmail externals, role mailboxes like `dpo@`, `sales-apj@`, contractor `c-*@` accounts, test accounts with `+suffix` emails, and deactivated employees. Filtered down to active @devrev.ai employees only (~112 people). Also stripped the `i-` prefix that imported-identity accounts carry, so `Arvind Bhushan` shows as `@arvind.bhushan` instead of `@i-arvind.bhushan`.
+- **Bumped the user-list fetch limit from 200 to 500.** The 200-row cap was silently hiding half the org on the client side — nothing to do with filtering, the API just needs a higher `limit`.
+
 ## [0.18.0] — 2026-05-14
 
 ### Added
