@@ -247,8 +247,11 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
     }
 
     if (userMentionTargets.length > 0) {
-      // Invite first; only fire the turn if the invite succeeds. We invite only
-      // the first mentioned user in v1 — multi-invite is out of scope.
+      // An @-mention of a teammate is treated as an invite-only action.
+      // We fire the invite, show a system message in the chat, and DO NOT
+      // run the normal chat turn — otherwise the agent tries to interpret
+      // the invite text as a design prompt and emits a confusing "no frame
+      // to build" response. v1 invites one user at a time (first match).
       const guest = userMentionTargets[0];
       try {
         const inviteRes = await fetch("/api/multiplayer/invite", {
@@ -267,7 +270,7 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
             title: `Invite failed: ${(data as { error?: string })?.error ?? inviteRes.status}`,
             intent: "alert",
           });
-          return; // do not fire the turn
+          return;
         }
         toast({
           title: `Invited ${guest.displayName}`,
@@ -280,6 +283,19 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
         });
         return;
       }
+      // Clear the input and stop — the server-side invite already wrote a
+      // system message to the chat history, so the next history refresh
+      // will render "Invited Konstantin..." inline. Do NOT run the chat
+      // turn for an invite-only prompt.
+      setText("");
+      setImages([]);
+      setImagePaths([]);
+      setDetectedFigmaUrl(null);
+      setMention(null);
+      clearTarget();
+      // Tell the host to reload the chat history so the system message appears.
+      window.dispatchEvent(new CustomEvent("arcade-studio:refresh-chat-history"));
+      return;
     }
 
     const finalPrompt = target ? `${buildTargetPreamble(target)}${p}` : p;

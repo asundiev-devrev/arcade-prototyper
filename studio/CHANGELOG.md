@@ -6,6 +6,12 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.18.4] — 2026-05-14
+
+### Fixed
+- **`@`-mention no longer fires a chat turn.** Sending `@konstantin check this out` used to invite Konstantin AND kick off a normal chat turn — the agent would try to interpret "check this out" as a design prompt and emit a "no frame to build" deviations response. Now `@`-mentions are invite-only: the invite fires, a system message appears inline in the chat transcript ("Invited Konstantin to this session..."), and the chat turn is skipped entirely. System messages render as a muted centered row, not a speech bubble.
+- **Dock icon no longer bounces for ~10s after the first invite.** Cloudflared was logging 20+ lines at its default `info` level on tunnel creation — on macOS that noise through Studio's Node stderr was enough to trigger Launch Services' "app wants attention" behavior. Running cloudflared with `--loglevel warn` and detaching the stream listeners after the URL is parsed quiets the pipe.
+
 ## [0.18.3] — 2026-05-14
 
 ### Fixed

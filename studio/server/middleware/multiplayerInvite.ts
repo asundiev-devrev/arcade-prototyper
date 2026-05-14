@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import fs from "node:fs/promises";
 import { getDevRevPat } from "../secrets/keychain";
 import { resolveDevuFromPat } from "../relay/auth";
 import { createSession, addInvite } from "../relay/sessionRegistry";
@@ -6,6 +7,8 @@ import { createOrFetchDm, postToDm } from "../devrev/dm";
 import { startTunnel, currentTunnelUrl } from "../relay/tunnel";
 import { SHARE_WORKER_URL } from "../cloudflare/deploy";
 import { listMentionableUsers } from "../devrev/devUsers";
+import { chatHistoryPath } from "../paths";
+import type { ChatMessage } from "../types";
 
 /**
  * One-shot HTTP endpoint for starting a multiplayer invite. Composes:
@@ -127,7 +130,27 @@ export function multiplayerInviteMiddleware() {
       return;
     }
 
-    void guestDisplayName; // reserved for future "invited Konstantin" toast content; not used in response body today
+    // Write an inline system message to the project's chat history so the
+    // host sees "Invited Konstantin" appear in the transcript. The client
+    // skips the normal chat turn when a mention is present, so WITHOUT this
+    // the send would look like nothing happened in the chat pane.
+    try {
+      const file = chatHistoryPath(projectSlug);
+      let existing: ChatMessage[] = [];
+      try { existing = JSON.parse(await fs.readFile(file, "utf-8")); } catch {}
+      const msg: ChatMessage = {
+        id: `sys-${Date.now()}`,
+        role: "system",
+        content: `Invited ${guestDisplayName} to this session. They'll receive a Computer DM with a join link.`,
+        createdAt: new Date().toISOString(),
+      };
+      existing.push(msg);
+      await fs.writeFile(file, JSON.stringify(existing, null, 2));
+    } catch (err) {
+      // Don't fail the whole invite if we can't write the chat history —
+      // the DM was already delivered. Just log and move on.
+      console.warn("[multiplayer] failed to write invite system message:", err);
+    }
 
     res.writeHead(201, { "Content-Type": "application/json" });
     res.end(JSON.stringify({
@@ -136,6 +159,7 @@ export function multiplayerInviteMiddleware() {
       deepLink,    // Raw arcade-studio:// URL (for future client use)
       tunnelUrl,
       dmId,
+      guestDisplayName,
     }));
   };
 }

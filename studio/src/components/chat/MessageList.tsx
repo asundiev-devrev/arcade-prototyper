@@ -217,8 +217,26 @@ export function MessageList({
         gap: 24,
       }}
     >
-      {history.map((m) =>
-        m.role === "assistant" && m.source === "computer" ? (
+      {history.map((m) => {
+        if (m.role === "system") {
+          // System messages are inline info rows (not speech bubbles).
+          // Used today for "Invited <name> to this session" after an
+          // @-mention. Muted color, centered, no avatar, no bubble.
+          return (
+            <div
+              key={m.id}
+              style={{
+                textAlign: "center",
+                fontSize: 13,
+                color: "var(--fg-neutral-subtle)",
+                padding: "4px 16px",
+              }}
+            >
+              {m.content}
+            </div>
+          );
+        }
+        return m.role === "assistant" && m.source === "computer" ? (
           <ComputerMessage key={m.id} content={m.content} />
         ) : (
           <BubbleRow key={m.id} role={m.role === "user" ? "user" : "assistant"}>
@@ -228,8 +246,8 @@ export function MessageList({
               m.content
             )}
           </BubbleRow>
-        ),
-      )}
+        );
+      })}
 
       {pendingPrompt && <BubbleRow role="user">{pendingPrompt}</BubbleRow>}
 

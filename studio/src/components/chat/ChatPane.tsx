@@ -29,7 +29,15 @@ export function ChatPane({
       if (!cancelled && r.ok) setHistory(await r.json());
     }
     if (state.phase !== "running") void refresh();
-    return () => { cancelled = true; };
+    // Also refresh when an @-mention invite writes a system message —
+    // those don't go through the chat-stream pipeline, so the phase
+    // transition above wouldn't fire for them.
+    const onInviteRefresh = () => void refresh();
+    window.addEventListener("arcade-studio:refresh-chat-history", onInviteRefresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("arcade-studio:refresh-chat-history", onInviteRefresh);
+    };
   }, [projectSlug, state.phase]);
 
   const enhancedSend = (prompt: string, images: string[] = []) => {

@@ -35,7 +35,13 @@ export async function startTunnel(opts: StartTunnelOptions): Promise<string> {
   // doesn't.
   let proc: ChildProcess;
   try {
-    proc = spawn("cloudflared", ["tunnel", "--url", `http://localhost:${opts.port}`], {
+    // --loglevel warn: cloudflared's default `info` level emits ~20 lines
+    // per session (connection handshakes, edge discovery, etc.). That
+    // noise can trigger macOS Launch Services to bounce the Dock icon
+    // as "app wants attention" if Studio's log forwarding has any
+    // Console.app-visible side effect. `warn` suppresses everything
+    // except the initial URL-announce block + real errors.
+    proc = spawn("cloudflared", ["tunnel", "--loglevel", "warn", "--url", `http://localhost:${opts.port}`], {
       stdio: ["ignore", "pipe", "pipe"],
     });
   } catch (err: unknown) {
@@ -60,12 +66,22 @@ export async function startTunnel(opts: StartTunnelOptions): Promise<string> {
     }, START_TIMEOUT_MS);
 
     const onChunk = (chunk: Buffer) => {
+      if (resolved) return; // Drop data once we've parsed the URL.
       const text = chunk.toString();
       const match = text.match(TRYCLOUDFLARE_URL_RE);
-      if (match && !resolved) {
+      if (match) {
         resolved = true;
         clearTimeout(timer);
         currentUrl = match[1];
+        // Detach listeners so future tunnel output doesn't flow through
+        // our event loop (just quietly drains the pipe buffers).
+        proc.stdout?.removeAllListeners("data");
+        proc.stderr?.removeAllListeners("data");
+        // Pipe remaining output to /dev/null-equivalent: `on("data", noop)`
+        // prevents the pipe from filling up, which would eventually stall
+        // cloudflared's writes.
+        proc.stdout?.on("data", () => {});
+        proc.stderr?.on("data", () => {});
         resolve(match[1]);
       }
     };
