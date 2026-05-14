@@ -47,7 +47,7 @@ describe("tunnel", () => {
     expect(url).toBe("https://brave-squirrel-42.trycloudflare.com");
     expect(mockSpawn).toHaveBeenCalledWith(
       "cloudflared",
-      ["tunnel", "--loglevel", "warn", "--url", "http://localhost:5556"],
+      ["tunnel", "--url", "http://localhost:5556"],
       expect.any(Object),
     );
   });

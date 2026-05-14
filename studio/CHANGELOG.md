@@ -6,6 +6,11 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.18.5] — 2026-05-14
+
+### Fixed
+- **0.18.4 broke tunnel creation.** Dropping cloudflared to `--loglevel warn` silenced the URL announcement too — the trycloudflare URL is logged at INFO level. Our 30s parse window timed out, and every invite failed with "Failed to fetch." Reverted the log-level flag. The stream-listener detach after URL parse (which also aimed at the dock-bounce) stays — that's still likely valuable on its own.
+
 ## [0.18.4] — 2026-05-14
 
 ### Fixed

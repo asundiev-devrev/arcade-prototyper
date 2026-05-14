@@ -35,13 +35,12 @@ export async function startTunnel(opts: StartTunnelOptions): Promise<string> {
   // doesn't.
   let proc: ChildProcess;
   try {
-    // --loglevel warn: cloudflared's default `info` level emits ~20 lines
-    // per session (connection handshakes, edge discovery, etc.). That
-    // noise can trigger macOS Launch Services to bounce the Dock icon
-    // as "app wants attention" if Studio's log forwarding has any
-    // Console.app-visible side effect. `warn` suppresses everything
-    // except the initial URL-announce block + real errors.
-    proc = spawn("cloudflared", ["tunnel", "--loglevel", "warn", "--url", `http://localhost:${opts.port}`], {
+    // Cloudflared emits the trycloudflare URL at INFO level, not WARN —
+    // dropping to `--loglevel warn` hides the URL entirely. We stay on
+    // the default log level and instead detach our data listeners as
+    // soon as we've parsed the URL (see below), so the downstream noise
+    // drains silently.
+    proc = spawn("cloudflared", ["tunnel", "--url", `http://localhost:${opts.port}`], {
       stdio: ["ignore", "pipe", "pipe"],
     });
   } catch (err: unknown) {
