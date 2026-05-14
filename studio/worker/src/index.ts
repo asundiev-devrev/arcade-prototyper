@@ -554,7 +554,7 @@ function renderJoinLandingPage(sessionId: string, relayUrl: string): string {
 <body>
   <div class="card">
     <h1>Opening Arcade Studio…</h1>
-    <p>You've been invited to a live prototype session. If Arcade Studio is installed, it should open automatically.</p>
+    <p id="status">You've been invited to a live prototype session. If Arcade Studio is installed, it should open automatically.</p>
     <p class="muted">Session: <code>${escHtml(sessionId)}</code></p>
     <button class="btn" id="retry">Try opening again</button>
 
@@ -568,27 +568,42 @@ function renderJoinLandingPage(sessionId: string, relayUrl: string): string {
 
 <script>
 (function(){
+  // Cold-launch timing: on a freshly installed Studio, macOS routes the
+  // deep link to the app, but the launcher's Vite boot takes 5–15s before
+  // it actually serves localhost:5556. During that window the app window
+  // is blank and macOS may show a "not responding" dialog. We wait long
+  // enough for that boot to finish before surfacing the install prompt,
+  // and we re-fire the scheme mid-wait in case the user installed Studio
+  // while this page was already open.
   var deepLink = '${escJs(deepLink)}';
+  var status = document.getElementById('status');
   var shown = false;
   function showInstall() {
     if (shown) return;
     shown = true;
     document.getElementById('install-prompt').style.display = 'block';
   }
-  function openDeepLink() {
+  function fireScheme() {
     window.location.href = deepLink;
-    // If Studio opens, the page will lose focus and this timer effectively
-    // doesn't matter. If nothing handles the scheme, we fall through to the
-    // install prompt after 2.5 seconds.
-    setTimeout(showInstall, 2500);
   }
-  document.getElementById('retry').addEventListener('click', openDeepLink);
+  function retryFlow() {
+    fireScheme();
+    status.textContent = 'Opening Arcade Studio… first launch can take 10–15 seconds while the app starts up.';
+    setTimeout(function() {
+      if (shown) return;
+      fireScheme();
+    }, 8000);
+    setTimeout(function() {
+      status.textContent = 'Still working on it — the app is starting up.';
+    }, 3000);
+    setTimeout(showInstall, 18000);
+  }
+  document.getElementById('retry').addEventListener('click', retryFlow);
   document.getElementById('try-again').addEventListener('click', function(e) {
     e.preventDefault();
-    openDeepLink();
+    retryFlow();
   });
-  // Attempt on load.
-  openDeepLink();
+  retryFlow();
 })();
 </script>
 </body>
