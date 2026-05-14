@@ -6,6 +6,14 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.18.6] — 2026-05-14
+
+### Fixed
+- **Invite link in the Computer DM is now clickable.** The message body wraps the URL in `[Join the session](<url>)` markdown syntax — Computer's DM renderer interprets that and turns it into a proper clickable link. Plain URLs (what we had before) were shown as inert text, so the recipient had to copy/paste the link to open the invite.
+
+### Known limitation
+- Invites still don't trigger Computer's unread-badge / desktop notification for the recipient. The DM lands in their inbox and they can see it once they open the thread, but nothing prompts them that a new invite arrived. Appears to be a side effect of how `timeline-entries.create` via PAT auth interacts with Computer's notification pipeline — we'll investigate separately.
+
 ## [0.18.5] — 2026-05-14
 
 ### Fixed

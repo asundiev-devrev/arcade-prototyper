@@ -70,6 +70,15 @@ export async function postToDm(
       type: "timeline_comment",
       object: dmId,
       body,
+      // The `display:discussions` label is what tells Computer's UI to
+      // render this entry as a first-class chat message (URL auto-linking,
+      // unread counter, desktop notifications). Without it, API-posted
+      // entries show up as inert plain text — visible if you open the DM
+      // but never marking it unread, and URLs don't render as clickable.
+      // Discovered 2026-05-14 by comparing API-posted entries (no label)
+      // to real-user replies in the same DM (labeled). See docs:
+      // https://developer.devrev.ai/public/beta/api-reference/timeline-entries
+      labels: ["display:discussions"],
     }),
   });
   if (!res.ok) {

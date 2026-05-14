@@ -79,6 +79,7 @@ describe("postToDm", () => {
           type: "timeline_comment",
           object: "don:core:dvrv-us-1:devo/0:dm/ABC",
           body: "hello",
+          labels: ["display:discussions"],
         }),
       }),
     );

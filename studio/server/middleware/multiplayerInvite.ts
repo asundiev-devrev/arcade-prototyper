@@ -110,12 +110,16 @@ export function multiplayerInviteMiddleware() {
     const deepLink = `arcade-studio://session/${session.id}?relay=${encodeURIComponent(tunnelUrl)}`;
     const inviteUrl = `${SHARE_WORKER_URL}/join/${session.id}?relay=${encodeURIComponent(tunnelUrl)}`;
 
+    // Computer's DM renderer interprets `[text](url)` markdown syntax and
+    // turns it into a clickable link. Plain URLs and Slack-style
+    // `<url|text>` are shown as inert text. Discovered empirically on
+    // 2026-05-14 — the DevRev API docs don't call this out.
     const messageLines = [
       `${host.displayName} invited you to a prototype session in Arcade Studio.`,
       "",
       promptPreview ? `Starting prompt: "${promptPreview}"` : "",
       "",
-      `Join: ${inviteUrl}`,
+      `[Join the session](${inviteUrl})`,
       "",
       "Requires Arcade Studio 0.18 or later. The link will try to open Studio automatically, or show you how to install it.",
     ].filter(Boolean).join("\n");

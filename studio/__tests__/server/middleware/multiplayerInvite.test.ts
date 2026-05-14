@@ -112,6 +112,9 @@ describe("multiplayerInviteMiddleware", () => {
     expect(postedBody).toContain("invited you");
     // DM message now links to the web landing page, not the raw scheme.
     expect(postedBody).toContain("/join/");
+    // URL is wrapped in markdown syntax so Computer renders it as a
+    // clickable link instead of inert text.
+    expect(postedBody).toMatch(/\[Join the session\]\(https:\/\/[^)]+\/join\/[^)]+\)/);
     expect(postedBody).toContain("add a sidebar");
     // Install-version hint is bumped to 0.18.
     expect(postedBody).toContain("0.18");
