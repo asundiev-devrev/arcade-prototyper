@@ -6,18 +6,11 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.18.0] — 2026-05-14
 
 ### Added
-
-- Multiplayer relay foundations (internal). In-process WebSocket relay at
-  `/api/multiplayer/ws` with PAT auth, driver-lock arbitration, and
-  session-persistence. No user-visible UI yet; foundations for
-  multi-user prototype sessions landing in subsequent plans.
-- Multiplayer invite flow. `@`-mention a DevRev teammate in Studio chat and
-  they receive a real Computer DM with a deep link. Clicking the link
-  launches Studio and prompts them to join the session. Live viewing comes
-  in a follow-up.
+- **Multiplayer invite flow (preview).** `@`-mention a DevRev teammate in the Studio chat input and they receive a real Computer DM with a deep link. Clicking the link launches Studio and prompts them to join the session. The guest reaches a "Connected. Waiting for the host to drive…" state — live event streaming (seeing your prompts and generated frames in real time) is the follow-up work. Technically: Studio spawns `cloudflared` on first invite to expose `localhost:5556`, creates a DevRev chat via `chats.create` with the host as a participant (Spike 2 verified the PAT-auth path), and posts the invite message as a regular timeline entry. The guest's browser WebSocket authenticates via `?pat=<guest PAT>` query string because the browser can't set Authorization headers. The `arcade-studio://` URL scheme is registered in `Info.plist`; the launcher forwards deep links to the running Vite server as a `#join=` hash fragment.
+- Internal: in-process WebSocket relay at `/api/multiplayer/ws` with driver-lock arbitration, session persistence, and a pure-logic protocol engine (the foundations the invite flow builds on).
 
 ## [0.19.0] — 2026-05-15
 
