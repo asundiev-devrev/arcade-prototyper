@@ -4,6 +4,7 @@ import { resolveDevuFromPat } from "../relay/auth";
 import { createSession, addInvite } from "../relay/sessionRegistry";
 import { createOrFetchDm, postToDm } from "../devrev/dm";
 import { startTunnel, currentTunnelUrl } from "../relay/tunnel";
+import { SHARE_WORKER_URL } from "../cloudflare/deploy";
 
 /**
  * One-shot HTTP endpoint for starting a multiplayer invite. Composes:
@@ -82,16 +83,22 @@ export function multiplayerInviteMiddleware() {
     const session = await createSession({ hostDevu: host.id, projectSlug });
     await addInvite(session.id, { devu: guestDevu, invitedByDevu: host.id });
 
-    const inviteUrl = `arcade-studio://session/${session.id}?relay=${encodeURIComponent(tunnelUrl)}`;
+    // The DM invite URL is the web landing page (Worker `GET /join/<id>`),
+    // not the raw `arcade-studio://` scheme. The landing page tries to
+    // launch Studio automatically and falls back to an install prompt
+    // for guests who don't have Studio installed. The raw deep link is
+    // still returned in the response for clients (tests, future uses).
+    const deepLink = `arcade-studio://session/${session.id}?relay=${encodeURIComponent(tunnelUrl)}`;
+    const inviteUrl = `${SHARE_WORKER_URL}/join/${session.id}?relay=${encodeURIComponent(tunnelUrl)}`;
 
     const messageLines = [
       `${host.displayName} invited you to a prototype session in Arcade Studio.`,
       "",
       promptPreview ? `Starting prompt: "${promptPreview}"` : "",
       "",
-      `Open: ${inviteUrl}`,
+      `Join: ${inviteUrl}`,
       "",
-      "(Requires Arcade Studio 0.15+. https://github.com/asundiev-devrev/arcade-studio-releases)",
+      "Requires Arcade Studio 0.18 or later. The link will try to open Studio automatically, or show you how to install it.",
     ].filter(Boolean).join("\n");
 
     const dmId = await createOrFetchDm(pat, host.id, guestDevu);
@@ -109,7 +116,8 @@ export function multiplayerInviteMiddleware() {
     res.writeHead(201, { "Content-Type": "application/json" });
     res.end(JSON.stringify({
       sessionId: session.id,
-      inviteUrl,
+      inviteUrl,   // Web landing page (shown in DM)
+      deepLink,    // Raw arcade-studio:// URL (for future client use)
       tunnelUrl,
       dmId,
     }));

@@ -45,8 +45,28 @@ export default {
     // hits the Worker.
     if (req.method === "OPTIONS") return cors(new Response(null, { status: 204 }));
 
-    if (req.method !== "POST" || new URL(req.url).pathname !== "/share") {
-      return cors(json(404, { error: { code: "not_found", message: "POST /share only" } }));
+    const url = new URL(req.url);
+
+    // Public landing page for multiplayer invites. When a host @-mentions
+    // a teammate in Studio, the DM link points here instead of the raw
+    // `arcade-studio://` scheme. This page tries to open Studio first,
+    // then falls back to a download-and-install prompt if nothing handles
+    // the scheme within a few seconds. No auth — URLs are unguessable
+    // (UUID session ids) and anyone with the link is already an invitee.
+    if (req.method === "GET") {
+      const joinMatch = /^\/join\/([a-zA-Z0-9-]+)\/?$/.exec(url.pathname);
+      if (joinMatch) {
+        const sessionId = joinMatch[1];
+        const relay = url.searchParams.get("relay") ?? "";
+        return new Response(renderJoinLandingPage(sessionId, relay), {
+          status: 200,
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        });
+      }
+    }
+
+    if (req.method !== "POST" || url.pathname !== "/share") {
+      return cors(json(404, { error: { code: "not_found", message: "POST /share or GET /join/<id> only" } }));
     }
 
     // ---- auth -------------------------------------------------------------
@@ -291,9 +311,9 @@ export default {
       ? result.aliases[0]
       : undefined;
     const rawUrl = aliasUrl ?? String(result?.url ?? "");
-    const url = rawUrl.startsWith("http") ? rawUrl : `https://${rawUrl}`;
+    const deployUrl = rawUrl.startsWith("http") ? rawUrl : `https://${rawUrl}`;
 
-    return cors(json(200, { url, deployId: String(result?.id ?? "") }));
+    return cors(json(200, { url: deployUrl, deployId: String(result?.id ?? "") }));
   },
 };
 
@@ -451,4 +471,126 @@ async function ensureAccessApp({
     const raw = await createAppRes.text().catch(() => "");
     throw new Error(`Access app create failed: ${createAppRes.status} ${raw}`);
   }
+}
+
+/**
+ * Landing page for multiplayer invites. Served from the share Worker at
+ * `GET /join/<sessionId>?relay=<url>`. The page tries to launch Arcade
+ * Studio via the `arcade-studio://` URL scheme on load. If Studio is not
+ * installed (or the scheme handler doesn't fire within ~2s), it shows
+ * an install prompt with a direct link to the latest DMG.
+ *
+ * Session IDs are UUIDs from Studio's relay session registry; the relay
+ * URL is the host's ephemeral `*.trycloudflare.com` tunnel. Both values
+ * are URL-encoded into the arcade-studio:// deep link client-side.
+ *
+ * Safe: escapes both params into HTML attributes + JS strings.
+ */
+function renderJoinLandingPage(sessionId: string, relayUrl: string): string {
+  const RELEASES_URL = "https://github.com/asundiev-devrev/arcade-studio-releases/releases/latest";
+  const MIN_VERSION = "0.18";
+  const escHtml = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const escJs = (s: string) =>
+    s.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/</g, "\\u003c");
+
+  const deepLink = `arcade-studio://session/${encodeURIComponent(sessionId)}?relay=${encodeURIComponent(relayUrl)}`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Join Arcade Studio session</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+    background: #fceade;
+    color: #2a1a3d;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .card {
+    background: white;
+    border-radius: 12px;
+    padding: 32px;
+    max-width: 480px;
+    width: 100%;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  }
+  h1 { margin: 0 0 8px; font-size: 22px; font-weight: 600; }
+  p { margin: 0 0 16px; line-height: 1.5; color: #4a3a5d; }
+  .muted { font-size: 13px; color: #6a5a7d; }
+  .btn {
+    display: inline-block;
+    padding: 10px 16px;
+    background: #7c3aed;
+    color: white;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 500;
+    margin-top: 8px;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .btn:hover { background: #6d28d9; }
+  .btn-secondary {
+    background: transparent;
+    color: #7c3aed;
+    border: 1px solid #7c3aed;
+  }
+  .btn-secondary:hover { background: #f5f0fa; }
+  #install-prompt { display: none; margin-top: 24px; padding-top: 20px; border-top: 1px solid #eee4d4; }
+  code { font-size: 12px; padding: 2px 6px; background: #f5f0fa; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, monospace; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Opening Arcade Studio…</h1>
+    <p>You've been invited to a live prototype session. If Arcade Studio is installed, it should open automatically.</p>
+    <p class="muted">Session: <code>${escHtml(sessionId)}</code></p>
+    <button class="btn" id="retry">Try opening again</button>
+
+    <div id="install-prompt">
+      <h1 style="font-size: 18px; margin-top: 0;">Don't have Arcade Studio yet?</h1>
+      <p>You'll need version ${escHtml(MIN_VERSION)} or later to join.</p>
+      <a class="btn" href="${escHtml(RELEASES_URL)}" target="_blank" rel="noopener">Download Arcade Studio</a>
+      <a class="btn btn-secondary" id="try-again" href="#">Already installed — try again</a>
+    </div>
+  </div>
+
+<script>
+(function(){
+  var deepLink = '${escJs(deepLink)}';
+  var shown = false;
+  function showInstall() {
+    if (shown) return;
+    shown = true;
+    document.getElementById('install-prompt').style.display = 'block';
+  }
+  function openDeepLink() {
+    window.location.href = deepLink;
+    // If Studio opens, the page will lose focus and this timer effectively
+    // doesn't matter. If nothing handles the scheme, we fall through to the
+    // install prompt after 2.5 seconds.
+    setTimeout(showInstall, 2500);
+  }
+  document.getElementById('retry').addEventListener('click', openDeepLink);
+  document.getElementById('try-again').addEventListener('click', function(e) {
+    e.preventDefault();
+    openDeepLink();
+  });
+  // Attempt on load.
+  openDeepLink();
+})();
+</script>
+</body>
+</html>`;
 }

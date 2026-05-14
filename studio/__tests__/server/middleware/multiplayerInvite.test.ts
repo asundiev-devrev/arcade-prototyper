@@ -98,8 +98,11 @@ describe("multiplayerInviteMiddleware", () => {
     expect(response._status).toBe(201);
     const body = JSON.parse(response._body!);
     expect(body.sessionId).toBeTruthy();
-    expect(body.inviteUrl).toMatch(/^arcade-studio:\/\/session\//);
+    // inviteUrl is the web landing page (Worker /join/<id>), not the raw scheme.
+    expect(body.inviteUrl).toMatch(/^https:\/\/arcade-studio-share\..*\.workers\.dev\/join\//);
     expect(body.inviteUrl).toContain("relay=https%3A%2F%2Fbrave-squirrel-42.trycloudflare.com");
+    // The raw arcade-studio:// deep link is still returned for future clients.
+    expect(body.deepLink).toMatch(/^arcade-studio:\/\/session\//);
     expect(createOrFetchDmMock).toHaveBeenCalledWith(
       "host-pat",
       "don:identity:dvrv-us-1:devo/0:devu/HOST",
@@ -107,8 +110,11 @@ describe("multiplayerInviteMiddleware", () => {
     );
     const postedBody = postToDmMock.mock.calls[0][2];
     expect(postedBody).toContain("invited you");
-    expect(postedBody).toContain("arcade-studio://session/");
+    // DM message now links to the web landing page, not the raw scheme.
+    expect(postedBody).toContain("/join/");
     expect(postedBody).toContain("add a sidebar");
+    // Install-version hint is bumped to 0.18.
+    expect(postedBody).toContain("0.18");
   });
 
   it("returns 401 when no PAT is configured", async () => {
