@@ -95,7 +95,7 @@ export function App() {
         )}
       </StartupAuthGate>
       <Toaster />
-      {deepLink && !joinedSession ? (
+      {deepLink && deepLink.kind === "session" && !joinedSession ? (
         <JoinSessionGate
           sessionId={deepLink.sessionId}
           relayUrl={deepLink.relayUrl}
