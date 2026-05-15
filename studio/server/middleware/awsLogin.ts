@@ -13,7 +13,7 @@ import { hasBedrockAuth } from "../awsPreflight";
  * "Signed in" when the child exits 0.
  *
  * We rely on the launcher having put either a system `aws` or our
- * bundled `Resources/awscli/aws-cli/aws` on PATH — so spawn("aws", ...)
+ * bundled `Resources/aws-cli/aws` on PATH — so spawn("aws", ...)
  * finds it either way.
  *
  * The profile name is hardcoded to "dev" to match what the launcher

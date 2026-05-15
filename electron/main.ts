@@ -2,6 +2,25 @@ import { app, BrowserWindow, shell } from "electron";
 import path from "node:path";
 import { startVite, stopVite } from "./viteRunner.js";
 
+/**
+ * In the packaged app, prefix PATH with the bundled CLI directories
+ * so middleware-spawned subprocesses (claude, cloudflared, aws,
+ * figmanage) resolve to our vendored binaries. In dev, the host's
+ * PATH is used as-is.
+ */
+function patchPath(): void {
+  if (!app.isPackaged) return;
+  const resourcesPath = process.resourcesPath;
+  const dirs = [
+    path.join(resourcesPath, "bin"),
+    path.join(resourcesPath, "bin", "figmanage-bin"),
+    path.join(resourcesPath, "aws-cli"),
+  ];
+  process.env.PATH = `${dirs.join(":")}:${process.env.PATH ?? ""}`;
+  process.env.ARCADE_STUDIO_CLAUDE_BIN = path.join(resourcesPath, "bin", "claude");
+}
+patchPath();
+
 let mainWindow: BrowserWindow | null = null;
 let pendingDeepLink: string | null = null;
 
