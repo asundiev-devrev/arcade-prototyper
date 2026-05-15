@@ -58,7 +58,7 @@ These ship inside the `.app` and resolve via PATH-prefix at launch:
 | CLI | Source | Bundle path |
 |---|---|---|
 | `claude` | npm `@anthropic-ai/claude-code` | `<Resources>/bin/claude` |
-| `figmanage` | npm `figmanage` | `<Resources>/bin/figmanage-bin/figmanage` |
+| `figmanage` | npm `figmanage` (wrapper at `electron/bin/figmanage` + bundled `node_modules/figmanage/`) | `<Resources>/bin/figmanage` |
 | `cloudflared` | GitHub release (build-time fetch) | `<Resources>/bin/cloudflared` |
 | `aws` (AWS CLI v2) | Apple `.pkg` (build-time fetch) | `<Resources>/aws-cli/aws` |
 

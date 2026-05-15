@@ -16,7 +16,6 @@ function patchPath(): void {
   const resourcesPath = process.resourcesPath;
   const dirs = [
     path.join(resourcesPath, "bin"),
-    path.join(resourcesPath, "bin", "figmanage-bin"),
     path.join(resourcesPath, "aws-cli"),
   ];
   process.env.PATH = `${dirs.join(":")}:${process.env.PATH ?? ""}`;

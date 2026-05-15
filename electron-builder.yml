@@ -34,9 +34,8 @@ files:
 extraResources:
   - from: "node_modules/@anthropic-ai/claude-code/bin/claude.exe"
     to: "bin/claude"
-  - from: "node_modules/figmanage/bin"
-    to: "bin/figmanage-bin"
-    filter: ["**/*"]
+  - from: "electron/bin/figmanage"
+    to: "bin/figmanage"
   - from: "studio/packaging/cloudflared/cloudflared"
     to: "bin/cloudflared"
   # AWS CLI v2 expanded layout from fetch-cli-deps.sh is
