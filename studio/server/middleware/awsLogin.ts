@@ -12,12 +12,14 @@ import { hasBedrockAuth } from "../awsPreflight";
  * browser…" / "waiting for approval…" progress and then flip to
  * "Signed in" when the child exits 0.
  *
- * We rely on the launcher having put either a system `aws` or our
- * bundled `Resources/aws-cli/aws` on PATH — so spawn("aws", ...)
- * finds it either way.
+ * We rely on `electron/main.ts`'s `patchPath()` having put either a
+ * system `aws` or our bundled `Resources/aws-cli/aws` on PATH — so
+ * spawn("aws", ...) finds it either way.
  *
- * The profile name is hardcoded to "dev" to match what the launcher
- * writes into ~/.aws/config on first run. If a user customizes their
+ * The profile name is hardcoded to "dev" — the convention from the
+ * legacy bash launcher that first-run-bootstrapped a `[profile dev]`
+ * block. The Electron wrapper does NOT auto-bootstrap; first-time
+ * users follow `studio/docs/aws-setup.md`. If a user customizes their
  * profile, they can still run `aws sso login --profile <theirs>` in
  * Terminal — we just optimize for the default path.
  */
