@@ -16,8 +16,13 @@ import { fontsMiddleware } from "./server/middleware/fonts";
 import { devrevMiddleware } from "./server/middleware/devrev";
 import { multiplayerMiddleware } from "./server/middleware/multiplayer";
 import { multiplayerInviteMiddleware } from "./server/middleware/multiplayerInvite";
+import { projectSharingMiddleware } from "./server/middleware/projectSharing";
+import { sharedProjectsMiddleware } from "./server/middleware/sharedProjects";
 import { attachRelayToHttpServer } from "./server/relay/wsServer";
 import { hydrateSessionRegistry } from "./server/relay/sessionRegistry";
+import { hydrateProjectRegistry } from "./server/relay/projectRegistry";
+import { listMirrors } from "./server/sharedProjects/cache";
+import { connectMirror } from "./server/sharedProjects/relayClient";
 import { settingsMiddleware } from "./server/middleware/settings";
 import { thumbnailsMiddleware } from "./server/middleware/thumbnails";
 import { liftMiddleware } from "./server/middleware/lift";
@@ -42,6 +47,8 @@ function apiPlugin(): import("vite").Plugin {
       server.middlewares.use(devrevMiddleware());
       server.middlewares.use(multiplayerMiddleware());
       server.middlewares.use(multiplayerInviteMiddleware());
+      server.middlewares.use(projectSharingMiddleware());
+      server.middlewares.use(sharedProjectsMiddleware());
       server.middlewares.use(settingsMiddleware());
       server.middlewares.use(cloudflareMiddleware());
       server.middlewares.use(projectsMiddleware());
@@ -64,14 +71,34 @@ function apiPlugin(): import("vite").Plugin {
       // after BOTH the HTTP server is listening AND hydration has settled —
       // otherwise a guest upgrade landing before hydration finishes would
       // see an empty registry and get a phantom 404.
-      const hydrated = hydrateSessionRegistry().catch((err) => {
-        console.warn("[studio/multiplayer] hydrate failed:", err);
-      });
+      const hydrated = Promise.all([
+        hydrateSessionRegistry().catch((err) => {
+          console.warn("[studio/multiplayer] hydrate failed:", err);
+        }),
+        hydrateProjectRegistry().catch((err) => {
+          console.warn("[studio/shared-projects] hydrate failed:", err);
+        }),
+      ]);
       server.httpServer?.once("listening", () => {
         const http = server.httpServer;
         if (!http) return;
         void hydrated.then(() => attachRelayToHttpServer(http as HttpServer));
       });
+      // Auto-resume persisted shared-project mirrors. Each mirror reconnects
+      // to its host's relay over WS independently; failures are logged but
+      // don't block boot.
+      void (async () => {
+        try {
+          const mirrors = await listMirrors();
+          for (const m of mirrors) {
+            connectMirror(m.id).catch((err) =>
+              console.warn(`[shared-projects] failed to reconnect ${m.id}:`, err),
+            );
+          }
+        } catch (err) {
+          console.warn("[shared-projects] failed to enumerate mirrors:", err);
+        }
+      })();
       void logVersionOnBoot();
       void cleanStaleStagingSessions();
       refreshStaleClaudeMd()
