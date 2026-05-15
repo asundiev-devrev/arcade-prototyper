@@ -50,6 +50,7 @@ extraResources:
 
 mac:
   category: public.app-category.developer-tools
+  icon: electron/icon.icns
   target:
     - target: dmg
       arch: arm64

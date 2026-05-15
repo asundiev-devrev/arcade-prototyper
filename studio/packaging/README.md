@@ -23,11 +23,12 @@ on other Macs.
 
 Signed + notarized release build:
 ```
-export CSC_NAME="Developer ID Application: DevRev, Inc. (NJDA6Y3XRS)"
 pnpm run studio:release
 ```
-Builds, signs every nested binary, notarizes both `.app` and DMG,
-staples the receipts, and publishes the release to the public mirror
+The signing identity is pinned in `electron-builder.yml#mac.identity`,
+so no `CSC_NAME` env var is needed (and setting one would override the
+YAML config). Builds, signs every nested binary, notarizes both `.app`
+and DMG, staples the receipts, and publishes the release to the public mirror
 (`asundiev-devrev/arcade-studio-releases`). On next-launch of
 existing 0.x.y installs, `electron-updater` will see the new release
 and prompt for install.
