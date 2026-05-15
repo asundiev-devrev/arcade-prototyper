@@ -54,6 +54,19 @@ export default {
     // the scheme within a few seconds. No auth — URLs are unguessable
     // (UUID session ids) and anyone with the link is already an invitee.
     if (req.method === "GET") {
+      const projectMatch = /^\/project\/([a-zA-Z0-9-]+)\/?$/.exec(url.pathname);
+      if (projectMatch) {
+        const projectShareId = projectMatch[1];
+        const relay = url.searchParams.get("relay") ?? "";
+        const host = url.searchParams.get("host") ?? "";
+        const hostName = url.searchParams.get("hostName") ?? "your teammate";
+        const projectSlug = url.searchParams.get("projectSlug") ?? "";
+        return new Response(
+          renderProjectLandingPage({ projectShareId, relay, host, hostName, projectSlug }),
+          { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } },
+        );
+      }
+
       const joinMatch = /^\/join\/([a-zA-Z0-9-]+)\/?$/.exec(url.pathname);
       if (joinMatch) {
         const sessionId = joinMatch[1];
@@ -66,7 +79,7 @@ export default {
     }
 
     if (req.method !== "POST" || url.pathname !== "/share") {
-      return cors(json(404, { error: { code: "not_found", message: "POST /share or GET /join/<id> only" } }));
+      return cors(json(404, { error: { code: "not_found", message: "POST /share, GET /project/<id>, or GET /join/<id> only" } }));
     }
 
     // ---- auth -------------------------------------------------------------
@@ -603,6 +616,99 @@ function renderJoinLandingPage(sessionId: string, relayUrl: string): string {
     e.preventDefault();
     retryFlow();
   });
+  retryFlow();
+})();
+</script>
+</body>
+</html>`;
+}
+
+/**
+ * Landing page for shared-project invites (Plan 2b). Served from the
+ * share Worker at `GET /project/<shareId>?relay=…&host=…&hostName=…&projectSlug=…`.
+ *
+ * Mirrors the join landing flow (cold-launch retry timing, install
+ * prompt fallback) but builds an `arcade-studio://project/<shareId>` deep
+ * link with the full set of params Studio's protocol handler expects for
+ * the shared-project model.
+ *
+ * Coexists with `/join/<id>` for one release while we migrate clients.
+ *
+ * Safe: escapes every param into HTML attributes + JS strings.
+ */
+function renderProjectLandingPage(input: {
+  projectShareId: string;
+  relay: string;
+  host: string;
+  hostName: string;
+  projectSlug: string;
+}): string {
+  const RELEASES_URL = "https://github.com/asundiev-devrev/arcade-studio-releases/releases/latest";
+  const MIN_VERSION = "0.18";
+  const escHtml = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const escJs = (s: string) =>
+    s.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/</g, "\\u003c");
+
+  const deepLink =
+    `arcade-studio://project/${encodeURIComponent(input.projectShareId)}` +
+    `?relay=${encodeURIComponent(input.relay)}` +
+    `&host=${encodeURIComponent(input.host)}` +
+    `&hostName=${encodeURIComponent(input.hostName)}` +
+    `&projectSlug=${encodeURIComponent(input.projectSlug)}`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Open shared Arcade Studio project</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif; background: #fceade; color: #2a1a3d; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .card { background: white; border-radius: 12px; padding: 32px; max-width: 480px; width: 100%; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
+  h1 { margin: 0 0 8px; font-size: 22px; font-weight: 600; }
+  p { margin: 0 0 16px; line-height: 1.5; color: #4a3a5d; }
+  .muted { font-size: 13px; color: #6a5a7d; }
+  .btn { display: inline-block; padding: 10px 16px; background: #7c3aed; color: white; text-decoration: none; border-radius: 8px; font-weight: 500; margin-top: 8px; border: none; cursor: pointer; font-size: 14px; }
+  .btn:hover { background: #6d28d9; }
+  .btn-secondary { background: transparent; color: #7c3aed; border: 1px solid #7c3aed; }
+  .btn-secondary:hover { background: #f5f0fa; }
+  #install-prompt { display: none; margin-top: 24px; padding-top: 20px; border-top: 1px solid #eee4d4; }
+  code { font-size: 12px; padding: 2px 6px; background: #f5f0fa; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, monospace; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Opening Arcade Studio…</h1>
+    <p id="status">${escHtml(input.hostName)} shared a project with you. If Arcade Studio is installed, it should open automatically.</p>
+    <p class="muted">Project: <code>${escHtml(input.projectSlug || input.projectShareId)}</code></p>
+    <button class="btn" id="retry">Try opening again</button>
+
+    <div id="install-prompt">
+      <h1 style="font-size: 18px; margin-top: 0;">Don't have Arcade Studio yet?</h1>
+      <p>You'll need version ${escHtml(MIN_VERSION)} or later to open shared projects.</p>
+      <a class="btn" href="${escHtml(RELEASES_URL)}" target="_blank" rel="noopener">Download Arcade Studio</a>
+      <a class="btn btn-secondary" id="try-again" href="#">Already installed — try again</a>
+    </div>
+  </div>
+
+<script>
+(function(){
+  var deepLink = '${escJs(deepLink)}';
+  var status = document.getElementById('status');
+  var shown = false;
+  function showInstall() { if (shown) return; shown = true; document.getElementById('install-prompt').style.display = 'block'; }
+  function fireScheme() { window.location.href = deepLink; }
+  function retryFlow() {
+    fireScheme();
+    setTimeout(function() { if (shown) return; fireScheme(); }, 8000);
+    setTimeout(function() { status.textContent = 'Still working on it — the app is starting up.'; }, 3000);
+    setTimeout(showInstall, 18000);
+  }
+  document.getElementById('retry').addEventListener('click', retryFlow);
+  document.getElementById('try-again').addEventListener('click', function(e) { e.preventDefault(); retryFlow(); });
   retryFlow();
 })();
 </script>
