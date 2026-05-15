@@ -1,4 +1,6 @@
 import { app, BrowserWindow, shell } from "electron";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { startVite, stopVite } from "./viteRunner.js";
 import { initUpdater } from "./updater.js";
@@ -21,6 +23,52 @@ function patchPath(): void {
   process.env.ARCADE_STUDIO_CLAUDE_BIN = path.join(resourcesPath, "bin", "claude");
 }
 patchPath();
+
+/**
+ * First-run bootstrap of ~/.aws/config with the DevRev SSO [profile dev]
+ * block. Ported from the legacy launcher.sh.
+ *
+ * Idempotent: if a [profile dev] block already exists (literal line
+ * match, not parsing), the file is left alone. This protects users who
+ * customized their profile from getting clobbered.
+ *
+ * Always sets AWS_PROFILE=dev (unless user already set it) so claude/aws
+ * subprocess invocations default to the SSO profile without users
+ * editing their shell rc files.
+ *
+ * The values match the DevRev Bedrock SSO portal. If they change, this
+ * block AND studio/docs/aws-setup.md must be updated in lockstep.
+ */
+function bootstrapAwsProfile(): void {
+  const awsDir = path.join(os.homedir(), ".aws");
+  const awsConfig = path.join(awsDir, "config");
+
+  let existing = "";
+  try {
+    existing = fs.readFileSync(awsConfig, "utf-8");
+  } catch {
+    // ENOENT — file doesn't exist yet, treat as empty
+  }
+
+  if (!/^\[profile dev\]/m.test(existing)) {
+    const block = [
+      "",
+      "[profile dev]",
+      "sso_start_url = https://d-9067645937.awsapps.com/start#",
+      "sso_region = us-east-1",
+      "sso_account_id = 020040093233",
+      "sso_role_name = BedrockLongLivedTokenAccess",
+      "region = us-east-1",
+      "",
+    ].join("\n");
+    fs.mkdirSync(awsDir, { recursive: true });
+    fs.appendFileSync(awsConfig, block);
+    console.log(`[main] Installed [profile dev] into ${awsConfig}`);
+  }
+
+  process.env.AWS_PROFILE = process.env.AWS_PROFILE || "dev";
+}
+bootstrapAwsProfile();
 
 let mainWindow: BrowserWindow | null = null;
 let pendingDeepLink: string | null = null;

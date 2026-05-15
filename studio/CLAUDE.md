@@ -76,7 +76,7 @@ The version flows from `package.json#version` into the bundle's `Info.plist` (vi
 - **`@xorkavi/arcade-gen/styles.css` is a pre-compiled subset.** It alone is never enough — always pair with Tailwind scanning of the consumer tree.
 - **Radix Select forbids `value=""`.** Use a non-empty sentinel and translate at save/load. Static test at `__tests__/components/select-item-empty-value.test.ts` catches violations.
 - **Claude CLI emits `{type:"result", subtype:"success", is_error:true}` on Bedrock auth failures.** Our parser (`src/lib/streamJson.ts`) honors `is_error` over `subtype` specifically for this. Don't "simplify" that check.
-- **`~/.aws/config` is no longer auto-bootstrapped on first run.** The old `launcher.sh` wrote a `[profile dev]` block on first launch; the Electron wrapper does not. First-time beta testers must run `aws configure sso` themselves (the AuthExpiredNotice in the UI links to `studio/docs/aws-setup.md`). If we re-add bootstrap, do it in `electron/main.ts` and keep it idempotent — users with customized `[profile dev]` must not get clobbered.
+- **`~/.aws/config` is bootstrapped on first run.** `electron/main.ts`'s `bootstrapAwsProfile()` writes the `[profile dev]` block when missing (ported from the legacy `launcher.sh`). Idempotent — users with a customized `[profile dev]` are NOT clobbered (literal `^\[profile dev\]` line match before append). It also defensively sets `AWS_PROFILE=dev` so `claude`/`aws` subprocesses inherit it. If we change the SSO portal values, both this code AND `studio/docs/aws-setup.md` must be updated in lockstep.
 
 ## Integrations — who owns what
 
