@@ -247,53 +247,72 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
     }
 
     if (userMentionTargets.length > 0) {
-      // An @-mention of a teammate is treated as an invite-only action.
-      // We fire the invite, show a system message in the chat, and DO NOT
-      // run the normal chat turn — otherwise the agent tries to interpret
-      // the invite text as a design prompt and emits a confusing "no frame
-      // to build" response. v1 invites one user at a time (first match).
+      // Plan 2b: An @-mention is now a shortcut for the project-sharing flow.
+      // We check whether the mentioned devu is already on the project's
+      // shared_with list; if not, we confirm with the user and POST to the
+      // sharing endpoint. Either way we skip the chat turn — the @-mention
+      // text is not a design prompt, and letting it run would just produce a
+      // confusing "no frame to build" response. v1 shares one user at a time
+      // (first match).
       const guest = userMentionTargets[0];
       try {
-        const inviteRes = await fetch("/api/multiplayer/invite", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            projectSlug,
-            guestDevu: guest.devu,
-            guestDisplayName: guest.displayName,
-            promptPreview: text.trim().slice(0, 120),
-          }),
-        });
-        if (!inviteRes.ok) {
-          const data = await inviteRes.json().catch(() => ({}));
-          toast({
-            title: `Invite failed: ${(data as { error?: string })?.error ?? inviteRes.status}`,
-            intent: "alert",
+        // Fetch current shared_with to avoid re-confirming for collaborators
+        // who are already on the project.
+        const curRes = await fetch(`/api/projects/${projectSlug}/share`);
+        const cur = (await curRes.json().catch(() => ({}))) as {
+          shared_with?: { devu: string }[];
+        };
+        const isAlready = (cur.shared_with ?? []).some((c) => c.devu === guest.devu);
+
+        if (!isAlready) {
+          // Native window.confirm is deliberate v1 — a styled inline
+          // confirmation is a polish follow-up.
+          const ok = window.confirm(`Add ${guest.displayName} to this project?`);
+          if (!ok) {
+            // Keep the input intact so the host can edit and try again.
+            return;
+          }
+          const shareRes = await fetch(`/api/projects/${projectSlug}/share`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ devu: guest.devu, displayName: guest.displayName }),
           });
-          return;
+          if (!shareRes.ok) {
+            const data = await shareRes.json().catch(() => ({}));
+            toast({
+              title: `Share failed: ${(data as { error?: string })?.error ?? shareRes.status}`,
+              intent: "alert",
+            });
+            return;
+          }
+          toast({
+            title: `Shared with ${guest.displayName}`,
+            intent: "success",
+          });
+        } else {
+          toast({
+            title: `${guest.displayName} is already on this project`,
+            intent: "info",
+          });
         }
-        toast({
-          title: `Invited ${guest.displayName}`,
-          intent: "success",
-        });
       } catch (err) {
         toast({
-          title: `Invite failed: ${(err as Error).message}`,
+          title: `Share failed: ${(err as Error).message}`,
           intent: "alert",
         });
         return;
       }
-      // Clear the input and stop — the server-side invite already wrote a
-      // system message to the chat history, so the next history refresh
-      // will render "Invited Konstantin..." inline. Do NOT run the chat
-      // turn for an invite-only prompt.
+      // Clear the input and stop. We keep the existing custom-event dispatch
+      // so any chat-history-driven UI gets a chance to refresh; the
+      // multiplayerInvite middleware (2a) used to write a system message —
+      // the new share endpoint does not, so the system-message side-effect
+      // is intentionally left to a follow-up task.
       setText("");
       setImages([]);
       setImagePaths([]);
       setDetectedFigmaUrl(null);
       setMention(null);
       clearTarget();
-      // Tell the host to reload the chat history so the system message appears.
       window.dispatchEvent(new CustomEvent("arcade-studio:refresh-chat-history"));
       return;
     }
