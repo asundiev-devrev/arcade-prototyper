@@ -96,7 +96,11 @@ echo "==> Installing launcher"
 cp "$PKG_DIR/launcher.sh" "$MACOS/Arcade Studio"
 chmod +x "$MACOS/Arcade Studio"
 
-echo "==> Ad-hoc codesigning"
+if [ -n "${CODESIGN_IDENTITY:-}" ]; then
+  echo "==> Codesigning with: $CODESIGN_IDENTITY"
+else
+  echo "==> Ad-hoc codesigning (set CODESIGN_IDENTITY for release builds)"
+fi
 bash "$PKG_DIR/lib/codesign.sh" "$APP"
 
 echo ""
