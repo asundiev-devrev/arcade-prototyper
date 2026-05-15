@@ -21,12 +21,22 @@ export async function startVite(appRoot: string): Promise<string> {
   const viteEntry = path.join(appRoot, "node_modules", "vite", "bin", "vite.js");
   const configPath = path.join(appRoot, "studio", "vite.config.ts");
 
+  console.log(`[viteRunner] spawning Vite via ${process.execPath} entry=${viteEntry} cwd=${appRoot}`);
   viteProc = spawn(process.execPath, [viteEntry, "--config", configPath], {
     cwd: appRoot,
     env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
-    stdio: ["ignore", "inherit", "inherit"],
+    stdio: ["ignore", "pipe", "pipe"],
   });
 
+  viteProc.stdout?.on("data", (chunk) => {
+    console.log(`[vite stdout] ${chunk.toString().trimEnd()}`);
+  });
+  viteProc.stderr?.on("data", (chunk) => {
+    console.error(`[vite stderr] ${chunk.toString().trimEnd()}`);
+  });
+  viteProc.on("error", (err) => {
+    console.error(`[viteRunner] spawn error: ${err.message}`);
+  });
   viteProc.on("exit", (code, signal) => {
     console.log(`[viteRunner] Vite exited with code=${code} signal=${signal}`);
     viteProc = null;
