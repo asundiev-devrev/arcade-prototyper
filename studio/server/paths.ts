@@ -100,3 +100,12 @@ export function multiplayerRoot(): string {
 export function sessionsJsonPath(): string {
   return path.join(multiplayerRoot(), "sessions.json");
 }
+
+/**
+ * Plan 2b shared-project state: one entry per (hostDevu, projectSlug) pair,
+ * with the list of `shared_with` recipients. Replaces the v1 per-session
+ * model. Read at startup; rewritten on every share/unshare.
+ */
+export function projectsJsonPath(): string {
+  return path.join(multiplayerRoot(), "projects.json");
+}

@@ -3,7 +3,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
+  loadProjects,
   loadSessions,
+  saveProjects,
   saveSessions,
 } from "../../../server/relay/persistence";
 import type { SessionState } from "../../../server/relay/types";
@@ -75,5 +77,62 @@ describe("relay persistence", () => {
     const dir = path.join(tmp, "multiplayer");
     const tmpFiles = fs.readdirSync(dir).filter((f) => f.endsWith(".tmp"));
     expect(tmpFiles).toEqual([]);
+  });
+});
+
+describe("relay persistence — Plan 2b projects", () => {
+  it("loadProjects returns [] when no file exists", async () => {
+    const result = await loadProjects();
+    expect(result).toEqual([]);
+  });
+
+  it("saveProjects writes a v2 file that loadProjects round-trips", async () => {
+    const before = [
+      {
+        id: "abc",
+        hostDevu: "don:identity:dvrv-us-1:devo/0:devu/1",
+        projectSlug: "my-proj",
+        createdAt: "2026-05-15T13:00:00Z",
+        shared_with: [],
+      },
+    ];
+    await saveProjects(before);
+    const after = await loadProjects();
+    expect(after).toEqual(before);
+    const file = path.join(tmp, "multiplayer", "projects.json");
+    expect(fs.existsSync(file)).toBe(true);
+    const raw = JSON.parse(fs.readFileSync(file, "utf-8"));
+    expect(raw.version).toBe(2);
+  });
+
+  it("loadProjects migrates v1 sessions.json into projects.json", async () => {
+    const sessionsDir = path.join(tmp, "multiplayer");
+    fs.mkdirSync(sessionsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(sessionsDir, "sessions.json"),
+      JSON.stringify({
+        version: 1,
+        sessions: [
+          {
+            id: "old-session-id",
+            sessionObject: "x",
+            hostDevu: "don:identity:dvrv-us-1:devo/0:devu/1",
+            projectSlug: "legacy-proj",
+            linkedWorkId: null,
+            createdAt: "2026-05-08T00:00:00Z",
+            endedAt: null,
+            invites: [],
+          },
+        ],
+      }),
+    );
+    const projects = await loadProjects();
+    expect(projects).toHaveLength(1);
+    expect(projects[0]?.projectSlug).toBe("legacy-proj");
+    expect(projects[0]?.shared_with).toEqual([]);
+    // Migration should have written the new file.
+    const newFile = path.join(tmp, "multiplayer", "projects.json");
+    const written = JSON.parse(fs.readFileSync(newFile, "utf-8"));
+    expect(written.version).toBe(2);
   });
 });
