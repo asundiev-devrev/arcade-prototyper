@@ -92,7 +92,7 @@ if lsof -nP -iTCP:5556 -sTCP:LISTEN >/dev/null 2>&1; then
     if [ -n "$DEEP_LINK" ]; then
       # URL-encode the deep link and pass as hash fragment. The front end's
       # useDeepLinkRoute hook reads the hash on boot.
-      HASH=$(printf '%s' "$DEEP_LINK" | python3 -c 'import sys,urllib.parse; print("#join=" + urllib.parse.quote(sys.stdin.read().strip(), safe=""))')
+      HASH=$(printf '%s' "$DEEP_LINK" | python3 -c 'import sys,urllib.parse; print("#share=" + urllib.parse.quote(sys.stdin.read().strip(), safe=""))')
       open "http://localhost:5556/$HASH"
     else
       open "http://localhost:5556"
@@ -141,7 +141,7 @@ for _ in $(seq 1 60); do
     if [ -n "$DEEP_LINK" ]; then
       # URL-encode the deep link and pass as hash fragment. The front end's
       # useDeepLinkRoute hook reads the hash on boot.
-      HASH=$(printf '%s' "$DEEP_LINK" | python3 -c 'import sys,urllib.parse; print("#join=" + urllib.parse.quote(sys.stdin.read().strip(), safe=""))')
+      HASH=$(printf '%s' "$DEEP_LINK" | python3 -c 'import sys,urllib.parse; print("#share=" + urllib.parse.quote(sys.stdin.read().strip(), safe=""))')
       open "http://localhost:5556/$HASH"
     else
       open "http://localhost:5556"
