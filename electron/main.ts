@@ -1,6 +1,6 @@
 import { app, BrowserWindow, shell } from "electron";
 import path from "node:path";
-import { startVite, stopVite } from "./viteRunner";
+import { startVite, stopVite } from "./viteRunner.js";
 
 let mainWindow: BrowserWindow | null = null;
 let pendingDeepLink: string | null = null;
