@@ -1,6 +1,7 @@
 import { app, BrowserWindow, shell } from "electron";
 import path from "node:path";
 import { startVite, stopVite } from "./viteRunner.js";
+import { initUpdater } from "./updater.js";
 
 /**
  * In the packaged app, prefix PATH with the bundled CLI directories
@@ -100,6 +101,7 @@ app.on("open-url", (event, url) => {
 
 app.whenReady().then(() => {
   void createWindow();
+  initUpdater();
 });
 
 app.on("window-all-closed", () => {
