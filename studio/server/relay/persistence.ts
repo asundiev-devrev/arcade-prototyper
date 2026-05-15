@@ -1,6 +1,10 @@
 import fs from "node:fs/promises";
 import { multiplayerRoot, sessionsJsonPath } from "../paths";
-import { sessionsFileSchema, type SessionState } from "./types";
+import {
+  sessionsFileSchema,
+  type ProjectState,
+  type SessionState,
+} from "./types";
 
 /**
  * Load all persisted sessions. Returns [] for any failure mode (missing file,
@@ -30,4 +34,17 @@ export async function saveSessions(sessions: SessionState[]): Promise<void> {
   const body = JSON.stringify({ version: 1, sessions }, null, 2);
   await fs.writeFile(tmpFile, body, "utf-8");
   await fs.rename(tmpFile, file);
+}
+
+// ── Plan 2b shared-project persistence (stubs) ───────────────────────
+// Task 4 replaces these with real persistence + migration logic that
+// reads/writes `relay/projects.json`. Until then projectRegistry imports
+// these names so its module graph compiles.
+
+export async function loadProjects(): Promise<ProjectState[]> {
+  return [];
+}
+
+export async function saveProjects(_projects: ProjectState[]): Promise<void> {
+  // no-op until Task 4
 }
