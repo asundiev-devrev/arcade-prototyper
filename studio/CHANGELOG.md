@@ -6,6 +6,26 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.19.0] — 2026-05-15
+
+### Changed
+- Build is now signed with DevRev's Apple Developer ID and notarized by
+  Apple. First launch no longer triggers the "unidentified developer"
+  Gatekeeper warning. No more right-click → Open dance.
+- Bundle identifier changed from `com.devrev.arcade-studio` to
+  `ai.devrev.internal.ArcadeStudio`. macOS treats the signed build as a
+  separate app from the previous unsigned ones — drag the old
+  `Arcade Studio.app` to the trash before installing 0.19.0 to avoid
+  having two installed simultaneously.
+
+### Migration notes
+- Your projects, settings, and DevRev PAT carry over automatically — they
+  live under `~/Library/Application Support/arcade-studio/` and the
+  macOS Keychain, both keyed by path/service name rather than bundle ID.
+- On first launch of 0.19.0, macOS may prompt you to allow the new app
+  to read the existing DevRev PAT from the Keychain (because the
+  signing identity changed). Click **Always Allow**.
+
 ## [0.17.1] — 2026-05-13
 
 ### Changed

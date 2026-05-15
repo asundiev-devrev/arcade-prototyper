@@ -118,6 +118,17 @@ hdiutil detach "$MOUNT"
 rm -f "$DMG"
 hdiutil convert "$DMG_RW" -format UDZO -imagekey zlib-level=9 -o "$DMG"
 
+# Sign the DMG container so notarization accepts it. Same identity as the
+# .app. The DMG doesn't need entitlements or the hardened runtime — it's
+# a disk image, not an executable — but it does need the timestamp and
+# Developer ID identity. Skipped silently when CODESIGN_IDENTITY is unset
+# so dev rebuilds still produce a usable (if unsigned) DMG.
+if [ -n "${CODESIGN_IDENTITY:-}" ]; then
+  echo "==> Signing DMG"
+  codesign --force --sign "$CODESIGN_IDENTITY" --timestamp "$DMG"
+  codesign -dv "$DMG" 2>&1 || true
+fi
+
 echo ""
 echo "✓ DMG: $DMG"
 du -sh "$DMG"
