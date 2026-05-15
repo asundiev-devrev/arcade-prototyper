@@ -1,5 +1,9 @@
 import { app, dialog } from "electron";
-import { autoUpdater } from "electron-updater";
+// electron-updater ships as CommonJS. Under ESM, named imports of
+// `autoUpdater` fail at runtime ("Named export 'autoUpdater' not
+// found"). Default-import the package and destructure.
+import electronUpdaterPkg from "electron-updater";
+const { autoUpdater } = electronUpdaterPkg;
 
 /**
  * Initializes electron-updater with the GitHub Releases provider.
