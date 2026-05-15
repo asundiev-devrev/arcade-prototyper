@@ -24,6 +24,75 @@ Produces `studio/packaging/dist/Arcade Studio.app` and `studio/packaging/dist/Ar
 
 This bundle is for DevRev-internal distribution. Apple Developer ID signing + notarization are deferred until we have a DevRev signing certificate. Once we do, the Privacy & Security dance goes away and double-click just works.
 
+## Signing and notarization
+
+The packaging supports two modes:
+
+- **Ad-hoc** (the default): runs `codesign --sign -`. The resulting `.app`
+  works on the build machine but Gatekeeper warns on other Macs ("from
+  an unidentified developer"). Use this for dev rebuilds. Just run
+  `pnpm run studio:pack`.
+
+- **Developer ID + notarized**: signs with the org's Apple Developer ID,
+  applies hardened-runtime entitlements, then submits the DMG to Apple
+  for notarization and staples the receipt. Use this for releases shipped
+  to beta testers.
+
+### One-time setup for releases
+
+1. Get the org's Developer ID Application certificate installed in your
+   login keychain. Verify with:
+   ```
+   security find-identity -v -p codesigning
+   ```
+   You're looking for a line like
+   `"Developer ID Application: DevRev Inc. (XXXXXXXXXX)"`.
+
+2. Create a notarytool keychain profile (one-time):
+   ```
+   xcrun notarytool store-credentials arcade-studio-notarize \
+     --apple-id <your-apple-id> \
+     --team-id <TEAMID> \
+     --password <app-specific-password>
+   ```
+   App-specific passwords come from
+   https://appleid.apple.com → Sign-In & Security.
+
+### Building a signed + notarized release
+
+```
+export CODESIGN_IDENTITY="Developer ID Application: DevRev Inc. (XXXXXXXXXX)"
+pnpm run studio:release
+```
+
+The script:
+1. Builds the `.app`, signing all nested binaries individually with the
+   Developer ID, hardened runtime, and entitlements
+   (`packaging/entitlements.plist`).
+2. Wraps it in a DMG and signs the DMG container.
+3. Submits the DMG to Apple notarization (`xcrun notarytool submit --wait`).
+   Typical wait is 1-5 minutes.
+4. Staples the notarization receipt to the DMG so first-launch on
+   offline machines still works.
+
+To verify the result on the build machine:
+```
+spctl --assess --type open --context context:primary-signature --verbose=4 \
+  "studio/packaging/dist/Arcade Studio <VERSION>.dmg"
+```
+Expected: `accepted; source=Notarized Developer ID`.
+
+### Notarization rejections
+
+If notarization fails, the script prints the submission ID and the path
+to the log. To see Apple's rejection reasons:
+```
+xcrun notarytool log <SUBMISSION_ID> --keychain-profile arcade-studio-notarize
+```
+Common causes: a nested binary missing the hardened-runtime flag, an
+entitlement disallowed by the Developer ID profile, or a binary signed
+with `--timestamp=none` (Apple requires a secure timestamp).
+
 ## Size
 
 The DMG is ~290 MB compressed; the installed `.app` is ~710 MB. Most of that is Node (~80 MB), the full repo `node_modules` (~550 MB including playwright/vite/tailwind/etc.), and the vendored `figmanage` and `claude-code` CLIs.
