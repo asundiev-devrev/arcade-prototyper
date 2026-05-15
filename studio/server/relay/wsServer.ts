@@ -134,7 +134,7 @@ function onConnection(
       code: "project_gone",
       message: "Project no longer exists.",
     });
-    ws.close(4403, "project_gone");
+    ws.close(4404, "project_gone");
     return;
   }
 

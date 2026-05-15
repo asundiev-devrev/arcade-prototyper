@@ -24,7 +24,7 @@ import type { ReplayBuffer } from "./replayBuffer";
 const CONTROL_REQUEST_TTL_MS = 30_000;
 const DORMANT_TAKEOVER_MS = 60_000;
 
-export interface ConnectionRef {
+interface ConnectionRef {
   connId: string;
   devu: string;
   displayName: string;
