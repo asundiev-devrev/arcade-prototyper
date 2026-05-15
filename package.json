@@ -3,12 +3,13 @@
   "private": true,
   "type": "module",
   "main": "electron/dist/main.js",
+  "version": "0.21.0",
   "scripts": {
     "studio": "vite --config studio/vite.config.ts",
     "studio:electron": "concurrently --kill-others --names vite,electron \"ARCADE_STUDIO_OPEN_BROWSER=0 pnpm run studio\" \"pnpm exec tsc -p electron/tsconfig.json && pnpm exec electron .\"",
     "studio:test": "vitest run --config studio/vitest.config.ts",
-    "studio:pack": "bash studio/packaging/build.sh && bash studio/packaging/dmg.sh",
-    "studio:release": "bash studio/packaging/build.sh && bash studio/packaging/dmg.sh && bash studio/packaging/lib/notarize.sh \"studio/packaging/dist/Arcade Studio $(cat studio/packaging/VERSION).dmg\"",
+    "studio:pack": "pnpm exec tsc -p electron/tsconfig.json && pnpm exec electron-builder --mac --config electron-builder.yml --publish never",
+    "studio:release": "pnpm exec tsc -p electron/tsconfig.json && pnpm exec electron-builder --mac --config electron-builder.yml --publish always",
     "studio:audit": "DRIFT_AUDIT=1 vitest run --config studio/vitest.config.ts __tests__/lift/drift --reporter=verbose"
   },
   "dependencies": {
