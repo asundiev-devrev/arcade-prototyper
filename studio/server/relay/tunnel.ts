@@ -132,3 +132,34 @@ export function __resetTunnelForTests(): void {
   currentProc = null;
   currentUrl = null;
 }
+
+const refs = new Set<string>();
+
+/**
+ * Acquire the shared tunnel on behalf of a project. If the tunnel isn't
+ * running, start it. Multiple projects share one cloudflared process —
+ * the public tunnel URL is identical for all of them; allowlist enforcement
+ * happens at the WebSocket layer, not at the tunnel.
+ */
+export async function acquireTunnel(holderId: string): Promise<string> {
+  refs.add(holderId);
+  const existing = currentTunnelUrl();
+  if (existing) return existing;
+  return startTunnel({ port: 5556 });
+}
+
+/**
+ * Release the tunnel on behalf of a project. When the last holder
+ * releases, the tunnel is stopped to reclaim the cloudflared process.
+ */
+export async function releaseTunnel(holderId: string): Promise<void> {
+  refs.delete(holderId);
+  if (refs.size === 0) {
+    await stopTunnel();
+  }
+}
+
+/** Test-only: clear the holder set without touching the tunnel. */
+export function __resetTunnelRefsForTests(): void {
+  refs.clear();
+}
