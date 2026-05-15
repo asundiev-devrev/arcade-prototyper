@@ -5,6 +5,16 @@ appId: ai.devrev.internal.ArcadeStudio
 productName: Arcade Studio
 copyright: Copyright © 2026 DevRev, Inc.
 
+# Disable asar packaging. Vite + the studio middleware need real
+# filesystem access throughout node_modules and studio/ at runtime
+# (file watching, source reads, middleware spawning subprocesses
+# pointed at JS entry files). Inside an asar archive those paths are
+# virtual — Vite's `vite.js` entry is unspawnable as a child process,
+# and middleware that does `fs.readFile` on relative paths fails.
+# Trade-off: slightly larger bundle, no integrity hash. Worth it for
+# correctness.
+asar: false
+
 # Source files included in the .app bundle.
 # All files matched here go to <Resources>/app/, so the runtime
 # layout matches what electron/main.ts expects (appRoot() returns
