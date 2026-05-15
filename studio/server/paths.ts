@@ -119,3 +119,22 @@ export function sessionsJsonPath(): string {
 export function projectsJsonPath(): string {
   return path.join(multiplayerRoot(), "projects.json");
 }
+
+/**
+ * Root folder for the GUEST-side on-disk mirror of shared projects.
+ * Sibling of `projects/` and `multiplayer/`. Each entry is an opaque
+ * shared-project id (not a slug) — recipients receive these from invite
+ * payloads and must not be subject to the `requireSlug` constraints.
+ */
+export function sharedProjectsRoot(): string {
+  return path.join(studioRoot(), "shared-projects");
+}
+
+/**
+ * Per-shared-project mirror directory on the GUEST side. Holds
+ * `metadata.json`, `chat-history.json`, and a `frames/` subdir with
+ * last-seen frame content keyed by frame path.
+ */
+export function sharedProjectDir(id: string): string {
+  return path.join(sharedProjectsRoot(), id);
+}
