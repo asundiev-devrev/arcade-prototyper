@@ -106,6 +106,13 @@ else
 fi
 bash "$PKG_DIR/lib/codesign.sh" "$APP"
 
+# Notarize + staple the .app itself, BEFORE wrapping it in the DMG.
+# Without this, Gatekeeper's runtime deep-verify fails on the extracted
+# app with "Arcade Studio is damaged" — the DMG's notarization ticket
+# does not transfer into the .app's bundle. No-op when CODESIGN_IDENTITY
+# isn't set (ad-hoc dev builds).
+bash "$PKG_DIR/lib/notarize-app.sh" "$APP"
+
 echo ""
 echo "✓ Built: $APP (${VERSION_BUILD})"
 du -sh "$APP"
