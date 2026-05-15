@@ -68,13 +68,22 @@ describe("multiplayer shared project — end to end", () => {
     await new Promise((r) => setTimeout(r, 50));
 
     // Guest joins for the first time AFTER the frame_write was sent.
-    const guest = await open(`projectShareId=${project.id}&pat=guest-pat&asRole=guest`);
-    const replay = await new Promise<any>((r) => {
+    // Attach the message listener BEFORE awaiting open — the relay sends
+    // cache_replay synchronously inside handleUpgrade, so a listener
+    // attached after `open` resolves can race past it. Same pattern as
+    // wsServerJoin.test.ts.
+    const guest = new WebSocket(`ws://localhost:${port}/api/multiplayer/ws?projectShareId=${project.id}&pat=guest-pat&asRole=guest`);
+    const replayPromise = new Promise<any>((r) => {
       guest.on("message", (raw) => {
         const ev = JSON.parse(raw.toString());
         if (ev.type === "cache_replay") r(ev);
       });
     });
+    await new Promise<void>((r, j) => {
+      guest.once("open", () => r());
+      guest.once("error", j);
+    });
+    const replay = await replayPromise;
     expect(replay.frames["frame-01"]).toBe("v1");
     host.close();
     guest.close();

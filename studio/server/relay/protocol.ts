@@ -347,6 +347,11 @@ export function applyCommand(
           event: { type: "agent_event", turnId: cmd.turnId, event: cmd.event },
         });
       } else if (cmd.type === "frame_write") {
+        // Record into replay buffer so late-joining guests get this frame
+        // via cache_replay. Idempotent: overwrites any prior content for
+        // this path. The chatRelayMirror records on the host's local path;
+        // this case covers commands arriving over the WebSocket.
+        s.replayBuffer.recordFrame(cmd.path, cmd.content);
         events.push({
           recipient: "broadcast",
           event: {
@@ -357,6 +362,7 @@ export function applyCommand(
           },
         });
       } else if (cmd.type === "frame_delete") {
+        s.replayBuffer.deleteFrame(cmd.path);
         events.push({
           recipient: "broadcast",
           event: { type: "frame_deleted", path: cmd.path },
