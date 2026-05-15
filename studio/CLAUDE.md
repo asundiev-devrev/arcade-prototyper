@@ -18,11 +18,19 @@ studio/
 ├── worker/              Cloudflare Worker that proxies share deploys (holds the real CF API token)
 ├── server/plugins/      Vite plugins (frame mount, project watch, etc.)
 ├── prototype-kit/       Composites + templates the generator is told to use
-├── packaging/           DMG build: download-node, download-awscli, build.sh, dmg.sh, launcher.sh
+├── packaging/           CLI deps + icon (fetch-cli-deps.sh vendors claude/cloudflared/awscli into packaging/{aws-cli,cloudflared}/)
 ├── __tests__/           Vitest suite (173 tests as of 0.3.0)
 ├── docs/                User-facing docs (aws-setup.md, etc.)
 ├── CHANGELOG.md         Source of truth for "What's new" modal
 └── vite.config.ts       Wires all middleware into Vite's dev server
+```
+
+The `.app` / `.dmg` themselves are produced by **electron-builder** at the repo root:
+
+```
+electron/                Electron main-process source (main.ts, viteRunner.ts, updater.ts) + entitlements + icons
+electron-builder.yml     Bundle config (files globs, extraResources for vendored CLIs, mac signing/notarize)
+package.json#version     Single source of truth for the build version (read by middleware + Info.plist)
 ```
 
 ## Commands (run from repo root, not studio/)
@@ -34,9 +42,9 @@ studio/
 
 ## Releasing a new version
 
-1. Bump `studio/packaging/VERSION` (semver, `0.x.y`).
+1. Bump the top-level `package.json#version` (semver, `0.x.y`). This is the single source of truth — electron-builder reads it for the bundle and the `/api/version` middleware reads it at runtime.
 2. Add an entry at the top of `studio/CHANGELOG.md` — keep-a-changelog style (`## [0.x.0] — YYYY-MM-DD` + Added / Fixed / Changed bullets).
-3. `pnpm run studio:pack` — DMG filename auto-picks up the new version.
+3. `pnpm run studio:pack` — runs `fetch-cli-deps.sh` then electron-builder; DMG lands in `dist/` at the repo root and auto-picks up the new version.
 4. Commit + push.
 5. Publish a release to the **public mirror** repo so beta testers see
    the "update available" banner in the app. The mirror is
@@ -45,27 +53,30 @@ studio/
 
    From this repo, run:
    ```
-   gh release create v0.x.y "studio/packaging/dist/Arcade Studio 0.x.y.dmg" \
+   gh release create v0.x.y "dist/Arcade Studio-0.x.y-arm64.dmg" \
      --repo asundiev-devrev/arcade-studio-releases \
      --title "Arcade Studio 0.x.y" \
      --notes-file <(awk '/^## \[0\.x\.y\]/{f=1;next} /^## \[/{f=0} f' studio/CHANGELOG.md) \
      --latest
    ```
 
+   Or use `pnpm run studio:release` to let electron-builder upload the
+   artifact directly via its `publish: github` config.
+
    The app polls `https://api.github.com/repos/asundiev-devrev/arcade-studio-releases/releases/latest`
    once per launch and caches the response for an hour.
 
-The version is stamped into `Info.plist`, `Contents/Resources/version.json`, the launcher boot log, and the Settings footer. Builds from a dirty working tree get a `-dirty` git-SHA suffix.
+The version flows from `package.json#version` into the bundle's `Info.plist` (via electron-builder's `extendInfo`), the `/api/version` middleware response, and the Settings footer.
 
 ## Things that cost debugging time last session — be wary
 
-- **Vite middleware does NOT hot-reload.** Changes to anything under `server/middleware/*` or `vite.config.ts` require a full restart (quit the app or kill `pnpm run studio` and rerun). Every "it's not working on my machine" that's actually "you didn't restart" traces to this.
+- **Vite middleware does NOT hot-reload.** Changes to anything under `server/middleware/*` or `vite.config.ts` require a full restart (quit the app or kill `pnpm run studio` and rerun). Under `pnpm run studio:electron` the Vite child still has the same restart-required constraint — quit Electron entirely, don't just close the window. Every "it's not working on my machine" that's actually "you didn't restart" traces to this.
 - **Settings PATs follow one pattern.** DevRev, Cloudflare, and Figma all have a section in `AppSettingsModal.tsx` with: password `Input`, Save/Replace/Remove buttons, Connected `Badge`, inline error. When adding a new integration, mirror the existing sections — don't invent a new shape.
 - **Tailwind v4 needs explicit `@source` globs for every consumer root** (studio, prototype-kit, user's frames dir). `studio/src/styles/tailwind.css` sets the static ones; the Vite plugin `injectStudioSourcePlugin` appends the projects root at dev time; `server/cloudflare/bundler.ts` does the same for Cloudflare share bundles. Missing any one of these → classes silently drop in that environment. See auto-memory `tailwind-v4-source-scanning.md`.
 - **`@xorkavi/arcade-gen/styles.css` is a pre-compiled subset.** It alone is never enough — always pair with Tailwind scanning of the consumer tree.
 - **Radix Select forbids `value=""`.** Use a non-empty sentinel and translate at save/load. Static test at `__tests__/components/select-item-empty-value.test.ts` catches violations.
 - **Claude CLI emits `{type:"result", subtype:"success", is_error:true}` on Bedrock auth failures.** Our parser (`src/lib/streamJson.ts`) honors `is_error` over `subtype` specifically for this. Don't "simplify" that check.
-- **`~/.aws/config` is written by the launcher on first run.** If you edit `packaging/launcher.sh`'s AWS block, keep it idempotent (grep-match before appending) — users with customized `[profile dev]` must not get clobbered.
+- **`~/.aws/config` is no longer auto-bootstrapped on first run.** The old `launcher.sh` wrote a `[profile dev]` block on first launch; the Electron wrapper does not. First-time beta testers must run `aws configure sso` themselves (the AuthExpiredNotice in the UI links to `studio/docs/aws-setup.md`). If we re-add bootstrap, do it in `electron/main.ts` and keep it idempotent — users with customized `[profile dev]` must not get clobbered.
 
 ## Integrations — who owns what
 
@@ -82,7 +93,7 @@ Every bug we fix gets a test. Patterns:
 - Server logic → `__tests__/server/...`
 - Parser behavior → `__tests__/lib/streamJson.test.ts`
 - Component behavior → `__tests__/components/*.test.tsx` with `@xorkavi/arcade-gen` mocked (note: mock must export `Modal`, `Input`, `Button`, etc. that the component uses — keep up to date)
-- Packaging e2e → `__tests__/packaging/build.test.ts` (runs the full `build.sh` + `dmg.sh`, ~2 min)
+- Packaging config → `__tests__/packaging/scaffold.test.ts` (asserts the shape of `electron-builder.yml` + supporting assets in `electron/` — pure config check, no actual build)
 
 Run the full suite before committing anything non-trivial: `pnpm run studio:test`.
 
