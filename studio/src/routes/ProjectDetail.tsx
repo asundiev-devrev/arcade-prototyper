@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { IconButton, Tooltip } from "@xorkavi/arcade-gen";
 import type { Project } from "../../server/types";
 import { Viewport } from "../components/viewport/Viewport";
 import { ChatPane } from "../components/chat/ChatPane";
@@ -9,8 +10,36 @@ import { ShareButton } from "../components/shell/ShareButton";
 import { CanvasToggle } from "../components/shell/CanvasToggle";
 import { ChatToggle } from "../components/shell/ChatToggle";
 import { ProjectPicker } from "../components/shell/ProjectPicker";
+import { SharePanel } from "../components/multiplayer/SharePanel";
+import { PresenceStrip } from "../components/multiplayer/PresenceStrip";
 import { ChatStreamProvider } from "../hooks/chatStreamContext";
 import { TargetSelectionProvider } from "../hooks/targetSelectionContext";
+
+interface PresenceConnection {
+  devu: string;
+  displayName: string;
+}
+
+function TeammatesIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
 
 const CHAT_OPEN_STORAGE_KEY = "studio:chatPaneOpen";
 const CHAT_WIDTH_STORAGE_KEY = "studio:chatPaneWidth";
@@ -63,6 +92,13 @@ export function ProjectDetail({
   const [resizing, setResizing] = useState(false);
   const resizeStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const seedChatRef = useRef<((text: string) => void) | null>(null);
+  const [showShare, setShowShare] = useState(false);
+  // Presence wiring lands in Task 21 once host-side EventSource exists; until
+  // then host stays null and guests stays empty so PresenceStrip renders nothing.
+  const [presence] = useState<{ host: PresenceConnection | null; guests: PresenceConnection[] }>({
+    host: null,
+    guests: [],
+  });
 
   useEffect(() => {
     window.localStorage.setItem(CHAT_OPEN_STORAGE_KEY, String(chatOpen));
@@ -178,12 +214,25 @@ export function ProjectDetail({
         }
         right={
           <>
+            <PresenceStrip host={presence.host} guests={presence.guests} />
             <ThemeToggle mode={project.mode} onToggle={toggleProjectMode} />
+            <Tooltip content="Share with teammates">
+              <IconButton
+                aria-label="Share with teammates"
+                variant={showShare ? "primary" : "tertiary"}
+                onClick={() => setShowShare((s) => !s)}
+              >
+                <TeammatesIcon />
+              </IconButton>
+            </Tooltip>
             <ShareButton project={project} />
             <CanvasToggle active={devOpen} onToggle={() => setDevOpen((o) => !o)} />
           </>
         }
       />
+      {showShare && (
+        <SharePanel slug={project.slug} onClose={() => setShowShare(false)} />
+      )}
       <div
         style={{
           display: "grid",
