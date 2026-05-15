@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!--
+    The bundled Node runtime needs JIT for V8, and Claude CLI's vendored
+    Node binary needs unsigned executable memory for its compiled add-ons.
+    Without these the hardened runtime kills the process at first JIT
+    compile with a SIGKILL and a "code signing" message in the system log.
+  -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <!--
+    Node loads many .node native add-ons; keytar in particular ships its
+    own .node binding. Without disabling library validation, the hardened
+    runtime refuses to load any dylib not signed by the same Team ID,
+    which makes our bundled native deps unusable.
+  -->
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+  <!--
+    The launcher relies on PATH, AWS_PROFILE, ARCADE_STUDIO_CLAUDE_BIN, etc.
+    The hardened runtime by default strips most DYLD_* and some shell-side
+    env vars before exec'ing children. We need them preserved end-to-end
+    (launcher.sh → node → claude → cloudflared subprocess chain).
+  -->
+  <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+  <true/>
+</dict>
+</plist>
