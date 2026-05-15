@@ -53,7 +53,10 @@ mac:
   target:
     - target: dmg
       arch: arm64
-  identity: "Developer ID Application: DevRev, Inc. (NJDA6Y3XRS)"
+  # electron-builder requires the identity name WITHOUT the "Developer ID
+  # Application: " prefix — codesign adds that prefix back automatically
+  # when matching the keychain entry.
+  identity: "DevRev, Inc. (NJDA6Y3XRS)"
   hardenedRuntime: true
   gatekeeperAssess: false
   entitlements: electron/entitlements.mac.plist

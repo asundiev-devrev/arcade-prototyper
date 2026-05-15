@@ -33,8 +33,11 @@ describe("electron-builder configuration", () => {
   });
 
   it("declares the Developer ID identity", () => {
-    expect(config.mac?.identity).toContain("Developer ID Application: DevRev, Inc.");
+    // electron-builder requires the name WITHOUT the "Developer ID
+    // Application: " prefix — Apple's codesign adds it back automatically.
+    expect(config.mac?.identity).toContain("DevRev, Inc.");
     expect(config.mac?.identity).toContain("NJDA6Y3XRS");
+    expect(config.mac?.identity).not.toContain("Developer ID Application:");
   });
 
   it("notarizes via the correct team ID", () => {
