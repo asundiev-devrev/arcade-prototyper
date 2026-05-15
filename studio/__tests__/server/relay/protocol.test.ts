@@ -5,6 +5,7 @@ import {
   applyDisconnect,
 } from "../../../server/relay/protocol";
 import type { LiveState } from "../../../server/relay/protocol";
+import { createReplayBuffer } from "../../../server/relay/replayBuffer";
 
 const HOST = "don:identity:dvrv-us-1:devo/0:devu/1";
 const GUEST = "don:identity:dvrv-us-1:devo/0:devu/2";
@@ -12,14 +13,15 @@ const STRANGER = "don:identity:dvrv-us-1:devo/0:devu/99";
 
 function withHostConnected(): LiveState {
   const s = createLiveState({
-    sessionId: "sess-1",
-    sessionObject: "relay-session-1",
+    projectShareId: "proj-1",
     hostDevu: HOST,
-    inviteList: [HOST, GUEST],
+    allowlist: [HOST, GUEST],
+    replayBuffer: createReplayBuffer({ chatTailLimit: 200 }),
   });
   return applyCommand(s, {
     type: "join",
-    sessionId: "sess-1",
+    projectShareId: "proj-1",
+    asRole: "host",
     connDevu: HOST,
     connDisplayName: "Host",
     connId: "c1",
@@ -37,7 +39,8 @@ describe("protocol.applyCommand", () => {
     const s0 = withHostConnected();
     const { nextState, events } = applyCommand(s0, {
       type: "join",
-      sessionId: "sess-1",
+      projectShareId: "proj-1",
+      asRole: "guest",
       connDevu: GUEST,
       connDisplayName: "Guest",
       connId: "c2",
@@ -51,7 +54,8 @@ describe("protocol.applyCommand", () => {
     const s0 = withHostConnected();
     const { nextState, events } = applyCommand(s0, {
       type: "join",
-      sessionId: "sess-1",
+      projectShareId: "proj-1",
+      asRole: "guest",
       connDevu: STRANGER,
       connDisplayName: "Stranger",
       connId: "c3",
@@ -66,7 +70,8 @@ describe("protocol.applyCommand", () => {
     let s = withHostConnected();
     s = applyCommand(s, {
       type: "join",
-      sessionId: "sess-1",
+      projectShareId: "proj-1",
+      asRole: "guest",
       connDevu: GUEST,
       connDisplayName: "Guest",
       connId: "c2",
@@ -123,7 +128,8 @@ describe("protocol.applyCommand", () => {
     let s = withHostConnected();
     s = applyCommand(s, {
       type: "join",
-      sessionId: "sess-1",
+      projectShareId: "proj-1",
+      asRole: "guest",
       connDevu: GUEST,
       connDisplayName: "Guest",
       connId: "c2",
@@ -146,7 +152,8 @@ describe("protocol.applyCommand", () => {
     let s = withHostConnected();
     s = applyCommand(s, {
       type: "join",
-      sessionId: "sess-1",
+      projectShareId: "proj-1",
+      asRole: "guest",
       connDevu: GUEST,
       connDisplayName: "Guest",
       connId: "c2",
@@ -180,7 +187,8 @@ describe("protocol.applyCommand", () => {
     let s = withHostConnected();
     s = applyCommand(s, {
       type: "join",
-      sessionId: "sess-1",
+      projectShareId: "proj-1",
+      asRole: "guest",
       connDevu: GUEST,
       connDisplayName: "Guest",
       connId: "c2",
@@ -200,7 +208,8 @@ describe("protocol.applyCommand", () => {
     let s = withHostConnected();
     s = applyCommand(s, {
       type: "join",
-      sessionId: "sess-1",
+      projectShareId: "proj-1",
+      asRole: "guest",
       connDevu: GUEST,
       connDisplayName: "Guest",
       connId: "c2",
@@ -261,7 +270,8 @@ describe("protocol.applyCommand", () => {
     // Add guest, then guest tries to forge an agent_event.
     s = applyCommand(s, {
       type: "join",
-      sessionId: "sess-1",
+      projectShareId: "proj-1",
+      asRole: "guest",
       connDevu: GUEST,
       connDisplayName: "Guest",
       connId: "c2",
@@ -280,7 +290,8 @@ describe("protocol.applyCommand", () => {
     let s = withHostConnected();
     s = applyCommand(s, {
       type: "join",
-      sessionId: "sess-1",
+      projectShareId: "proj-1",
+      asRole: "guest",
       connDevu: GUEST,
       connDisplayName: "Guest",
       connId: "c2",
@@ -345,7 +356,8 @@ describe("protocol.applyCommand", () => {
     let s = withHostConnected();
     s = applyCommand(s, {
       type: "join",
-      sessionId: "sess-1",
+      projectShareId: "proj-1",
+      asRole: "guest",
       connDevu: GUEST,
       connDisplayName: "Guest",
       connId: "c2",
@@ -423,7 +435,8 @@ describe("protocol.applyDisconnect", () => {
     let s = withHostConnected();
     s = applyCommand(s, {
       type: "join",
-      sessionId: "sess-1",
+      projectShareId: "proj-1",
+      asRole: "guest",
       connDevu: GUEST,
       connDisplayName: "Guest",
       connId: "c2",
@@ -453,7 +466,8 @@ describe("protocol.applyDisconnect", () => {
     // Host opens a second tab: another connection with the same devu.
     s = applyCommand(s, {
       type: "join",
-      sessionId: "sess-1",
+      projectShareId: "proj-1",
+      asRole: "host",
       connDevu: HOST,
       connDisplayName: "Host",
       connId: "c1-tab2",
@@ -471,14 +485,16 @@ describe("protocol.applyDisconnect", () => {
     // Guest joins twice (two tabs).
     s = applyCommand(s, {
       type: "join",
-      sessionId: "sess-1",
+      projectShareId: "proj-1",
+      asRole: "guest",
       connDevu: GUEST,
       connDisplayName: "Guest",
       connId: "c2",
     }).nextState;
     s = applyCommand(s, {
       type: "join",
-      sessionId: "sess-1",
+      projectShareId: "proj-1",
+      asRole: "guest",
       connDevu: GUEST,
       connDisplayName: "Guest",
       connId: "c2-tab2",

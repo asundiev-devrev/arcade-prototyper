@@ -10,10 +10,10 @@ import {
   __resetWsServerForTests,
 } from "../../../server/relay/wsServer";
 import {
-  createSession,
-  addInvite,
-  __resetSessionRegistryForTests,
-} from "../../../server/relay/sessionRegistry";
+  createOrGetProject,
+  addCollaborator,
+  __resetProjectRegistryForTests,
+} from "../../../server/relay/projectRegistry";
 
 vi.mock("../../../server/relay/auth", () => ({
   resolveDevuFromPat: async (pat: string) => {
@@ -23,6 +23,13 @@ vi.mock("../../../server/relay/auth", () => ({
   },
 }));
 
+vi.mock("../../../server/relay/persistence", () => ({
+  loadProjects: async () => [],
+  saveProjects: async () => {},
+  loadSessions: async () => [],
+  saveSessions: async () => {},
+}));
+
 let tmp: string;
 let server: http.Server;
 let port: number;
@@ -30,7 +37,7 @@ let port: number;
 beforeEach(async () => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "arcade-relay-ws-"));
   process.env.ARCADE_STUDIO_ROOT = tmp;
-  __resetSessionRegistryForTests();
+  __resetProjectRegistryForTests();
   __resetWsServerForTests();
   server = http.createServer();
   attachRelayToHttpServer(server);
@@ -50,10 +57,14 @@ interface ConnectedWs {
   onMessage(cb: (msg: any) => void): () => void;
 }
 
-function connect(pat: string, sessionId: string): Promise<ConnectedWs> {
+function connect(
+  pat: string,
+  projectShareId: string,
+  asRole: "host" | "guest" = "host",
+): Promise<ConnectedWs> {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(
-      `ws://127.0.0.1:${port}/api/multiplayer/ws?sessionId=${sessionId}`,
+      `ws://127.0.0.1:${port}/api/multiplayer/ws?projectShareId=${projectShareId}&asRole=${asRole}`,
       { headers: { Authorization: pat } },
     );
     const pending: any[] = [];
@@ -97,22 +108,20 @@ function receiveUntil(c: ConnectedWs, predicate: (msg: any) => boolean, timeoutM
 }
 
 describe("wsServer integration", () => {
-  it("authenticates the PAT and allows an invited user to join + receive session_state", async () => {
-    const s = await createSession({ hostDevu: "devu/A", projectSlug: "demo" });
-    await addInvite(s.id, { devu: "devu/A", invitedByDevu: "devu/A" });
+  it("authenticates the PAT and allows the host to join + receive presence_state", async () => {
+    const p = await createOrGetProject({ hostDevu: "devu/A", projectSlug: "demo" });
 
-    const ws = await connect("pat-a", s.id);
-    const state = await receiveUntil(ws, (m) => m.type === "session_state");
-    expect(state.driverDevu).toBe("devu/A");
+    const ws = await connect("pat-a", p.id, "host");
+    const presence = await receiveUntil(ws, (m) => m.type === "presence_state");
+    expect(presence.host).toEqual({ devu: "devu/A", displayName: "Alice" });
     ws.ws.close();
   });
 
   it("rejects a connection with an invalid PAT at the WebSocket handshake", async () => {
-    const s = await createSession({ hostDevu: "devu/A", projectSlug: "demo" });
-    await addInvite(s.id, { devu: "devu/A", invitedByDevu: "devu/A" });
+    const p = await createOrGetProject({ hostDevu: "devu/A", projectSlug: "demo" });
 
     const ws = new WebSocket(
-      `ws://127.0.0.1:${port}/api/multiplayer/ws?sessionId=${s.id}`,
+      `ws://127.0.0.1:${port}/api/multiplayer/ws?projectShareId=${p.id}&asRole=guest`,
       { headers: { Authorization: "bogus" } },
     );
     // A rejected upgrade never transitions to "open", so we observe it via the
@@ -126,15 +135,48 @@ describe("wsServer integration", () => {
     expect(status).toBe(401);
   });
 
-  it("fans a prompt_started event from the driver out to all connected participants", async () => {
-    const s = await createSession({ hostDevu: "devu/A", projectSlug: "demo" });
-    await addInvite(s.id, { devu: "devu/A", invitedByDevu: "devu/A" });
-    await addInvite(s.id, { devu: "devu/B", invitedByDevu: "devu/A" });
+  it("rejects a devu not in the allowlist with HTTP 403", async () => {
+    const p = await createOrGetProject({ hostDevu: "devu/A", projectSlug: "demo" });
+    // devu/B is not added as a collaborator → not allowed.
 
-    const alice = await connect("pat-a", s.id);
-    await receiveUntil(alice, (m) => m.type === "session_state");
-    const bob = await connect("pat-b", s.id);
-    await receiveUntil(bob, (m) => m.type === "session_state");
+    const ws = new WebSocket(
+      `ws://127.0.0.1:${port}/api/multiplayer/ws?projectShareId=${p.id}&asRole=guest`,
+      { headers: { Authorization: "pat-b" } },
+    );
+    const status = await new Promise<number>((resolve, reject) => {
+      ws.on("unexpected-response", (_req, res) => resolve(res.statusCode ?? 0));
+      ws.on("open", () => reject(new Error("should not have opened")));
+      ws.on("error", () => {});
+      setTimeout(() => reject(new Error("timed out")), 2000);
+    });
+    expect(status).toBe(403);
+  });
+
+  it("rejects asRole=host from a non-host devu with HTTP 403", async () => {
+    const p = await createOrGetProject({ hostDevu: "devu/A", projectSlug: "demo" });
+    await addCollaborator(p.id, { devu: "devu/B", displayName: "Bob", addedBy: "devu/A" });
+
+    const ws = new WebSocket(
+      `ws://127.0.0.1:${port}/api/multiplayer/ws?projectShareId=${p.id}&asRole=host`,
+      { headers: { Authorization: "pat-b" } },
+    );
+    const status = await new Promise<number>((resolve, reject) => {
+      ws.on("unexpected-response", (_req, res) => resolve(res.statusCode ?? 0));
+      ws.on("open", () => reject(new Error("should not have opened")));
+      ws.on("error", () => {});
+      setTimeout(() => reject(new Error("timed out")), 2000);
+    });
+    expect(status).toBe(403);
+  });
+
+  it("fans a prompt_started event from the driver out to all connected participants", async () => {
+    const p = await createOrGetProject({ hostDevu: "devu/A", projectSlug: "demo" });
+    await addCollaborator(p.id, { devu: "devu/B", displayName: "Bob", addedBy: "devu/A" });
+
+    const alice = await connect("pat-a", p.id, "host");
+    await receiveUntil(alice, (m) => m.type === "presence_state");
+    const bob = await connect("pat-b", p.id, "guest");
+    await receiveUntil(bob, (m) => m.type === "presence_state");
 
     alice.ws.send(
       JSON.stringify({ type: "prompt", text: "hello", turnId: "t-1" }),
@@ -150,14 +192,13 @@ describe("wsServer integration", () => {
   });
 
   it("rejects a prompt from a non-driver with an error event", async () => {
-    const s = await createSession({ hostDevu: "devu/A", projectSlug: "demo" });
-    await addInvite(s.id, { devu: "devu/A", invitedByDevu: "devu/A" });
-    await addInvite(s.id, { devu: "devu/B", invitedByDevu: "devu/A" });
+    const p = await createOrGetProject({ hostDevu: "devu/A", projectSlug: "demo" });
+    await addCollaborator(p.id, { devu: "devu/B", displayName: "Bob", addedBy: "devu/A" });
 
-    const alice = await connect("pat-a", s.id);
-    await receiveUntil(alice, (m) => m.type === "session_state");
-    const bob = await connect("pat-b", s.id);
-    await receiveUntil(bob, (m) => m.type === "session_state");
+    const alice = await connect("pat-a", p.id, "host");
+    await receiveUntil(alice, (m) => m.type === "presence_state");
+    const bob = await connect("pat-b", p.id, "guest");
+    await receiveUntil(bob, (m) => m.type === "presence_state");
 
     bob.ws.send(JSON.stringify({ type: "prompt", text: "hi", turnId: "t-2" }));
     const err = await receiveUntil(bob, (m) => m.type === "error");
@@ -168,14 +209,13 @@ describe("wsServer integration", () => {
   });
 
   it("emits user_left when a connection drops", async () => {
-    const s = await createSession({ hostDevu: "devu/A", projectSlug: "demo" });
-    await addInvite(s.id, { devu: "devu/A", invitedByDevu: "devu/A" });
-    await addInvite(s.id, { devu: "devu/B", invitedByDevu: "devu/A" });
+    const p = await createOrGetProject({ hostDevu: "devu/A", projectSlug: "demo" });
+    await addCollaborator(p.id, { devu: "devu/B", displayName: "Bob", addedBy: "devu/A" });
 
-    const alice = await connect("pat-a", s.id);
-    await receiveUntil(alice, (m) => m.type === "session_state");
-    const bob = await connect("pat-b", s.id);
-    await receiveUntil(bob, (m) => m.type === "session_state");
+    const alice = await connect("pat-a", p.id, "host");
+    await receiveUntil(alice, (m) => m.type === "presence_state");
+    const bob = await connect("pat-b", p.id, "guest");
+    await receiveUntil(bob, (m) => m.type === "presence_state");
 
     bob.ws.close();
     const left = await receiveUntil(alice, (m) => m.type === "user_left");
@@ -185,12 +225,10 @@ describe("wsServer integration", () => {
   });
 
   it("serializes concurrent prompts — second one is rejected with turn_in_flight", async () => {
-    const s = await createSession({ hostDevu: "devu/A", projectSlug: "demo" });
-    await addInvite(s.id, { devu: "devu/A", invitedByDevu: "devu/A" });
-    await addInvite(s.id, { devu: "devu/B", invitedByDevu: "devu/A" });
+    const p = await createOrGetProject({ hostDevu: "devu/A", projectSlug: "demo" });
 
-    const alice = await connect("pat-a", s.id);
-    await receiveUntil(alice, (m) => m.type === "session_state");
+    const alice = await connect("pat-a", p.id, "host");
+    await receiveUntil(alice, (m) => m.type === "presence_state");
 
     alice.ws.send(JSON.stringify({ type: "prompt", text: "first", turnId: "t-1" }));
     await receiveUntil(alice, (m) => m.type === "prompt_started");
@@ -204,11 +242,10 @@ describe("wsServer integration", () => {
   });
 
   it("after turn_ended, a subsequent prompt is accepted", async () => {
-    const s = await createSession({ hostDevu: "devu/A", projectSlug: "demo" });
-    await addInvite(s.id, { devu: "devu/A", invitedByDevu: "devu/A" });
+    const p = await createOrGetProject({ hostDevu: "devu/A", projectSlug: "demo" });
 
-    const alice = await connect("pat-a", s.id);
-    await receiveUntil(alice, (m) => m.type === "session_state");
+    const alice = await connect("pat-a", p.id, "host");
+    await receiveUntil(alice, (m) => m.type === "presence_state");
 
     alice.ws.send(JSON.stringify({ type: "prompt", text: "a", turnId: "t-1" }));
     await receiveUntil(alice, (m) => m.type === "prompt_started");
@@ -223,15 +260,12 @@ describe("wsServer integration", () => {
   });
 
   it("accepts pat via ?pat= query when Authorization header is absent", async () => {
-    const s = await createSession({ hostDevu: "devu/A", projectSlug: "demo" });
-    await addInvite(s.id, { devu: "devu/A", invitedByDevu: "devu/A" });
+    const p = await createOrGetProject({ hostDevu: "devu/A", projectSlug: "demo" });
 
     // Connect WITHOUT the Authorization header — use ?pat=pat-a instead.
-    // The existing connect() helper sets Authorization; for this test we build
-    // the WebSocket inline so we can omit it.
     const pending = new Promise<ConnectedWs>((resolve, reject) => {
       const ws = new WebSocket(
-        `ws://127.0.0.1:${port}/api/multiplayer/ws?sessionId=${s.id}&pat=pat-a`,
+        `ws://127.0.0.1:${port}/api/multiplayer/ws?projectShareId=${p.id}&asRole=host&pat=pat-a`,
       );
       const pendingMsgs: any[] = [];
       const listeners = new Set<(msg: any) => void>();
@@ -254,8 +288,27 @@ describe("wsServer integration", () => {
       ws.once("error", reject);
     });
     const alice = await pending;
-    const state = await receiveUntil(alice, (m) => m.type === "session_state");
-    expect(state.driverDevu).toBe("devu/A");
+    const presence = await receiveUntil(alice, (m) => m.type === "presence_state");
+    expect(presence.host?.devu).toBe("devu/A");
     alice.ws.close();
+  });
+
+  it("broadcasts a comment_posted event with byDevu/displayName from the connection", async () => {
+    const p = await createOrGetProject({ hostDevu: "devu/A", projectSlug: "demo" });
+    await addCollaborator(p.id, { devu: "devu/B", displayName: "Bob", addedBy: "devu/A" });
+
+    const alice = await connect("pat-a", p.id, "host");
+    await receiveUntil(alice, (m) => m.type === "presence_state");
+    const bob = await connect("pat-b", p.id, "guest");
+    await receiveUntil(bob, (m) => m.type === "presence_state");
+
+    bob.ws.send(JSON.stringify({ type: "comment_posted", id: "cm-1", text: "wow", mentions: [] }));
+    const aliceSaw = await receiveUntil(alice, (m) => m.type === "comment_posted");
+    expect(aliceSaw.byDevu).toBe("devu/B");
+    expect(aliceSaw.displayName).toBe("Bob");
+    expect(aliceSaw.text).toBe("wow");
+
+    alice.ws.close();
+    bob.ws.close();
   });
 });

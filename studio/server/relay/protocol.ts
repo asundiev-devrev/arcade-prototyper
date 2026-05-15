@@ -1,4 +1,5 @@
-import type { RelayEvent } from "./types";
+import type { ConnectionInfo, RelayEvent } from "./types";
+import type { ReplayBuffer } from "./replayBuffer";
 
 /**
  * Pure protocol engine. Zero I/O. Zero WebSocket. Zero time-sources except
@@ -13,6 +14,11 @@ import type { RelayEvent } from "./types";
  *
  * Keeping this pure is what makes the correctness-critical bits (driver-lock,
  * turn serialization) trivially testable.
+ *
+ * Plan 2b: identity is now `projectShareId`, not session id. The set of
+ * permitted devus is `allowlist` (host + shared_with). Each project owns a
+ * `replayBuffer` so a freshly-connected guest can be brought to current
+ * state with a single `cache_replay` event.
  */
 
 const CONTROL_REQUEST_TTL_MS = 30_000;
@@ -32,32 +38,32 @@ export interface CursorEntry {
 }
 
 export interface LiveState {
-  sessionId: string;
-  sessionObject: string;
+  projectShareId: string;
   hostDevu: string;
-  inviteList: string[];            // devu ids allowed to join
-  connections: Map<string, ConnectionRef>;   // connId → ref
+  allowlist: string[];                         // devu ids allowed to join
+  replayBuffer: ReplayBuffer;                  // per-project chat tail + frames
+  connections: Map<string, ConnectionRef>;     // connId → ref
   driverDevu: string | null;
   /** When the current driver dropped connection, or null if connected. */
   driverDisconnectedAt: number | null;
   currentTurn: { turnId: string; byDevu: string; startedAt: number } | null;
-  cursors: Map<string, CursorEntry>; // devu → latest cursor
+  cursors: Map<string, CursorEntry>;           // devu → latest cursor
   controlRequest: { byDevu: string; expiresAt: number } | null;
 }
 
 export interface CreateLiveStateInput {
-  sessionId: string;
-  sessionObject: string;
+  projectShareId: string;
   hostDevu: string;
-  inviteList: string[];
+  allowlist: string[];
+  replayBuffer: ReplayBuffer;
 }
 
 export function createLiveState(input: CreateLiveStateInput): LiveState {
   return {
-    sessionId: input.sessionId,
-    sessionObject: input.sessionObject,
+    projectShareId: input.projectShareId,
     hostDevu: input.hostDevu,
-    inviteList: input.inviteList,
+    allowlist: input.allowlist,
+    replayBuffer: input.replayBuffer,
     connections: new Map(),
     driverDevu: null,
     driverDisconnectedAt: null,
@@ -73,7 +79,7 @@ export function createLiveState(input: CreateLiveStateInput): LiveState {
  * authenticated identity.
  */
 export type InboundCommand =
-  | { type: "join"; sessionId: string; connDevu: string; connDisplayName: string; connId: string }
+  | { type: "join"; projectShareId: string; asRole: "host" | "guest"; connDevu: string; connDisplayName: string; connId: string }
   | { type: "request_control"; connDevu: string; connId: string }
   | { type: "grant_control"; connDevu: string; connId: string; targetDevu: string }
   | { type: "release_control"; connDevu: string; connId: string }
@@ -84,7 +90,8 @@ export type InboundCommand =
   | { type: "cancel_turn"; connDevu: string; connId: string; turnId: string }
   | { type: "cursor"; connDevu: string; connId: string; x: number; y: number; frameId?: string }
   | { type: "agent_event"; connDevu: string; connId: string; turnId: string; event: unknown }
-  | { type: "turn_ended"; connDevu: string; connId: string; turnId: string; ok: boolean; error?: string };
+  | { type: "turn_ended"; connDevu: string; connId: string; turnId: string; ok: boolean; error?: string }
+  | { type: "comment_posted"; connDevu: string; connId: string; id: string; text: string; mentions: string[] };
 
 export type EventRecipient = "broadcast" | string; // connId, or "broadcast"
 
@@ -100,6 +107,21 @@ export interface ApplyResult {
 
 export interface ApplyOptions {
   now?: number;
+}
+
+function presenceFor(s: LiveState): { host: ConnectionInfo | null; guests: ConnectionInfo[] } {
+  let host: ConnectionInfo | null = null;
+  const guests: ConnectionInfo[] = [];
+  // Dedupe by devu — multiple tabs from the same devu count as one presence.
+  const seen = new Set<string>();
+  for (const conn of s.connections.values()) {
+    if (seen.has(conn.devu)) continue;
+    seen.add(conn.devu);
+    const info: ConnectionInfo = { devu: conn.devu, displayName: conn.displayName };
+    if (conn.devu === s.hostDevu) host = info;
+    else guests.push(info);
+  }
+  return { host, guests };
 }
 
 /**
@@ -120,11 +142,19 @@ export function applyCommand(
 
   switch (cmd.type) {
     case "join": {
-      const allowed = s.inviteList.includes(cmd.connDevu);
+      const allowed = s.allowlist.includes(cmd.connDevu);
       if (!allowed) {
         events.push({
           recipient: cmd.connId,
-          event: { type: "error", code: "not_invited", message: "You are not invited to this session." },
+          event: { type: "error", code: "not_allowed", message: "You are not allowed in this project." },
+        });
+        return { nextState: s, events };
+      }
+      // asRole=host but the connecting devu isn't the project host → reject.
+      if (cmd.asRole === "host" && cmd.connDevu !== s.hostDevu) {
+        events.push({
+          recipient: cmd.connId,
+          event: { type: "error", code: "not_host", message: "You are not the host of this project." },
         });
         return { nextState: s, events };
       }
@@ -141,20 +171,28 @@ export function applyCommand(
       if (s.driverDevu === cmd.connDevu) {
         s.driverDisconnectedAt = null;
       }
+      // First, replay cached state to the joining connection alone.
+      const snap = s.replayBuffer.snapshot();
+      events.push({
+        recipient: cmd.connId,
+        event: {
+          type: "cache_replay",
+          chatHistoryTail: snap.chatHistoryTail,
+          frames: snap.frames,
+        },
+      });
       events.push({
         recipient: "broadcast",
         event: { type: "user_joined", devu: cmd.connDevu, displayName: cmd.connDisplayName },
       });
+      // Then broadcast presence.
+      const presence = presenceFor(s);
       events.push({
         recipient: "broadcast",
         event: {
-          type: "session_state",
-          driverDevu: s.driverDevu,
-          connections: Array.from(s.connections.values()).map((c) => ({
-            devu: c.devu,
-            displayName: c.displayName,
-          })),
-          sessionObject: s.sessionObject,
+          type: "presence_state",
+          host: presence.host,
+          guests: presence.guests,
         },
       });
       return { nextState: s, events };
@@ -188,10 +226,10 @@ export function applyCommand(
         });
         return { nextState: s, events };
       }
-      if (!s.inviteList.includes(cmd.targetDevu)) {
+      if (!s.allowlist.includes(cmd.targetDevu)) {
         events.push({
           recipient: cmd.connId,
-          event: { type: "error", code: "not_invited", message: "Target is not in the invite list." },
+          event: { type: "error", code: "not_allowed", message: "Target is not in the allowlist." },
         });
         return { nextState: s, events };
       }
@@ -229,10 +267,10 @@ export function applyCommand(
     }
 
     case "claim_control": {
-      if (!s.inviteList.includes(cmd.connDevu)) {
+      if (!s.allowlist.includes(cmd.connDevu)) {
         events.push({
           recipient: cmd.connId,
-          event: { type: "error", code: "not_invited", message: "You are not invited." },
+          event: { type: "error", code: "not_allowed", message: "You are not allowed in this project." },
         });
         return { nextState: s, events };
       }
@@ -354,6 +392,29 @@ export function applyCommand(
       return { nextState: s, events };
     }
 
+    case "comment_posted": {
+      const conn = s.connections.get(cmd.connId);
+      if (!conn) {
+        // Not joined — silently drop. (The WebSocket layer ensures every
+        // connection has joined before receiving messages, but defend in
+        // depth.)
+        return { nextState: s, events };
+      }
+      events.push({
+        recipient: "broadcast",
+        event: {
+          type: "comment_posted",
+          id: cmd.id,
+          byDevu: conn.devu,
+          displayName: conn.displayName,
+          text: cmd.text,
+          mentions: cmd.mentions,
+          ts: now,
+        },
+      });
+      return { nextState: s, events };
+    }
+
     default: {
       const _exhaustive: never = cmd;
       void _exhaustive;
@@ -366,6 +427,9 @@ export function applyCommand(
  * Apply a WebSocket disconnect. Removes the connection from the live state
  * and, if the disconnecting user was the driver, records the time so a
  * dormant takeover can be granted after the grace period.
+ *
+ * When a devu's last connection drops, also broadcasts a fresh
+ * `presence_state` so peers see their absence.
  */
 export function applyDisconnect(
   state: LiveState,
@@ -383,6 +447,15 @@ export function applyDisconnect(
   const events: EmittedEvent[] = [];
   if (!stillConnected) {
     events.push({ recipient: "broadcast", event: { type: "user_left", devu: conn.devu } });
+    const presence = presenceFor(s);
+    events.push({
+      recipient: "broadcast",
+      event: {
+        type: "presence_state",
+        host: presence.host,
+        guests: presence.guests,
+      },
+    });
   }
   if (!stillConnected && s.driverDevu === conn.devu) {
     s.driverDisconnectedAt = now;
@@ -393,10 +466,13 @@ export function applyDisconnect(
 function cloneState(s: LiveState): LiveState {
   return {
     ...s,
-    inviteList: s.inviteList.slice(),
+    allowlist: s.allowlist.slice(),
     connections: new Map(s.connections),
     currentTurn: s.currentTurn ? { ...s.currentTurn } : null,
     cursors: new Map(s.cursors),
     controlRequest: s.controlRequest ? { ...s.controlRequest } : null,
+    // replayBuffer is a stateful object — share the reference; we don't
+    // clone it because clone semantics on a ring buffer would silently lose
+    // state on every applyCommand.
   };
 }

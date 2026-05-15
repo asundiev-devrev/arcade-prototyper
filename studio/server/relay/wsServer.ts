@@ -3,12 +3,12 @@ import { URL } from "node:url";
 import { WebSocketServer, type WebSocket } from "ws";
 import { randomUUID } from "node:crypto";
 import { resolveDevuFromPat } from "./auth";
-import { getSession } from "./sessionRegistry";
+import { getProject, isAllowed } from "./projectRegistry";
+import { createReplayBuffer } from "./replayBuffer";
 import {
   applyCommand,
   applyDisconnect,
   createLiveState,
-  type ConnectionRef,
   type InboundCommand,
   type LiveState,
 } from "./protocol";
@@ -19,19 +19,23 @@ import { clientCommandSchema, type RelayEvent } from "./types";
  *
  * Responsibilities:
  *   - HTTP upgrade handshake under /api/multiplayer/ws
- *   - Authenticate the PAT on upgrade (reject with close code 4401 on failure)
- *   - Per-session live state (driver lock, connections, cursor snapshots)
+ *   - Authorize the PAT + project allowlist on upgrade
+ *     (HTTP 400 / 401 / 403 / 404 are returned BEFORE the WebSocket opens;
+ *      runtime denials post-open close with WS code 4403)
+ *   - Per-project live state (driver lock, connections, cursor snapshots,
+ *     replay buffer)
  *   - Route validated commands through relay/protocol.ts
  *   - Fan events out with broadcast or per-connId addressing
  *   - Heartbeat + disconnect detection
  */
 
 interface LiveSession {
+  projectShareId: string;
   state: LiveState;
   sockets: Map<string, WebSocket>; // connId → socket
 }
 
-const liveSessions = new Map<string, LiveSession>(); // sessionId → LiveSession
+const liveSessions = new Map<string, LiveSession>(); // projectShareId → LiveSession
 
 const HEARTBEAT_MS = 15_000;
 const PING_TIMEOUT_MS = 40_000;
@@ -53,18 +57,20 @@ export function attachRelayToHttpServer(server: http.Server): void {
     try {
       if (!req.url?.startsWith("/api/multiplayer/ws")) return;
       const url = new URL(req.url, "http://localhost");
-      const sessionId = url.searchParams.get("sessionId");
+      const projectShareId = url.searchParams.get("projectShareId");
+      const asRoleRaw = url.searchParams.get("asRole");
+      const asRole = asRoleRaw === "host" || asRoleRaw === "guest" ? asRoleRaw : null;
       const headerPat = req.headers.authorization ?? "";
       const queryPat = url.searchParams.get("pat") ?? "";
       const pat = headerPat || queryPat;
 
-      if (!sessionId) {
+      if (!projectShareId || !asRole) {
         socket.write("HTTP/1.1 400 Bad Request\r\n\r\n");
         socket.destroy();
         return;
       }
-      const session = getSession(sessionId);
-      if (!session || session.endedAt) {
+      const project = getProject(projectShareId);
+      if (!project) {
         socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
         socket.destroy();
         return;
@@ -75,9 +81,19 @@ export function attachRelayToHttpServer(server: http.Server): void {
         socket.destroy();
         return;
       }
+      if (!isAllowed(projectShareId, identity.id)) {
+        socket.write("HTTP/1.1 403 Forbidden\r\n\r\n");
+        socket.destroy();
+        return;
+      }
+      if (asRole === "host" && project.hostDevu !== identity.id) {
+        socket.write("HTTP/1.1 403 Forbidden\r\n\r\n");
+        socket.destroy();
+        return;
+      }
 
       wss.handleUpgrade(req, socket, head, (ws) => {
-        onConnection(ws, sessionId, identity.id, identity.displayName);
+        onConnection(ws, projectShareId, asRole, identity.id, identity.displayName);
       });
     } catch (err) {
       console.error("[relay] upgrade failed:", err);
@@ -86,36 +102,39 @@ export function attachRelayToHttpServer(server: http.Server): void {
   });
 }
 
-function getOrCreateLiveSession(sessionId: string): LiveSession | null {
-  const existing = liveSessions.get(sessionId);
+function getOrCreateLiveSession(projectShareId: string): LiveSession | null {
+  const existing = liveSessions.get(projectShareId);
   if (existing) return existing;
-  const persisted = getSession(sessionId);
-  if (!persisted || persisted.endedAt) return null;
+  const project = getProject(projectShareId);
+  if (!project) return null;
+  const allowlist = [project.hostDevu, ...project.shared_with.map((c) => c.devu)];
   const state = createLiveState({
-    sessionId: persisted.id,
-    sessionObject: persisted.sessionObject,
-    hostDevu: persisted.hostDevu,
-    inviteList: persisted.invites.map((i) => i.devu).concat(persisted.hostDevu),
+    projectShareId: project.id,
+    hostDevu: project.hostDevu,
+    allowlist,
+    replayBuffer: createReplayBuffer({ chatTailLimit: 200 }),
   });
-  const live: LiveSession = { state, sockets: new Map() };
-  liveSessions.set(sessionId, live);
+  const live: LiveSession = { projectShareId: project.id, state, sockets: new Map() };
+  liveSessions.set(projectShareId, live);
   return live;
 }
 
 function onConnection(
   ws: WebSocket,
-  sessionId: string,
+  projectShareId: string,
+  asRole: "host" | "guest",
   devu: string,
   displayName: string,
 ): void {
-  const live = getOrCreateLiveSession(sessionId);
+  const live = getOrCreateLiveSession(projectShareId);
   if (!live) {
+    // Race: project disappeared between upgrade-time check and now.
     sendEvent(ws, {
       type: "error",
-      code: "session_gone",
-      message: "Session no longer exists.",
+      code: "project_gone",
+      message: "Project no longer exists.",
     });
-    ws.close(4404, "session_gone");
+    ws.close(4403, "project_gone");
     return;
   }
 
@@ -124,15 +143,12 @@ function onConnection(
 
   dispatch(live, {
     type: "join",
-    sessionId,
+    projectShareId,
+    asRole,
     connDevu: devu,
     connDisplayName: displayName,
     connId,
   });
-
-  // TODO(plan-4): reconnect replay buffer. Per spec §3, the relay should
-  // retain the last ~200 events per session so a guest reconnecting mid-turn
-  // gets a replay of what they missed. Deferred until guests exist (Plan 4).
 
   let alive = true;
   const heartbeat = setInterval(() => {
@@ -174,9 +190,8 @@ function onConnection(
     if (cmd.type === "join") return;
 
     // Narrow each validated cmd to an InboundCommand with connection context.
-    // TypeScript can't infer this from a discriminated union of Zod outputs
-    // without a little manual dispatch.
     const inbound = attachConnContext(cmd, devu, connId);
+    if (!inbound) return;
     dispatch(live, inbound);
   });
 
@@ -198,13 +213,13 @@ function attachConnContext(
   cmd: ReturnType<typeof clientCommandSchema.parse>,
   connDevu: string,
   connId: string,
-): InboundCommand {
+): InboundCommand | null {
   // Re-narrow a validated ClientCommand (which does NOT carry connDevu/connId)
   // into an InboundCommand by injecting the connection-scoped fields.
   switch (cmd.type) {
     case "join":
-      // Unreachable — filtered before this call.
-      return { type: "join", sessionId: cmd.sessionId, connDevu, connDisplayName: "", connId };
+      // Filtered before this call — ignore.
+      return null;
     case "request_control":
     case "release_control":
     case "claim_control":
@@ -224,6 +239,8 @@ function attachConnContext(
     case "agent_event":
       return { ...cmd, connDevu, connId };
     case "turn_ended":
+      return { ...cmd, connDevu, connId };
+    case "comment_posted":
       return { ...cmd, connDevu, connId };
   }
 }
