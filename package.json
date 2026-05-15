@@ -8,8 +8,8 @@
     "studio": "vite --config studio/vite.config.ts",
     "studio:electron": "concurrently --kill-others --names vite,electron \"ARCADE_STUDIO_OPEN_BROWSER=0 pnpm run studio\" \"pnpm exec tsc -p electron/tsconfig.json && pnpm exec electron .\"",
     "studio:test": "vitest run --config studio/vitest.config.ts",
-    "studio:pack": "pnpm exec tsc -p electron/tsconfig.json && pnpm exec electron-builder --mac --config electron-builder.yml --publish never",
-    "studio:release": "pnpm exec tsc -p electron/tsconfig.json && pnpm exec electron-builder --mac --config electron-builder.yml --publish always",
+    "studio:pack": "bash studio/packaging/scripts/fetch-cli-deps.sh && pnpm exec tsc -p electron/tsconfig.json && pnpm exec electron-builder --mac --config electron-builder.yml --publish never",
+    "studio:release": "bash studio/packaging/scripts/fetch-cli-deps.sh && pnpm exec tsc -p electron/tsconfig.json && pnpm exec electron-builder --mac --config electron-builder.yml --publish always",
     "studio:audit": "DRIFT_AUDIT=1 vitest run --config studio/vitest.config.ts __tests__/lift/drift --reporter=verbose"
   },
   "dependencies": {

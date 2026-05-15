@@ -37,9 +37,14 @@ extraResources:
   - from: "node_modules/figmanage/bin"
     to: "bin/figmanage-bin"
     filter: ["**/*"]
-  - from: "studio/packaging/cloudflared"
+  - from: "studio/packaging/cloudflared/cloudflared"
     to: "bin/cloudflared"
-  - from: "studio/packaging/aws-cli"
+  # AWS CLI v2 expanded layout from fetch-cli-deps.sh is
+  # studio/packaging/aws-cli/aws-cli/aws (the inner aws-cli/ dir is
+  # the package's own root, with `aws`, `aws_completer`, libs, and a
+  # bundled python3.14). We point `from:` at that inner dir so the
+  # bundle lands at <Resources>/aws-cli/aws — one level instead of two.
+  - from: "studio/packaging/aws-cli/aws-cli"
     to: "aws-cli"
     filter: ["**/*"]
 

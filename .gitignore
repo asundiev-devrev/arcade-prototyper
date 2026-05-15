@@ -7,3 +7,10 @@ dist/
 .worktrees/
 studio/packaging/dist/
 studio/tmp/
+
+# Build-time fetched binaries (Task 7 of electron-wrapper plan)
+studio/packaging/cloudflared/
+studio/packaging/aws-cli/
+
+# Electron build output
+electron/dist/
