@@ -50,6 +50,12 @@ export function getProject(id: string): ProjectState | undefined {
   return projects.get(id);
 }
 
+export function getProjectByHostSlug(hostDevu: string, projectSlug: string): ProjectState | undefined {
+  const id = byHostSlug.get(`${hostDevu}::${projectSlug}`);
+  if (!id) return undefined;
+  return projects.get(id);
+}
+
 export function listProjects(opts: { hostDevu: string }): ProjectState[] {
   return Array.from(projects.values()).filter((p) => p.hostDevu === opts.hostDevu);
 }

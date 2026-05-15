@@ -4,7 +4,7 @@ import { WebSocketServer, type WebSocket } from "ws";
 import { randomUUID } from "node:crypto";
 import { resolveDevuFromPat } from "./auth";
 import { getProject, isAllowed } from "./projectRegistry";
-import { createReplayBuffer } from "./replayBuffer";
+import { createReplayBuffer, type ReplayBuffer } from "./replayBuffer";
 import {
   applyCommand,
   applyDisconnect,
@@ -272,6 +272,31 @@ function sendEvent(ws: WebSocket, ev: RelayEvent): void {
   } catch (err) {
     console.warn("[relay] send failed:", err);
   }
+}
+
+/**
+ * Broadcast an event to all connected sockets for a given projectShareId.
+ * No-op if no live session exists for the project (no one connected yet).
+ *
+ * Used by the chat-relay mirror (middleware/chatRelayMirror.ts) to fan host
+ * chat events out to live guests without forcing chat.ts to talk to the
+ * relay's lower-level dispatch primitives.
+ */
+export function broadcastToProject(projectShareId: string, event: RelayEvent): void {
+  const live = liveSessions.get(projectShareId);
+  if (!live) return;
+  for (const ws of live.sockets.values()) sendEvent(ws, event);
+}
+
+/**
+ * Returns the replay buffer for a project's live session, or null if no
+ * live session exists yet. The buffer is shared with the relay protocol —
+ * recording into it makes the cached state available on guest join via
+ * `cache_replay`.
+ */
+export function getReplayBufferForProject(projectShareId: string): ReplayBuffer | null {
+  const live = liveSessions.get(projectShareId);
+  return live ? live.state.replayBuffer : null;
 }
 
 /** Test-only: wipe live session state. Does NOT touch disk. */
