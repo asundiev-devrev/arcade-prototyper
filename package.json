@@ -2,6 +2,7 @@
   "name": "arcade-prototyper",
   "private": true,
   "type": "module",
+  "main": "electron/dist/main.js",
   "scripts": {
     "studio": "vite --config studio/vite.config.ts",
     "studio:test": "vitest run --config studio/vitest.config.ts",
@@ -30,6 +31,10 @@
     "@types/react-dom": "^19.0.0",
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^6.0.1",
+    "concurrently": "^9.2.1",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
+    "electron-updater": "^6.8.3",
     "jsdom": "^26.0.0",
     "playwright": "^1.59.1",
     "tailwindcss": "^4.2.2",
