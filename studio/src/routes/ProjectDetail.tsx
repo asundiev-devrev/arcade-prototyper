@@ -14,11 +14,7 @@ import { SharePanel } from "../components/multiplayer/SharePanel";
 import { PresenceStrip } from "../components/multiplayer/PresenceStrip";
 import { ChatStreamProvider } from "../hooks/chatStreamContext";
 import { TargetSelectionProvider } from "../hooks/targetSelectionContext";
-
-interface PresenceConnection {
-  devu: string;
-  displayName: string;
-}
+import { useProjectPresence } from "../hooks/useProjectPresence";
 
 function TeammatesIcon() {
   return (
@@ -93,12 +89,7 @@ export function ProjectDetail({
   const resizeStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const seedChatRef = useRef<((text: string) => void) | null>(null);
   const [showShare, setShowShare] = useState(false);
-  // Presence wiring lands in Task 21 once host-side EventSource exists; until
-  // then host stays null and guests stays empty so PresenceStrip renders nothing.
-  const [presence] = useState<{ host: PresenceConnection | null; guests: PresenceConnection[] }>({
-    host: null,
-    guests: [],
-  });
+  const { host, guests } = useProjectPresence(slug);
 
   useEffect(() => {
     window.localStorage.setItem(CHAT_OPEN_STORAGE_KEY, String(chatOpen));
@@ -214,7 +205,7 @@ export function ProjectDetail({
         }
         right={
           <>
-            <PresenceStrip host={presence.host} guests={presence.guests} />
+            <PresenceStrip host={host} guests={guests} />
             <ThemeToggle mode={project.mode} onToggle={toggleProjectMode} />
             <Tooltip content="Share with teammates">
               <IconButton

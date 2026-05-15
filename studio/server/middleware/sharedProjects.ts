@@ -13,6 +13,10 @@ import {
   sendComment,
   getMirrorBus,
 } from "../sharedProjects/relayClient";
+import { getProjectByHostSlug } from "../relay/projectRegistry";
+import { onProjectEvent } from "../relay/wsServer";
+import { getDevRevPat } from "../secrets/keychain";
+import { resolveDevuFromPat } from "../relay/auth";
 
 /**
  * Guest-side HTTP/SSE surface for shared projects (Plan 2b).
@@ -36,6 +40,7 @@ const IMPORT_RE = /^\/api\/shared-projects\/import\/?$/;
 const ITEM_RE = /^\/api\/shared-projects\/([^\/]+)\/?$/;
 const COMMENT_RE = /^\/api\/shared-projects\/([^\/]+)\/comment\/?$/;
 const STREAM_RE = /^\/api\/shared-projects\/([^\/]+)\/stream\/?$/;
+const HOST_STREAM_RE = /^\/api\/projects\/([a-z0-9][a-z0-9-]{0,62})\/presence-stream\/?$/i;
 
 export function sharedProjectsMiddleware() {
   return async (req: IncomingMessage, res: ServerResponse, next?: () => void) => {
@@ -46,6 +51,9 @@ export function sharedProjectsMiddleware() {
     if (req.method === "POST" && COMMENT_RE.test(url)) return comment(req, res, url.match(COMMENT_RE)![1]);
     if (req.method === "DELETE" && ITEM_RE.test(url)) return remove(res, url.match(ITEM_RE)![1]);
     if (req.method === "GET" && ITEM_RE.test(url)) return show(res, url.match(ITEM_RE)![1]);
+    if (req.method === "GET" && HOST_STREAM_RE.test(url)) {
+      return hostPresenceStream(req, res, url.match(HOST_STREAM_RE)![1]);
+    }
     return next?.();
   };
 }
@@ -127,4 +135,40 @@ async function stream(_req: IncomingMessage, res: ServerResponse, id: string) {
     bus.off("event", onEvent);
     bus.off("status", onStatus);
   });
+}
+
+/**
+ * Host-side presence stream — SSE feed of broadcast relay events for a
+ * project the caller hosts. Lets the host's React shell render live
+ * `presence_state` events without holding a WebSocket of its own (the
+ * relay's host WS is owned by the Vite process).
+ */
+async function hostPresenceStream(
+  _req: IncomingMessage,
+  res: ServerResponse,
+  slug: string,
+) {
+  const pat = (await getDevRevPat()) || process.env.DEVREV_PAT || "";
+  const host = pat ? await resolveDevuFromPat(pat) : null;
+  if (!host) {
+    res.writeHead(401);
+    res.end();
+    return;
+  }
+  const project = getProjectByHostSlug(host.id, slug);
+  if (!project) {
+    res.writeHead(404);
+    res.end();
+    return;
+  }
+
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+  });
+  const off = onProjectEvent(project.id, (ev) => {
+    res.write(`event: relay\ndata: ${JSON.stringify(ev)}\n\n`);
+  });
+  res.on("close", () => off());
 }

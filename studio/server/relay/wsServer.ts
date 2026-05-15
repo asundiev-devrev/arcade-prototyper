@@ -1,5 +1,6 @@
 import type http from "node:http";
 import { URL } from "node:url";
+import { EventEmitter } from "node:events";
 import { WebSocketServer, type WebSocket } from "ws";
 import { randomUUID } from "node:crypto";
 import { resolveDevuFromPat } from "./auth";
@@ -36,6 +37,37 @@ interface LiveSession {
 }
 
 const liveSessions = new Map<string, LiveSession>(); // projectShareId → LiveSession
+
+/**
+ * Project event bus — fires whenever a relay event is broadcast to all
+ * sockets in a project. Lets in-process consumers (e.g. the host-side SSE
+ * endpoint in middleware/sharedProjects.ts) subscribe to live events
+ * without holding a WebSocket of their own.
+ *
+ * Only "broadcast"-recipient events flow through here; per-conn unicast
+ * stays on the WebSocket and never hits the bus.
+ */
+const projectBus = new EventEmitter();
+// Bus carries N listeners per active project view; the default 10-cap is
+// noisy in dev when multiple browser tabs subscribe to the same project.
+projectBus.setMaxListeners(0);
+
+/**
+ * Subscribe to broadcast events for a single project. Returns an unsubscribe
+ * function. Listener fires only for events whose projectShareId matches.
+ */
+export function onProjectEvent(
+  projectShareId: string,
+  listener: (ev: RelayEvent) => void,
+): () => void {
+  const wrapped = (id: string, ev: RelayEvent) => {
+    if (id === projectShareId) listener(ev);
+  };
+  projectBus.on("event", wrapped);
+  return () => {
+    projectBus.off("event", wrapped);
+  };
+}
 
 const HEARTBEAT_MS = 15_000;
 const PING_TIMEOUT_MS = 40_000;
@@ -258,6 +290,7 @@ function emitAll(
   for (const ev of events) {
     if (ev.recipient === "broadcast") {
       for (const socket of live.sockets.values()) sendEvent(socket, ev.event);
+      projectBus.emit("event", live.projectShareId, ev.event);
     } else {
       const socket = live.sockets.get(ev.recipient);
       if (socket) sendEvent(socket, ev.event);
@@ -286,6 +319,7 @@ export function broadcastToProject(projectShareId: string, event: RelayEvent): v
   const live = liveSessions.get(projectShareId);
   if (!live) return;
   for (const ws of live.sockets.values()) sendEvent(ws, event);
+  projectBus.emit("event", live.projectShareId, event);
 }
 
 /**
