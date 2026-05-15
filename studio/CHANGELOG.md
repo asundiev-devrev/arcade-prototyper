@@ -6,6 +6,25 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.20.0] — 2026-05-15
+
+### Added
+- **Multiplayer is now a property of the project, not a one-shot session.** Share a project with a DevRev teammate once and it appears on their Studio homepage as a tile. They can open it, watch frames stream live while you're working, and post comments. Closing their tab no longer ends the session — re-opening picks back up. When you go offline, they see the cached last-seen state plus a banner. Comments composed while you're offline queue locally on their disk and flush on reconnect.
+- **Share panel** in the project header lists current collaborators and lets you add or remove them. Adding still sends a Computer DM with a clickable link, just pointing at `/project/<id>` instead of the old `/join/<id>` route.
+- **Presence strip** in the project header shows avatar dots for everyone currently watching (host + connected guests).
+- **Comment-only chat** for guests in shared projects. Guest's chat input only produces comments — frame builds stay host-driven.
+- **`@`-mention shortcut in chat** now routes through the share endpoint with a confirmation prompt for new collaborators (instead of creating a per-mention session).
+
+### Changed
+- Wire protocol: `session_state` event replaced with `presence_state` (host + guests) and `cache_replay` (chat tail + latest frames per path) on join. Allowlist enforcement happens at WebSocket upgrade against the project's `shared_with` list. New `comment_posted` command/event for guest comments.
+- `sessions.json` migrates to `projects.json` on first launch (one project per `(host, slug)` pair, deduped from sessions). Legacy `sessions.json` is left in place for one release as a safety net.
+- Cloudflare tunnel is refcounted across projects — multiple shared projects share one cloudflared process; tunnel stops when the last collaborator is removed.
+- Worker landing page at `/project/<id>` joins existing `/join/<id>` (kept one release for 0.18.x clients). Both use the 18-second progressive retry from the 0.18.6 fix.
+- macOS deep-link forwarding switched from `#join=` to `#share=` hash. The frontend hook still understands both for one release.
+
+### Known limitation
+- Frame rendering on the guest side uses an iframe `srcDoc` v1 stand-in. Host frames are JSX, so what guests see is the raw template text rather than the rendered prototype. Real bundle-and-render path is the next follow-up.
+
 ## [0.18.6] — 2026-05-14
 
 ### Fixed
