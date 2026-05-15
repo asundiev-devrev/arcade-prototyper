@@ -12,17 +12,24 @@ Produces `studio/packaging/dist/Arcade Studio.app` and `studio/packaging/dist/Ar
 
 ## Install (internal users)
 
+For **signed release builds** (the default, distributed via the public mirror):
+
 1. Download `Arcade Studio.dmg` from the DevRev-internal share link.
 2. Open the DMG and drag **Arcade Studio** to **Applications**. Eject the DMG.
-3. **First launch:** double-click **Arcade Studio** in `/Applications`. macOS shows "Arcade Studio cannot be opened because the developer cannot be verified." Click **Done** (or Cancel). This is Gatekeeper blocking the unsigned app — you have to override it once.
-4. Open **System Settings → Privacy & Security**. Scroll down to the "Security" section. There's a line "'Arcade Studio' was blocked to protect your Mac." with an **Open Anyway** button. Click it, authenticate with Touch ID or your password, and click **Open** in the confirmation dialog.
-5. Studio launches. Your browser opens `http://localhost:5556`. Every subsequent double-click works normally — no more Gatekeeper dialog.
+3. Double-click. The app launches; your browser opens `http://localhost:5556`.
 
-> **Why this is clunky:** the `.app` is unsigned (no Apple Developer ID certificate). On macOS Sonoma (14.x) and later, Apple removed the classic right-click → Open shortcut, so System Settings is the only way to whitelist an unsigned app. One-time pain per install.
+For **ad-hoc dev builds** (built locally without `CODESIGN_IDENTITY`):
 
-## Why unsigned
+1. Download or copy the `.app` to `/Applications`.
+2. **First launch:** double-click. macOS shows "Arcade Studio cannot be opened because the developer cannot be verified." Click **Done** (or Cancel).
+3. Open **System Settings → Privacy & Security**. Scroll to "Security". There's a line "'Arcade Studio' was blocked to protect your Mac." with an **Open Anyway** button. Click it, authenticate, and click **Open** in the confirmation dialog.
+4. Studio launches; subsequent double-clicks work normally — no more Gatekeeper dialog.
 
-This bundle is for DevRev-internal distribution. Apple Developer ID signing + notarization are deferred until we have a DevRev signing certificate. Once we do, the Privacy & Security dance goes away and double-click just works.
+> The signed-build path is what beta testers see. The ad-hoc dev path only matters when you've built locally without an Apple Developer ID identity.
+
+## Distribution model
+
+DevRev-internal distribution. Signed and notarized release builds go to the public mirror repo (`asundiev-devrev/arcade-studio-releases`), and the in-app updater polls that mirror for new versions. Source stays in this private repo. See "Signing and notarization" below for how to make a release-grade build.
 
 ## Signing and notarization
 
@@ -101,14 +108,16 @@ The DMG is ~290 MB compressed; the installed `.app` is ~710 MB. Most of that is 
 
 ### "Arcade Studio is damaged and can't be opened"
 
-This happens occasionally when macOS marks the bundle as truly damaged (bad ad-hoc signature, partial DMG copy, or Gatekeeper flagging it after several failed launches). Strip the quarantine attribute and re-sign:
+For signed release builds, this is rare and usually means the download was corrupted or quarantine flags were stripped in transit. Re-download the DMG from the mirror.
+
+For ad-hoc dev builds, the bundle's signature can break after copying between machines or partial DMG mounts. Strip the quarantine attribute and re-sign:
 
 ```bash
 xattr -dr com.apple.quarantine "/Applications/Arcade Studio.app"
 codesign --force --deep --sign - --timestamp=none "/Applications/Arcade Studio.app"
 ```
 
-Then go to **System Settings → Privacy & Security** and click **Open Anyway** as described in the install section. If the dialog isn't there, delete the app and reinstall from the DMG.
+Then go to **System Settings → Privacy & Security** and click **Open Anyway**. If the dialog isn't there, delete the app and reinstall from the DMG.
 
 ### Port 5556 already in use
 
@@ -130,7 +139,7 @@ tail -100 "$HOME/Library/Logs/arcade-studio.log"
 
 Common causes:
 - The bundled Node binary lost its executable bit (rare — shouldn't happen after ad-hoc codesigning). Re-run `pnpm studio:pack`.
-- The `.app` was copied between machines in a way that stripped the signature. Re-run `codesign --force --deep --sign - --timestamp=none "/Applications/Arcade Studio.app"` on the target machine.
+- (Ad-hoc dev builds only) The `.app` was copied between machines in a way that stripped the signature. Re-run `codesign --force --deep --sign - --timestamp=none "/Applications/Arcade Studio.app"` on the target machine. **Don't run this on a signed release build — it strips the notarization.**
 
 ### "Connect Figma" button doesn't complete
 
