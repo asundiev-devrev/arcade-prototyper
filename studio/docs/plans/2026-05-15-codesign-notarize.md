@@ -176,16 +176,11 @@ Create `studio/packaging/entitlements.plist` with exactly this content:
   -->
   <key>com.apple.security.cs.allow-dyld-environment-variables</key>
   <true/>
-  <!--
-    Claude CLI's native binary is downloaded post-install (200MB) and runs
-    interpreted bytecode. It needs the same unsigned-executable-memory
-    grant; we keep this entitlement on the parent bundle so it cascades.
-  -->
-  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
-  <true/>
 </dict>
 </plist>
 ```
+
+(The `allow-unsigned-executable-memory` entitlement defined above already covers Claude CLI's downloaded native binary — child processes the bundle launches inherit the parent's hardened-runtime relaxations.)
 
 - [ ] **Step 2: Verify**
 
