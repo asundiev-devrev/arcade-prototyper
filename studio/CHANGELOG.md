@@ -11,12 +11,27 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 - **"Arcade Studio is damaged and can't be opened" on first launch.** The 0.20.0 DMG was notarized, but the `.app` inside wasn't — Gatekeeper's deep-verify at runtime failed because the notarization receipt didn't transfer from the DMG into the bundle. The build now submits the `.app` itself to Apple notarization and staples the receipt onto the bundle BEFORE wrapping it in the DMG. Both `.app` and DMG are now stapled.
 
-### Workaround for users on 0.20.0
-If you've already installed 0.20.0 and hit "damaged", run in Terminal once:
+### Workaround for users who tried 0.20.0
+If you installed 0.20.0 and hit "damaged", Gatekeeper has cached a bad verdict on the bundle that survives even after installing a clean 0.20.1. To clear it:
+
+1. Drag `Arcade Studio.app` out of `/Applications` to the Trash.
+2. In Terminal:
+   ```
+   xattr -cr ~/Downloads/Arcade\ Studio.app   # if downloaded
+   ```
+3. Reinstall the 0.20.1 DMG to `/Applications` via Finder drag-and-drop.
+4. Double-click to open.
+
+If macOS still says "damaged", install to a fresh path first to bypass the cached verdict:
 ```
-xattr -cr /Applications/Arcade\ Studio.app
+mkdir -p /tmp/arcade-fresh
+cp -R "/Volumes/Arcade Studio/Arcade Studio.app" /tmp/arcade-fresh/
+xattr -cr /tmp/arcade-fresh/Arcade\ Studio.app
+open /tmp/arcade-fresh/Arcade\ Studio.app
 ```
-That clears the quarantine attribute Dia/Chrome/Safari adds and lets the existing online notarization check run. From 0.20.1 onward, the stapled receipt makes this unnecessary.
+Once that opens cleanly, you can move it to `/Applications`.
+
+Fresh users (never installed any prior version) get a clean install with no workaround.
 
 ## [0.20.0] — 2026-05-15
 
