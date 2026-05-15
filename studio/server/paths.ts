@@ -84,6 +84,16 @@ export function designMdPath(projectSlug: string): string {
 }
 
 /**
+ * Per-project shared-state file written by the host's Share panel. Contains
+ * the projectShareId and the current `shared_with` list. Recipients never
+ * see this file — it lives in the host's project dir alongside `project.json`
+ * and is rewritten on every share/unshare.
+ */
+export function multiplayerJsonPath(projectSlug: string): string {
+  return path.join(projectDir(projectSlug), "multiplayer.json");
+}
+
+/**
  * Root folder for Studio multiplayer session state. Sibling of `projects/`.
  * Holds `sessions.json` (persisted session metadata) plus any future
  * per-session artifacts.
