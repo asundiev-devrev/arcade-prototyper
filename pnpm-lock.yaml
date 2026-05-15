@@ -23,6 +23,9 @@ importers:
       chokidar:
         specifier: ^4.0.0
         version: 4.0.3
+      electron-updater:
+        specifier: ^6.8.3
+        version: 6.8.3
       esbuild:
         specifier: ^0.25.0
         version: 0.25.12
@@ -78,9 +81,6 @@ importers:
       electron-builder:
         specifier: ^25.1.8
         version: 25.1.8(electron-builder-squirrel-windows@25.1.8)
-      electron-updater:
-        specifier: ^6.8.3
-        version: 6.8.3
       jsdom:
         specifier: ^26.0.0
         version: 26.1.0

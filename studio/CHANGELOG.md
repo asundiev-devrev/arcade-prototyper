@@ -6,6 +6,11 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.21.1] — 2026-05-15
+
+### Fixed
+- **First-launch crash on 0.21.0**: `electron-updater` was declared as a devDependency, so electron-builder didn't bundle it into `app.asar`. App crashed at boot with `ERR_MODULE_NOT_FOUND: Cannot find package 'electron-updater'`. Moved to runtime `dependencies`. Don't install 0.21.0; jump straight to 0.21.1.
+
 ## [0.21.0] — 2026-05-15
 
 ### Changed
