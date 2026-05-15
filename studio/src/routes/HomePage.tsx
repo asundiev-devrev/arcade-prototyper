@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useToast } from "@xorkavi/arcade-gen";
 import { useProjects } from "../hooks/useProjects";
 import { api } from "../lib/api";
@@ -8,12 +8,57 @@ import { StudioHeader } from "../components/shell/StudioHeader";
 import { AppSettingsButton } from "../components/shell/SettingsButton";
 import { HeroPromptInput, type HeroPromptSubmitArgs } from "../components/home/HeroPromptInput";
 import { ProjectsSection } from "../components/home/ProjectsSection";
+import { SharedTile } from "../components/multiplayer/SharedTile";
 import type { Project } from "../../server/types";
+
+interface SharedProjectMeta {
+  id: string;
+  hostDevu: string;
+  hostDisplayName: string;
+  projectSlug: string;
+  relayUrl: string;
+  addedAt?: string;
+  lastSeenAt?: string;
+}
 
 export function HomePage({ onOpen }: { onOpen: (slug: string) => void }) {
   const { projects, refresh } = useProjects();
   const { toast } = useToast();
   const [submitting, setSubmitting] = useState(false);
+  const [sharedProjects, setSharedProjects] = useState<SharedProjectMeta[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/shared-projects")
+      .then((r) => (r.ok ? r.json() : { projects: [] }))
+      .then((data) => {
+        if (cancelled) return;
+        const list = Array.isArray(data?.projects) ? (data.projects as SharedProjectMeta[]) : [];
+        setSharedProjects(list);
+      })
+      .catch(() => {
+        // best-effort — homepage should never fail because of shared projects
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function openSharedProject(p: SharedProjectMeta) {
+    // Reuse the existing deep-link import pipeline (App.tsx) so the same
+    // wiring that handles invite URLs lights up SharedProject. Re-importing
+    // a mirror that already exists is idempotent — `createMirror` simply
+    // rewrites metadata.json. Constructing the arcade-studio:// URL with
+    // the metadata we already have keeps `useDeepLinkRoute.parseDeepLink`
+    // happy (it requires id + relay; we also pass host/hostName/projectSlug).
+    const inner = new URL(`arcade-studio://project/${p.id}`);
+    inner.searchParams.set("relay", p.relayUrl.replace(/^ws/, "http"));
+    inner.searchParams.set("host", p.hostDevu);
+    inner.searchParams.set("hostName", p.hostDisplayName);
+    inner.searchParams.set("projectSlug", p.projectSlug);
+    window.location.hash = `share=${encodeURIComponent(inner.toString())}`;
+    window.location.reload();
+  }
 
   async function handleHeroSubmit(args: HeroPromptSubmitArgs) {
     if (submitting) return;
@@ -122,6 +167,42 @@ export function HomePage({ onOpen }: { onOpen: (slug: string) => void }) {
             onRename={handleRename}
             onDelete={handleDelete}
           />
+          {sharedProjects.length > 0 && (
+            <section>
+              <h2
+                style={{
+                  margin: 0,
+                  marginBottom: 16,
+                  fontFamily:
+                    "var(--core-font-display), 'Chip Display Variable', sans-serif",
+                  fontWeight: 600,
+                  fontSize: 27,
+                  lineHeight: "36px",
+                  color: "var(--fg-neutral-prominent, #211e20)",
+                }}
+              >
+                Shared with you
+              </h2>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                  gap: 16,
+                }}
+              >
+                {sharedProjects.map((p) => (
+                  <SharedTile
+                    key={p.id}
+                    id={p.id}
+                    hostDisplayName={p.hostDisplayName}
+                    projectSlug={p.projectSlug}
+                    status="unknown"
+                    onOpen={() => openSharedProject(p)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       </div>
     </div>
