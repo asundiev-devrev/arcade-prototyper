@@ -16,7 +16,7 @@ describe("packaging scaffold", () => {
     expect(existsSync(plist)).toBe(true);
     const contents = readFileSync(plist, "utf-8");
     expect(contents).toContain("CFBundleIdentifier");
-    expect(contents).toContain("com.devrev.arcade-studio");
+    expect(contents).toContain("ai.devrev.internal.ArcadeStudio");
     expect(contents).toContain("CFBundleExecutable");
     expect(contents).toContain("Arcade Studio");
   });
