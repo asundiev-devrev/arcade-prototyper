@@ -46,18 +46,27 @@ export async function saveSessions(sessions: SessionState[]): Promise<void> {
 // and write the result before returning it.
 
 /**
- * Load all persisted projects. Returns [] for any failure mode (missing
- * file, unparseable JSON, unknown schema version). When projects.json is
- * absent but a v1 sessions.json exists, migrate it in-place and return
- * the migrated list.
+ * Load all persisted projects.
+ *
+ * Behavior matrix:
+ * - File missing (ENOENT)             → migrate from v1 sessions.json if
+ *                                       present, otherwise return [].
+ * - File present, valid v2            → return parsed projects.
+ * - File present, unparseable JSON    → log + return []. Do NOT migrate
+ *                                       (we'd overwrite something the
+ *                                       user might still recover).
+ * - File present, schema mismatch     → log + return []. Do NOT migrate
+ *                                       (e.g. a future v3 written by a
+ *                                       newer Studio after a downgrade —
+ *                                       overwriting it with v2 is data
+ *                                       loss).
+ * - Other read errors (EACCES, etc.)  → throw.
  */
 export async function loadProjects(): Promise<ProjectState[]> {
   const file = projectsJsonPath();
+  let raw: string | null = null;
   try {
-    const raw = await fs.readFile(file, "utf-8");
-    const parsed = projectsFileSchema.safeParse(JSON.parse(raw));
-    if (parsed.success) return parsed.data.projects;
-    // Unparseable / wrong-version projects.json: fall through to migration.
+    raw = await fs.readFile(file, "utf-8");
   } catch (err) {
     if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
       // Anything other than missing-file should surface — disk errors,
@@ -65,6 +74,26 @@ export async function loadProjects(): Promise<ProjectState[]> {
       throw err;
     }
   }
+  if (raw !== null) {
+    // File exists. Parse and validate. If the schema doesn't match (e.g.
+    // a future version we don't understand), log and return [] WITHOUT
+    // attempting to migrate from sessions.json — overwriting an unknown
+    // future version with v2 would be data loss.
+    try {
+      const parsed = projectsFileSchema.safeParse(JSON.parse(raw));
+      if (parsed.success) return parsed.data.projects;
+      console.warn(
+        `[persistence] projects.json exists but failed schema validation; ` +
+          `treating as empty without overwriting. Issues: ${parsed.error.issues
+            .map((i) => i.message)
+            .join("; ")}`,
+      );
+    } catch (err) {
+      console.warn(`[persistence] projects.json is not valid JSON: ${err}`);
+    }
+    return [];
+  }
+  // No file — migrate from v1 if it exists, otherwise return [].
   const migrated = await migrateFromSessions();
   if (migrated.length > 0) {
     await saveProjects(migrated);

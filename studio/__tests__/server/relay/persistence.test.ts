@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -134,5 +134,53 @@ describe("relay persistence — Plan 2b projects", () => {
     const newFile = path.join(tmp, "multiplayer", "projects.json");
     const written = JSON.parse(fs.readFileSync(newFile, "utf-8"));
     expect(written.version).toBe(2);
+  });
+
+  it("does NOT migrate from sessions.json when projects.json exists with an unknown schema version", async () => {
+    // Silence the expected schema-mismatch warning.
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const dir = path.join(tmp, "multiplayer");
+    fs.mkdirSync(dir, { recursive: true });
+
+    // Future-version projects.json — we don't understand it.
+    fs.writeFileSync(
+      path.join(dir, "projects.json"),
+      JSON.stringify({
+        version: 99,
+        projects: [{ id: "future", future_field: true }],
+      }),
+    );
+
+    // Legacy sessions.json that WOULD be migrated if loadProjects fell through.
+    fs.writeFileSync(
+      path.join(dir, "sessions.json"),
+      JSON.stringify({
+        version: 1,
+        sessions: [
+          {
+            id: "old-session-id",
+            sessionObject: "x",
+            hostDevu: "don:identity:dvrv-us-1:devo/0:devu/1",
+            projectSlug: "legacy-proj",
+            linkedWorkId: null,
+            createdAt: "2026-05-08T00:00:00Z",
+            endedAt: null,
+            invites: [],
+          },
+        ],
+      }),
+    );
+
+    const result = await loadProjects();
+    expect(result).toEqual([]);
+
+    // The future projects.json must NOT have been overwritten.
+    const stillThere = JSON.parse(
+      fs.readFileSync(path.join(dir, "projects.json"), "utf-8"),
+    );
+    expect(stillThere.version).toBe(99);
+
+    warnSpy.mockRestore();
   });
 });
