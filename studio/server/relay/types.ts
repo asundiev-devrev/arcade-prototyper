@@ -16,7 +16,11 @@ import { z } from "zod";
 // ── Commands (client → relay) ─────────────────────────────────────────
 
 export const clientCommandSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("join"), sessionId: z.string().min(1) }),
+  z.object({
+    type: z.literal("join"),
+    projectShareId: z.string().min(1),
+    asRole: z.enum(["host", "guest"]),
+  }),
   z.object({ type: z.literal("request_control") }),
   z.object({ type: z.literal("grant_control"), targetDevu: z.string().min(1) }),
   z.object({ type: z.literal("release_control") }),
@@ -51,6 +55,12 @@ export const clientCommandSchema = z.discriminatedUnion("type", [
     ok: z.boolean(),
     error: z.string().optional(),
   }),
+  z.object({
+    type: z.literal("comment_posted"),
+    id: z.string().min(1),
+    text: z.string().min(1),
+    mentions: z.array(z.string()).default([]),
+  }),
 ]);
 export type ClientCommand = z.infer<typeof clientCommandSchema>;
 
@@ -64,10 +74,14 @@ export type ConnectionInfo = z.infer<typeof connectionInfoSchema>;
 
 export const relayEventSchema = z.discriminatedUnion("type", [
   z.object({
-    type: z.literal("session_state"),
-    driverDevu: z.string().nullable(),
-    connections: z.array(connectionInfoSchema),
-    sessionObject: z.string(),
+    type: z.literal("presence_state"),
+    host: connectionInfoSchema.nullable(),
+    guests: z.array(connectionInfoSchema),
+  }),
+  z.object({
+    type: z.literal("cache_replay"),
+    chatHistoryTail: z.array(z.unknown()),
+    frames: z.record(z.string(), z.string()),
   }),
   z.object({
     type: z.literal("user_joined"),
@@ -108,6 +122,15 @@ export const relayEventSchema = z.discriminatedUnion("type", [
     turnId: z.string(),
     ok: z.boolean(),
     error: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal("comment_posted"),
+    id: z.string(),
+    byDevu: z.string(),
+    displayName: z.string(),
+    text: z.string(),
+    mentions: z.array(z.string()),
+    ts: z.number(),
   }),
   z.object({
     type: z.literal("cursors"),
@@ -155,3 +178,28 @@ export const sessionsFileSchema = z.object({
   sessions: z.array(sessionStateSchema),
 });
 export type SessionsFile = z.infer<typeof sessionsFileSchema>;
+
+// ── Plan 2b: shared-project model ─────────────────────────────────────
+
+export const sharedWithEntrySchema = z.object({
+  devu: z.string().min(1),
+  displayName: z.string().min(1),
+  addedAt: z.string(),
+  addedBy: z.string().min(1),
+});
+export type SharedWithEntry = z.infer<typeof sharedWithEntrySchema>;
+
+export const projectStateSchema = z.object({
+  id: z.string().min(1),
+  hostDevu: z.string().min(1),
+  projectSlug: z.string().min(1),
+  createdAt: z.string(),
+  shared_with: z.array(sharedWithEntrySchema).default([]),
+});
+export type ProjectState = z.infer<typeof projectStateSchema>;
+
+export const projectsFileSchema = z.object({
+  version: z.literal(2),
+  projects: z.array(projectStateSchema),
+});
+export type ProjectsFile = z.infer<typeof projectsFileSchema>;

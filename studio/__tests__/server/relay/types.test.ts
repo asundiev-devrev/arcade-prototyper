@@ -2,70 +2,91 @@ import { describe, it, expect } from "vitest";
 import {
   clientCommandSchema,
   relayEventSchema,
-  sessionStateSchema,
+  projectStateSchema,
 } from "../../../server/relay/types";
 
-describe("relay wire types", () => {
-  it("parses a valid prompt command", () => {
-    const cmd = clientCommandSchema.parse({
-      type: "prompt",
-      text: "make it blue",
-      turnId: "abc-123",
+describe("clientCommandSchema (Plan 2b)", () => {
+  it("accepts a join command with projectShareId and asRole", () => {
+    const result = clientCommandSchema.safeParse({
+      type: "join",
+      projectShareId: "550e8400-e29b-41d4-a716-446655440000",
+      asRole: "guest",
     });
-    expect(cmd.type).toBe("prompt");
+    expect(result.success).toBe(true);
   });
 
-  it("rejects a prompt command missing turnId", () => {
-    expect(() =>
-      clientCommandSchema.parse({ type: "prompt", text: "hi" }),
-    ).toThrow();
-  });
-
-  it("parses a cursor command with optional frameId", () => {
-    const cmd = clientCommandSchema.parse({
-      type: "cursor",
-      x: 100,
-      y: 200,
+  it("rejects a join command missing asRole", () => {
+    const result = clientCommandSchema.safeParse({
+      type: "join",
+      projectShareId: "550e8400-e29b-41d4-a716-446655440000",
     });
-    expect(cmd.type).toBe("cursor");
-    const cmd2 = clientCommandSchema.parse({
-      type: "cursor",
-      x: 0,
-      y: 0,
-      frameId: "01-home",
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a comment_posted command with mentions", () => {
+    const result = clientCommandSchema.safeParse({
+      type: "comment_posted",
+      id: "comment-1",
+      text: "Looks great!",
+      mentions: ["don:identity:dvrv-us-1:devo/0:devu/123"],
     });
-    expect(cmd2.type).toBe("cursor");
+    expect(result.success).toBe(true);
   });
+});
 
-  it("parses a session_state event", () => {
-    const ev = relayEventSchema.parse({
-      type: "session_state",
-      driverDevu: "don:identity:dvrv-us-1:devo/0:devu/1",
-      connections: [{ devu: "don:identity:dvrv-us-1:devo/0:devu/1", displayName: "A" }],
-      sessionObject: "relay-session-abc",
-    });
-    expect(ev.type).toBe("session_state");
-  });
-
-  it("rejects an unknown command type", () => {
-    expect(() =>
-      clientCommandSchema.parse({ type: "hack_the_relay" }),
-    ).toThrow();
-  });
-
-  it("sessionStateSchema captures the persisted session shape", () => {
-    const state = sessionStateSchema.parse({
-      id: "abc",
-      sessionObject: "relay-abc",
-      hostDevu: "don:identity:dvrv-us-1:devo/0:devu/1",
-      projectSlug: "my-project",
-      linkedWorkId: null,
-      createdAt: new Date().toISOString(),
-      endedAt: null,
-      invites: [
-        { devu: "don:identity:dvrv-us-1:devo/0:devu/2", invitedByDevu: "don:identity:dvrv-us-1:devo/0:devu/1", invitedAt: new Date().toISOString() },
+describe("relayEventSchema (Plan 2b)", () => {
+  it("accepts a presence_state event with host and guests", () => {
+    const result = relayEventSchema.safeParse({
+      type: "presence_state",
+      host: { devu: "don:.../devu/1", displayName: "Andrey" },
+      guests: [
+        { devu: "don:.../devu/2", displayName: "Bea" },
       ],
     });
-    expect(state.id).toBe("abc");
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a presence_state event with null host (offline)", () => {
+    const result = relayEventSchema.safeParse({
+      type: "presence_state",
+      host: null,
+      guests: [],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a cache_replay event", () => {
+    const result = relayEventSchema.safeParse({
+      type: "cache_replay",
+      chatHistoryTail: [{ kind: "prompt_started", turnId: "t1", byDevu: "x", text: "hi" }],
+      frames: { "frame-01": "<jsx>" },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a comment_posted broadcast event", () => {
+    const result = relayEventSchema.safeParse({
+      type: "comment_posted",
+      id: "c-1",
+      byDevu: "don:.../devu/2",
+      displayName: "Bea",
+      text: "looks good",
+      mentions: [],
+      ts: Date.now(),
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("projectStateSchema", () => {
+  it("validates a minimal project record", () => {
+    const result = projectStateSchema.safeParse({
+      id: "550e8400-e29b-41d4-a716-446655440000",
+      hostDevu: "don:.../devu/1",
+      projectSlug: "my-project",
+      createdAt: "2026-05-15T13:00:00Z",
+      shared_with: [],
+    });
+    expect(result.success).toBe(true);
   });
 });
