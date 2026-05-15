@@ -7,6 +7,7 @@ import { StartupAuthGate } from "./components/feedback/StartupAuthGate";
 import { UpdateBanner } from "./components/feedback/UpdateBanner";
 import { useDeepLinkRoute, clearDeepLink } from "./hooks/useDeepLinkRoute";
 import { JoinSessionGate } from "./components/multiplayer/JoinSessionGate";
+import SharedProject from "./routes/SharedProject";
 
 function readSlugFromHash(): string | null {
   const match = window.location.hash.match(/^#\/project\/([a-z0-9][a-z0-9-]{0,62})$/i);
@@ -28,6 +29,40 @@ export function App() {
     sessionObject: string;
     driverDevu: string | null;
   }>(null);
+  const [activeShared, setActiveShared] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!deepLink || deepLink.kind !== "project") return;
+    const route = deepLink;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/shared-projects/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            projectShareId: route.projectShareId,
+            relayUrl: `${route.relayUrl.replace(/^http/, "ws")}/api/multiplayer/ws`,
+            hostDevu: route.hostDevu,
+            hostDisplayName: route.hostDisplayName,
+            projectSlug: route.projectSlug,
+          }),
+        });
+        if (!res.ok) {
+          console.error("project import failed:", res.status, await res.text());
+          return;
+        }
+        if (cancelled) return;
+        clearDeepLink();
+        setActiveShared(route.projectShareId);
+      } catch (err) {
+        console.error("project import failed:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [deepLink]);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,7 +118,9 @@ export function App() {
       <FrameFontProxy />
       <UpdateBanner />
       <StartupAuthGate>
-        {openSlug === null ? (
+        {activeShared ? (
+          <SharedProject id={activeShared} />
+        ) : openSlug === null ? (
           <HomePage onOpen={openProject} />
         ) : (
           <ProjectDetail
