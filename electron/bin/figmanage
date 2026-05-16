@@ -1,0 +1,15 @@
+#!/bin/sh
+# Wrapper that runs figmanage via the bundled Electron binary in
+# Node mode. The Electron app's main executable, when invoked with
+# ELECTRON_RUN_AS_NODE=1, behaves as a stock Node.js runtime.
+#
+# Layout in the packaged .app:
+#   Contents/Resources/bin/figmanage           (this script)
+#   Contents/Resources/app/node_modules/figmanage/dist/index.js
+#   Contents/MacOS/Arcade Studio               (Electron binary)
+set -e
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+RESOURCES="$(cd "$SCRIPT_DIR/.." && pwd)"
+ELECTRON_BIN="$(cd "$RESOURCES/.." && pwd)/MacOS/Arcade Studio"
+FIGMANAGE_ENTRY="$RESOURCES/app/node_modules/figmanage/dist/index.js"
+exec env ELECTRON_RUN_AS_NODE=1 "$ELECTRON_BIN" "$FIGMANAGE_ENTRY" "$@"

@@ -6,6 +6,22 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.21.1] — 2026-05-15
+
+### Fixed
+- **First-launch crash on 0.21.0**: `electron-updater` was declared as a devDependency, so electron-builder didn't bundle it into `app.asar`. App crashed at boot with `ERR_MODULE_NOT_FOUND: Cannot find package 'electron-updater'`. Moved to runtime `dependencies`. Don't install 0.21.0; jump straight to 0.21.1.
+
+## [0.21.0] — 2026-05-15
+
+### Changed
+- **Studio is now a real Electron app instead of a bash launcher + browser tab.** Double-click opens a dedicated window. No more "did I close the tab or quit the app?" confusion. Cmd-Q quits the whole thing — Vite child dies cleanly with the window. Native menu bar (File/Edit/View/Window/Help — Electron's defaults; custom menu coming later if useful).
+- **In-app auto-update.** First launch on 0.21.0 polls the public mirror for newer versions. When a new release lands, you'll see a "Quit and install" prompt — no more downloading DMGs by hand. Powered by `electron-updater` against the same `asundiev-devrev/arcade-studio-releases` repo the old "update available" banner used.
+- **Build chain swapped to `electron-builder`.** The 11-script bash chain (`build.sh`, `dmg.sh`, `codesign.sh`, `notarize.sh`, `notarize-app.sh`, `install-deps.sh`, `copy-sources.sh`, `download-{node,awscli,cloudflared}.sh`, `launcher.sh`) is replaced by a single `electron-builder.yml` declarative config. `pnpm run studio:pack` and `pnpm run studio:release` work the same — the implementation under the hood just changed.
+
+### Migration notes
+- Drag the old `Arcade Studio.app` to the trash before installing 0.21.0. Bundle ID is the same (`ai.devrev.internal.ArcadeStudio`), so projects/settings persist via `~/Library/Application Support/arcade-studio/`. macOS may re-prompt once for keychain access (Electron's signature differs from the bash launcher's).
+- Bundle is bigger: ~400 MB DMG vs the previous ~270 MB. Electron runtime (~150 MB) is the cost of the native window. Trade is worth it for the UX gain.
+
 ## [0.20.1] — 2026-05-15
 
 ### Fixed

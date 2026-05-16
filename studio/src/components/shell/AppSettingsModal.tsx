@@ -53,10 +53,10 @@ export function AppSettingsModal({
   const [figmaSaving, setFigmaSaving] = useState(false);
   const [figmaError, setFigmaError] = useState<string | null>(null);
 
-  // Build version — shown in the footer. Stamped at packaging time
-  // (studio/packaging/build.sh writes Contents/Resources/version.json);
-  // dev checkouts surface "dev" so we can distinguish local builds at a
-  // glance when a beta tester pastes their logs.
+  // Build version — shown in the footer. Sourced from package.json#version
+  // by /api/version (electron-builder reads the same field at packaging
+  // time); dev checkouts without a version field surface "dev" so we can
+  // distinguish local builds at a glance when a beta tester pastes logs.
   const [versionLabel, setVersionLabel] = useState<string | null>(null);
   const [changelogOpen, setChangelogOpen] = useState(false);
 
