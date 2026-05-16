@@ -24,7 +24,14 @@ export async function startVite(appRoot: string): Promise<string> {
   console.log(`[viteRunner] spawning Vite via ${process.execPath} entry=${viteEntry} cwd=${appRoot}`);
   viteProc = spawn(process.execPath, [viteEntry, "--config", configPath], {
     cwd: appRoot,
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+    env: {
+      ...process.env,
+      ELECTRON_RUN_AS_NODE: "1",
+      // Suppress Vite's `open: true` — we render in our BrowserWindow,
+      // not the user's default browser. studio/vite.config.ts honors
+      // this env var.
+      ARCADE_STUDIO_OPEN_BROWSER: "0",
+    },
     stdio: ["ignore", "pipe", "pipe"],
   });
 
