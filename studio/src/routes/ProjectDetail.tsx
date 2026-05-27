@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { IconButton, Tooltip } from "@xorkavi/arcade-gen";
-import type { Project } from "../../server/types";
 import { Viewport } from "../components/viewport/Viewport";
 import { ChatPane } from "../components/chat/ChatPane";
 import { DevModePanel } from "../components/devmode/DevModePanel";
@@ -14,7 +13,7 @@ import { SharePanel } from "../components/multiplayer/SharePanel";
 import { PresenceStrip } from "../components/multiplayer/PresenceStrip";
 import { ChatStreamProvider } from "../hooks/chatStreamContext";
 import { TargetSelectionProvider } from "../hooks/targetSelectionContext";
-import { useProjectPresence } from "../hooks/useProjectPresence";
+import { useProjectFromHost } from "../hooks/useProjectFromHost";
 
 function TeammatesIcon() {
   return (
@@ -56,7 +55,14 @@ export function ProjectDetail({
   onBack: () => void;
   onOpenProject: (slug: string) => void;
 }) {
-  const [project, setProject] = useState<Project | null>(null);
+  const source = useProjectFromHost(slug);
+  // Allow optimistic local updates (e.g. theme toggle) on top of the
+  // hook-owned project record. `localProject`, when set, overrides the
+  // hook's value until the next refresh lands.
+  const [localProject, setLocalProject] = useState<typeof source.project>(null);
+  const project = localProject ?? source.project;
+  const { presence, refresh: refreshProject, chatStream } = source;
+  const { host, guests } = presence;
   const [devOpen, setDevOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [frameWidth, setFrameWidth] = useState<number>(() => {
@@ -89,7 +95,6 @@ export function ProjectDetail({
   const resizeStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const seedChatRef = useRef<((text: string) => void) | null>(null);
   const [showShare, setShowShare] = useState(false);
-  const { host, guests } = useProjectPresence(slug);
 
   useEffect(() => {
     window.localStorage.setItem(CHAT_OPEN_STORAGE_KEY, String(chatOpen));
@@ -143,22 +148,11 @@ export function ProjectDetail({
     setChatWidth(CHAT_WIDTH_DEFAULT);
   }
 
-  const refreshProject = useCallback(async () => {
-    const res = await fetch(`/api/projects/${slug}`);
-    if (!res.ok) return;
-    const p = (await res.json()) as Project;
-    setProject(p);
-  }, [slug]);
-
-  useEffect(() => {
-    void refreshProject();
-  }, [refreshProject]);
-
   async function toggleProjectMode() {
     if (!project) return;
     const previous = project.mode;
     const next = previous === "dark" ? "light" : "dark";
-    setProject({ ...project, mode: next });
+    setLocalProject({ ...project, mode: next });
     try {
       const res = await fetch(`/api/projects/${slug}`, {
         method: "PATCH",
@@ -167,8 +161,12 @@ export function ProjectDetail({
       });
       if (!res.ok) throw new Error("Failed to save theme");
       setReloadKey((k) => k + 1);
+      // Re-pull the canonical record so any server-side normalisation
+      // (e.g. updatedAt) lands; clear the local override on next render.
+      refreshProject();
+      setLocalProject(null);
     } catch {
-      setProject({ ...project, mode: previous });
+      setLocalProject({ ...project, mode: previous });
     }
   }
 
@@ -188,7 +186,7 @@ export function ProjectDetail({
     );
 
   return (
-    <ChatStreamProvider projectSlug={project.slug}>
+    <ChatStreamProvider value={chatStream}>
     <TargetSelectionProvider>
     <div style={{ display: "grid", gridTemplateRows: "48px 1fr", height: "100vh" }}>
       <StudioHeader
@@ -199,7 +197,7 @@ export function ProjectDetail({
               project={project}
               onHome={onBack}
               onOpenProject={onOpenProject}
-              onRenamed={() => void refreshProject()}
+              onRenamed={() => refreshProject()}
             />
           </>
         }
