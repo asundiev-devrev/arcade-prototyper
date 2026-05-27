@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { IconButton, Tooltip } from "@xorkavi/arcade-gen";
 import { Viewport } from "../components/viewport/Viewport";
 import { ChatPane } from "../components/chat/ChatPane";
@@ -135,6 +135,16 @@ function ProjectDetailSpectator({
   onOpenProject: (slug: string) => void;
 }) {
   const source = useProjectFromMirror(id);
+  // Spectator iframes hit the shared-projects compile endpoint — host's
+  // `/api/frames/:slug/:frame` 404s for guests because the TSX lives in
+  // the mirror cache, not under `projects/`. Memoize keyed on `id` so
+  // child memoized iframes don't see a fresh function identity each render
+  // and re-mount unnecessarily.
+  const frameSrcOverride = useCallback(
+    (slug: string) =>
+      `/api/shared-projects/${encodeURIComponent(id)}/frame/${encodeURIComponent(slug)}`,
+    [id],
+  );
   return (
     <ProjectDetailShell
       mode="spectator"
@@ -142,12 +152,7 @@ function ProjectDetailSpectator({
       source={source}
       onBack={onBack}
       onOpenProject={onOpenProject}
-      // Spectator iframes hit the shared-projects compile endpoint —
-      // host's `/api/frames/:slug/:frame` 404s for guests because the
-      // TSX lives in the mirror cache, not under `projects/`.
-      frameSrcOverride={(slug) =>
-        `/api/shared-projects/${encodeURIComponent(id)}/frame/${encodeURIComponent(slug)}`
-      }
+      frameSrcOverride={frameSrcOverride}
     />
   );
 }

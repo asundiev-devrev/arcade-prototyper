@@ -3,8 +3,8 @@ import { transformWithEsbuild } from "vite";
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import path from "node:path";
-import { frameDir, projectDir, projectJsonPath } from "../paths";
-import { resolveFrameFsPath } from "../sharedProjects/cache";
+import { frameDir, projectDir, projectJsonPath, sharedProjectDir, sharedProjectsRoot } from "../paths";
+import { resolveFrameFsPath, sanitizeFramePathForFs } from "../sharedProjects/cache";
 
 function readProjectMode(slug: string): "light" | "dark" {
   try {
@@ -13,6 +13,47 @@ function readProjectMode(slug: string): "light" | "dark" {
   } catch {
     return "light";
   }
+}
+
+/**
+ * Whitelist for the spectator `:id` URL segment. `projectShareId` values are
+ * `randomUUID()` outputs (lowercase hex with dashes), but mirrors created out
+ * of band may use slightly different casings — keep the allowed set narrow
+ * (alphanumeric, `-`, `_`) so attackers can't smuggle `..`, `/`, dots, or
+ * encoded slashes that would escape `shared-projects/` once handed to
+ * `sharedProjectDir(id)` → `path.join(root, id)`.
+ */
+const SHARED_PROJECT_ID = /^[a-zA-Z0-9_-]+$/;
+
+/**
+ * HTML-escape user-controlled values rendered into the frame shell. Title and
+ * any other text-context interpolations must go through this so a frame slug
+ * like `<script>alert(1)</script>` can't break out of `<title>` and execute.
+ */
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) =>
+    c === "&"
+      ? "&amp;"
+      : c === "<"
+        ? "&lt;"
+        : c === ">"
+          ? "&gt;"
+          : c === '"'
+            ? "&quot;"
+            : "&#39;",
+  );
+}
+
+/**
+ * Defense-in-depth check: even after the regex passes, confirm that the
+ * resolved on-disk path stays inside the spectator mirror root. Returns
+ * true if `sharedProjectDir(id)` resolves to a child of `shared-projects/`.
+ */
+function isSharedIdSafe(id: string): boolean {
+  if (!SHARED_PROJECT_ID.test(id)) return false;
+  const root = path.resolve(sharedProjectsRoot());
+  const resolved = path.resolve(sharedProjectDir(id));
+  return resolved === root || resolved.startsWith(root + path.sep);
 }
 
 /**
@@ -83,12 +124,17 @@ function renderFrameShellHtml(opts: {
       });
     })();
   `;
+  // `mode` is already constrained to "light" | "dark" by the type, but pass
+  // it through escapeHtml anyway so the call site is uniform — cheap and
+  // makes audits easier. `bootstrapUrl` and `overridesUrl` are constructed
+  // server-side from validated/encoded segments, but they still land in HTML
+  // attribute contexts so we escape `&` / `"` for safety.
   const overridesLink = overridesUrl
-    ? `<link rel="stylesheet" href="${overridesUrl}" />`
+    ? `<link rel="stylesheet" href="${escapeHtml(overridesUrl)}" />`
     : "";
   return `<!DOCTYPE html>
-<html lang="en" data-theme="arcade" class="${mode}">
-  <head><meta charset="UTF-8" /><title>${title}</title>
+<html lang="en" data-theme="arcade" class="${escapeHtml(mode)}">
+  <head><meta charset="UTF-8" /><title>${escapeHtml(title)}</title>
     <script>${errorShimScript}</script>
     <script type="module">
       import RefreshRuntime from "/@react-refresh";
@@ -100,7 +146,7 @@ function renderFrameShellHtml(opts: {
     ${overridesLink}
   </head>
   <body><div id="root"></div>
-    <script type="module" src="${bootstrapUrl}"></script>
+    <script type="module" src="${escapeHtml(bootstrapUrl)}"></script>
   </body>
 </html>`;
 }
@@ -121,6 +167,25 @@ export function frameMountPlugin(): Plugin {
         if (!m) return next();
         const id = decodeURIComponent(m[1]);
         const framePath = decodeURIComponent(m[2]);
+        // Reject path traversal BEFORE any disk access. The route regex
+        // `[^/?]+` permits dots / encoded slashes / `..` once
+        // decodeURIComponent runs, so we have to gate it here. Bouncing
+        // requests before resolveFrameFsPath() ensures `path.join(root,
+        // id)` can't escape `shared-projects/` even on weird filesystems.
+        if (!isSharedIdSafe(id)) {
+          res.writeHead(400);
+          res.end("Invalid shared project id");
+          return;
+        }
+        // The frame path is sanitized into a filesystem-safe filename by
+        // `sanitizeFramePathForFs`; reject anything that would change once
+        // sanitized, since that signals a traversal attempt rather than a
+        // legitimate slug.
+        if (sanitizeFramePathForFs(framePath) !== framePath) {
+          res.writeHead(400);
+          res.end("Invalid frame path");
+          return;
+        }
         const absFrame = await resolveFrameFsPath(id, framePath);
         if (!absFrame) {
           res.writeHead(404);
@@ -205,6 +270,15 @@ export function frameMountPlugin(): Plugin {
         const framePath = q.get("path")!;
         const queryMode = q.get("mode");
         const mode = queryMode === "dark" ? "dark" : "light";
+        // The HTTP middleware validates these before constructing the
+        // bootstrap URL, but Vite also resolves virtual modules from
+        // direct `/@id/...` requests — re-check here so the load path is
+        // safe on its own. A `throw` short-circuits the import with an
+        // error visible in the spectator's red screen.
+        if (!isSharedIdSafe(sharedId) || sanitizeFramePathForFs(framePath) !== framePath) {
+          const msg = `Invalid spectator frame request: ${sharedId}/${framePath}`;
+          return `throw new Error(${JSON.stringify(msg)});`;
+        }
         const absFrame = await resolveFrameFsPath(sharedId, framePath);
         if (!absFrame) {
           // Vite expects `load` to throw or return null/source. Returning
