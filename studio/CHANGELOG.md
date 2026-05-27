@@ -6,6 +6,55 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.21.0] — 2026-05-27
+
+### Fixed
+- **Multiplayer survives host Studio restarts.** Quick-tunnel hostnames
+  (`*.trycloudflare.com`) regenerate every time the host restarts Studio,
+  which previously left every guest's mirror permanently offline until
+  the host re-shared the project. The host now publishes its current
+  relay URL to the share Worker on every tunnel acquire and on every
+  Studio boot; guests look it up before connecting and on every
+  reconnect attempt, so a host restart is invisible to a guest beyond a
+  brief offline blip.
+
+### Added
+- New share Worker routes `POST /rendezvous/:shareId` and
+  `GET /rendezvous/:shareId`, backed by Workers KV with a 7-day TTL.
+  Authenticated with the same `ALLOWED_KEYS` Bearer keys as `/share`.
+- A `pnpm run worker:deploy` script that lints `wrangler.toml` for the
+  KV namespace placeholder before delegating to `wrangler deploy`.
+
+### Changed
+- `metadata.json.relayUrl` in shared-project mirrors is now an optional
+  hint, used only as a fallback when the Worker has no current
+  rendezvous (legacy 0.20.x mirrors). New mirrors imported under 0.21+
+  omit it entirely.
+- Offline banner copy: "Gil is offline — viewing cached state." → "Gil
+  hasn't been online recently — viewing cached state. New comments will
+  be sent when they're back."
+
+### Operator notes
+- One-time: provision the new KV namespace
+  (`wrangler kv namespace create RENDEZVOUS`), paste the id into
+  `studio/worker/wrangler.toml`, then redeploy with
+  `pnpm run worker:deploy`.
+- Existing 0.20.x guests don't need to re-import; the next time the
+  host launches 0.21.0 their mirror auto-upgrades on the next reconnect
+  attempt.
+
+### Also fixed (originally queued for 0.20.2)
+- **"Deploy failed: 400" when sharing a frame to Cloudflare Pages.** The
+  multiplayer invite middleware introduced in 0.18.x claimed
+  `POST /api/projects/:slug/share` for adding a collaborator, which
+  collided with the pre-existing Cloudflare deploy route on the same
+  path. The collaborator middleware ran first and rejected the deploy
+  body for missing `devu`, surfacing as a generic 400 in the Share
+  modal. The collaborator routes are now mounted under
+  `/api/projects/:slug/collaborators` instead, so frame deploys reach
+  the Cloudflare middleware again. Added a regression test asserting
+  `projectSharing` does not intercept `/share`.
+
 ## [0.20.1] — 2026-05-15
 
 ### Fixed
