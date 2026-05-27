@@ -9,6 +9,7 @@ import { ShareButton } from "../components/shell/ShareButton";
 import { CanvasToggle } from "../components/shell/CanvasToggle";
 import { ChatToggle } from "../components/shell/ChatToggle";
 import { ProjectPicker } from "../components/shell/ProjectPicker";
+import { BackButton } from "../components/shell/BackButton";
 import { SharePanel } from "../components/multiplayer/SharePanel";
 import { PresenceStrip } from "../components/multiplayer/PresenceStrip";
 import { ChatStreamProvider } from "../hooks/chatStreamContext";
@@ -322,13 +323,18 @@ function ProjectDetailShell({
         title={
           <>
             <ChatToggle active={chatOpen} onToggle={() => setChatOpen((o) => !o)} />
-            {!isSpectator && (
+            {!isSpectator ? (
               <ProjectPicker
                 project={project}
                 onHome={onBack}
                 onOpenProject={onOpenProject}
                 onRenamed={() => refreshProject()}
               />
+            ) : (
+              <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <BackButton onClick={onBack} />
+                <span>{project.name}</span>
+              </span>
             )}
           </>
         }
