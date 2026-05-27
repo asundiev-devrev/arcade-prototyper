@@ -20,7 +20,7 @@ import { projectSharingMiddleware } from "./server/middleware/projectSharing";
 import { sharedProjectsMiddleware } from "./server/middleware/sharedProjects";
 import { attachRelayToHttpServer } from "./server/relay/wsServer";
 import { hydrateSessionRegistry } from "./server/relay/sessionRegistry";
-import { hydrateProjectRegistry } from "./server/relay/projectRegistry";
+import { hydrateProjectRegistry, republishAllRendezvous } from "./server/relay/projectRegistry";
 import { listMirrors } from "./server/sharedProjects/cache";
 import { connectMirror } from "./server/sharedProjects/relayClient";
 import { settingsMiddleware } from "./server/middleware/settings";
@@ -75,9 +75,11 @@ function apiPlugin(): import("vite").Plugin {
         hydrateSessionRegistry().catch((err) => {
           console.warn("[studio/multiplayer] hydrate failed:", err);
         }),
-        hydrateProjectRegistry().catch((err) => {
-          console.warn("[studio/shared-projects] hydrate failed:", err);
-        }),
+        hydrateProjectRegistry()
+          .then(() => republishAllRendezvous())
+          .catch((err) => {
+            console.warn("[studio/shared-projects] hydrate/republish failed:", err);
+          }),
       ]);
       server.httpServer?.once("listening", () => {
         const http = server.httpServer;

@@ -114,6 +114,29 @@ async function flush(): Promise<void> {
   await saveProjects(Array.from(projects.values()));
 }
 
+/**
+ * Boot-time helper: for every project with at least one collaborator, acquire
+ * the tunnel (which publishes the rendezvous record). This is what makes
+ * "host quits Studio, reopens an hour later" not break every guest mirror —
+ * the new ephemeral tunnel URL gets published before any guest tries to
+ * reconnect.
+ *
+ * Best-effort: failures are logged and ignored so a flaky network at boot
+ * doesn't block the dev server from starting. Dynamic import of ./tunnel
+ * breaks the circular dep (tunnel.publishHolderRendezvous calls getProject).
+ */
+export async function republishAllRendezvous(): Promise<void> {
+  const { acquireTunnel } = await import("./tunnel");
+  for (const p of projects.values()) {
+    if (p.shared_with.length === 0) continue;
+    try {
+      await acquireTunnel(p.id);
+    } catch (err: any) {
+      console.warn(`[shared-projects] republish ${p.id} failed:`, err?.message ?? err);
+    }
+  }
+}
+
 /** Test-only: wipe in-memory state. Does NOT delete the on-disk file. */
 export function __resetProjectRegistryForTests(): void {
   projects.clear();

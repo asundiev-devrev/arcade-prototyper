@@ -7,6 +7,7 @@ import {
   removeCollaborator,
   listProjects,
   isAllowed,
+  republishAllRendezvous,
 } from "../../../server/relay/projectRegistry";
 
 vi.mock("../../../server/relay/persistence", () => ({
@@ -14,6 +15,13 @@ vi.mock("../../../server/relay/persistence", () => ({
   saveProjects: async () => {},
   loadSessions: async () => [],
   saveSessions: async () => {},
+}));
+
+// republishAllRendezvous dynamically imports ./tunnel; mock that path so
+// vi.spyOn isn't needed on a frozen ESM namespace.
+const { acquireTunnelMock } = vi.hoisted(() => ({ acquireTunnelMock: vi.fn() }));
+vi.mock("../../../server/relay/tunnel", () => ({
+  acquireTunnel: acquireTunnelMock,
 }));
 
 beforeEach(() => __resetProjectRegistryForTests());
@@ -65,5 +73,46 @@ describe("projectRegistry", () => {
     await createOrGetProject({ hostDevu: "don:.../devu/3", projectSlug: "b" });
     const list = listProjects({ hostDevu: HOST });
     expect(list.map((p) => p.id)).toEqual([a.id]);
+  });
+});
+
+describe("republishAllRendezvous", () => {
+  beforeEach(() => {
+    __resetProjectRegistryForTests();
+    acquireTunnelMock.mockReset();
+    acquireTunnelMock.mockResolvedValue("https://t.trycloudflare.com");
+  });
+
+  it("acquires the tunnel for every project with shared_with > 0", async () => {
+    const a = await createOrGetProject({ hostDevu: HOST, projectSlug: "a" });
+    const b = await createOrGetProject({ hostDevu: HOST, projectSlug: "b" });
+    await createOrGetProject({ hostDevu: HOST, projectSlug: "c" });
+    await addCollaborator(a.id, { devu: GUEST, displayName: "x", addedBy: HOST });
+    await addCollaborator(b.id, { devu: "don:.../devu/3", displayName: "y", addedBy: HOST });
+    await republishAllRendezvous();
+    expect(acquireTunnelMock).toHaveBeenCalledTimes(2);
+    expect(acquireTunnelMock).toHaveBeenCalledWith(a.id);
+    expect(acquireTunnelMock).toHaveBeenCalledWith(b.id);
+  });
+
+  it("does nothing when no projects are shared", async () => {
+    await createOrGetProject({ hostDevu: HOST, projectSlug: "lonely" });
+    await republishAllRendezvous();
+    expect(acquireTunnelMock).not.toHaveBeenCalled();
+  });
+
+  it("logs and continues when one acquireTunnel rejects", async () => {
+    const a = await createOrGetProject({ hostDevu: HOST, projectSlug: "a" });
+    const b = await createOrGetProject({ hostDevu: HOST, projectSlug: "b" });
+    await addCollaborator(a.id, { devu: GUEST, displayName: "x", addedBy: HOST });
+    await addCollaborator(b.id, { devu: GUEST, displayName: "y", addedBy: HOST });
+    acquireTunnelMock
+      .mockRejectedValueOnce(new Error("net"))
+      .mockResolvedValueOnce("https://t.trycloudflare.com");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await republishAllRendezvous();
+    expect(acquireTunnelMock).toHaveBeenCalledTimes(2);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 });
