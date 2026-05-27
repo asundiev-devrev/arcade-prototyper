@@ -71,8 +71,12 @@ mac:
   gatekeeperAssess: false
   entitlements: electron/entitlements.mac.plist
   entitlementsInherit: electron/entitlements.mac.plist
-  notarize:
-    teamId: NJDA6Y3XRS
+  # Auto-notarize disabled: electron-builder 25 only accepts APPLE_ID +
+  # APPLE_APP_SPECIFIC_PASSWORD env vars (no keychain-profile support).
+  # We notarize manually post-pack via:
+  #   xcrun notarytool submit dist/*.dmg --keychain-profile arcade-studio-notarize --wait
+  #   xcrun stapler staple dist/*.dmg
+  notarize: false
   extendInfo:
     LSUIElement: false
     NSHighResolutionCapable: true

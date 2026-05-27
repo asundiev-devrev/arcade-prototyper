@@ -44,9 +44,19 @@ package.json#version     Single source of truth for the build version (read by m
 
 1. Bump the top-level `package.json#version` (semver, `0.x.y`). This is the single source of truth — electron-builder reads it for the bundle and the `/api/version` middleware reads it at runtime.
 2. Add an entry at the top of `studio/CHANGELOG.md` — keep-a-changelog style (`## [0.x.0] — YYYY-MM-DD` + Added / Fixed / Changed bullets).
-3. `pnpm run studio:pack` — runs `fetch-cli-deps.sh` then electron-builder; DMG lands in `dist/` at the repo root and auto-picks up the new version.
-4. Commit + push.
-5. Publish a release to the **public mirror** repo so beta testers see
+3. `pnpm run studio:pack` — runs `fetch-cli-deps.sh` then electron-builder; DMG lands in `dist/` at the repo root and auto-picks up the new version. The .app + DMG are codesigned but **not notarized** — electron-builder 25 only accepts `APPLE_ID` + `APPLE_APP_SPECIFIC_PASSWORD` env vars for notarize, while our credentials live in the `arcade-studio-notarize` keychain profile (set up via `xcrun notarytool store-credentials`). So `notarize: false` in `electron-builder.yml` and we notarize manually below.
+4. Notarize + staple manually:
+   ```
+   xcrun notarytool submit "dist/Arcade Studio-0.x.y-arm64.dmg" \
+     --keychain-profile arcade-studio-notarize --wait
+   xcrun stapler staple "dist/mac-arm64/Arcade Studio.app"
+   pnpm exec electron-builder --mac dmg \
+     --prepackaged "dist/mac-arm64/Arcade Studio.app" \
+     --config electron-builder.yml --publish never
+   ```
+   The submit-then-staple-then-rewrap dance is required because `stapler` only works post-acceptance, and the DMG must wrap a stapled `.app` for offline launches to satisfy Gatekeeper.
+5. Commit + push.
+6. Publish a release to the **public mirror** repo so beta testers see
    the "update available" banner in the app. The mirror is
    `asundiev-devrev/arcade-studio-releases` — a separate, public repo
    that carries only DMG artifacts; source stays in this private repo.
@@ -60,8 +70,9 @@ package.json#version     Single source of truth for the build version (read by m
      --latest
    ```
 
-   Or use `pnpm run studio:release` to let electron-builder upload the
-   artifact directly via its `publish: github` config.
+   `pnpm run studio:release` is **not** safe right now: it runs the full
+   electron-builder publish pipeline, which skips manual notarize. Use
+   `gh release create` after the manual notarize+staple+rewrap above.
 
    The app polls `https://api.github.com/repos/asundiev-devrev/arcade-studio-releases/releases/latest`
    once per launch and caches the response for an hour.
