@@ -31,6 +31,10 @@ interface MirrorClient {
 
 const clients = new Map<string, MirrorClient>();
 
+let __lastUrl: string | null = null;
+/** Test-only: inspect the last URL passed to `new WebSocket(...)`. */
+export const __test__ = { lastUrl: () => __lastUrl };
+
 export function getMirrorBus(id: string): EventEmitter | null {
   return clients.get(id)?.bus ?? null;
 }
@@ -133,6 +137,7 @@ async function openSocket(
   }
   const pat = (await getDevRevPat()) || process.env.DEVREV_PAT || "";
   const url = `${relayUrl}?projectShareId=${client.id}&asRole=guest&pat=${encodeURIComponent(pat)}`;
+  __lastUrl = url;
   const ws = new WebSocket(url);
   client.ws = ws;
 
