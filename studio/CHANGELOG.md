@@ -6,6 +6,37 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.23.0] — 2026-05-27
+
+### Changed
+- **Shared projects now use the same authoring shell as your own
+  projects.** The bespoke "view-only mirror" UI is gone. When you open
+  a project a teammate shared with you, you see the exact same chrome
+  the host sees: the same header, viewport grid, frame cards, comments
+  rail. Affordances that don't make sense for a guest are hidden — no
+  "New frame" tile, no per-frame delete, the prompt textarea swaps for
+  a comment box that posts to the host. This is the visual parity beta
+  testers asked for: no more "this looks like a different app".
+- **Frames in shared projects render as compiled HTML, not raw TSX.**
+  Previously, a guest opening a shared project saw the source code of
+  each frame as text. The mirror now exposes a per-project frame
+  endpoint that compiles cached TSX through the same pipeline the host
+  uses, so guests see the live output their teammate is generating.
+
+### Fixed
+- **Comment input recovers from network errors.** A failed comment post
+  used to leave the textarea full and stuck busy forever. The input now
+  re-enables on failure, preserves the typed text, and shows an inline
+  error message so the user can retry.
+
+### Internal
+- Extracted `useProjectFromHost` and `useProjectFromMirror` hooks so the
+  same `ProjectDetail` route serves both modes via a `mode` prop.
+  Deleted `studio/src/routes/SharedProject.tsx`. Added 30+ tests across
+  hooks, components, and the new spectator frame endpoint, including
+  regressions for slug-change race, theme-toggle flash, frame replay
+  merging, path-traversal protection, and comment-post error handling.
+
 ## [0.22.4] — 2026-05-27
 
 ### Fixed
