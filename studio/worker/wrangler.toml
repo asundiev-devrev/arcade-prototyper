@@ -33,3 +33,11 @@ CF_ACCOUNT_ID = "1e913847a5861b7fd371db148d4da92c"
 # dashboard propagates to every current and future share — no Worker
 # redeploy needed, no per-project dashboard clicks.
 ACCESS_POLICY_ID = "6d62b014-e9d2-47fe-960d-52b8dbdaa9ae"
+
+# Workers KV namespace storing the per-shareId rendezvous record published by
+# host Studios. Provisioned with `wrangler kv namespace create RENDEZVOUS`.
+# The id below MUST be replaced with the real namespace id after provisioning;
+# CI fails loudly if left as the placeholder.
+[[kv_namespaces]]
+binding = "KV_RENDEZVOUS"
+id = "REPLACE_WITH_REAL_NAMESPACE_ID"
