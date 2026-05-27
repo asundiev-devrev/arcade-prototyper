@@ -10,6 +10,7 @@ import {
   listProjects,
 } from "../relay/projectRegistry";
 import { acquireTunnel, releaseTunnel, currentTunnelUrl } from "../relay/tunnel";
+import { seedOneProject } from "../relay/seedReplayBuffers";
 import { createOrFetchDm, postToDm } from "../devrev/dm";
 import { SHARE_WORKER_URL } from "../cloudflare/deploy";
 import { multiplayerJsonPath } from "../paths";
@@ -116,6 +117,16 @@ async function handlePostShare(req: IncomingMessage, res: ServerResponse, slug: 
 
   const project = await createOrGetProject({ hostDevu: host.id, projectSlug: slug });
   await addCollaborator(project.id, { devu, displayName, addedBy: host.id });
+
+  // Seed the per-project replay buffer from disk now, in case the project
+  // was created mid-session (after boot-time seed already ran on an empty
+  // registry). Without this, frames the host generated before the share
+  // would not appear in a guest's cache_replay.
+  try {
+    await seedOneProject(project.id, slug);
+  } catch (err) {
+    console.warn("[projectSharing] seed-on-share failed:", err);
+  }
 
   let tunnelUrl: string;
   try {

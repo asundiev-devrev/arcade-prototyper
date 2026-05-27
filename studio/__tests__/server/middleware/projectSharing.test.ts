@@ -107,6 +107,33 @@ describe("projectSharing middleware", () => {
     expect(list.body.shared_with).toEqual([]);
   });
 
+  it("seeds the per-project replay buffer from disk on share", async () => {
+    // Regression for 0.22.4: a project added to the registry mid-session
+    // (after the boot-time seed has already run) used to leave its replay
+    // buffer empty, so a guest's cache_replay was missing every frame the
+    // host had generated before the share.
+    const fs = await import("node:fs/promises");
+    const framesDir = path.join(tmpDir, "projects", "my-proj", "frames");
+    await fs.mkdir(path.join(framesDir, "frame-pre"), { recursive: true });
+    await fs.writeFile(
+      path.join(framesDir, "frame-pre", "index.tsx"),
+      "<jsx>pre</jsx>",
+    );
+
+    const res = await call("POST", "/api/projects/my-proj/collaborators", {
+      devu: "don:.../devu/2",
+      displayName: "Bea",
+    });
+    expect(res.status).toBe(201);
+
+    const { getReplayBufferForProject } = await import(
+      "../../../server/relay/wsServer"
+    );
+    const buf = getReplayBufferForProject(res.body.projectShareId);
+    expect(buf).not.toBeNull();
+    expect(buf!.snapshot().frames["frame-pre"]).toBe("<jsx>pre</jsx>");
+  });
+
   // Regression for 0.20.2: this middleware used to claim
   // `/api/projects/:slug/share`, which collided with the Cloudflare share
   // (frame deploy) endpoint and produced "Deploy failed: 400". The

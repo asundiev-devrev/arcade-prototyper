@@ -30,7 +30,15 @@ export async function seedReplayBuffersFromDisk(hostDevu: string): Promise<void>
   }
 }
 
-async function seedOneProject(projectShareId: string, projectSlug: string): Promise<void> {
+/**
+ * Seed the replay buffer for a single project from disk. Use this on the
+ * share path so a project freshly added to the registry mid-session picks
+ * up frames the host already generated, without waiting for the next
+ * Studio restart.
+ *
+ * Idempotent: re-seeding overwrites with the same content.
+ */
+export async function seedOneProject(projectShareId: string, projectSlug: string): Promise<void> {
   const buf = getReplayBufferForProject(projectShareId);
   if (!buf) return;
   const framesDir = path.join(projectsRoot(), projectSlug, "frames");

@@ -6,6 +6,17 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.22.4] — 2026-05-27
+
+### Fixed
+- **A project shared mid-session now includes the host's existing
+  frames in the guest's first cache replay.** The boot-time disk seed
+  added in 0.22.3 only runs once at startup, so a project newly
+  created (or first shared) AFTER boot got an empty replay buffer —
+  guests connecting saw nothing until the host generated more frames.
+  Sharing a project now triggers a per-project disk seed, closing the
+  gap regardless of when the project was added to the registry.
+
 ## [0.22.3] — 2026-05-27
 
 ### Fixed
