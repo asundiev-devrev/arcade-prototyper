@@ -37,6 +37,15 @@ export function FrameCard({
   projectMode,
   zoom,
   highlighted,
+  // Spectator mode: hide affordances that drive host-side state. The
+  // element picker writes a target into the host's chat input — guests
+  // have no chat input to drive — so it's gated off here. Resize +
+  // open-in-new-tab stay live; both are pure read interactions.
+  readonly: isReadonly = false,
+  // Spectator mode also passes a custom URL builder so the iframe loads
+  // from the spectator compile endpoint (which reads from the mirror
+  // cache) instead of the host's `/api/frames/:slug/:frame` route.
+  srcOverride,
 }: {
   projectSlug: string;
   frame: Frame;
@@ -47,6 +56,8 @@ export function FrameCard({
   /** When set, paints a temporary outline: "target" = blue (nav success),
    *  "missing" = red (nav target not found). `null`/`undefined` = no highlight. */
   highlighted?: "target" | "missing" | null;
+  readonly?: boolean;
+  srcOverride?: (frameSlug: string) => string;
 }) {
   const [resizing, setResizing] = useState(false);
   const [hoverHandle, setHoverHandle] = useState(false);
@@ -154,7 +165,13 @@ export function FrameCard({
     Math.max(FRAME_WIDTH_MIN, frameWidth),
   );
   const handleVisible = hoverHandle || resizing;
-  const frameUrl = `/api/frames/${projectSlug}/${frame.slug}?mode=${projectMode}`;
+  // `srcOverride` short-circuits the host endpoint URL — used by the
+  // spectator viewport which needs to hit the shared-projects compile
+  // endpoint instead. Author mode (`srcOverride === undefined`) keeps the
+  // existing URL byte-for-byte to avoid touching the live host flow.
+  const frameUrl = srcOverride
+    ? srcOverride(frame.slug)
+    : `/api/frames/${projectSlug}/${frame.slug}?mode=${projectMode}`;
   const isTargetedFrame =
     target !== null && target.frameSlug === frame.slug;
 
@@ -200,40 +217,42 @@ export function FrameCard({
             (e.currentTarget as HTMLDivElement).style.opacity = base;
           }}
         >
-          <Tooltip
-            content={
-              picking
-                ? "Cancel (Esc)"
-                : isTargetedFrame
-                ? `Targeting <${target?.componentName}> — click to clear`
-                : "Pick an element to target in chat"
-            }
-          >
-            <IconButton
-              aria-label={
+          {!isReadonly && (
+            <Tooltip
+              content={
                 picking
-                  ? "Cancel element picker"
+                  ? "Cancel (Esc)"
                   : isTargetedFrame
-                  ? "Clear targeted element"
-                  : "Pick element"
+                  ? `Targeting <${target?.componentName}> — click to clear`
+                  : "Pick an element to target in chat"
               }
-              aria-pressed={picking || isTargetedFrame}
-              variant={picking || isTargetedFrame ? "primary" : "tertiary"}
-              onClick={() => {
-                if (picking) {
-                  setPicking(false);
-                  return;
-                }
-                if (isTargetedFrame) {
-                  setTarget(null);
-                  return;
-                }
-                setPicking(true);
-              }}
             >
-              <CrosshairIcon />
-            </IconButton>
-          </Tooltip>
+              <IconButton
+                aria-label={
+                  picking
+                    ? "Cancel element picker"
+                    : isTargetedFrame
+                    ? "Clear targeted element"
+                    : "Pick element"
+                }
+                aria-pressed={picking || isTargetedFrame}
+                variant={picking || isTargetedFrame ? "primary" : "tertiary"}
+                onClick={() => {
+                  if (picking) {
+                    setPicking(false);
+                    return;
+                  }
+                  if (isTargetedFrame) {
+                    setTarget(null);
+                    return;
+                  }
+                  setPicking(true);
+                }}
+              >
+                <CrosshairIcon />
+              </IconButton>
+            </Tooltip>
+          )}
           <IconButton
             aria-label="Open frame in new tab"
             variant="tertiary"

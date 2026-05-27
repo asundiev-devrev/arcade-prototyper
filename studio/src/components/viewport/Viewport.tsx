@@ -14,10 +14,17 @@ export function Viewport({
   zoom,
   onZoomChange,
   onSeedChat,
-  // Spectator mode passes `readonly`. Task 5 will gate destructive
-  // affordances on this. Accepted here so the prop typechecks today
-  // and threading from `ProjectDetail` (Task 4) compiles.
-  readonly: _readonly,
+  // Spectator mode passes `readonly`. Hides destructive affordances
+  // (NewFrameCard, EmptyViewport CTA) and skips host-only data
+  // sources (`useFrames` polling against `/api/projects/:slug`, which
+  // 404s for spectators).
+  readonly: isReadonly = false,
+  // Spectator mode also passes a custom iframe URL builder so the
+  // FrameCard hits the spectator compile endpoint
+  // (`/api/shared-projects/:id/frame/:framePath`) instead of the host
+  // endpoint. Author mode leaves this undefined → FrameCard falls back
+  // to its existing `/api/frames/:slug/:frame` URL.
+  frameSrcOverride,
 }: {
   project: Project;
   frameWidth: number;
@@ -26,9 +33,11 @@ export function Viewport({
   onZoomChange: (next: number) => void;
   onSeedChat: (text: string) => void;
   readonly?: boolean;
+  frameSrcOverride?: (frameSlug: string) => string;
 }) {
-  void _readonly;
-  const { frames } = useFrames(project);
+  // Pass `enabled: !isReadonly` so the polling timer and host fetch
+  // don't run for spectators — see useFrames docstring.
+  const { frames } = useFrames(project, { enabled: !isReadonly });
   const [creatingFrame, setCreatingFrame] = useState(false);
   const [highlight, setHighlight] = useState<{
     slug: string;
@@ -119,7 +128,30 @@ export function Viewport({
     return () => window.removeEventListener("message", onMessage);
   }, []);
 
-  if (!frames.length) return <EmptyViewport onCreateFrame={handleCreateFrame} busy={creatingFrame} />;
+  if (!frames.length) {
+    // Spectator-side empty state: the host hasn't generated anything yet.
+    // Don't show a "+ New frame" CTA — guests can't author. The
+    // SharedProject empty-state route (already shipped in 0.22.1) shows a
+    // dedicated waiting-for-host illustration before the spectator gets
+    // here, but this guard keeps us covered if the route ever hands the
+    // viewport an empty mirror directly.
+    if (isReadonly) {
+      return (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            height: "100%",
+            color: "var(--fg-neutral-subtle)",
+          }}
+        >
+          Waiting for the host to generate frames…
+        </div>
+      );
+    }
+    return <EmptyViewport onCreateFrame={handleCreateFrame} busy={creatingFrame} />;
+  }
 
   return (
     <ViewportPreview zoom={zoom} onZoomChange={onZoomChange}>
@@ -143,9 +175,13 @@ export function Viewport({
             projectMode={project.mode}
             zoom={zoom}
             highlighted={highlight?.slug === f.slug ? highlight.kind : null}
+            readonly={isReadonly}
+            srcOverride={frameSrcOverride}
           />
         ))}
-        <NewFrameCard onClick={handleCreateFrame} busy={creatingFrame} />
+        {!isReadonly && (
+          <NewFrameCard onClick={handleCreateFrame} busy={creatingFrame} />
+        )}
       </div>
     </ViewportPreview>
   );

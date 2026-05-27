@@ -142,6 +142,12 @@ function ProjectDetailSpectator({
       source={source}
       onBack={onBack}
       onOpenProject={onOpenProject}
+      // Spectator iframes hit the shared-projects compile endpoint —
+      // host's `/api/frames/:slug/:frame` 404s for guests because the
+      // TSX lives in the mirror cache, not under `projects/`.
+      frameSrcOverride={(slug) =>
+        `/api/shared-projects/${encodeURIComponent(id)}/frame/${encodeURIComponent(slug)}`
+      }
     />
   );
 }
@@ -152,12 +158,14 @@ function ProjectDetailShell({
   source,
   onBack,
   onOpenProject,
+  frameSrcOverride,
 }: {
   mode: "author" | "spectator";
   routeKey: string;
   source: ProjectShellSource;
   onBack: () => void;
   onOpenProject: (slug: string) => void;
+  frameSrcOverride?: (frameSlug: string) => string;
 }) {
   const isSpectator = mode === "spectator";
   // Optimistic local override for the theme toggle. Author-only path:
@@ -412,6 +420,7 @@ function ProjectDetailShell({
             onZoomChange={setZoom}
             onSeedChat={(text) => seedChatRef.current?.(text)}
             readonly={isSpectator}
+            frameSrcOverride={frameSrcOverride}
           />
         </main>
         {!isSpectator && devOpen && <DevModePanel slug={project.slug} />}
