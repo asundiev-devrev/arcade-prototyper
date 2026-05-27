@@ -6,7 +6,7 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.21.0] — 2026-05-27
+## [0.22.0] — 2026-05-27
 
 ### Fixed
 - **Multiplayer survives host Studio restarts.** Quick-tunnel hostnames
@@ -40,7 +40,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `studio/worker/wrangler.toml`, then redeploy with
   `pnpm run worker:deploy`.
 - Existing 0.20.x guests don't need to re-import; the next time the
-  host launches 0.21.0 their mirror auto-upgrades on the next reconnect
+  host launches 0.22.0 their mirror auto-upgrades on the next reconnect
   attempt.
 
 ### Also fixed (originally queued for 0.20.2)
