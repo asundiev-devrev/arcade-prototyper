@@ -13,7 +13,11 @@ export default defineConfig({
     ],
   },
   test: {
-    include: ["__tests__/**/*.test.ts", "__tests__/**/*.test.tsx"],
+    include: [
+      "__tests__/**/*.test.ts",
+      "__tests__/**/*.test.tsx",
+      "worker/__tests__/**/*.test.ts",
+    ],
     environment: "jsdom",
     setupFiles: ["./__tests__/setup.ts"],
     // gridstack 12.3.3 uses an extensionless subpath import (`./gridstack-engine`)

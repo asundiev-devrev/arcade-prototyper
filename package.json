@@ -7,7 +7,8 @@
     "studio:test": "vitest run --config studio/vitest.config.ts",
     "studio:pack": "bash studio/packaging/build.sh && bash studio/packaging/dmg.sh",
     "studio:release": "bash studio/packaging/build.sh && bash studio/packaging/dmg.sh && bash studio/packaging/lib/notarize.sh \"studio/packaging/dist/Arcade Studio $(cat studio/packaging/VERSION).dmg\"",
-    "studio:audit": "DRIFT_AUDIT=1 vitest run --config studio/vitest.config.ts __tests__/lift/drift --reporter=verbose"
+    "studio:audit": "DRIFT_AUDIT=1 vitest run --config studio/vitest.config.ts __tests__/lift/drift --reporter=verbose",
+    "worker:deploy": "bash studio/worker/bin/check-wrangler.sh && cd studio/worker && wrangler deploy"
   },
   "dependencies": {
     "@tailwindcss/node": "^4.2.4",

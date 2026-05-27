@@ -91,12 +91,15 @@ export default {
     // opening the multiplayer WS. Backed by Workers KV with a 7-day TTL.
     const rendezvousMatch = /^\/rendezvous\/([^\/]+)\/?$/.exec(url.pathname);
     if (rendezvousMatch) {
+      // Authenticate before validating the shareId — unauthenticated callers
+      // shouldn't be able to probe whether a given shareId would be
+      // syntactically accepted.
+      const authCheck = checkBearer(req, env);
+      if (authCheck) return cors(authCheck);
       const shareId = rendezvousMatch[1];
       if (!VALID_SHARE_ID_RE.test(shareId)) {
         return cors(json(400, { error: { code: "bad_share_id", message: "shareId must be a UUID" } }));
       }
-      const authCheck = checkBearer(req, env);
-      if (authCheck) return cors(authCheck);
 
       if (req.method === "GET") {
         const raw = await env.KV_RENDEZVOUS.get(`r:${shareId}`);
@@ -410,7 +413,7 @@ function cors(res: Response): Response {
   // fetches work and so we could tighten this later (e.g. by checking
   // against a specific origin) without re-deploying clients.
   res.headers.set("Access-Control-Allow-Origin", "*");
-  res.headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type");
   return res;
 }
