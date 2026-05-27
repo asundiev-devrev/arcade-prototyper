@@ -130,11 +130,10 @@ export function Viewport({
 
   if (!frames.length) {
     // Spectator-side empty state: the host hasn't generated anything yet.
-    // Don't show a "+ New frame" CTA — guests can't author. The
-    // SharedProject empty-state route (already shipped in 0.22.1) shows a
-    // dedicated waiting-for-host illustration before the spectator gets
-    // here, but this guard keeps us covered if the route ever hands the
-    // viewport an empty mirror directly.
+    // Don't show a "+ New frame" CTA — guests can't author. This is the
+    // canonical waiting-for-host surface now that ProjectDetail spectator
+    // mode owns the full shared-project shell (the bespoke SharedProject
+    // route was retired in this plan).
     if (isReadonly) {
       return (
         <div

@@ -46,9 +46,10 @@ export function HomePage({ onOpen }: { onOpen: (slug: string) => void }) {
 
   function openSharedProject(p: SharedProjectMeta) {
     // Reuse the existing deep-link import pipeline (App.tsx) so the same
-    // wiring that handles invite URLs lights up SharedProject. Re-importing
-    // a mirror that already exists is idempotent — `createMirror` simply
-    // rewrites metadata.json. Constructing the arcade-studio:// URL with
+    // wiring that handles invite URLs lights up the spectator shell
+    // (ProjectDetail mode="spectator"). Re-importing a mirror that
+    // already exists is idempotent — `createMirror` simply rewrites
+    // metadata.json. Constructing the arcade-studio:// URL with
     // the metadata we already have keeps `useDeepLinkRoute.parseDeepLink`
     // happy (it requires id + relay; we also pass host/hostName/projectSlug).
     const inner = new URL(`arcade-studio://project/${p.id}`);

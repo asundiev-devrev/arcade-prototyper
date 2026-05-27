@@ -7,7 +7,6 @@ import { StartupAuthGate } from "./components/feedback/StartupAuthGate";
 import { UpdateBanner } from "./components/feedback/UpdateBanner";
 import { useDeepLinkRoute, clearDeepLink } from "./hooks/useDeepLinkRoute";
 import { JoinSessionGate } from "./components/multiplayer/JoinSessionGate";
-import SharedProject from "./routes/SharedProject";
 
 function readSlugFromHash(): string | null {
   const match = window.location.hash.match(/^#\/project\/([a-z0-9][a-z0-9-]{0,62})$/i);
@@ -119,7 +118,13 @@ export function App() {
       <UpdateBanner />
       <StartupAuthGate>
         {activeShared ? (
-          <SharedProject id={activeShared} />
+          <ProjectDetail
+            key={activeShared}
+            mode="spectator"
+            id={activeShared}
+            onBack={() => setActiveShared(null)}
+            onOpenProject={openProject}
+          />
         ) : openSlug === null ? (
           <HomePage onOpen={openProject} />
         ) : (
