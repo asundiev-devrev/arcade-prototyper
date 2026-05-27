@@ -135,6 +135,66 @@ describe("useProjectFromHost", () => {
     });
   });
 
+  it("fetches /api/projects/:slug/history exactly once per mount (no duplicate effect)", async () => {
+    const fetchSpy = installFetchStub();
+    render(
+      <HookProbe
+        slug="demo"
+        onState={() => {
+          // no-op
+        }}
+      />,
+    );
+
+    await waitFor(() => {
+      const historyCalls = fetchSpy.mock.calls.filter(
+        ([url]) => url === "/api/projects/demo/history",
+      );
+      expect(historyCalls.length).toBeGreaterThan(0);
+    });
+
+    // Settle pending microtasks so any duplicate effect (the regression we
+    // are guarding against) would have fired before we count.
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const historyCalls = fetchSpy.mock.calls.filter(
+      ([url]) => url === "/api/projects/demo/history",
+    );
+    expect(historyCalls.length).toBe(1);
+  });
+
+  it("fires history fetch once per arcade-studio:refresh-chat-history event", async () => {
+    const fetchSpy = installFetchStub();
+    render(
+      <HookProbe
+        slug="demo"
+        onState={() => {
+          // no-op
+        }}
+      />,
+    );
+
+    await waitFor(() => {
+      const historyCalls = fetchSpy.mock.calls.filter(
+        ([url]) => url === "/api/projects/demo/history",
+      );
+      expect(historyCalls.length).toBe(1);
+    });
+
+    await act(async () => {
+      window.dispatchEvent(new Event("arcade-studio:refresh-chat-history"));
+      await Promise.resolve();
+    });
+
+    const historyCalls = fetchSpy.mock.calls.filter(
+      ([url]) => url === "/api/projects/demo/history",
+    );
+    // 1 from mount + 1 from the dispatched event = 2. If duplicated, would be 4.
+    expect(historyCalls.length).toBe(2);
+  });
+
   // Avoid leaking the unresolved chat-stream fetch promise into other tests.
   // We let act() flush microtasks but never expect the stream to settle.
   it("exposes a refresh fn that re-reads the project", async () => {

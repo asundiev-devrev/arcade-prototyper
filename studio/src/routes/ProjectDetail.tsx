@@ -61,7 +61,7 @@ export function ProjectDetail({
   // hook's value until the next refresh lands.
   const [localProject, setLocalProject] = useState<typeof source.project>(null);
   const project = localProject ?? source.project;
-  const { presence, refresh: refreshProject, chatStream } = source;
+  const { presence, refresh: refreshProject, chatStream, chatHistory } = source;
   const { host, guests } = presence;
   const [devOpen, setDevOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -243,7 +243,7 @@ export function ProjectDetail({
             position: "relative",
           }}
         >
-          <ChatPane projectSlug={project.slug} seedRef={seedChatRef} />
+          <ChatPane projectSlug={project.slug} history={chatHistory} seedRef={seedChatRef} />
           {chatOpen && (
             <div
               role="separator"

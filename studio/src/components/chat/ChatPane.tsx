@@ -1,4 +1,4 @@
-import { useEffect, useState, type MutableRefObject } from "react";
+import { type MutableRefObject } from "react";
 import { MessageList } from "./MessageList";
 import { PromptInput } from "./PromptInput";
 import { useChatStreamContext } from "../../hooks/chatStreamContext";
@@ -8,37 +8,24 @@ import { extractFigmaUrl, decoratePromptWithFigma } from "../../lib/figmaUrl";
 import { ErrorBanner } from "../feedback/ErrorBanner";
 import { AuthExpiredNotice } from "../feedback/AuthExpiredNotice";
 
+/**
+ * Persisted chat history is owned by `useProjectFromHost` (or the spectator
+ * equivalent) and threaded down via the `history` prop. ChatPane intentionally
+ * does NOT fetch `/api/projects/:slug/history` itself — the source hook does
+ * that exactly once per relevant trigger. Earlier versions duplicated the
+ * fetch here; that double-fired on every phase transition out of `running`
+ * and on every `arcade-studio:refresh-chat-history` window event.
+ */
 export function ChatPane({
   projectSlug,
+  history,
   seedRef,
 }: {
   projectSlug: string;
+  history: ChatMessage[];
   seedRef?: MutableRefObject<((text: string) => void) | null>;
 }) {
-  const [history, setHistory] = useState<ChatMessage[]>([]);
   const { state, send, retry } = useChatStreamContext();
-
-  // Refresh persisted chat history whenever a turn transitions out of
-  // `running`. The hook already streams live events for the current turn;
-  // history only needs to be re-read when the server has written a new
-  // final assistant message to disk.
-  useEffect(() => {
-    let cancelled = false;
-    async function refresh() {
-      const r = await fetch(`/api/projects/${projectSlug}/history`);
-      if (!cancelled && r.ok) setHistory(await r.json());
-    }
-    if (state.phase !== "running") void refresh();
-    // Also refresh when an @-mention invite writes a system message —
-    // those don't go through the chat-stream pipeline, so the phase
-    // transition above wouldn't fire for them.
-    const onInviteRefresh = () => void refresh();
-    window.addEventListener("arcade-studio:refresh-chat-history", onInviteRefresh);
-    return () => {
-      cancelled = true;
-      window.removeEventListener("arcade-studio:refresh-chat-history", onInviteRefresh);
-    };
-  }, [projectSlug, state.phase]);
 
   const enhancedSend = (prompt: string, images: string[] = []) => {
     const url = extractFigmaUrl(prompt);
