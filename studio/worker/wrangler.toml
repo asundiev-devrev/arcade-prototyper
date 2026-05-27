@@ -42,4 +42,4 @@ ACCESS_POLICY_ID = "6d62b014-e9d2-47fe-960d-52b8dbdaa9ae"
 # exits non-zero if it is still present.
 [[kv_namespaces]]
 binding = "KV_RENDEZVOUS"
-id = "REPLACE_WITH_REAL_NAMESPACE_ID"
+id = "89fc9356a35c48de9bf06e1d08e51515"
