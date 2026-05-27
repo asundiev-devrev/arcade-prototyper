@@ -7,7 +7,7 @@ set -euo pipefail
 
 WRANGLER="$(dirname "$0")/../wrangler.toml"
 
-if grep -q 'REPLACE_WITH_REAL_NAMESPACE_ID' "$WRANGLER"; then
+if grep -qE '^[[:space:]]*id[[:space:]]*=[[:space:]]*"REPLACE_WITH_REAL_NAMESPACE_ID"' "$WRANGLER"; then
   echo "ERROR: $WRANGLER still contains REPLACE_WITH_REAL_NAMESPACE_ID." >&2
   echo "Run: cd studio/worker && wrangler kv namespace create RENDEZVOUS" >&2
   echo "Then paste the returned id into the [[kv_namespaces]] block." >&2
