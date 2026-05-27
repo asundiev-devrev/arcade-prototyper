@@ -28,6 +28,19 @@ interface UpdateCheckResult {
 
 const DISMISS_KEY = "arcade-studio:update-banner-dismissed-version";
 
+/**
+ * Extract the minor segment from a 0.x.y semver string. Used only for
+ * the 0.21 Electron-migration threshold check; not a general semver
+ * comparator. Returns 0 on parse failure (so unknown versions don't
+ * trip the migration warning).
+ */
+function semverMinor(v: string): number {
+  const parts = v.split(".");
+  if (parts.length < 2) return 0;
+  const minor = parseInt(parts[1], 10);
+  return Number.isFinite(minor) ? minor : 0;
+}
+
 export function UpdateBanner() {
   const [info, setInfo] = useState<UpdateCheckResult | null>(null);
   const [dismissedVersion, setDismissedVersion] = useState<string | null>(() => {
@@ -62,6 +75,14 @@ export function UpdateBanner() {
 
   const { latest, current, downloadUrl, releaseUrl } = info;
 
+  // 0.21.0 was the Electron migration. Anyone still on 0.20.x or earlier
+  // installing 0.21.x must manually delete the old `Arcade Studio.app`
+  // first — bash-launcher and Electron builds coexist as separate apps
+  // (different signing identity), and Launch Services binds the
+  // arcade-studio:// URL scheme to whichever was launched most recently.
+  const isElectronMigration =
+    semverMinor(current) < 21 && semverMinor(latest) >= 21;
+
   return (
     <div
       role="status"
@@ -72,20 +93,32 @@ export function UpdateBanner() {
         gap: 12,
         padding: "8px 16px",
         fontSize: 13,
-        background: "var(--bg-intelligence-subtle, #eef3ff)",
-        color: "var(--fg-intelligence-prominent, #24408e)",
+        background: isElectronMigration
+          ? "var(--bg-warning-subtle, #fff3e0)"
+          : "var(--bg-intelligence-subtle, #eef3ff)",
+        color: isElectronMigration
+          ? "var(--fg-warning-prominent, #8b4500)"
+          : "var(--fg-intelligence-prominent, #24408e)",
         borderBottom: "1px solid var(--stroke-neutral-subtle, #e4e4e4)",
       }}
     >
       <span>
-        <strong>Arcade Studio {latest}</strong> is available (you're on {current}).
+        {isElectronMigration ? (
+          <>
+            <strong>Arcade Studio {latest} is a major upgrade</strong> — Studio is now a real app, not a browser tab. <strong>Drag the old <code>Arcade Studio.app</code> to the trash</strong> before installing, otherwise you'll have two apps and the invite-link handler will break. Your projects, PAT, and settings carry over automatically. (You're on {current}.)
+          </>
+        ) : (
+          <>
+            <strong>Arcade Studio {latest}</strong> is available (you're on {current}).
+          </>
+        )}
       </span>
       {downloadUrl ? (
         <a
           href={downloadUrl}
           target="_blank"
           rel="noreferrer"
-          style={{ textDecoration: "underline", color: "inherit" }}
+          style={{ textDecoration: "underline", color: "inherit", whiteSpace: "nowrap" }}
         >
           Download
         </a>
@@ -94,7 +127,7 @@ export function UpdateBanner() {
           href={releaseUrl}
           target="_blank"
           rel="noreferrer"
-          style={{ textDecoration: "underline", color: "inherit" }}
+          style={{ textDecoration: "underline", color: "inherit", whiteSpace: "nowrap" }}
         >
           Release notes
         </a>

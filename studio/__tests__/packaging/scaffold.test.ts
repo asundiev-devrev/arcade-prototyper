@@ -1,27 +1,58 @@
-import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
 import { describe, it, expect } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
+import yaml from "yaml";
 
-const packagingDir = path.resolve(__dirname, "..", "..", "packaging");
+const REPO_ROOT = path.resolve(__dirname, "../../..");
+const CONFIG_PATH = path.join(REPO_ROOT, "electron-builder.yml");
 
-describe("packaging scaffold", () => {
-  it("has a README that identifies itself", () => {
-    const readme = path.join(packagingDir, "README.md");
-    expect(existsSync(readme)).toBe(true);
-    expect(readFileSync(readme, "utf-8")).toMatch(/Arcade Studio/);
+describe("electron-builder configuration", () => {
+  const config = yaml.parse(fs.readFileSync(CONFIG_PATH, "utf-8"));
+
+  it("declares the correct app ID", () => {
+    expect(config.appId).toBe("ai.devrev.internal.ArcadeStudio");
   });
 
-  it("has an Info.plist declaring bundle identifier", () => {
-    const plist = path.join(packagingDir, "Info.plist");
-    expect(existsSync(plist)).toBe(true);
-    const contents = readFileSync(plist, "utf-8");
-    expect(contents).toContain("CFBundleIdentifier");
-    expect(contents).toContain("ai.devrev.internal.ArcadeStudio");
-    expect(contents).toContain("CFBundleExecutable");
-    expect(contents).toContain("Arcade Studio");
+  it("declares the correct product name", () => {
+    expect(config.productName).toBe("Arcade Studio");
   });
 
-  it("has an icon file", () => {
-    expect(existsSync(path.join(packagingDir, "icon.icns"))).toBe(true);
+  it("targets DMG for arm64", () => {
+    const target = config.mac?.target;
+    expect(target).toBeDefined();
+    const dmgEntry = Array.isArray(target)
+      ? target.find((t: { target: string }) => t.target === "dmg")
+      : null;
+    expect(dmgEntry).toBeDefined();
+    expect(dmgEntry?.arch).toBe("arm64");
+  });
+
+  it("uses hardened runtime + entitlements", () => {
+    expect(config.mac?.hardenedRuntime).toBe(true);
+    expect(config.mac?.entitlements).toBe("electron/entitlements.mac.plist");
+  });
+
+  it("declares the Developer ID identity", () => {
+    // electron-builder requires the name WITHOUT the "Developer ID
+    // Application: " prefix — Apple's codesign adds it back automatically.
+    expect(config.mac?.identity).toContain("DevRev, Inc.");
+    expect(config.mac?.identity).toContain("NJDA6Y3XRS");
+    expect(config.mac?.identity).not.toContain("Developer ID Application:");
+  });
+
+  it("notarizes via the correct team ID", () => {
+    expect(config.mac?.notarize?.teamId).toBe("NJDA6Y3XRS");
+  });
+
+  it("registers the arcade-studio:// URL scheme", () => {
+    const urlTypes = config.mac?.extendInfo?.CFBundleURLTypes;
+    expect(urlTypes).toBeDefined();
+    expect(urlTypes[0].CFBundleURLSchemes).toContain("arcade-studio");
+  });
+
+  it("publishes to the public mirror", () => {
+    expect(config.publish?.provider).toBe("github");
+    expect(config.publish?.owner).toBe("asundiev-devrev");
+    expect(config.publish?.repo).toBe("arcade-studio-releases");
   });
 });

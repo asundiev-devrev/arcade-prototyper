@@ -2,41 +2,58 @@
   "name": "arcade-prototyper",
   "private": true,
   "type": "module",
+  "main": "electron/dist/main.js",
+  "version": "0.22.0",
   "scripts": {
     "studio": "vite --config studio/vite.config.ts",
+    "studio:electron": "concurrently --kill-others --names vite,electron \"ARCADE_STUDIO_OPEN_BROWSER=0 pnpm run studio\" \"pnpm exec tsc -p electron/tsconfig.json && pnpm exec electron .\"",
     "studio:test": "vitest run --config studio/vitest.config.ts",
-    "studio:pack": "bash studio/packaging/build.sh && bash studio/packaging/dmg.sh",
-    "studio:release": "bash studio/packaging/build.sh && bash studio/packaging/dmg.sh && bash studio/packaging/lib/notarize.sh \"studio/packaging/dist/Arcade Studio $(cat studio/packaging/VERSION).dmg\"",
+    "studio:pack": "bash studio/packaging/scripts/fetch-cli-deps.sh && pnpm exec tsc -p electron/tsconfig.json && pnpm exec electron-builder --mac --config electron-builder.yml --publish never",
+    "studio:release": "bash studio/packaging/scripts/fetch-cli-deps.sh && pnpm exec tsc -p electron/tsconfig.json && pnpm exec electron-builder --mac --config electron-builder.yml --publish always",
     "studio:audit": "DRIFT_AUDIT=1 vitest run --config studio/vitest.config.ts __tests__/lift/drift --reporter=verbose",
     "worker:deploy": "bash studio/worker/bin/check-wrangler.sh && cd studio/worker && wrangler deploy"
   },
   "dependencies": {
+    "@anthropic-ai/claude-code": "^2.1.142",
     "@tailwindcss/node": "^4.2.4",
     "@tailwindcss/oxide": "^4.2.4",
+    "@tailwindcss/vite": "^4.3.0",
+    "@vitejs/plugin-react": "^6.0.2",
     "@xorkavi/arcade-gen": "^1.0.0",
     "chokidar": "^4.0.0",
+    "electron-updater": "^6.8.3",
     "esbuild": "^0.25.0",
+    "figmanage": "^1.4.2",
     "react": "^19.0.0",
     "react-day-picker": "^9.14.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.1.0",
+    "tailwindcss": "^4.3.0",
+    "vite": "^8.0.13",
     "ws": "^8.20.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.2.2",
     "@testing-library/react": "^16.0.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/ws": "^8.18.1",
-    "@vitejs/plugin-react": "^6.0.1",
+    "concurrently": "^9.2.1",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
     "jsdom": "^26.0.0",
     "playwright": "^1.59.1",
-    "tailwindcss": "^4.2.2",
     "typescript": "^5.9.3",
-    "vite": "^8.0.8",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "yaml": "^2.9.0"
   },
-  "packageManager": "pnpm@10.33.2+sha512.a90faf6feeab71ad6c6e57f94e0fe1a12f5dcc22cd754db40ae9593eb6a3e0b6b12e3540218bb37ae083404b1f2ce6db2a4121e979829b4aff94b99f49da1cf8"
+  "packageManager": "pnpm@10.33.2+sha512.a90faf6feeab71ad6c6e57f94e0fe1a12f5dcc22cd754db40ae9593eb6a3e0b6b12e3540218bb37ae083404b1f2ce6db2a4121e979829b4aff94b99f49da1cf8",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@anthropic-ai/claude-code",
+      "electron",
+      "esbuild"
+    ]
+  }
 }

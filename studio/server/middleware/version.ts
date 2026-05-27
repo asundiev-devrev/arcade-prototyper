@@ -3,23 +3,24 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Where `build.sh` drops version.json inside the packaged .app:
-//   <App>/Contents/Resources/version.json
+// We read the build version from the top-level `package.json#version`.
+// electron-builder reads the same field at packaging time and bakes it
+// into latest-mac.yml + the .app's Info.plist, so package.json is the
+// single source of truth in both dev and packaged modes.
+//
 // This middleware file lives at:
-//   <repo>/studio/server/middleware/version.ts
-// Inside the bundle that becomes:
-//   <App>/Contents/Resources/app/studio/server/middleware/version.ts
-// so ../../../../version.json resolves to the stamped file. In a dev
-// checkout (running `pnpm run studio` from the repo) the file doesn't
-// exist — we surface "dev" so the UI can label local builds distinctly.
+//   <repo>/studio/server/middleware/version.ts                       (dev)
+//   <App>/Contents/Resources/app/studio/server/middleware/version.ts (packaged)
+// In both cases, three "../" lands on the repo root / app root where
+// package.json sits (electron-builder.yml's `files:` glob copies
+// package.json to <Resources>/app/package.json).
 const SERVER_MW_DIR = path.dirname(fileURLToPath(import.meta.url));
-const VERSION_JSON = path.resolve(SERVER_MW_DIR, "..", "..", "..", "..", "version.json");
+const PACKAGE_JSON = path.resolve(SERVER_MW_DIR, "..", "..", "..", "package.json");
 
-// In a packaged .app, build.sh copies CHANGELOG.md next to version.json
-// (Contents/Resources/CHANGELOG.md). In a dev checkout, the source file
-// lives at studio/CHANGELOG.md — four "../" from server/middleware/ lands
-// at the repo root, then we pick it up from there.
-const CHANGELOG_PACKAGED = path.resolve(SERVER_MW_DIR, "..", "..", "..", "..", "CHANGELOG.md");
+// CHANGELOG.md lives at studio/CHANGELOG.md in the source tree, which
+// electron-builder bundles to <Resources>/app/studio/CHANGELOG.md via
+// the `studio/**/*` glob. Three "../" from server/middleware/ resolves
+// to studio/, so the same path works in dev and in the packaged app.
 const CHANGELOG_SOURCE = path.resolve(SERVER_MW_DIR, "..", "..", "CHANGELOG.md");
 
 interface VersionInfo {
@@ -31,15 +32,15 @@ interface VersionInfo {
 
 async function readVersion(): Promise<VersionInfo> {
   try {
-    const raw = await fs.readFile(VERSION_JSON, "utf-8");
-    const parsed = JSON.parse(raw) as Partial<VersionInfo>;
-    if (typeof parsed.base === "string" && typeof parsed.build === "string") {
-      return {
-        base: parsed.base,
-        build: parsed.build,
-        gitSha: typeof parsed.gitSha === "string" ? parsed.gitSha : undefined,
-        builtAt: typeof parsed.builtAt === "string" ? parsed.builtAt : undefined,
-      };
+    const raw = await fs.readFile(PACKAGE_JSON, "utf-8");
+    const parsed = JSON.parse(raw) as { version?: unknown };
+    if (typeof parsed.version === "string" && parsed.version.length > 0) {
+      // Mirror the previous shape: `base` is the semver, `build` is the
+      // user-facing label. The old build.sh distinguished the two so a
+      // "-dirty" suffix could land in `build` only; electron-builder
+      // doesn't ship that distinction yet, so for now they're identical
+      // and future suffixes (e.g., commit SHA) can be appended to `build`.
+      return { base: parsed.version, build: parsed.version };
     }
   } catch {
     // File missing or malformed — fall through to the dev-build shape.
@@ -146,16 +147,13 @@ export async function checkForUpdate(
 }
 
 async function readChangelog(): Promise<string | null> {
-  // Packaged .app takes precedence — if it's there it's authoritative for
-  // that build. Fall back to the in-repo source for dev checkouts.
-  for (const p of [CHANGELOG_PACKAGED, CHANGELOG_SOURCE]) {
-    try {
-      return await fs.readFile(p, "utf-8");
-    } catch {
-      // try the next path
-    }
+  // Same path resolves in dev and packaged builds — see CHANGELOG_SOURCE
+  // comment above.
+  try {
+    return await fs.readFile(CHANGELOG_SOURCE, "utf-8");
+  } catch {
+    return null;
   }
-  return null;
 }
 
 export function versionMiddleware() {

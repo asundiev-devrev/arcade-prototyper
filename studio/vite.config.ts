@@ -126,7 +126,11 @@ export default defineConfig({
   },
   server: {
     port: 5556,
-    open: true,
+    // Auto-open is gated on ARCADE_STUDIO_OPEN_BROWSER. The Electron
+    // wrapper sets this to "0" so Vite doesn't open a browser tab in
+    // addition to the Electron window. Plain `pnpm run studio` keeps
+    // the old browser-tab UX by default.
+    open: process.env.ARCADE_STUDIO_OPEN_BROWSER !== "0",
     fs: {
       allow: [path.resolve(__dirname, ".."), studioRoot()],
     },

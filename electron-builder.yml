@@ -1,0 +1,105 @@
+# electron-builder configuration for Arcade Studio.
+# See https://www.electron.build/configuration for full reference.
+
+appId: ai.devrev.internal.ArcadeStudio
+productName: Arcade Studio
+copyright: Copyright © 2026 DevRev, Inc.
+
+# Disable asar packaging. Vite + the studio middleware need real
+# filesystem access throughout node_modules and studio/ at runtime
+# (file watching, source reads, middleware spawning subprocesses
+# pointed at JS entry files). Inside an asar archive those paths are
+# virtual — Vite's `vite.js` entry is unspawnable as a child process,
+# and middleware that does `fs.readFile` on relative paths fails.
+# Trade-off: slightly larger bundle, no integrity hash. Worth it for
+# correctness.
+asar: false
+
+# Source files included in the .app bundle.
+# All files matched here go to <Resources>/app/, so the runtime
+# layout matches what electron/main.ts expects (appRoot() returns
+# <Resources>/app/).
+files:
+  - electron/dist/**/*
+  - studio/**/*
+  - prototype-kit/**/*
+  - package.json
+  - "node_modules/**/*"
+  - "!node_modules/**/{*.md,*.markdown,*.ts,*.flow,*.spec.js,*.test.js,*.map}"
+  - "!node_modules/**/{__tests__,test,tests}/**"
+  - "!**/*.{png,jpg,jpeg,gif}"
+  - "!.git/**"
+  - "!.worktrees/**"
+  - "!.claude/**"
+  - "!.omc/**"
+  - "!.playwright-mcp/**"
+  - "!coverage/**"
+  - "!studio/packaging/dist/**"
+  - "!dist/**"
+
+# Bundled CLIs that must NOT live inside node_modules — they're
+# shelled out to from middleware (claude, cloudflared, aws,
+# figmanage). We put them under <Resources>/bin/ and the runtime
+# environment-prefixes PATH with that directory.
+extraResources:
+  - from: "node_modules/@anthropic-ai/claude-code/bin/claude.exe"
+    to: "bin/claude"
+  - from: "electron/bin/figmanage"
+    to: "bin/figmanage"
+  - from: "studio/packaging/cloudflared/cloudflared"
+    to: "bin/cloudflared"
+  # AWS CLI v2 expanded layout from fetch-cli-deps.sh is
+  # studio/packaging/aws-cli/aws-cli/aws (the inner aws-cli/ dir is
+  # the package's own root, with `aws`, `aws_completer`, libs, and a
+  # bundled python3.14). We point `from:` at that inner dir so the
+  # bundle lands at <Resources>/aws-cli/aws — one level instead of two.
+  - from: "studio/packaging/aws-cli/aws-cli"
+    to: "aws-cli"
+    filter: ["**/*"]
+
+mac:
+  category: public.app-category.developer-tools
+  icon: electron/icon.icns
+  target:
+    - target: dmg
+      arch: arm64
+  # electron-builder requires the identity name WITHOUT the "Developer ID
+  # Application: " prefix — codesign adds that prefix back automatically
+  # when matching the keychain entry.
+  identity: "DevRev, Inc. (NJDA6Y3XRS)"
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: electron/entitlements.mac.plist
+  entitlementsInherit: electron/entitlements.mac.plist
+  notarize:
+    teamId: NJDA6Y3XRS
+  extendInfo:
+    LSUIElement: false
+    NSHighResolutionCapable: true
+    CFBundleURLTypes:
+      - CFBundleURLName: ai.devrev.internal.ArcadeStudio.session
+        CFBundleURLSchemes:
+          - arcade-studio
+
+dmg:
+  background: electron/dmg-background.png
+  icon: electron/icon.icns
+  iconSize: 128
+  contents:
+    - x: 200
+      y: 200
+      type: file
+    - x: 600
+      y: 200
+      type: link
+      path: /Applications
+  window:
+    width: 800
+    height: 500
+
+# In-app updater publishes to the existing public mirror.
+publish:
+  provider: github
+  owner: asundiev-devrev
+  repo: arcade-studio-releases
+  releaseType: release
