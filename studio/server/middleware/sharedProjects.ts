@@ -84,7 +84,10 @@ async function show(res: ServerResponse, id: string) {
 async function importMirror(req: IncomingMessage, res: ServerResponse) {
   let body: any;
   try { body = await readJson(req); } catch { return json(res, 400, { error: "bad_json" }); }
-  const required = ["projectShareId", "relayUrl", "hostDevu", "hostDisplayName", "projectSlug"];
+  // relayUrl became optional in 0.21+ — guests resolve the live URL via the
+  // Worker rendezvous on every connect. Hosts on 0.20.x still send it; we
+  // accept and store it as a fallback when present.
+  const required = ["projectShareId", "hostDevu", "hostDisplayName", "projectSlug"];
   for (const k of required) {
     if (!body[k]) return json(res, 400, { error: `${k} required` });
   }

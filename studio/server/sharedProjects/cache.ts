@@ -17,7 +17,10 @@ import { sharedProjectDir, sharedProjectsRoot } from "../paths";
 
 export interface MirrorMetadata {
   id: string;
-  relayUrl: string;
+  // Optional from 0.21+: resolved at connect time via Worker rendezvous.
+  // Older mirrors imported under 0.20.x still have this populated; new
+  // ones from 0.21+ omit it entirely.
+  relayUrl?: string;
   hostDevu: string;
   hostDisplayName: string;
   projectSlug: string;
@@ -27,7 +30,7 @@ export interface MirrorMetadata {
 
 export async function createMirror(input: {
   id: string;
-  relayUrl: string;
+  relayUrl?: string;
   hostDevu: string;
   hostDisplayName: string;
   projectSlug: string;
