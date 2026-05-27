@@ -17,23 +17,32 @@ import { multiplayerJsonPath } from "../paths";
 /**
  * HTTP endpoints for the host's Share panel:
  *
- *   POST   /api/projects/:slug/share          → add a collaborator (composes
- *                                                project registry → tunnel
- *                                                acquire → write
- *                                                multiplayer.json → DM the
- *                                                invite link).
- *   GET    /api/projects/:slug/share          → list current collaborators.
- *   DELETE /api/projects/:slug/share/:devu    → remove a collaborator.
- *                                                Releases the tunnel ref if
- *                                                this was the last
- *                                                collaborator.
- *   GET    /api/projects/:slug/share/link     → fresh share-link URL for the
- *                                                "copy link" affordance.
+ *   POST   /api/projects/:slug/collaborators        → add a collaborator
+ *                                                     (composes project
+ *                                                     registry → tunnel
+ *                                                     acquire → write
+ *                                                     multiplayer.json → DM
+ *                                                     the invite link).
+ *   GET    /api/projects/:slug/collaborators        → list current
+ *                                                     collaborators.
+ *   DELETE /api/projects/:slug/collaborators/:devu  → remove a collaborator.
+ *                                                     Releases the tunnel ref
+ *                                                     if this was the last
+ *                                                     collaborator.
+ *   GET    /api/projects/:slug/collaborators/link   → fresh share-link URL for
+ *                                                     the "copy link"
+ *                                                     affordance.
+ *
+ * NOTE: These were originally `/share` and `/share/:devu`, which collided with
+ * the pre-existing `POST /api/projects/:slug/share` route handled by
+ * `cloudflareMiddleware` (frame deploy to Cloudflare Pages). The collision
+ * caused beta users to see "Deploy failed: 400" because this middleware ran
+ * first and rejected the deploy body for missing `devu`. Renamed in 0.20.2.
  */
 
-const SHARE_RE = /^\/api\/projects\/([a-z0-9][a-z0-9-]{0,62})\/share\/?$/i;
-const SHARE_DEVU_RE = /^\/api\/projects\/([a-z0-9][a-z0-9-]{0,62})\/share\/(.+)$/i;
-const LINK_RE = /^\/api\/projects\/([a-z0-9][a-z0-9-]{0,62})\/share\/link\/?$/i;
+const SHARE_RE = /^\/api\/projects\/([a-z0-9][a-z0-9-]{0,62})\/collaborators\/?$/i;
+const SHARE_DEVU_RE = /^\/api\/projects\/([a-z0-9][a-z0-9-]{0,62})\/collaborators\/(.+)$/i;
+const LINK_RE = /^\/api\/projects\/([a-z0-9][a-z0-9-]{0,62})\/collaborators\/link\/?$/i;
 
 export function projectSharingMiddleware() {
   return async (req: IncomingMessage, res: ServerResponse, next?: () => void) => {

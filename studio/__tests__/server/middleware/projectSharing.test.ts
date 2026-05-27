@@ -75,8 +75,8 @@ async function call(method: string, url: string, body?: unknown) {
 }
 
 describe("projectSharing middleware", () => {
-  it("POST /api/projects/:slug/share adds a collaborator and posts a DM", async () => {
-    const res = await call("POST", "/api/projects/my-proj/share", {
+  it("POST /api/projects/:slug/collaborators adds a collaborator and posts a DM", async () => {
+    const res = await call("POST", "/api/projects/my-proj/collaborators", {
       devu: "don:.../devu/2",
       displayName: "Bea",
     });
@@ -85,25 +85,37 @@ describe("projectSharing middleware", () => {
     expect(res.body.inviteUrl).toContain("/project/");
   });
 
-  it("GET /api/projects/:slug/share returns shared_with list", async () => {
-    await call("POST", "/api/projects/my-proj/share", {
+  it("GET /api/projects/:slug/collaborators returns shared_with list", async () => {
+    await call("POST", "/api/projects/my-proj/collaborators", {
       devu: "don:.../devu/2",
       displayName: "Bea",
     });
-    const res = await call("GET", "/api/projects/my-proj/share");
+    const res = await call("GET", "/api/projects/my-proj/collaborators");
     expect(res.status).toBe(200);
     expect(res.body.shared_with).toHaveLength(1);
     expect(res.body.shared_with[0].devu).toBe("don:.../devu/2");
   });
 
-  it("DELETE /api/projects/:slug/share/:devu removes a collaborator", async () => {
-    await call("POST", "/api/projects/my-proj/share", {
+  it("DELETE /api/projects/:slug/collaborators/:devu removes a collaborator", async () => {
+    await call("POST", "/api/projects/my-proj/collaborators", {
       devu: "don:.../devu/2",
       displayName: "Bea",
     });
-    const res = await call("DELETE", "/api/projects/my-proj/share/don:.../devu/2");
+    const res = await call("DELETE", "/api/projects/my-proj/collaborators/don:.../devu/2");
     expect(res.status).toBe(204);
-    const list = await call("GET", "/api/projects/my-proj/share");
+    const list = await call("GET", "/api/projects/my-proj/collaborators");
     expect(list.body.shared_with).toEqual([]);
+  });
+
+  // Regression for 0.20.2: this middleware used to claim
+  // `/api/projects/:slug/share`, which collided with the Cloudflare share
+  // (frame deploy) endpoint and produced "Deploy failed: 400". The
+  // collaborator routes must NOT match `/share`, so the request falls through
+  // to cloudflareMiddleware.
+  it("does NOT intercept POST /api/projects/:slug/share (cloudflare deploy route)", async () => {
+    const res = await call("POST", "/api/projects/my-proj/share", {
+      frameSlug: "hero",
+    });
+    expect(res.status).toBe(404); // fallthrough handler in beforeEach()
   });
 });

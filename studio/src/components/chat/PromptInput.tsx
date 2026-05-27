@@ -258,7 +258,7 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
       try {
         // Fetch current shared_with to avoid re-confirming for collaborators
         // who are already on the project.
-        const curRes = await fetch(`/api/projects/${projectSlug}/share`);
+        const curRes = await fetch(`/api/projects/${projectSlug}/collaborators`);
         const cur = (await curRes.json().catch(() => ({}))) as {
           shared_with?: { devu: string }[];
         };
@@ -272,7 +272,7 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
             // Keep the input intact so the host can edit and try again.
             return;
           }
-          const shareRes = await fetch(`/api/projects/${projectSlug}/share`, {
+          const shareRes = await fetch(`/api/projects/${projectSlug}/collaborators`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ devu: guest.devu, displayName: guest.displayName }),

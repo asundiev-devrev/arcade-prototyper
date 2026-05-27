@@ -13,7 +13,7 @@ interface ShareResponse {
 
 /**
  * Host-side panel listing the teammates a project is currently shared with.
- * Talks to the `/api/projects/:slug/share` endpoints introduced in Task 7.
+ * Talks to the `/api/projects/:slug/collaborators` endpoints introduced in Task 7.
  *
  * v1 takes a raw `devu_…` string in the input box; @-mention popover wiring
  * is a follow-up polish pass.
@@ -26,7 +26,7 @@ export function SharePanel({ slug, onClose }: { slug: string; onClose: () => voi
 
   const refresh = async () => {
     try {
-      const res = await fetch(`/api/projects/${slug}/share`);
+      const res = await fetch(`/api/projects/${slug}/collaborators`);
       if (!res.ok) return;
       const data = (await res.json()) as ShareResponse;
       setCollabs(data.shared_with ?? []);
@@ -44,7 +44,7 @@ export function SharePanel({ slug, onClose }: { slug: string; onClose: () => voi
     setBusy(true);
     setError(null);
     try {
-      await fetch(`/api/projects/${slug}/share/${encodeURIComponent(devu)}`, {
+      await fetch(`/api/projects/${slug}/collaborators/${encodeURIComponent(devu)}`, {
         method: "DELETE",
       });
       await refresh();
@@ -61,7 +61,7 @@ export function SharePanel({ slug, onClose }: { slug: string; onClose: () => voi
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/projects/${slug}/share`, {
+      const res = await fetch(`/api/projects/${slug}/collaborators`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ devu: trimmed, displayName: trimmed }),
