@@ -6,6 +6,19 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.22.1] — 2026-05-27
+
+### Fixed
+- **Shared-project viewport is no longer blank when no frames have arrived
+  yet.** The guest view used to render nothing under the offline banner,
+  which made it look like the page was broken. It now shows an
+  empty-state card explaining what to expect (host status, when frames
+  will sync) so guests don't think they're staring at a stuck screen.
+- **Comments sidebar shows actual comments instead of a JSON dump of every
+  relay event.** Filters the event stream to `comment_posted` and renders
+  display name + text only. Frame-write/presence noise stays out of the
+  reader's way.
+
 ## [0.22.0] — 2026-05-27
 
 ### Changed
