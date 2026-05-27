@@ -365,6 +365,196 @@ describe("useProjectFromMirror", () => {
     expect(calls.length).toBe(2);
   });
 
+  // ── Regression tests (P2 follow-up) ───────────────────────────────
+
+  it("refresh() merges live frames on top of the server snapshot (does not stomp in-flight frame_written)", async () => {
+    // Park the show fetch so we can deliver a frame_written between
+    // fetch start and JSON parse, then resolve the parked fetch.
+    let resolveSecondShow: ((d: typeof sampleShow) => void) | null = null;
+    let firstCallSeen = false;
+    const handler = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url === "/api/shared-projects/p-1") {
+        if (!firstCallSeen) {
+          firstCallSeen = true;
+          // Initial mount: resolve immediately with sampleShow.
+          return Promise.resolve({ ok: true, json: async () => sampleShow });
+        }
+        // Subsequent (manual) refresh: park.
+        return new Promise((resolve) => {
+          resolveSecondShow = (d) =>
+            resolve({ ok: true, json: async () => d });
+        });
+      }
+      return Promise.resolve({ ok: false, status: 404, json: async () => ({}) });
+    });
+    global.fetch = handler as any;
+
+    let last: CapturedSource | null = null;
+    let refreshRef: (() => Promise<void>) | undefined;
+    function Probe() {
+      const source = useProjectFromMirror("p-1");
+      refreshRef = source.refresh;
+      last = captureFrom(source);
+      return null;
+    }
+    render(<Probe />);
+
+    await waitFor(() => {
+      expect(last?.frameSlugs.sort()).toEqual(["frame-01", "frame-02"]);
+    });
+
+    // Kick off a refresh that will park.
+    let refreshPromise: Promise<void> | undefined;
+    act(() => {
+      refreshPromise = refreshRef!();
+    });
+
+    // While the refresh is in-flight, deliver a frame_written.
+    const es = FakeEventSource.instances.find((i) =>
+      i.url.endsWith("/api/shared-projects/p-1/stream"),
+    )!;
+    await act(async () => {
+      es.emit("relay", {
+        type: "frame_written",
+        path: "frame-live",
+        content: "<div>live</div>",
+        turnId: "t-3",
+      });
+    });
+    expect(last!.frameSlugs).toContain("frame-live");
+
+    // Now resolve the parked refresh with the OLD server snapshot
+    // (frame-01 + frame-02 only, NO frame-live). Without the merge
+    // fix, frame-live would be erased.
+    await act(async () => {
+      resolveSecondShow!(sampleShow);
+      await refreshPromise;
+    });
+
+    expect(last!.frameSlugs.sort()).toEqual([
+      "frame-01",
+      "frame-02",
+      "frame-live",
+    ]);
+  });
+
+  it("cache_replay with empty chatHistoryTail clears chatHistory (no empty-tail guard)", async () => {
+    let last: CapturedSource | null = null;
+    render(<HookProbe id="p-1" onState={(s) => { last = s; }} />);
+
+    await waitFor(() => {
+      expect(last?.chatHistoryLength).toBe(2);
+    });
+
+    const es = FakeEventSource.instances.find((i) =>
+      i.url.endsWith("/api/shared-projects/p-1/stream"),
+    )!;
+
+    // Replay with an explicitly empty tail — represents a host clear.
+    await act(async () => {
+      es.emit("relay", {
+        type: "cache_replay",
+        frames: { "frame-01": "<div>frame 01</div>" },
+        chatHistoryTail: [],
+      });
+    });
+
+    expect(last!.chatHistoryLength).toBe(0);
+  });
+
+  it("refresh() on a non-2xx response sets project=null and status=offline", async () => {
+    // Stub: first call OK, second call 404 (project unshared).
+    let firstCallSeen = false;
+    const handler = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url === "/api/shared-projects/p-1") {
+        if (!firstCallSeen) {
+          firstCallSeen = true;
+          return Promise.resolve({ ok: true, json: async () => sampleShow });
+        }
+        return Promise.resolve({ ok: false, status: 404, json: async () => ({}) });
+      }
+      return Promise.resolve({ ok: false, status: 404, json: async () => ({}) });
+    });
+    global.fetch = handler as any;
+
+    let last: CapturedSource | null = null;
+    let refreshRef: (() => Promise<void>) | undefined;
+    function Probe() {
+      const source = useProjectFromMirror("p-1");
+      refreshRef = source.refresh;
+      last = captureFrom(source);
+      return null;
+    }
+    render(<Probe />);
+
+    await waitFor(() => {
+      expect(last?.project).toBeTruthy();
+    });
+
+    await act(async () => {
+      await refreshRef!();
+    });
+
+    expect(last!.project).toBeNull();
+    expect(last!.status).toBe("offline");
+  });
+
+  it("synthesized chatStream identity is stable across renders when chat state is unchanged", async () => {
+    const seen: unknown[] = [];
+    function IdentityProbe() {
+      const source = useProjectFromMirror("p-1");
+      seen.push(source.chatStream);
+      return null;
+    }
+    const { rerender } = render(<IdentityProbe />);
+    await waitFor(() => {
+      expect(seen.length).toBeGreaterThan(0);
+    });
+
+    // Force several extra renders. chat state unchanged → chatStream
+    // identity must NOT flip on every render (would defeat the
+    // useMemo and thrash any consumer doing useEffect on it).
+    rerender(<IdentityProbe />);
+    rerender(<IdentityProbe />);
+    rerender(<IdentityProbe />);
+
+    // Find at least two consecutive renders with the same chatStream
+    // identity. Without useMemo every entry is a fresh object.
+    const lastTwo = seen.slice(-2);
+    expect(lastTwo[0]).toBe(lastTwo[1]);
+  });
+
+  it("synthesizes frame slugs verbatim from the path (no shaping via deriveProjectName)", async () => {
+    // Mirror is allowed to hand us paths with chars that downstream
+    // slug regex rejects — we must pass them through untouched and
+    // not silently sanitize. Test asserts the slug == the path.
+    const showWithDottedPath = {
+      ...sampleShow,
+      frames: {
+        "weird.path_with-chars-01": "<div>x</div>",
+      },
+      chat: [],
+    };
+    const handler = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url === "/api/shared-projects/p-1") {
+        return Promise.resolve({ ok: true, json: async () => showWithDottedPath });
+      }
+      return Promise.resolve({ ok: false, status: 404, json: async () => ({}) });
+    });
+    global.fetch = handler as any;
+
+    let last: CapturedSource | null = null;
+    render(<HookProbe id="p-1" onState={(s) => { last = s; }} />);
+    await waitFor(() => {
+      expect(last?.project).toBeTruthy();
+    });
+
+    expect(last!.frameSlugs).toEqual(["weird.path_with-chars-01"]);
+  });
+
   it("ignores stale show responses after id changes", async () => {
     let resolveOldId: ((d: typeof sampleShow) => void) | null = null;
     const newShow = {

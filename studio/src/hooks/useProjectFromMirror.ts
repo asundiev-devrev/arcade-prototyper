@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChatMessage, Frame, Project } from "../../server/types";
 import type { StudioEvent } from "../lib/streamJson";
 import {
@@ -43,10 +43,15 @@ function synthesizeFrames(
   fallbackCreatedAt: string,
 ): Frame[] {
   const out: Frame[] = [];
-  for (const slug of Object.keys(framesRecord)) {
+  for (const path of Object.keys(framesRecord)) {
+    // Pass `path` through verbatim as `slug`. Downstream slug regex
+    // validation may reject characters the mirror permits (dots,
+    // underscores) — but sanitizing here would silently drop frames
+    // the host actually wrote. If validation fails downstream that's
+    // a host-side issue to surface, not something to paper over.
     out.push({
-      slug,
-      name: deriveProjectName(slug),
+      slug: path,
+      name: deriveProjectName(path),
       createdAt: fallbackCreatedAt,
       size: "1440",
     });
@@ -160,6 +165,10 @@ export function useProjectFromMirror(id: string): ProjectShellSource {
   }, []);
   useEffect(() => {
     genRef.current += 1;
+    // Reset live frames when the id changes — otherwise frames from
+    // the previous shared-project leak into the new one's first
+    // synthesized snapshot.
+    framesRef.current = {};
   }, [id]);
 
   const refresh = useCallback(async () => {
@@ -170,12 +179,24 @@ export function useProjectFromMirror(id: string): ProjectShellSource {
     } catch {
       return;
     }
-    if (!res.ok) return;
+    if (!mountedRef.current || gen !== genRef.current) return;
+    if (!res.ok) {
+      // 404 (project unshared) / 5xx must surface as offline — leaving
+      // the synthesized project in place would lie to the spectator.
+      setProject(null);
+      setStatus("offline");
+      return;
+    }
     const data = (await res.json()) as MirrorShowResponse;
     if (!mountedRef.current || gen !== genRef.current) return;
 
     metadataRef.current = data.metadata;
-    framesRef.current = { ...(data.frames ?? {}) };
+    // Always merge live framesRef on top of the server snapshot — a
+    // `frame_written` SSE event delivered between fetch start and JSON
+    // parse must not be stomped by the older snapshot. On first load
+    // framesRef is empty so this degrades to the natural assign.
+    const serverFrames = data.frames ?? {};
+    framesRef.current = { ...serverFrames, ...framesRef.current };
 
     setProject(synthesizeProject(data.metadata, framesRef.current));
 
@@ -211,11 +232,14 @@ export function useProjectFromMirror(id: string): ProjectShellSource {
       if (type === "frame_written" && typeof ev.path === "string") {
         const path = ev.path;
         const content = typeof ev.content === "string" ? ev.content : "";
+        // Always update framesRef regardless of project state — when the
+        // initial show fetch finally settles, refresh() merges this in
+        // (rather than clobbering it with the older server snapshot).
         framesRef.current = { ...framesRef.current, [path]: content };
         setProject((p) => {
           if (!p) {
-            // Frame arrived before show fetch settled. We'll rebuild in
-            // refresh; in the meantime queue the frame in framesRef.
+            // Frame arrived before show fetch settled. framesRef is
+            // already updated; refresh() will rebuild on settle.
             return p;
           }
           if (p.frames.some((f) => f.slug === path)) return p;
@@ -224,6 +248,7 @@ export function useProjectFromMirror(id: string): ProjectShellSource {
             frames: [
               ...p.frames,
               {
+                // Pass path through verbatim — see synthesizeFrames.
                 slug: path,
                 name: deriveProjectName(path),
                 createdAt: new Date().toISOString(),
@@ -283,7 +308,9 @@ export function useProjectFromMirror(id: string): ProjectShellSource {
           const msg = relayEventToChatMessage(raw as RelayLike);
           if (msg) synthesized.push(msg);
         }
-        if (synthesized.length) setChatHistory(synthesized);
+        // Always replace chatHistory — an empty tail is a valid resync
+        // signal (host cleared) and must not be silently ignored.
+        setChatHistory(synthesized);
         return;
       }
 
@@ -329,15 +356,22 @@ export function useProjectFromMirror(id: string): ProjectShellSource {
   // that satisfies the `ProjectShellSource.chatStream` field for any
   // legacy descendant that destructures `state` / `send` / `retry`.
   // Spectator UI gates `send` off elsewhere; `retry` is a no-op.
-  const chatStream: ReturnType<typeof useChatStream> = {
-    state: chat,
-    send: async () => {
-      /* spectator cannot drive turns */
-    },
-    retry: () => {
-      /* no last-prompt context to retry from */
-    },
-  };
+  //
+  // Memoized so reference identity only flips when `chat` actually
+  // changes — descendants doing `useEffect(..., [chatStream])` won't
+  // thrash on every parent render.
+  const chatStream: ReturnType<typeof useChatStream> = useMemo(
+    () => ({
+      state: chat,
+      send: async () => {
+        /* spectator cannot drive turns */
+      },
+      retry: () => {
+        /* no last-prompt context to retry from */
+      },
+    }),
+    [chat],
+  );
 
   return {
     project,
