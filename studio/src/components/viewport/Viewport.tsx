@@ -14,6 +14,10 @@ export function Viewport({
   zoom,
   onZoomChange,
   onSeedChat,
+  // Spectator mode passes `readonly`. Task 5 will gate destructive
+  // affordances on this. Accepted here so the prop typechecks today
+  // and threading from `ProjectDetail` (Task 4) compiles.
+  readonly: _readonly,
 }: {
   project: Project;
   frameWidth: number;
@@ -21,7 +25,9 @@ export function Viewport({
   zoom: number;
   onZoomChange: (next: number) => void;
   onSeedChat: (text: string) => void;
+  readonly?: boolean;
 }) {
+  void _readonly;
   const { frames } = useFrames(project);
   const [creatingFrame, setCreatingFrame] = useState(false);
   const [highlight, setHighlight] = useState<{

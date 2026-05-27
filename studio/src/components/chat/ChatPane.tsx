@@ -20,11 +20,17 @@ export function ChatPane({
   projectSlug,
   history,
   seedRef,
+  // Spectator mode passes `readonly`. Task 6 will replace the prompt
+  // textarea with a comment-only input on this flag. Accepted here so
+  // threading from `ProjectDetail` (Task 4) compiles cleanly.
+  readonly: _readonly,
 }: {
   projectSlug: string;
   history: ChatMessage[];
   seedRef?: MutableRefObject<((text: string) => void) | null>;
+  readonly?: boolean;
 }) {
+  void _readonly;
   const { state, send, retry } = useChatStreamContext();
 
   const enhancedSend = (prompt: string, images: string[] = []) => {

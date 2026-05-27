@@ -13,7 +13,8 @@ import { SharePanel } from "../components/multiplayer/SharePanel";
 import { PresenceStrip } from "../components/multiplayer/PresenceStrip";
 import { ChatStreamProvider } from "../hooks/chatStreamContext";
 import { TargetSelectionProvider } from "../hooks/targetSelectionContext";
-import { useProjectFromHost } from "../hooks/useProjectFromHost";
+import { useProjectFromHost, type ProjectShellSource } from "../hooks/useProjectFromHost";
+import { useProjectFromMirror } from "../hooks/useProjectFromMirror";
 
 function TeammatesIcon() {
   return (
@@ -46,7 +47,64 @@ const FRAME_WIDTH_DEFAULT = 1440;
 const ZOOM_STORAGE_PREFIX = "studio:zoom:";
 const ZOOM_DEFAULT = 1.0;
 
-export function ProjectDetail({
+/**
+ * `ProjectDetail` is the single authoring shell that hosts (`mode="author"`)
+ * and spectators (`mode="spectator"`) both render through. Two modes pull
+ * from different data sources but share JSX:
+ *
+ *   - Author:    `useProjectFromHost(slug)`  — host fetch + chat SSE.
+ *   - Spectator: `useProjectFromMirror(id)`  — mirror cache + relay SSE.
+ *
+ * Both hooks return the same `ProjectShellSource` shape, so the inner
+ * `ProjectDetailShell` stays mode-agnostic. Spectator-only gates here:
+ *
+ *   - `readonly` flag threaded into Viewport + ChatPane (Tasks 5/6 wire
+ *     the actual readonly behaviour into those children; Task 4 just
+ *     plumbs the prop).
+ *   - Host-only chrome (ProjectPicker, ShareButton, SharePanel toggle,
+ *     DevModePanel toggle, ThemeToggle) is hidden in spectator mode —
+ *     those mutate host state a guest can't drive.
+ *
+ * The wrapper-per-mode shape is deliberate: each wrapper calls exactly
+ * one data hook so we never spin up the unused hook's fetch + SSE just
+ * to discard it. Mode does not change for the lifetime of an instance
+ * (App.tsx renders a fresh tree on route swap), so the wrapper split
+ * doesn't lose any behaviour.
+ */
+export type ProjectDetailProps =
+  | {
+      mode: "author";
+      slug: string;
+      onBack: () => void;
+      onOpenProject: (slug: string) => void;
+    }
+  | {
+      mode: "spectator";
+      id: string;
+      onBack: () => void;
+      onOpenProject: (slug: string) => void;
+    };
+
+export function ProjectDetail(props: ProjectDetailProps) {
+  if (props.mode === "spectator") {
+    return (
+      <ProjectDetailSpectator
+        id={props.id}
+        onBack={props.onBack}
+        onOpenProject={props.onOpenProject}
+      />
+    );
+  }
+  return (
+    <ProjectDetailAuthor
+      slug={props.slug}
+      onBack={props.onBack}
+      onOpenProject={props.onOpenProject}
+    />
+  );
+}
+
+function ProjectDetailAuthor({
   slug,
   onBack,
   onOpenProject,
@@ -56,11 +114,57 @@ export function ProjectDetail({
   onOpenProject: (slug: string) => void;
 }) {
   const source = useProjectFromHost(slug);
-  // Optimistic local override for the theme toggle. We only override the
-  // single field the user just changed (`mode`) so a concurrent rename
-  // (which calls `refreshProject()` and updates `source.project.name`) is
-  // not masked by a stale cached project record. Cleared once the refetch
-  // following the PATCH lands.
+  return (
+    <ProjectDetailShell
+      mode="author"
+      routeKey={slug}
+      source={source}
+      onBack={onBack}
+      onOpenProject={onOpenProject}
+    />
+  );
+}
+
+function ProjectDetailSpectator({
+  id,
+  onBack,
+  onOpenProject,
+}: {
+  id: string;
+  onBack: () => void;
+  onOpenProject: (slug: string) => void;
+}) {
+  const source = useProjectFromMirror(id);
+  return (
+    <ProjectDetailShell
+      mode="spectator"
+      routeKey={id}
+      source={source}
+      onBack={onBack}
+      onOpenProject={onOpenProject}
+    />
+  );
+}
+
+function ProjectDetailShell({
+  mode,
+  routeKey,
+  source,
+  onBack,
+  onOpenProject,
+}: {
+  mode: "author" | "spectator";
+  routeKey: string;
+  source: ProjectShellSource;
+  onBack: () => void;
+  onOpenProject: (slug: string) => void;
+}) {
+  const isSpectator = mode === "spectator";
+  // Optimistic local override for the theme toggle. Author-only path:
+  // spectators never call `toggleProjectMode`, so the override stays null
+  // for them. Kept here (rather than nested in the author wrapper) to
+  // avoid re-mounting state on a hypothetical future mode-flip — and to
+  // keep one shared shell.
   const [localModeOverride, setLocalModeOverride] =
     useState<"light" | "dark" | null>(null);
   const project = source.project
@@ -81,7 +185,7 @@ export function ProjectDetail({
   });
   const [zoom, setZoom] = useState<number>(() => {
     if (typeof window === "undefined") return ZOOM_DEFAULT;
-    const stored = window.localStorage.getItem(`${ZOOM_STORAGE_PREFIX}${slug}`);
+    const stored = window.localStorage.getItem(`${ZOOM_STORAGE_PREFIX}${routeKey}`);
     const parsed = stored ? Number(stored) : NaN;
     if (!Number.isFinite(parsed) || parsed <= 0) return ZOOM_DEFAULT;
     return parsed;
@@ -116,8 +220,8 @@ export function ProjectDetail({
   }, [frameWidth]);
 
   useEffect(() => {
-    window.localStorage.setItem(`${ZOOM_STORAGE_PREFIX}${slug}`, String(zoom));
-  }, [slug, zoom]);
+    window.localStorage.setItem(`${ZOOM_STORAGE_PREFIX}${routeKey}`, String(zoom));
+  }, [routeKey, zoom]);
 
   useEffect(() => {
     if (!resizing) return;
@@ -156,12 +260,15 @@ export function ProjectDetail({
   }
 
   async function toggleProjectMode() {
-    if (!project) return;
+    // Theme toggle is a host-only mutation (`PATCH /api/projects/:slug`);
+    // the spectator UI never renders ThemeToggle, so this guard is
+    // belt-and-suspenders.
+    if (!project || isSpectator) return;
     const previous = project.mode;
     const next = previous === "dark" ? "light" : "dark";
     setLocalModeOverride(next);
     try {
-      const res = await fetch(`/api/projects/${slug}`, {
+      const res = await fetch(`/api/projects/${routeKey}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode: next }),
@@ -202,33 +309,39 @@ export function ProjectDetail({
         title={
           <>
             <ChatToggle active={chatOpen} onToggle={() => setChatOpen((o) => !o)} />
-            <ProjectPicker
-              project={project}
-              onHome={onBack}
-              onOpenProject={onOpenProject}
-              onRenamed={() => refreshProject()}
-            />
+            {!isSpectator && (
+              <ProjectPicker
+                project={project}
+                onHome={onBack}
+                onOpenProject={onOpenProject}
+                onRenamed={() => refreshProject()}
+              />
+            )}
           </>
         }
         right={
           <>
             <PresenceStrip host={host} guests={guests} />
-            <ThemeToggle mode={project.mode} onToggle={toggleProjectMode} />
-            <Tooltip content="Share with teammates">
-              <IconButton
-                aria-label="Share with teammates"
-                variant={showShare ? "primary" : "tertiary"}
-                onClick={() => setShowShare((s) => !s)}
-              >
-                <TeammatesIcon />
-              </IconButton>
-            </Tooltip>
-            <ShareButton project={project} />
-            <CanvasToggle active={devOpen} onToggle={() => setDevOpen((o) => !o)} />
+            {!isSpectator && (
+              <>
+                <ThemeToggle mode={project.mode} onToggle={toggleProjectMode} />
+                <Tooltip content="Share with teammates">
+                  <IconButton
+                    aria-label="Share with teammates"
+                    variant={showShare ? "primary" : "tertiary"}
+                    onClick={() => setShowShare((s) => !s)}
+                  >
+                    <TeammatesIcon />
+                  </IconButton>
+                </Tooltip>
+                <ShareButton project={project} />
+                <CanvasToggle active={devOpen} onToggle={() => setDevOpen((o) => !o)} />
+              </>
+            )}
           </>
         }
       />
-      {showShare && (
+      {!isSpectator && showShare && (
         <SharePanel slug={project.slug} onClose={() => setShowShare(false)} />
       )}
       <div
@@ -252,7 +365,12 @@ export function ProjectDetail({
             position: "relative",
           }}
         >
-          <ChatPane projectSlug={project.slug} history={chatHistory} seedRef={seedChatRef} />
+          <ChatPane
+            projectSlug={project.slug}
+            history={chatHistory}
+            seedRef={seedChatRef}
+            readonly={isSpectator}
+          />
           {chatOpen && (
             <div
               role="separator"
@@ -293,9 +411,10 @@ export function ProjectDetail({
             zoom={zoom}
             onZoomChange={setZoom}
             onSeedChat={(text) => seedChatRef.current?.(text)}
+            readonly={isSpectator}
           />
         </main>
-        {devOpen && <DevModePanel slug={project.slug} />}
+        {!isSpectator && devOpen && <DevModePanel slug={project.slug} />}
       </div>
     </div>
     </TargetSelectionProvider>

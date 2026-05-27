@@ -125,6 +125,7 @@ export function App() {
         ) : (
           <ProjectDetail
             key={openSlug}
+            mode="author"
             slug={openSlug}
             onBack={closeProject}
             onOpenProject={openProject}
