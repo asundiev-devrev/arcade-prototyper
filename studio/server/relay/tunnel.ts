@@ -133,6 +133,11 @@ export function __resetTunnelForTests(): void {
   currentUrl = null;
 }
 
+/** Test-only: pre-populate the tunnel URL so acquireTunnel skips spawn. */
+export function __setTunnelUrlForTests(url: string | null): void {
+  currentUrl = url;
+}
+
 const refs = new Set<string>();
 
 /**
@@ -144,8 +149,52 @@ const refs = new Set<string>();
 export async function acquireTunnel(holderId: string): Promise<string> {
   refs.add(holderId);
   const existing = currentTunnelUrl();
-  if (existing) return existing;
-  return startTunnel({ port: 5556 });
+  const url = existing ?? (await startTunnel({ port: 5556 }));
+  // Best-effort rendezvous publish: tunnel still works without it (only
+  // 0.21+ guests benefit). holderId is the projectShareId for shared-project
+  // holders; for non-shared holders (legacy session ids) getProject returns
+  // undefined and we skip the publish silently.
+  void publishHolderRendezvous(holderId, url).catch((err) => {
+    console.warn(`[tunnel] rendezvous publish failed for ${holderId}:`, err?.message ?? err);
+  });
+  return url;
+}
+
+async function publishHolderRendezvous(holderId: string, tunnelUrl: string): Promise<void> {
+  // Dynamic imports break the otherwise-circular dependency:
+  //   projectRegistry.republishAllRendezvous() -> tunnel.acquireTunnel()
+  //   tunnel.publishHolderRendezvous() -> projectRegistry.getProject()
+  const { getShareKey } = await import("../secrets/shareKey");
+  const { publishRendezvous } = await import("../cloudflare/rendezvous");
+  const { getProject } = await import("./projectRegistry");
+  const key = await getShareKey();
+  if (!key) return;
+  const project = getProject(holderId);
+  if (!project) return; // Holder is not a shared-project (e.g. legacy session id).
+  const wssUrl = tunnelUrl.replace(/^https:/, "wss:") + "/api/multiplayer/ws";
+  await publishRendezvous({
+    shareKey: key,
+    shareId: holderId,
+    relayUrl: wssUrl,
+    hostDevu: project.hostDevu,
+    hostDisplayName: await resolveHostDisplayName(project.hostDevu),
+  });
+}
+
+async function resolveHostDisplayName(hostDevu: string): Promise<string> {
+  // Display name only ever surfaces in a guest's offline banner so a stable
+  // fallback (the bare devu id) is fine when PAT lookup is unavailable.
+  try {
+    const { resolveDevuFromPat } = await import("./auth");
+    const { getDevRevPat } = await import("../secrets/keychain");
+    const pat = (await getDevRevPat()) || process.env.DEVREV_PAT || "";
+    if (!pat) return hostDevu;
+    const me = await resolveDevuFromPat(pat);
+    if (me?.id === hostDevu && me.displayName) return me.displayName;
+    return hostDevu;
+  } catch {
+    return hostDevu;
+  }
 }
 
 /**
