@@ -323,13 +323,19 @@ export function broadcastToProject(projectShareId: string, event: RelayEvent): v
 }
 
 /**
- * Returns the replay buffer for a project's live session, or null if no
- * live session exists yet. The buffer is shared with the relay protocol —
- * recording into it makes the cached state available on guest join via
- * `cache_replay`.
+ * Returns the replay buffer for a project, creating the live session lazily
+ * if it doesn't exist yet. Returns null only when the project itself isn't
+ * registered (e.g. the host hasn't shared it with anyone).
+ *
+ * Lazy creation matters for the host write path: the host writes frames to
+ * disk before any guest has connected, and `recordChatEventForReplay` needs
+ * a buffer to record into so a later-joining guest sees those frames in
+ * their `cache_replay`. Previously this returned null until the first
+ * socket connected, which silently dropped every pre-connect frame and
+ * left guests staring at "No frames yet".
  */
 export function getReplayBufferForProject(projectShareId: string): ReplayBuffer | null {
-  const live = liveSessions.get(projectShareId);
+  const live = getOrCreateLiveSession(projectShareId);
   return live ? live.state.replayBuffer : null;
 }
 

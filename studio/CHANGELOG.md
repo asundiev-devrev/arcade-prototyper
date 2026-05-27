@@ -6,6 +6,17 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.22.2] — 2026-05-27
+
+### Fixed
+- **Frames generated before any guest connects now actually reach the
+  guest's mirror.** The host's relay-side replay buffer was created
+  lazily on the first guest WebSocket connection, which meant every
+  frame the host wrote before that point was silently dropped. Late-
+  joining guests then saw an empty viewport even when the host had
+  generated dozens of frames. The buffer is now materialized on first
+  write, so guests joining later get the full set via `cache_replay`.
+
 ## [0.22.1] — 2026-05-27
 
 ### Fixed

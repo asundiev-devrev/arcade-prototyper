@@ -8,6 +8,7 @@ import path from "node:path";
 import {
   attachRelayToHttpServer,
   __resetWsServerForTests,
+  getReplayBufferForProject,
 } from "../../../server/relay/wsServer";
 import {
   createOrGetProject,
@@ -291,6 +292,27 @@ describe("wsServer integration", () => {
     const presence = await receiveUntil(alice, (m) => m.type === "presence_state");
     expect(presence.host?.devu).toBe("devu/A");
     alice.ws.close();
+  });
+
+  it("frames recorded before any guest connects are delivered via cache_replay", async () => {
+    // Regression: getReplayBufferForProject must lazy-create the live session
+    // so frames written by the host before any guest WS connects are not
+    // silently dropped. Previously this returned null until first connection,
+    // which left late-joining guests staring at "No frames yet" even when
+    // the host had generated frames.
+    const p = await createOrGetProject({ hostDevu: "devu/A", projectSlug: "demo" });
+    await addCollaborator(p.id, { devu: "devu/B", displayName: "Bob", addedBy: "devu/A" });
+
+    // Host writes a frame BEFORE any guest connects.
+    const buf = getReplayBufferForProject(p.id);
+    expect(buf).not.toBeNull();
+    buf!.recordFrame("frame-pre-connect", "<jsx>pre</jsx>");
+
+    // Now a guest joins — the cache_replay must include the pre-connect frame.
+    const bob = await connect("pat-b", p.id, "guest");
+    const replay = await receiveUntil(bob, (m) => m.type === "cache_replay");
+    expect(replay.frames["frame-pre-connect"]).toBe("<jsx>pre</jsx>");
+    bob.ws.close();
   });
 
   it("broadcasts a comment_posted event with byDevu/displayName from the connection", async () => {
