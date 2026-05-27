@@ -56,11 +56,18 @@ export function ProjectDetail({
   onOpenProject: (slug: string) => void;
 }) {
   const source = useProjectFromHost(slug);
-  // Allow optimistic local updates (e.g. theme toggle) on top of the
-  // hook-owned project record. `localProject`, when set, overrides the
-  // hook's value until the next refresh lands.
-  const [localProject, setLocalProject] = useState<typeof source.project>(null);
-  const project = localProject ?? source.project;
+  // Optimistic local override for the theme toggle. We only override the
+  // single field the user just changed (`mode`) so a concurrent rename
+  // (which calls `refreshProject()` and updates `source.project.name`) is
+  // not masked by a stale cached project record. Cleared once the refetch
+  // following the PATCH lands.
+  const [localModeOverride, setLocalModeOverride] =
+    useState<"light" | "dark" | null>(null);
+  const project = source.project
+    ? localModeOverride
+      ? { ...source.project, mode: localModeOverride }
+      : source.project
+    : null;
   const { presence, refresh: refreshProject, chatStream, chatHistory } = source;
   const { host, guests } = presence;
   const [devOpen, setDevOpen] = useState(false);
@@ -152,7 +159,7 @@ export function ProjectDetail({
     if (!project) return;
     const previous = project.mode;
     const next = previous === "dark" ? "light" : "dark";
-    setLocalProject({ ...project, mode: next });
+    setLocalModeOverride(next);
     try {
       const res = await fetch(`/api/projects/${slug}`, {
         method: "PATCH",
@@ -161,12 +168,14 @@ export function ProjectDetail({
       });
       if (!res.ok) throw new Error("Failed to save theme");
       setReloadKey((k) => k + 1);
-      // Re-pull the canonical record so any server-side normalisation
-      // (e.g. updatedAt) lands; clear the local override on next render.
-      refreshProject();
-      setLocalProject(null);
+      // Re-pull the canonical record before clearing the local override —
+      // otherwise we briefly render the stale pre-PATCH `source.project`
+      // (with the old mode) between the clear and the refetch landing,
+      // producing a visible theme flash.
+      await refreshProject();
+      setLocalModeOverride(null);
     } catch {
-      setLocalProject({ ...project, mode: previous });
+      setLocalModeOverride(previous);
     }
   }
 

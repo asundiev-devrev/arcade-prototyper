@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Project, ChatMessage } from "../../server/types";
 import { useChatStream, type StreamState } from "./useChatStream";
 import { useProjectPresence } from "./useProjectPresence";
@@ -36,7 +36,7 @@ export interface ProjectShellSource {
   status: "online" | "offline" | "unknown";
   send?: (prompt: string, images?: string[]) => void;
   postComment?: (text: string) => Promise<void>;
-  refresh: () => void;
+  refresh: () => Promise<void>;
 }
 
 /**
@@ -59,10 +59,35 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
   const { state: chat, send } = chatStream;
   const { host, guests } = useProjectPresence(slug);
 
+  // Generation counter guards `refresh` against two races:
+  //   - slug change mid-flight (a stale response would otherwise overwrite
+  //     the new slug's project record);
+  //   - unmount mid-flight (would set state on an unmounted component).
+  // Each `refresh()` invocation captures a fresh `gen`; we only commit the
+  // result when the captured value still matches the live `genRef`.
+  const genRef = useRef(0);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      // Bump generation on unmount so any in-flight refresh resolves into
+      // a stale gen check and bails out.
+      genRef.current += 1;
+    };
+  }, []);
+  // Bump generation when slug changes so any in-flight refresh tied to the
+  // previous slug is discarded before its response can land.
+  useEffect(() => {
+    genRef.current += 1;
+  }, [slug]);
+
   const refresh = useCallback(async () => {
+    const gen = ++genRef.current;
     const res = await fetch(`/api/projects/${slug}`);
     if (!res.ok) return;
     const p = (await res.json()) as Project;
+    if (!mountedRef.current || gen !== genRef.current) return;
     setProject(p);
   }, [slug]);
 
@@ -102,8 +127,6 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
     status: "online",
     send,
     postComment: undefined,
-    refresh: () => {
-      void refresh();
-    },
+    refresh,
   };
 }
