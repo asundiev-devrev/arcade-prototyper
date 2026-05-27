@@ -1,6 +1,7 @@
 import { type MutableRefObject } from "react";
 import { MessageList } from "./MessageList";
 import { PromptInput } from "./PromptInput";
+import { CommentInput } from "../multiplayer/CommentInput";
 import { useChatStreamContext } from "../../hooks/chatStreamContext";
 import type { ChatMessage } from "../../../server/types";
 import { EmptyStatePrompts } from "./EmptyStatePrompts";
@@ -15,22 +16,26 @@ import { AuthExpiredNotice } from "../feedback/AuthExpiredNotice";
  * that exactly once per relevant trigger. Earlier versions duplicated the
  * fetch here; that double-fired on every phase transition out of `running`
  * and on every `arcade-studio:refresh-chat-history` window event.
+ *
+ * Spectator mode (`readonly={true}`) swaps the authoring `PromptInput` for
+ * a comment-only `CommentInput` that posts to
+ * `/api/shared-projects/:id/comment` via the parent-supplied `postComment`
+ * handler. The persisted MessageList still renders so guests see host
+ * prompts and live agent thinking from the shared chat reducer.
  */
 export function ChatPane({
   projectSlug,
   history,
   seedRef,
-  // Spectator mode passes `readonly`. Task 6 will replace the prompt
-  // textarea with a comment-only input on this flag. Accepted here so
-  // threading from `ProjectDetail` (Task 4) compiles cleanly.
-  readonly: _readonly,
+  readonly = false,
+  postComment,
 }: {
   projectSlug: string;
   history: ChatMessage[];
   seedRef?: MutableRefObject<((text: string) => void) | null>;
   readonly?: boolean;
+  postComment?: (text: string) => Promise<void>;
 }) {
-  void _readonly;
   const { state, send, retry } = useChatStreamContext();
 
   const enhancedSend = (prompt: string, images: string[] = []) => {
@@ -79,7 +84,16 @@ export function ChatPane({
           onRetry={state.phase !== "running" && state.lastPrompt ? retry : undefined}
         />
       )}
-      <PromptInput busy={state.phase === "running"} projectSlug={projectSlug} onSend={enhancedSend} seedRef={seedRef} />
+      {readonly ? (
+        // Spectators can comment but cannot drive turns. We chose a
+        // dedicated comment input over disabling PromptInput because
+        // comments are how guests participate in shared projects today —
+        // a greyed-out prompt textarea would imply the host can be
+        // unblocked, which isn't true.
+        <CommentInput onSend={async (text) => { await postComment?.(text); }} />
+      ) : (
+        <PromptInput busy={state.phase === "running"} projectSlug={projectSlug} onSend={enhancedSend} seedRef={seedRef} />
+      )}
     </div>
   );
 }

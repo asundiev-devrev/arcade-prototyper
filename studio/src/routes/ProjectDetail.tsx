@@ -185,7 +185,7 @@ function ProjectDetailShell({
       ? { ...source.project, mode: localModeOverride }
       : source.project
     : null;
-  const { presence, refresh: refreshProject, chatStream, chatHistory } = source;
+  const { presence, refresh: refreshProject, chatStream, chatHistory, postComment } = source;
   const { host, guests } = presence;
   const [devOpen, setDevOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -383,6 +383,7 @@ function ProjectDetailShell({
             history={chatHistory}
             seedRef={seedChatRef}
             readonly={isSpectator}
+            postComment={postComment}
           />
           {chatOpen && (
             <div
