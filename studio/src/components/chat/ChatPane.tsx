@@ -1,7 +1,6 @@
 import { type MutableRefObject } from "react";
 import { MessageList } from "./MessageList";
 import { PromptInput } from "./PromptInput";
-import { CommentInput } from "../multiplayer/CommentInput";
 import { useChatStreamContext } from "../../hooks/chatStreamContext";
 import type { ChatMessage } from "../../../server/types";
 import { EmptyStatePrompts } from "./EmptyStatePrompts";
@@ -17,11 +16,12 @@ import { AuthExpiredNotice } from "../feedback/AuthExpiredNotice";
  * fetch here; that double-fired on every phase transition out of `running`
  * and on every `arcade-studio:refresh-chat-history` window event.
  *
- * Spectator mode (`readonly={true}`) swaps the authoring `PromptInput` for
- * a comment-only `CommentInput` that posts to
- * `/api/shared-projects/:id/comment` via the parent-supplied `postComment`
- * handler. The persisted MessageList still renders so guests see host
- * prompts and live agent thinking from the shared chat reducer.
+ * Spectator mode (`readonly={true}`) reuses the same `PromptInput` chrome —
+ * placeholder, attach button, and authoring affordances are gated inside
+ * PromptInput's `commentMode` branch. We pass `commentMode.onSubmit` so the
+ * input posts to `/api/shared-projects/:id/comment` instead of driving a
+ * turn. Identical chrome was a deliberate Figma-parity ask: guests should
+ * not get a visibly downgraded composer.
  */
 export function ChatPane({
   projectSlug,
@@ -84,16 +84,17 @@ export function ChatPane({
           onRetry={state.phase !== "running" && state.lastPrompt ? retry : undefined}
         />
       )}
-      {readonly ? (
-        // Spectators can comment but cannot drive turns. We chose a
-        // dedicated comment input over disabling PromptInput because
-        // comments are how guests participate in shared projects today —
-        // a greyed-out prompt textarea would imply the host can be
-        // unblocked, which isn't true.
-        <CommentInput onSend={async (text) => { await postComment?.(text); }} />
-      ) : (
-        <PromptInput busy={state.phase === "running"} projectSlug={projectSlug} onSend={enhancedSend} seedRef={seedRef} />
-      )}
+      <PromptInput
+        busy={state.phase === "running"}
+        projectSlug={projectSlug}
+        onSend={enhancedSend}
+        seedRef={seedRef}
+        commentMode={
+          readonly
+            ? { onSubmit: async (text) => { await postComment?.(text); } }
+            : undefined
+        }
+      />
     </div>
   );
 }
