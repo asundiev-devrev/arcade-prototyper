@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "main": "electron/dist/main.js",
-  "version": "0.22.2",
+  "version": "0.22.3",
   "scripts": {
     "studio": "vite --config studio/vite.config.ts",
     "studio:electron": "concurrently --kill-others --names vite,electron \"ARCADE_STUDIO_OPEN_BROWSER=0 pnpm run studio\" \"pnpm exec tsc -p electron/tsconfig.json && pnpm exec electron .\"",

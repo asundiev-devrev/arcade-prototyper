@@ -6,6 +6,18 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.22.3] — 2026-05-27
+
+### Fixed
+- **Frames generated in previous Studio sessions now sync to guests on
+  reconnect.** The replay buffer is in-memory, so every host restart
+  wiped knowledge of frames that already lived on disk. Combined with
+  the file watcher's `ignoreInitial: true`, this meant guests could
+  only ever see frames generated *after* both sides were online at the
+  same time. Studio now seeds the replay buffer from disk at boot for
+  every shared project the host owns, so a guest who joins later gets
+  the full frame set via `cache_replay`.
+
 ## [0.22.2] — 2026-05-27
 
 ### Fixed
