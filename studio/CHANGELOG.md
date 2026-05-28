@@ -15,6 +15,9 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 - Cancelled turns no longer render as errors. A neutral "Cancelled" marker appears in the chat instead.
 
+### Fixed
+- Share modal no longer hangs on "waiting for SSL certificate…" forever. The post-deploy probe now races each fetch against a 5-second per-attempt timeout, so a Cloudflare Access redirect that never resolves still rolls into the global timeout. "Open in New Tab" stays clickable while provisioning, giving an escape hatch.
+
 ## [0.23.0] — 2026-05-27
 
 ### Changed
