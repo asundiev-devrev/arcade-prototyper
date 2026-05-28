@@ -110,11 +110,45 @@ function renderFrameShellHtml(opts: {
         } catch (e) {}
         var root = document.getElementById("root") || document.body;
         if (!root) return;
-        var pre = document.createElement("pre");
-        pre.style.cssText = "padding:24px;margin:0;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#b91c1c;background:#fef2f2;min-height:100vh;box-sizing:border-box;white-space:pre-wrap;overflow:auto;";
-        pre.textContent = label + "\\n\\n" + msg + (stack ? "\\n\\n" + stack : "");
+        // Calm "auto-repairing" overlay. The previous behaviour was a wall
+        // of red stack-trace text — accurate but designed for a developer,
+        // not a designer/PM looking at their canvas. The studio dispatches
+        // an auto-fix turn server-side on every postMessage above, so the
+        // honest read is "we noticed, we're fixing it" — surface that, hide
+        // the gore behind a disclosure. Chat pane carries the durable
+        // record (system messages on dispatch + completion).
         root.innerHTML = "";
-        root.appendChild(pre);
+        var wrap = document.createElement("div");
+        wrap.style.cssText = "padding:24px;font:13px/1.5 system-ui,-apple-system,sans-serif;color:#374151;background:#fafafa;min-height:100vh;box-sizing:border-box;display:flex;flex-direction:column;align-items:flex-start;gap:8px;";
+        var head = document.createElement("div");
+        head.style.cssText = "display:flex;align-items:center;gap:10px;";
+        var dot = document.createElement("span");
+        dot.style.cssText = "display:inline-block;width:8px;height:8px;border-radius:50%;background:#a78bfa;animation:arcade-frame-pulse 1.4s ease-in-out infinite;";
+        var title = document.createElement("strong");
+        title.textContent = "Auto-repairing this frame";
+        title.style.cssText = "font-weight:600;color:#111827;";
+        head.appendChild(dot);
+        head.appendChild(title);
+        var sub = document.createElement("div");
+        sub.style.cssText = "color:#6b7280;font-size:12.5px;";
+        sub.textContent = "We caught a " + (label === "Frame failed to load" ? "load" : "runtime") + " error and asked the agent to fix it. Watch the chat for an update.";
+        var details = document.createElement("details");
+        details.style.cssText = "margin-top:12px;color:#6b7280;font-size:12px;max-width:100%;";
+        var summary = document.createElement("summary");
+        summary.textContent = "Show technical details";
+        summary.style.cssText = "cursor:pointer;color:#6b7280;";
+        details.appendChild(summary);
+        var pre = document.createElement("pre");
+        pre.style.cssText = "margin-top:8px;padding:10px;background:#f3f4f6;border-radius:6px;font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#7f1d1d;white-space:pre-wrap;overflow:auto;max-height:60vh;";
+        pre.textContent = label + "\\n\\n" + msg + (stack ? "\\n\\n" + stack : "");
+        details.appendChild(pre);
+        var keyframes = document.createElement("style");
+        keyframes.textContent = "@keyframes arcade-frame-pulse { 0%, 100% { opacity: 0.4; transform: scale(0.9); } 50% { opacity: 1; transform: scale(1.1); } }";
+        wrap.appendChild(keyframes);
+        wrap.appendChild(head);
+        wrap.appendChild(sub);
+        wrap.appendChild(details);
+        root.appendChild(wrap);
       }
       window.addEventListener("error", function (e) {
         showFatal("Frame failed to load", e.error || e.message);

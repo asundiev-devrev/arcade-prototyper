@@ -14,6 +14,26 @@ const PROTOTYPER_ROOT = path.resolve(STUDIO_DIR, "..");
 const ARCADE_GEN_ROOT = process.env.ARCADE_GEN_ROOT
   ?? (process.env.HOME ? path.resolve(process.env.HOME, "arcade-gen") : "/__arcade_gen_unconfigured");
 
+/**
+ * Append a single message to a project's persisted chat history. Used by
+ * the chat middleware (turn user/assistant messages) and by the auto-fix
+ * dispatcher in `buildErrorReporter` (system messages narrating the
+ * auto-repair flow). Centralised here so call sites don't reimplement the
+ * read-modify-write dance — and so the chat middleware no longer needs to
+ * export a private helper.
+ */
+export async function appendHistory(slug: string, msg: ChatMessage): Promise<void> {
+  const file = chatHistoryPath(slug);
+  let existing: ChatMessage[] = [];
+  try {
+    existing = JSON.parse(await fs.readFile(file, "utf-8"));
+  } catch {
+    /* missing or unreadable history — start fresh */
+  }
+  existing.push(msg);
+  await fs.writeFile(file, JSON.stringify(existing, null, 2));
+}
+
 function slugify(name: string): string {
   return (
     name

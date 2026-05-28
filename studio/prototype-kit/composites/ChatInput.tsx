@@ -304,12 +304,17 @@ function SendButton(props: { onClick?: () => void; disabled?: boolean }) {
 }
 
 function StopButton(props: { onClick?: () => void }) {
+  // Use the prominent/on-prominent pair so the glyph contrasts with the
+  // dark fill in both light and dark themes. Earlier the button used
+  // `bg-neutral-medium` + `fg-neutral-prominent`, which collapse to the
+  // same dark hue in light mode and the same light hue in dark mode —
+  // either way the square inside became invisible.
   return (
     <button
       type="button"
       aria-label="Stop"
       onClick={props.onClick}
-      className="shrink-0 flex items-center justify-center w-9 h-9 rounded-circle-x2 bg-(--bg-neutral-medium) text-(--fg-neutral-prominent) hover:bg-(--bg-neutral-prominent) transition"
+      className="shrink-0 flex items-center justify-center w-9 h-9 rounded-circle-x2 bg-(--bg-neutral-prominent) text-(--fg-neutral-on-prominent) hover:bg-(--bg-neutral-medium) transition"
     >
       <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
         <rect x="2" y="2" width="8" height="8" rx="1.5" />

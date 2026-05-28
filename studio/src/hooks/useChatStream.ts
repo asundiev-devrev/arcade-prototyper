@@ -150,8 +150,24 @@ export function useChatStream(slug: string) {
 
             if (frame.type === "idle") {
               if (!sawTurnHeader) {
+                // The server's "idle" verdict can race with a local optimistic
+                // flip from send(): the SSE GET fires on mount, the server
+                // sees no turn yet, and the `event: idle` frame may arrive
+                // AFTER the route effect has already started one (which
+                // optimistically set phase=running). If we stomped non-idle
+                // states here we'd erase the Working… row and Stop button
+                // until the next reconnect — exactly the "nothing's happening"
+                // window the hero handoff was supposed to eliminate.
+                //
+                // So only fall to idle when we're in a terminal phase
+                // (done/error/cancelled) that needs re-idling for the next
+                // turn. Never override running — if the optimistic flip
+                // turns out to be wrong (POST /api/chat fails), the catch
+                // branch in send() flips us to error.
                 safeSetState((s) =>
-                  s.phase === "idle" ? s : { ...s, phase: "idle", busy: false },
+                  s.phase === "running" || s.phase === "idle"
+                    ? s
+                    : { ...s, phase: "idle", busy: false },
                 );
               }
               outcome = "idle";

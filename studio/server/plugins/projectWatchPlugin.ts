@@ -64,16 +64,6 @@ export function projectWatchPlugin(): Plugin {
         const slug = parts[0];
         if (!slug || !/^[a-z0-9][a-z0-9-]{0,62}$/i.test(slug)) return;
 
-        // Existing behavior: reconcile + full-reload on any tsx/ts/css change.
-        if (/\.(tsx|ts|css)$/.test(filePath)) {
-          try {
-            await reconcileFrames(slug);
-          } catch (err) {
-            console.warn(`[projectWatchPlugin] reconcileFrames(${slug}) failed:`, err);
-          }
-          server.ws.send({ type: "full-reload", path: "*" });
-        }
-
         // Multiplayer mirror: only `<slug>/frames/<frameId>/index.tsx`.
         // parts === [slug, "frames", frameId, "index.tsx"]
         const dir = parts[1];
@@ -84,6 +74,30 @@ export function projectWatchPlugin(): Plugin {
           !!frameId &&
           fileName === "index.tsx" &&
           parts.length === 4;
+
+        // Reconcile project frame state on any tsx/ts/css change (covers
+        // shared/*.ts deletes, theme-overrides.css edits, frame
+        // adds/removes). Cheap, idempotent, no client visibility.
+        if (/\.(tsx|ts|css)$/.test(filePath)) {
+          try {
+            await reconcileFrames(slug);
+          } catch (err) {
+            console.warn(`[projectWatchPlugin] reconcileFrames(${slug}) failed:`, err);
+          }
+          // Full page reload, however, must be scoped to frame writes only.
+          // Earlier this fired on every tsx/ts/css change — including the
+          // scaffold-time writes for `theme-overrides.css` and `shared/devrev.ts`
+          // that createProject performs as the user navigates from the home
+          // hero into the new project. The `full-reload` broadcast was landing
+          // while the route effect's POST /api/chat request was in flight, the
+          // browser tore the connection down on reload, and the turn never
+          // started server-side — leaving the chat pane idle until the agent
+          // happened to flush a frame much later. Vite's normal HMR handles
+          // the rest (CSS hot-replaces; shared/*.ts is module-graph HMR).
+          if (isFrameIndex) {
+            server.ws.send({ type: "full-reload", path: "*" });
+          }
+        }
         if (!isFrameIndex) return;
 
         const host = await getHostDevu();

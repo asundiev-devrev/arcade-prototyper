@@ -152,6 +152,57 @@ describe("handleViteError", () => {
     expect(runTurn).not.toHaveBeenCalled();
   });
 
+  it("posts user-facing system messages on dispatch and on completion", async () => {
+    // Regression for the "silent self-healing" UX bug: when a frame trips
+    // FrameErrorBoundary or Vite's compile-time path, the studio dispatches
+    // an auto-fix turn under the hood. Pre-fix the user just saw a red
+    // stack-trace wall + nothing in chat — they couldn't tell whether the
+    // tool was doing anything. Now the dispatcher appends two system-role
+    // chat messages (start + done) so the chat carries a breadcrumb.
+    const file = seedProject("demo", "welcome");
+    const runTurn = vi.fn().mockResolvedValue(undefined);
+    const writes: Array<{ slug: string; msg: { role: string; content: string } }> = [];
+    const writeHistory = vi.fn(async (slug: string, msg: any) => {
+      writes.push({ slug, msg });
+    });
+
+    const result = await handleViteError(errPayload(file, "boom"), {
+      runTurn,
+      appendHistory: writeHistory,
+    });
+    expect(result).toBe("dispatched");
+
+    // Three writes: start banner, raw-error detail row, done banner.
+    expect(writes.length).toBeGreaterThanOrEqual(2);
+    expect(writes[0].slug).toBe("demo");
+    expect(writes[0].msg.role).toBe("system");
+    expect(writes[0].msg.content.toLowerCase()).toContain("auto-repair");
+    expect(writes[0].msg.content).toContain("welcome");
+    const last = writes[writes.length - 1];
+    expect(last.msg.role).toBe("system");
+    expect(last.msg.content.toLowerCase()).toContain("auto-repair");
+    expect(last.msg.content.toLowerCase()).toContain("finished");
+  });
+
+  it("posts a failure system message when the auto-fix turn rejects", async () => {
+    const file = seedProject("demo", "welcome");
+    const runTurn = vi.fn().mockRejectedValue(new Error("claude blew up"));
+    const writes: Array<{ msg: { role: string; content: string } }> = [];
+    const writeHistory = vi.fn(async (_slug: string, msg: any) => {
+      writes.push({ msg });
+    });
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const result = await handleViteError(errPayload(file, "boom"), {
+      runTurn,
+      appendHistory: writeHistory,
+    });
+    expect(result).toBe("skipped:error");
+    const last = writes[writes.length - 1];
+    expect(last.msg.role).toBe("system");
+    expect(last.msg.content.toLowerCase()).toContain("couldn't run");
+  });
+
   it("passes session id and a compact fix prompt to runClaudeTurn", async () => {
     const file = seedProject("demo", "welcome");
     // Inject a sessionId by rewriting project.json.

@@ -6,6 +6,46 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.23.8] — 2026-05-28
+
+### Changed
+- **Frame errors no longer slap the user with a red stack-trace wall.** When a frame fails to load or crashes at runtime, the iframe now shows a calm "Auto-repairing this frame" panel with a pulsing dot and one-line explanation; the technical details (error message + stack) are tucked behind a "Show technical details" disclosure for the curious. Same look applies whether the error is caught by the inline shim (module-load failures, e.g. missing exports) or React's error boundary (runtime crashes inside the rendered tree).
+- **Auto-repair runs are visible in chat.** When the studio dispatches a background auto-fix turn against a broken frame, it now writes user-facing system messages into the chat: a "Auto-repairing **<frame>** — picked up a load/runtime error and asked the agent to fix it" breadcrumb on dispatch, the raw error message as a follow-up muted line, and an "Auto-repair finished — check **<frame>**" line on completion (or a "couldn't run" line on failure). Previously these auto-fix turns ran completely silently, leaving the user staring at a red iframe with no indication that anything was happening behind the scenes. Rate-limited dispatches stay quiet.
+
+## [0.23.7] — 2026-05-28
+
+### Fixed
+- **Hero→project handoff actually works now.** Final piece of the puzzle missed in 0.23.6: the project-folder file watcher was broadcasting a Vite `full-reload` to the browser whenever any `.tsx`/`.ts`/`.css` write landed under `projects/`. New-project scaffolding writes `theme-overrides.css` and `shared/devrev.ts` immediately after the project record is created — those writes raced the browser's `POST /api/chat` request and the page reloaded mid-flight, killing the request before the server registered the turn. The chat pane then sat idle until ~10s later when the agent's first frame triggered the next reload. The watcher now scopes the full-reload broadcast to actual frame writes (`frames/<id>/index.tsx`); reconciliation still runs on every change, but scaffold-time writes no longer rip the floor out from under the hero handoff.
+
+## [0.23.6] — 2026-05-28
+
+### Fixed
+- **Hero→project handoff is visibly active — for real this time.** Submitting a prompt from the homepage now reliably lands on the new project's chat with the prompt bubble, the "Working…" row, and the Stop button visible from the moment the page paints. Two reinforcing bugs were hiding behind the symptom: (1) the in-memory bucket that carries the prompt across the redirect was being wiped by Vite's full-reload broadcast, which fires whenever the new project's scaffolding writes a `.css` or `.ts` file under `projects/`, leaving the route with nothing to send; and (2) under React's StrictMode (active in dev / packaged Studio), the route's pending-prompt effect ran setup → cleanup → setup, and a `cancelled` guard inside the async send path returned before `send()` could fire. The bucket now lives in `sessionStorage` (survives reloads, scoped to the tab) and the `cancelled` guard is gone — `send()` is already idempotent against an already-running stream.
+
+## [0.23.5] — 2026-05-28
+
+### Fixed
+- **Hero→project handoff is visibly active again.** Submitting a prompt from the homepage now lands on the new project's chat with the prompt bubble, the "Working…" row, and the Stop button rendered immediately — no more dead window where the page looks idle until a frame quietly appears. The previous handoff fix painted the optimistic prompt bubble correctly, but a race in the chat-stream subscription (the server's "no turn yet" idle frame downgraded the optimistic running phase back to idle) silently hid the progress indicators until the next reconnect. The idle-frame handler now leaves running phases untouched.
+
+## [0.23.4] — 2026-05-28
+
+### Fixed
+- **Stop-streaming button is visible again.** While a turn is in flight, the circular Stop button now paints a dark fill with a light glyph (or vice-versa in dark mode) instead of collapsing to an all-black or all-light disc. The previous token pair (`--bg-neutral-medium` + `--fg-neutral-prominent`) resolved to the same hue inside a given theme, hiding the square.
+- **SVG uploads work everywhere they should.** The chat input now accepts `image/svg+xml` from the file picker, the paste shortcut, and drag-and-drop, on both the homepage staging endpoint and the per-project endpoint. Files save with a clean `.svg` extension. Previously the picker silently filtered SVGs out on macOS browsers and the server returned 400 even when an SVG slipped through.
+- **File picker shows SVGs alongside PNGs/JPEGs on macOS.** Some macOS browsers' "image/\*" filter hid `.svg` because Finder reports SVGs with a non-image UTI. The picker now lists every supported MIME type explicitly plus the `.svg` extension, so vector and raster sit together in the chooser.
+
+### Changed
+- **Token guidance in the project's `CLAUDE.md` calls out the violet "Intelligence" family.** Beta testers reported `--expressive-intelligence` not rendering — the agent was inventing the name. The template now lists the canonical `--bg-intelligence-prominent` / `--bg-intelligence-medium` / `--bg-intelligence-subtle` / `--fg-intelligence-prominent` / `--fg-intelligence-on-prominent` tokens, flags `--expressive-*` as a recurring hallucination, and clarifies that `--surface-shallow` is the soft tinted sidebar/rail color (not white). Future modification turns reach for the right token names on the first try.
+
+## [0.23.3] — 2026-05-28
+
+### Fixed
+- **Hallucinated edits no longer appear as clean successes.** When the agent narrates a change ("Split the skill list into two columns", "Removed the untitled frame") but does not actually modify any file under `frames/` or `shared/`, the chat pane now appends a visible warning trailer instead of letting the silent failure through. Catches both the "agent paraphrased instead of editing" and "Edit tool failed silently and the agent moved on" failure modes that beta testers reported on modification turns.
+- **Targeted-edit prompts are now explicit about the path.** When a designer right-clicks an element and uses "edit this", the prompt preamble now tells the agent to `Read frames/<path>` first, names the line:column as the disambiguator, and warns that a reply without an `Edit`/`Write` tool call is a failed turn. Previously the preamble named the file but did not require reading it before editing.
+
+### Changed
+- **Modification turns are first-class in the agent's instructions.** Added a "Modifying existing frames" section to the project's `CLAUDE.md` template covering: how to interpret the target preamble, when to use `Edit` vs `Write`, what to do when `Edit` fails (retry with wider context, then fall back to `Write` — never narrate a non-edit), and how to refuse cleanly when the change is not possible. Previously the template was almost entirely written for the new-frame case.
+
 ## [0.23.2] — 2026-05-28
 
 ### Fixed

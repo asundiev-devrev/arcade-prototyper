@@ -56,6 +56,22 @@ describe("/api/uploads/:slug", () => {
     expect(Buffer.compare(written, body)).toBe(0);
   });
 
+  it("accepts an SVG upload (image/svg+xml) and saves with .svg extension", async () => {
+    const p = await createProject({ name: "Vector", theme: "arcade", mode: "light" });
+    const body = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>');
+    const res = await fetch(`http://localhost:${port}/api/uploads/${p.slug}`, {
+      method: "POST",
+      headers: { "Content-Type": "image/svg+xml" },
+      body,
+    });
+    expect(res.status).toBe(200);
+    const json = await res.json() as { path: string; url: string };
+    // Saved filename uses `.svg`, not `.svg+xml` — the agent + browser need a
+    // canonical extension for the file to round-trip into a frame.
+    expect(json.path).toMatch(/\.svg$/);
+    expect(fs.existsSync(json.path)).toBe(true);
+  });
+
   it("rejects unsupported content types with 400", async () => {
     const p = await createProject({ name: "Plain", theme: "arcade", mode: "light" });
     const res = await fetch(`http://localhost:${port}/api/uploads/${p.slug}`, {

@@ -60,9 +60,11 @@ function buildTargetPreamble(t: TargetSelection): string {
     : `<${t.componentName}>`;
   return [
     `Target element: ${label}`,
-    `Source: ${rel}:${t.line}:${t.column}`,
+    `Source: frames/${rel}:${t.line}:${t.column}`,
     "",
-    "Apply the following change only to this element (or its direct children if the intent clearly requires it). Do not make unrelated edits.",
+    `Read frames/${rel} first — do not edit from memory. The line:column above identifies the targeted element inside that file. Apply the requested change ONLY to this element (or its direct children if the intent clearly requires it); do not modify other files or unrelated parts of this file.`,
+    "",
+    "A reply without a corresponding Edit or Write tool call is a failed turn. If your Edit tool reports zero or multiple matches, widen the surrounding context and retry — or fall back to Write with the full new file contents. Do not paraphrase the change in narration as a substitute for editing.",
     "",
   ].join("\n");
 }
@@ -161,10 +163,25 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commen
     }, 5000);
   }
 
-  async function uploadImage(blob: Blob): Promise<{ path: string; url: string }> {
+  // Some browsers (notably Safari and some macOS Chromium builds) hand back
+  // filesystem-dragged files with an empty `f.type`. Fall back to the file
+  // extension so SVGs and other image files are not silently dropped on the
+  // floor. Server-side validation still has the final word on the MIME type.
+  function inferImageMime(f: File): string | null {
+    if (f.type.startsWith("image/")) return f.type;
+    const ext = f.name.toLowerCase().split(".").pop() ?? "";
+    if (ext === "svg") return "image/svg+xml";
+    if (ext === "png") return "image/png";
+    if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+    if (ext === "gif") return "image/gif";
+    if (ext === "webp") return "image/webp";
+    return null;
+  }
+
+  async function uploadImageWithMime(blob: Blob, mime: string): Promise<{ path: string; url: string }> {
     const res = await fetch(`/api/uploads/${projectSlug}`, {
       method: "POST",
-      headers: { "Content-Type": blob.type },
+      headers: { "Content-Type": mime },
       body: blob,
     });
     if (!res.ok) {
@@ -182,10 +199,12 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commen
 
   async function addFiles(files: File[] | FileList) {
     if (isComment) return;
-    const arr = Array.from(files).filter((f) => f.type.startsWith("image/"));
-    for (const f of arr) {
+    const arr = Array.from(files)
+      .map((f) => ({ file: f, mime: inferImageMime(f) }))
+      .filter((x): x is { file: File; mime: string } => x.mime !== null);
+    for (const { file, mime } of arr) {
       try {
-        const { path, url } = await uploadImage(f);
+        const { path, url } = await uploadImageWithMime(file, mime);
         if (!mountedRef.current) return;
         setImages((xs) => [...xs, url]);
         setImagePaths((xs) => [...xs, path]);
@@ -414,7 +433,13 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commen
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          // Some macOS browsers' "image/*" filter hides .svg in the picker
+          // because Finder reports SVG with a non-image UTI. Listing the
+          // explicit MIME types AND the .svg extension forces every browser
+          // to show SVGs alongside raster images. Keep the wildcard as the
+          // last entry so any future image format the platform recognizes
+          // still passes through.
+          accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,.svg,image/*"
           multiple
           hidden
           onChange={onFilePicked}

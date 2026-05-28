@@ -122,13 +122,23 @@ function ProjectDetailAuthor({
   const consumedRef = useRef(false);
 
   useEffect(() => {
+    // Hero→project handoff. Two double-fire defenses:
+    //   - `consumedRef` (component-instance scope) blocks a second setup pass
+    //     under React StrictMode (which runs setup → cleanup → setup in dev).
+    //   - `takePendingPrompt` is read-and-remove, so even if consumedRef were
+    //     bypassed, the bucket only yields the prompt once.
+    //
+    // No `cancelled` guard inside the IIFE: under StrictMode the cleanup ran
+    // before the async hop resolved, so any cancelled flag flipped true and
+    // suppressed the only call to `send()` — leaving the chat pane idle and
+    // the user staring at a "dead window". `send()` itself is idempotent
+    // against an already-running stream, so re-entry is harmless.
     if (consumedRef.current) return;
     if (!send) return;
     const pending = takePendingPrompt(slug);
     if (!pending) return;
     consumedRef.current = true;
 
-    let cancelled = false;
     (async () => {
       let images = pending.imagePaths;
       if (images.length > 0) {
@@ -139,16 +149,11 @@ function ProjectDetailAuthor({
           images = [];
         }
       }
-      if (cancelled) return;
       const decorated = pending.figmaUrl
         ? decoratePromptWithFigma(pending.prompt, pending.figmaUrl)
         : pending.prompt;
       send(decorated, images);
     })();
-
-    return () => {
-      cancelled = true;
-    };
   }, [slug, send]);
 
   return (

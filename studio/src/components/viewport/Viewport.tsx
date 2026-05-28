@@ -77,9 +77,19 @@ export function Viewport({
           frame: payload.frame,
           message: payload.message,
         }),
-      }).catch(() => {
-        // non-critical; the UI already shows the error
-      });
+      })
+        .then(() => {
+          // Server has appended the "Auto-repairing…" system message into
+          // the project's chat-history.json (and another when the auto-fix
+          // turn finishes). Nudge the chat pane to reload so the user sees
+          // the breadcrumb without waiting for the next turn-end refresh.
+          window.dispatchEvent(
+            new CustomEvent("arcade-studio:refresh-chat-history"),
+          );
+        })
+        .catch(() => {
+          // non-critical; the iframe overlay already shows the error
+        });
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);

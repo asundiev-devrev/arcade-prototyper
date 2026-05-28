@@ -3,7 +3,8 @@ import path from "node:path";
 import { projectsRoot } from "./paths";
 import { runClaudeTurn } from "./claudeCode";
 import { resolveClaudeBin } from "./claudeBin";
-import { getProject } from "./projects";
+import { getProject, appendHistory } from "./projects";
+import type { ChatMessage } from "./types";
 
 /**
  * Maps `${slug}/${frameName}` to the last time we auto-prompted the agent
@@ -52,6 +53,8 @@ export interface BuildErrorReporterDeps {
   loadProject?: typeof getProject;
   /** Overridable bin resolver. */
   resolveBin?: () => string;
+  /** Overridable history writer; defaults to the real `appendHistory`. */
+  appendHistory?: typeof appendHistory;
 }
 
 export async function handleViteError(
@@ -62,6 +65,7 @@ export async function handleViteError(
   const now = deps.now ?? Date.now;
   const loadProject = deps.loadProject ?? getProject;
   const resolveBin = deps.resolveBin ?? resolveClaudeBin;
+  const writeHistory = deps.appendHistory ?? appendHistory;
 
   const root = projectsRoot();
   const parsed = parseBuildError(payload, root);
@@ -72,11 +76,14 @@ export async function handleViteError(
     slug,
     frameName,
     root,
+    kind: "build",
+    rawMessage: message,
     prompt: `The frame ${frameName} is failing to build with: ${message}. Fix the smallest thing that resolves it; do not restructure.`,
     runTurn,
     now,
     loadProject,
     resolveBin,
+    appendHistory: writeHistory,
   });
 }
 
@@ -98,6 +105,7 @@ export async function handleRuntimeError(
   const now = deps.now ?? Date.now;
   const loadProject = deps.loadProject ?? getProject;
   const resolveBin = deps.resolveBin ?? resolveClaudeBin;
+  const writeHistory = deps.appendHistory ?? appendHistory;
 
   const root = projectsRoot();
   const clean = String(message ?? "").slice(0, 500) || "unknown runtime error";
@@ -105,11 +113,14 @@ export async function handleRuntimeError(
     slug,
     frameName,
     root,
+    kind: "runtime",
+    rawMessage: clean,
     prompt: `The frame ${frameName} threw a runtime error: ${clean}. Fix the smallest thing that resolves it; do not restructure.`,
     runTurn,
     now,
     loadProject,
     resolveBin,
+    appendHistory: writeHistory,
   });
 }
 
@@ -117,13 +128,35 @@ async function dispatchAutoFix(args: {
   slug: string;
   frameName: string;
   root: string;
+  /** Whether the error came from Vite's compile-time path or a runtime crash
+   *  in the iframe's React tree. Distinct labels in the user-facing system
+   *  message so the chat reads "load" vs "runtime" the same way the iframe
+   *  overlay does. */
+  kind: "build" | "runtime";
+  /** Raw error message — surfaced to the agent verbatim and persisted as the
+   *  details of the user-facing system message so the user can expand and
+   *  see what went wrong if they care. */
+  rawMessage: string;
   prompt: string;
   runTurn: typeof runClaudeTurn;
   now: () => number;
   loadProject: typeof getProject;
   resolveBin: () => string;
+  appendHistory: typeof appendHistory;
 }): Promise<"skipped:rate-limited" | "skipped:no-project" | "skipped:error" | "dispatched"> {
-  const { slug, frameName, root, prompt, runTurn, now, loadProject, resolveBin } = args;
+  const {
+    slug,
+    frameName,
+    root,
+    kind,
+    rawMessage,
+    prompt,
+    runTurn,
+    now,
+    loadProject,
+    resolveBin,
+    appendHistory: writeHistory,
+  } = args;
   const key = `${slug}/${frameName}`;
   const t = now();
   const prev = lastAttempt.get(key) ?? 0;
@@ -139,6 +172,33 @@ async function dispatchAutoFix(args: {
   }
   if (!project) return "skipped:no-project";
 
+  // Surface a chat-pane breadcrumb so the user can see that the studio is
+  // self-healing. Without this the iframe just flips between a red wall and
+  // a working frame and the user has no idea whether the agent is doing
+  // anything in the background. System messages render as a muted centered
+  // line in MessageList — quieter than a full assistant bubble, which is
+  // what we want here (this is studio-driven, not user-prompted, work).
+  const startMsg: ChatMessage = {
+    id: `auto-fix-start:${key}:${t}`,
+    role: "system",
+    content: `Auto-repairing **${frameName}** — picked up a ${kind === "build" ? "load" : "runtime"} error and asked the agent to fix it.`,
+    createdAt: new Date(t).toISOString(),
+  };
+  await writeHistory(slug, startMsg).catch((err) => {
+    console.warn(`[buildErrorReporter] appendHistory(start) for ${key} failed:`, err);
+  });
+  // Best-effort: if the raw error is non-trivial, persist it as a follow-up
+  // system row so the chat carries the diagnostic text. Helps when the
+  // auto-fix doesn't actually resolve it and the user has to step in.
+  if (rawMessage && rawMessage.length > 0) {
+    await writeHistory(slug, {
+      id: `auto-fix-detail:${key}:${t}`,
+      role: "system",
+      content: `↳ ${rawMessage}`,
+      createdAt: new Date(t).toISOString(),
+    }).catch(() => {});
+  }
+
   try {
     await runTurn({
       cwd: path.join(root, slug),
@@ -147,9 +207,21 @@ async function dispatchAutoFix(args: {
       prompt,
       onEvent: () => {},
     });
+    await writeHistory(slug, {
+      id: `auto-fix-done:${key}:${now()}`,
+      role: "system",
+      content: `Auto-repair finished — check **${frameName}**. If it still looks wrong, tell the agent what to change.`,
+      createdAt: new Date(now()).toISOString(),
+    }).catch(() => {});
     return "dispatched";
   } catch (err) {
     console.warn(`[buildErrorReporter] runClaudeTurn for ${key} failed:`, err);
+    await writeHistory(slug, {
+      id: `auto-fix-failed:${key}:${now()}`,
+      role: "system",
+      content: `Auto-repair couldn't run for **${frameName}**. Try asking the agent directly to fix it.`,
+      createdAt: new Date(now()).toISOString(),
+    }).catch(() => {});
     return "skipped:error";
   }
 }

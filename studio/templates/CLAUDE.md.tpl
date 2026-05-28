@@ -364,6 +364,49 @@ A multi-frame prototype without navigation is just three disconnected screens. I
 
 When a prompt names a specific frame by display name (e.g. "Design the Untitled 1 screen: a signup form", "update the Welcome frame's copy"), edit ONLY that frame's `index.tsx`. Do NOT create new frames, rename existing ones, or modify unrelated frames. This rule makes the `+ New frame` button's seed text route correctly — users click it, the chat input pre-fills with "Design the Untitled 1 screen: ", and whatever they add after should land in that specific frame.
 
+## Modifying existing frames (read this every time the prompt edits an existing frame)
+
+Most turns after the first one are *modifications* — "add a row", "split into two columns", "move the header up", "add a link to the sidebar". A modification turn that produces a confident reply but no real file change is the single worst failure mode in this product: the user thinks the change shipped, the viewport says otherwise, and trust collapses.
+
+**A response without a corresponding `Edit` or `Write` tool call is a failed turn.** The studio inspects the project's `frames/` and `shared/` directories at the end of every turn; if no file moved, the user sees a visible warning regardless of how clean your prose was. Don't earn that warning.
+
+### When the prompt comes with a target preamble
+
+The studio's UI lets the designer right-click a rendered element and pick "edit this". When that happens, your prompt arrives with a block at the very top that looks like:
+
+```
+Target element: <div> inside <ChatInterface>
+Source: 01-chat-interface/index.tsx:732:35
+
+Apply the following change only to this element (or its direct children if the intent clearly requires it). Do not make unrelated edits.
+```
+
+Read this preamble literally:
+
+1. **`Source:` is a path inside the project, relative to `frames/`.** The example above lives at `frames/01-chat-interface/index.tsx`. `Read` that file before you do anything else — never operate from memory or assume what the JSX looks like.
+2. **The line:column points at the targeted element in the file you just read.** Use it to disambiguate when the same tag (e.g. `<div>`) appears many times. Center your `Edit` around the unique surrounding code at that line.
+3. **Do not edit any other file.** "Only this element" means: do not touch sibling frames, do not refactor shared components, do not "while you're here" rename anything. Even composites used by the targeted element are off-limits unless the prompt explicitly asks.
+
+### Picking the right tool
+
+- **`Edit`** is the default for targeted modifications. Find a unique, contiguous chunk of the existing JSX that contains the element you want to change, and replace it. Include enough surrounding code (a parent tag, a unique class name, a unique string) that the `old_string` matches exactly once.
+- **`Write`** rewrites the whole file. Use it when the change is sweeping (more than ~30% of the file changes), when you can't find a unique anchor for `Edit`, or when the file is short enough that a clean rewrite is easier to reason about than a surgical edit.
+- Never invent a third path. There is no "explain the change in the chat and let the user apply it" — the user expects code to move.
+
+### When `Edit` fails (it will, sometimes)
+
+Claude's `Edit` tool fails when `old_string` matches zero times or more than once. Both failures appear in the tool result; neither is acceptable to ignore.
+
+- **Zero matches:** you misread the file. `Read` it again at the relevant range, copy the surrounding code character-for-character, and retry.
+- **Multiple matches:** your anchor isn't unique. Widen the `old_string` to include a parent element, a unique attribute, or a sibling with distinctive copy.
+- **After a second failed `Edit`, fall back to `Write`** with the full new file contents. Do NOT paraphrase the change in narration as a substitute for editing. Do NOT silently abandon the change and move on.
+
+### Reply shape on a modification turn
+
+The same response shape applies — one-sentence summary + `### Deviations`. The summary describes what the *user will see change* in the frame, in design language ("Split the skill list into two columns at desktop width"). It does NOT describe what files you touched or which tool you called.
+
+If you genuinely cannot make the change (the element isn't where the preamble says, the target is in a composite you're not allowed to edit, the prompt contradicts itself), say so explicitly in plain language and stop. A clear refusal is better than a hallucinated success.
+
 ## Responsive design (required for every frame)
 
 Studio renders frames in five device widths, switchable from the top toolbar:
@@ -411,13 +454,17 @@ If the user asks for a "mobile" or "desktop" design specifically, design for tha
 
 Additional rules:
 - **Never hardcode hex, rgb, or hsl.** Colors come from tokens defined in `{{ARCADE}}/src/tokens/generated/light.css` and `dark.css`.
-- **Never invent a token name.** Common hallucinations: `--border-default`, `--surface-default`, `--text-primary`. These don't exist; CSS silently resolves them to unset and you get black borders and black text. Canonical groups:
+- **Never invent a token name.** Common hallucinations: `--border-default`, `--surface-default`, `--text-primary`, `--expressive-intelligence`, `--expressive-success`. These don't exist; CSS silently resolves them to unset and you get black borders, black text, or unrendered violet/green fills. Canonical groups:
   - Text: `--fg-neutral-prominent` (primary), `--fg-neutral-subtle` (secondary/description), `--fg-neutral-medium`, `--fg-neutral-on-prominent` (text on dark fills).
   - Strokes (borders): `--stroke-neutral-subtle` (Figma's "Stroke / Subtle"), `--stroke-neutral-medium`, `--stroke-neutral-prominent`. **There is no `--border-*`.**
-  - Surfaces: `--surface-backdrop`, `--surface-overlay`, `--surface-shallow`. **There is no `--surface-default`.**
+  - Surfaces: `--surface-backdrop`, `--surface-overlay`, `--surface-shallow`. **There is no `--surface-default`.** `--surface-shallow` is the SIDEBAR / rail color (a soft tinted neutral, NOT white) — if it looks white in your render, you almost certainly meant `--surface-overlay` (the body) or `--bg-neutral-soft`.
   - Backgrounds: `--bg-neutral-prominent`, `--bg-neutral-medium`, `--bg-neutral-soft`, `--bg-neutral-subtle`, `--bg-neutral-inverted`.
+  - Intent-colored backgrounds (use when an element is semantically "AI/agent", "alert", "success", etc., NOT for decorative accents). Each intent has the same `prominent / medium / subtle` ladder plus a matching `--fg-<intent>-prominent` and `--fg-<intent>-on-prominent`:
+    - **Intelligence (violet — the "AI / agent / Computer" color)**: `--bg-intelligence-prominent`, `--bg-intelligence-medium`, `--bg-intelligence-subtle`, `--fg-intelligence-prominent`, `--fg-intelligence-on-prominent`. **The token is `--bg-intelligence-*`, NOT `--expressive-intelligence`, NOT `--bg-violet-*`, NOT `--bg-purple-*`.**
+    - Other intents follow the same shape: `--bg-info-*`, `--bg-success-*`, `--bg-warning-*`, `--bg-alert-*` (+ matching `--fg-…`).
   - Control hovers/actives: `--control-bg-neutral-subtle-hover`, `--control-bg-neutral-subtle-active`.
   - Component tokens: Arcade now ships per-component tokens — e.g. `--component-button-bg-primary`, `--component-input-stroke`, `--component-modal-surface`, `--component-toggle-track-on`. Prefer these when styling a known arcade component; fall back to the neutral groups above only when no component token exists. See `{{ARCADE}}/src/tokens/generated/component.css` for the full list.
+- **If a token doesn't render the color you expected, grep `{{ARCADE}}/src/tokens/generated/light.css` for it before re-trying.** Silent fallback to inherited / unset is what produces "the violet didn't show up" or "shallow looks white" reports.
 - Figma → token mapping: `Stroke / Subtle` → `--stroke-neutral-subtle`; `Foreground / Secondary` (and any gray secondary text) → `--fg-neutral-subtle`; `Foreground / Primary` → `--fg-neutral-prominent`.
 - Current theme: **{{THEME}}**.
 - When Figma reports a value like 17px that does NOT map to a named token, the design likely intends the nearest token — pick the closest `rounded-square` / `text-body-large` / `h-control-md` rather than hard-coding the off-grid pixel.

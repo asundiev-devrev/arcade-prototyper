@@ -17,12 +17,17 @@ export function uploadsMiddleware() {
 
     const ct = req.headers["content-type"] ?? "";
     const baseType = ct.split(";")[0].trim().toLowerCase();
-    const extMatch = /^image\/(png|jpeg|webp|gif)$/.exec(baseType);
+    // svg+xml is the canonical SVG mime type. We map it to a `svg` file
+    // extension so the saved file's name matches what the agent and the
+    // browser expect — saving an svg as `.svg+xml` would fail the
+    // import-validation step downstream.
+    const extMatch = /^image\/(png|jpeg|webp|gif|svg\+xml)$/.exec(baseType);
     if (!extMatch) {
       res.writeHead(400, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: { message: "Unsupported image type" } }));
       return;
     }
+    const ext = extMatch[1] === "svg+xml" ? "svg" : extMatch[1];
 
     const project = await getProject(slug);
     if (!project) {
@@ -67,7 +72,7 @@ export function uploadsMiddleware() {
     try {
       const dir = path.join(projectDir(slug), "_uploads");
       await fs.mkdir(dir, { recursive: true });
-      const name = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extMatch[1]}`;
+      const name = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
       const abs = path.join(dir, name);
       await fs.writeFile(abs, Buffer.concat(chunks));
       res.writeHead(200, { "Content-Type": "application/json" });

@@ -30,12 +30,13 @@ export function stagingUploadsMiddleware() {
     // strict equality check. An unanchored regex would let non-image bodies
     // slip through by sending e.g. `Content-Type: text/plain; fake=image/png`.
     const baseType = ct.split(";")[0].trim().toLowerCase();
-    const extMatch = /^image\/(png|jpeg|webp|gif)$/.exec(baseType);
+    const extMatch = /^image\/(png|jpeg|webp|gif|svg\+xml)$/.exec(baseType);
     if (!extMatch) {
       res.writeHead(400, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: { message: "Unsupported image type" } }));
       return;
     }
+    const ext = extMatch[1] === "svg+xml" ? "svg" : extMatch[1];
 
     const existing = parseCookie(req.headers.cookie, COOKIE_NAME);
     const sessionId = existing ?? newSessionId();
@@ -66,7 +67,7 @@ export function stagingUploadsMiddleware() {
     try {
       const dir = stagingSessionDir(sessionId);
       await fs.mkdir(dir, { recursive: true });
-      const name = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extMatch[1]}`;
+      const name = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
       const abs = path.join(dir, name);
       await fs.writeFile(abs, Buffer.concat(chunks));
       const headers: Record<string, string | string[]> = { "Content-Type": "application/json" };

@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import { runClaudeTurnWithRetry } from "../claudeCode";
 import { resolveClaudeBin } from "../claudeBin";
 import { hasBedrockAuth } from "../awsPreflight";
-import { getProject, updateProject } from "../projects";
+import { getProject, updateProject, appendHistory } from "../projects";
 import { readGlobalSettings } from "./settings";
 import { chatHistoryPath, lastErrorLogPath, lastStdoutLogPath, projectDir } from "../paths";
 import { runComputerTurn } from "../devrev/computerAgent";
@@ -19,6 +19,12 @@ import { renderDesignMd } from "../figma/systemRender";
 import { designMdPath } from "../paths";
 import { startTurn, subscribe, getTurn, cancelTurn } from "../turnRegistry";
 import { hasDeviationsSection, DEVIATIONS_MISSING_TRAILER } from "../deviationsContract";
+import {
+  snapshotProjectFiles,
+  diffSnapshots,
+  hasAnyChange,
+  NO_CHANGES_TRAILER,
+} from "../frameChangeContract";
 import { recordChatEventForReplay, type ProjectRef } from "./chatRelayMirror";
 import { resolveDevuFromPat } from "../relay/auth";
 import { getDevRevPat } from "../secrets/keychain";
@@ -35,14 +41,6 @@ const COMPUTER_MENTION_GLOBAL = /@Computer\b\s*/gi;
 const FRAME_TRIGGER = /#frame\b/i;
 const FRAME_TRIGGER_GLOBAL = /#frame\b\s*/gi;
 const FRAME_SOURCE_CHAR_BUDGET = 60_000;
-
-async function appendHistory(slug: string, msg: ChatMessage) {
-  const file = chatHistoryPath(slug);
-  let existing: ChatMessage[] = [];
-  try { existing = JSON.parse(await fs.readFile(file, "utf-8")); } catch {}
-  existing.push(msg);
-  await fs.writeFile(file, JSON.stringify(existing, null, 2));
-}
 
 /**
  * Read all frame `index.tsx` files for a project, concatenated as fenced
@@ -530,6 +528,14 @@ async function runClaudeBranch(ctx: {
   const toolLabels: string[] = [];
   let pendingEnd: { ok: boolean; error?: string } | null = null;
 
+  // Snapshot frame + shared files BEFORE the turn so we can detect whether
+  // any file actually changed by the time the agent reports success. The
+  // deviations contract checks the SHAPE of the agent's reply; this check
+  // verifies that the reply corresponds to a real edit. Without it, an
+  // agent that hallucinates a clean "Deviations: None" turn passes both
+  // the contract and the user.
+  const beforeSnapshot = await snapshotProjectFiles(projectDir(slug));
+
   let model: string | undefined;
   try {
     model = (await readGlobalSettings()).studio?.model;
@@ -605,6 +611,24 @@ async function runClaudeBranch(ctx: {
     if (joined && !hasDeviationsSection(joined)) {
       emit({ kind: "narration", text: DEVIATIONS_MISSING_TRAILER.trimStart() });
       narrationTexts.push(DEVIATIONS_MISSING_TRAILER.trimStart());
+    }
+
+    // Verify the agent's claim against the filesystem. If the reply contains
+    // narration (i.e. the agent told the user something happened) but no
+    // file under frames/ or shared/ moved, surface a designer-facing warning
+    // instead of a silent green checkmark. This catches two failure modes:
+    // (a) hallucinated edits — the agent narrates a change without calling
+    // any Edit/Write tool; (b) silent Edit failures — Claude's Edit tool
+    // returns an error when `old_string` doesn't match uniquely, and the
+    // agent sometimes responds by paraphrasing what it "would have done"
+    // instead of retrying.
+    if (joined) {
+      const afterSnapshot = await snapshotProjectFiles(projectDir(slug));
+      const diff = diffSnapshots(beforeSnapshot, afterSnapshot);
+      if (!hasAnyChange(diff)) {
+        emit({ kind: "narration", text: NO_CHANGES_TRAILER.trimStart() });
+        narrationTexts.push(NO_CHANGES_TRAILER.trimStart());
+      }
     }
 
     const content = narrationTexts.join("\n\n").trim();

@@ -70,6 +70,14 @@ describe("POST /api/uploads/_staging", () => {
     expect(path.dirname(first.body.path)).toBe(path.dirname(second.body.path));
   });
 
+  it("accepts an SVG upload and saves it with a .svg extension", async () => {
+    const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>');
+    const res = await post("/api/uploads/_staging", svg, { "content-type": "image/svg+xml" });
+    expect(res.status).toBe(200);
+    expect(res.body.path).toMatch(/\.svg$/);
+    expect(fs.existsSync(res.body.path)).toBe(true);
+  });
+
   it("rejects unsupported mime types", async () => {
     const res = await post("/api/uploads/_staging", Buffer.from("nope"), {
       "content-type": "text/plain",
