@@ -16,6 +16,9 @@ import { ChatStreamProvider } from "../hooks/chatStreamContext";
 import { TargetSelectionProvider } from "../hooks/targetSelectionContext";
 import { useProjectFromHost, type ProjectShellSource } from "../hooks/useProjectFromHost";
 import { useProjectFromMirror } from "../hooks/useProjectFromMirror";
+import { takePendingPrompt } from "../lib/pendingPrompt";
+import { decoratePromptWithFigma } from "../lib/figmaUrl";
+import { api } from "../lib/api";
 
 function TeammatesIcon() {
   return (
@@ -115,6 +118,39 @@ function ProjectDetailAuthor({
   onOpenProject: (slug: string) => void;
 }) {
   const source = useProjectFromHost(slug);
+  const send = source.send;
+  const consumedRef = useRef(false);
+
+  useEffect(() => {
+    if (consumedRef.current) return;
+    if (!send) return;
+    const pending = takePendingPrompt(slug);
+    if (!pending) return;
+    consumedRef.current = true;
+
+    let cancelled = false;
+    (async () => {
+      let images = pending.imagePaths;
+      if (images.length > 0) {
+        try {
+          const adoption = await api.adoptUploads(slug, images);
+          images = images.map((old) => adoption.mapping[old] ?? old);
+        } catch {
+          images = [];
+        }
+      }
+      if (cancelled) return;
+      const decorated = pending.figmaUrl
+        ? decoratePromptWithFigma(pending.prompt, pending.figmaUrl)
+        : pending.prompt;
+      send(decorated, images);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, send]);
+
   return (
     <ProjectDetailShell
       mode="author"
