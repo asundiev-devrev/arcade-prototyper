@@ -195,6 +195,8 @@ export function Viewport({
             highlighted={highlight?.slug === f.slug ? highlight.kind : null}
             readonly={isReadonly}
             srcOverride={frameSrcOverride}
+            agentCursor={agentCursor}
+            phase={phase}
           />
         ))}
         {!isReadonly && (

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUpRightSmall, IconButton, Tooltip, useToast } from "@xorkavi/arcade-gen";
 import type { Frame } from "../../../server/types";
 import { useTargetSelection } from "../../hooks/targetSelectionContext";
+import { FrameSkeleton } from "./FrameSkeleton";
+import type { StreamState, TurnPhase } from "../../hooks/chatStreamReducer";
 
 const FRAME_WIDTH_MIN = 320;
 const FRAME_WIDTH_MAX = 2560;
@@ -46,6 +48,8 @@ export function FrameCard({
   // from the spectator compile endpoint (which reads from the mirror
   // cache) instead of the host's `/api/frames/:slug/:frame` route.
   srcOverride,
+  agentCursor = null,
+  phase = "idle",
 }: {
   projectSlug: string;
   frame: Frame;
@@ -58,6 +62,8 @@ export function FrameCard({
   highlighted?: "target" | "missing" | null;
   readonly?: boolean;
   srcOverride?: (frameSlug: string) => string;
+  agentCursor?: StreamState["agentCursor"];
+  phase?: TurnPhase;
 }) {
   const [resizing, setResizing] = useState(false);
   const [hoverHandle, setHoverHandle] = useState(false);
@@ -174,6 +180,8 @@ export function FrameCard({
     : `/api/frames/${projectSlug}/${frame.slug}?mode=${projectMode}`;
   const isTargetedFrame =
     target !== null && target.frameSlug === frame.slug;
+  const isTargeted = phase === "running" && agentCursor?.frame === frame.slug;
+  const composites = agentCursor?.composites ?? [];
 
   return (
     <div
@@ -305,6 +313,7 @@ export function FrameCard({
               pointerEvents: resizing ? "none" : "auto",
             }}
           />
+          <FrameSkeleton visible={isTargeted} composites={composites} />
         </div>
         <div
           role="separator"
