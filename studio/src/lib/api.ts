@@ -43,4 +43,8 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ slug, prompt, images }),
     }).then(j<{ turnId: string; slug: string }>),
+  cancelTurn: (slug: string) =>
+    fetch(`/api/chat/cancel/${slug}`, { method: "POST" }).then(
+      j<{ cancelled: true; slug: string }>,
+    ),
 };
