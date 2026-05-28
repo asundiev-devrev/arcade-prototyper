@@ -6,6 +6,11 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.24.0] — 2026-05-28
+
+### Added
+- **Live cursor + progressive UI reveal during agent turns.** The viewport stops staring back at you while the agent works. A small anonymous pointer flies between FrameCards as the agent reads, writes, and edits files; a narration bubble follows it with the agent's last thought (truncated to two lines). Inside the targeted FrameCard, a composite-aware skeleton scaffold paints from the imports the agent is pulling in (Hero, Header, Footer, Sidebar, Card, Modal — generic 4-block fallback otherwise). When Vite HMR lands the real iframe content, a top-down wipe with a glowing leading edge reveals it and the skeleton fades. Effect is purely cosmetic: the generation pipeline, prompt template, and iframe contract are untouched. Spectators see the same cursor + skeleton + reveal automatically through the shared chat-stream reducer — no new relay protocol.
+
 ## [0.23.8] — 2026-05-28
 
 ### Changed
