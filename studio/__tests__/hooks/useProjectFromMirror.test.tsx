@@ -125,7 +125,10 @@ function installShowFetchStub() {
       return Promise.resolve({ ok: true, json: async () => sampleShow });
     }
     if (url === "/api/shared-projects/p-1/comment") {
-      return Promise.resolve({ ok: true, json: async () => ({ ok: true }) });
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ ok: true, id: "c-stub", queued: false, ts: 1716240000001 }),
+      });
     }
     return Promise.resolve({ ok: false, status: 404, json: async () => ({}) });
   });
@@ -336,6 +339,61 @@ describe("useProjectFromMirror", () => {
     const init = commentCalls[0]![1] as RequestInit;
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body as string)).toEqual({ text: "hi" });
+  });
+
+  it("postComment optimistically appends and dedupes against the relay echo", async () => {
+    // Stub returns id=c-42 + ts so the optimistic-append branch fires.
+    const handler = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url === "/api/shared-projects/p-1") {
+        return Promise.resolve({ ok: true, json: async () => sampleShow });
+      }
+      if (url === "/api/shared-projects/p-1/comment") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ ok: true, id: "c-42", queued: true, ts: 1716240000999 }),
+        });
+      }
+      return Promise.resolve({ ok: false, status: 404, json: async () => ({}) });
+    });
+    global.fetch = handler as any;
+
+    let last: CapturedSource | null = null;
+    let postCommentRef: ((text: string) => Promise<void>) | undefined;
+    function Probe() {
+      const source = useProjectFromMirror("p-1");
+      postCommentRef = source.postComment;
+      last = captureFrom(source);
+      return null;
+    }
+    render(<Probe />);
+
+    await waitFor(() => {
+      expect(last?.chatHistoryLength).toBe(2);
+    });
+
+    // Optimistic append: chatHistory grows from 2 → 3 immediately.
+    await act(async () => {
+      await postCommentRef!("hi from guest");
+    });
+    expect(last!.chatHistoryLength).toBe(3);
+
+    // Relay echoes the same id later — must replace, not duplicate.
+    const es = FakeEventSource.instances.find((i) =>
+      i.url.endsWith("/api/shared-projects/p-1/stream"),
+    )!;
+    await act(async () => {
+      es.emit("relay", {
+        type: "comment_posted",
+        id: "c-42",
+        byDevu: "DEVU-2",
+        displayName: "Andrey",
+        text: "hi from guest",
+        mentions: [],
+        ts: 1716240000999,
+      });
+    });
+    expect(last!.chatHistoryLength).toBe(3);
   });
 
   it("refresh() re-fetches the show endpoint", async () => {

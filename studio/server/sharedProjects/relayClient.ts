@@ -94,7 +94,7 @@ export async function sendComment(
   id: string,
   text: string,
   mentions: string[] = [],
-): Promise<void> {
+): Promise<{ id: string; queued: boolean }> {
   const c = clients.get(id);
   const cmd = {
     type: "comment_posted",
@@ -104,14 +104,15 @@ export async function sendComment(
   };
   if (c?.ws?.readyState === WebSocket.OPEN) {
     c.ws.send(JSON.stringify(cmd));
-  } else {
-    await enqueueComment(id, {
-      id: cmd.id,
-      text,
-      mentions,
-      ts: Date.now(),
-    });
+    return { id: cmd.id, queued: false };
   }
+  await enqueueComment(id, {
+    id: cmd.id,
+    text,
+    mentions,
+    ts: Date.now(),
+  });
+  return { id: cmd.id, queued: true };
 }
 
 async function openSocket(

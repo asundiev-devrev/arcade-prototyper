@@ -290,7 +290,17 @@ export function useProjectFromMirror(id: string): ProjectShellSource {
 
       if (type === "prompt_started" || type === "comment_posted") {
         const msg = relayEventToChatMessage(ev);
-        if (msg) setChatHistory((h) => [...h, msg]);
+        if (!msg) return;
+        // Optimistic append from `postComment` already inserted this id;
+        // the relay echo would otherwise duplicate the bubble. Replace the
+        // optimistic entry with the canonical broadcast (server ts/source).
+        setChatHistory((h) => {
+          const i = h.findIndex((m) => m.id === msg.id);
+          if (i === -1) return [...h, msg];
+          const next = h.slice();
+          next[i] = msg;
+          return next;
+        });
         return;
       }
 
@@ -342,11 +352,35 @@ export function useProjectFromMirror(id: string): ProjectShellSource {
     async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed) return;
-      await fetch(`/api/shared-projects/${id}/comment`, {
+      const res = await fetch(`/api/shared-projects/${id}/comment`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: trimmed }),
       });
+      if (!res.ok) {
+        // Surface server failures to PromptInput's commentMode catch.
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { error?: string }).error ?? `comment failed: ${res.status}`);
+      }
+      // Optimistic append: when the host is offline the relay never echoes
+      // the comment back (server-side queue replays on reconnect), so the
+      // bubble would otherwise never appear. The relay-broadcast handler
+      // dedupes by id, so an eventual echo replaces this entry rather than
+      // double-renders.
+      const data = (await res.json().catch(() => ({}))) as {
+        id?: string;
+        ts?: number;
+      };
+      if (!data.id) return;
+      const ts = typeof data.ts === "number" ? data.ts : Date.now();
+      const optimistic: ChatMessage = {
+        id: `comment:${data.id}`,
+        role: "user",
+        content: trimmed,
+        source: "claude",
+        createdAt: new Date(ts).toISOString(),
+      };
+      setChatHistory((h) => (h.some((m) => m.id === optimistic.id) ? h : [...h, optimistic]));
     },
     [id],
   );
