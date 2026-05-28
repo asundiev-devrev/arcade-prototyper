@@ -20,14 +20,29 @@ describe("extractComposites", () => {
       `import Hero from "../prototype-kit/composites/Hero";`,
       `import { Card, Footer } from "../../prototype-kit/composites/CardKit";`,
     ].join("\n");
-    expect(extractComposites(src).sort()).toEqual(["Card", "Footer", "Hero"]);
+    expect(extractComposites(src)).toEqual(["Hero", "Card", "Footer"]);
   });
 
-  it("dedupes repeated identifiers", () => {
+  it("dedupes repeated identifiers (insertion-ordered)", () => {
     const src = [
       `import { Button } from "@xorkavi/arcade-gen";`,
       `import { Button } from "@xorkavi/arcade-gen";`,
     ].join("\n");
     expect(extractComposites(src)).toEqual(["Button"]);
+  });
+
+  it("extracts mixed default + named imports from @xorkavi/arcade-gen", () => {
+    const src = `import Hero, { Button, Input as Field } from "@xorkavi/arcade-gen";`;
+    expect(extractComposites(src)).toEqual(["Hero", "Button", "Input"]);
+  });
+
+  it("extracts plain default import from @xorkavi/arcade-gen", () => {
+    const src = `import Hero from "@xorkavi/arcade-gen";`;
+    expect(extractComposites(src)).toEqual(["Hero"]);
+  });
+
+  it("extracts mixed default + named imports from composites path", () => {
+    const src = `import Hero, { Footer } from "../prototype-kit/composites/HeroKit";`;
+    expect(extractComposites(src)).toEqual(["Hero", "Footer"]);
   });
 });
