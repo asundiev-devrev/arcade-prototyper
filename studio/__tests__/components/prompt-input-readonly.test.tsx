@@ -70,10 +70,6 @@ vi.mock("../../src/components/chat/PromptInput", () => ({
   },
 }));
 
-vi.mock("../../src/components/chat/EmptyStatePrompts", () => ({
-  EmptyStatePrompts: () => <div data-testid="empty-state-prompts" />,
-}));
-
 vi.mock("../../src/hooks/chatStreamContext", () => ({
   useChatStreamContext: () => ({
     state: {
@@ -173,15 +169,4 @@ describe("ChatPane spectator mode (readonly)", () => {
     expect(screen.queryByPlaceholderText(/comment on this prototype/i)).toBeNull();
   });
 
-  it("hides EmptyStatePrompts in spectator mode (no 'Try starting with' suggestions for guests)", () => {
-    render(
-      <ChatPane projectSlug="p-1" history={[]} readonly postComment={async () => {}} />,
-    );
-    expect(screen.queryByTestId("empty-state-prompts")).toBeNull();
-  });
-
-  it("shows EmptyStatePrompts in author mode when history is empty", () => {
-    render(<ChatPane projectSlug="p-1" history={[]} />);
-    expect(screen.getByTestId("empty-state-prompts")).toBeTruthy();
-  });
 });

@@ -18,6 +18,13 @@ export function takePendingPrompt(slug: string): PendingHeroPrompt | undefined {
   return value;
 }
 
+/** Read without removing. Used by ChatPane to paint an optimistic
+ *  "Working…" row during the homepage→project handoff, before the route's
+ *  useEffect-driven `send()` has flipped the chat-stream state to running. */
+export function peekPendingPrompt(slug: string): PendingHeroPrompt | undefined {
+  return bucket.get(slug);
+}
+
 export function clearPendingPrompt(slug: string): void {
   bucket.delete(slug);
 }

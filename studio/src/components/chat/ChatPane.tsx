@@ -3,8 +3,8 @@ import { MessageList } from "./MessageList";
 import { PromptInput } from "./PromptInput";
 import { useChatStreamContext } from "../../hooks/chatStreamContext";
 import type { ChatMessage } from "../../../server/types";
-import { EmptyStatePrompts } from "./EmptyStatePrompts";
 import { extractFigmaUrl, decoratePromptWithFigma } from "../../lib/figmaUrl";
+import { peekPendingPrompt } from "../../lib/pendingPrompt";
 import { ErrorBanner } from "../feedback/ErrorBanner";
 import { AuthExpiredNotice } from "../feedback/AuthExpiredNotice";
 
@@ -44,8 +44,6 @@ export function ChatPane({
     send(decorated, images);
   };
 
-  const showEmpty = history.length === 0 && state.phase === "idle";
-
   // Optimistically show the user's prompt bubble if the latest turn's
   // prompt hasn't landed in persisted history yet. `state.lastPrompt` is
   // set either by the local optimistic update in `send()` or by the server
@@ -53,30 +51,34 @@ export function ChatPane({
   const historyHasPrompt = history.some(
     (m) => m.role === "user" && m.content === state.lastPrompt,
   );
+  // Hero handoff: when the user submits from HomePage we redirect to the
+  // project route before the chat stream has any state. Peek (don't take —
+  // ProjectDetail's effect still owns consuming) so the first paint shows
+  // the prompt bubble + "Working…" row instead of an empty pane.
+  const heroPending =
+    !readonly && history.length === 0 && state.phase === "idle"
+      ? peekPendingPrompt(projectSlug)?.prompt
+      : undefined;
   const pendingPrompt =
     state.lastPrompt && !historyHasPrompt && state.phase !== "idle"
       ? state.lastPrompt
-      : undefined;
+      : heroPending;
+  const optimisticBusy = !!heroPending;
+  const phase = optimisticBusy ? "running" : state.phase;
+  const turnStartedAt = optimisticBusy ? Date.now() : state.turnStartedAt;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      {showEmpty ? (
-        <>
-          {readonly ? null : <EmptyStatePrompts onPick={(p) => enhancedSend(p)} />}
-          <div style={{ flex: 1 }} />
-        </>
-      ) : (
-        <MessageList
-          history={history}
-          pendingPrompt={pendingPrompt}
-          currentItems={state.items}
-          busy={state.phase === "running"}
-          phase={state.phase}
-          source={state.source}
-          turnStartedAt={state.turnStartedAt}
-          turnEndedAt={state.turnEndedAt}
-        />
-      )}
+      <MessageList
+        history={history}
+        pendingPrompt={pendingPrompt}
+        currentItems={state.items}
+        busy={phase === "running"}
+        phase={phase}
+        source={state.source}
+        turnStartedAt={turnStartedAt}
+        turnEndedAt={state.turnEndedAt}
+      />
       {state.error && state.errorKind === "auth" && <AuthExpiredNotice />}
       {state.error && state.errorKind !== "auth" && (
         <ErrorBanner
@@ -85,7 +87,7 @@ export function ChatPane({
         />
       )}
       <PromptInput
-        busy={state.phase === "running"}
+        busy={phase === "running"}
         projectSlug={projectSlug}
         onSend={enhancedSend}
         onStop={readonly ? undefined : cancel}
