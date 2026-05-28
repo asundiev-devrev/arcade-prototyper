@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/react";
 
-// Mock @xorkavi/arcade-gen — same pattern as viewport-live-cursor.test.tsx.
+// Mock @xorkavi/arcade-gen — same pattern as viewport-partials.test.tsx.
 vi.mock("@xorkavi/arcade-gen", async () => {
   const React = await import("react");
   const passthrough = (tag: string) =>
@@ -39,8 +39,8 @@ const demoFrame: Frame = {
   createdAt: "2026-01-01T00:00:00Z",
 };
 
-describe("FrameCard skeleton integration", () => {
-  it("renders FrameSkeleton when phase=running and agentCursor.frame matches", () => {
+describe("FrameCard CodeStreamPanel integration", () => {
+  it("renders <CodeStreamPanel> when activeWrite is provided", () => {
     const { container } = render(
       <FrameCard
         projectSlug="demo"
@@ -50,39 +50,18 @@ describe("FrameCard skeleton integration", () => {
         projectMode="light"
         zoom={1}
         phase="running"
-        agentCursor={{
-          frame: "home",
-          action: "writing",
-          composites: ["Hero", "Button"],
-          updatedAt: Date.now(),
+        activeWrite={{
+          partialContent: "export function Home() {",
+          filePath: "/p/frames/home/index.tsx",
         }}
       />,
     );
-    expect(container.querySelector('[data-testid="frame-skeleton"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-testid="code-stream-panel"]'),
+    ).not.toBeNull();
   });
 
-  it("does NOT render FrameSkeleton when phase=idle", () => {
-    const { container } = render(
-      <FrameCard
-        projectSlug="demo"
-        frame={demoFrame}
-        frameWidth={1440}
-        onFrameWidthChange={() => {}}
-        projectMode="light"
-        zoom={1}
-        phase="idle"
-        agentCursor={{
-          frame: "home",
-          action: "writing",
-          composites: ["Hero"],
-          updatedAt: Date.now(),
-        }}
-      />,
-    );
-    expect(container.querySelector('[data-testid="frame-skeleton"]')).toBeNull();
-  });
-
-  it("does NOT render FrameSkeleton when agentCursor.frame does NOT match", () => {
+  it("does NOT render <CodeStreamPanel> when activeWrite is undefined", () => {
     const { container } = render(
       <FrameCard
         projectSlug="demo"
@@ -92,18 +71,15 @@ describe("FrameCard skeleton integration", () => {
         projectMode="light"
         zoom={1}
         phase="running"
-        agentCursor={{
-          frame: "details",
-          action: "writing",
-          composites: [],
-          updatedAt: Date.now(),
-        }}
       />,
     );
-    expect(container.querySelector('[data-testid="frame-skeleton"]')).toBeNull();
+    expect(
+      container.querySelector('[data-testid="code-stream-panel"]'),
+    ).toBeNull();
   });
 
-  it("defaults phase to idle and agentCursor to null when not passed", () => {
+  it("calls onIframeLoaded(frame.slug) when iframe finishes loading", () => {
+    const onIframeLoaded = vi.fn();
     const { container } = render(
       <FrameCard
         projectSlug="demo"
@@ -112,32 +88,12 @@ describe("FrameCard skeleton integration", () => {
         onFrameWidthChange={() => {}}
         projectMode="light"
         zoom={1}
+        onIframeLoaded={onIframeLoaded}
       />,
     );
-    // No skeleton rendered
-    expect(container.querySelector('[data-testid="frame-skeleton"]')).toBeNull();
-  });
-
-  it("renders skeleton when agentCursor has frame=null but filePath contains this frame slug", () => {
-    const { container } = render(
-      <FrameCard
-        projectSlug="demo"
-        frame={demoFrame}
-        frameWidth={1440}
-        onFrameWidthChange={() => {}}
-        projectMode="light"
-        zoom={1}
-        phase="running"
-        agentCursor={{
-          frame: null,
-          action: "writing",
-          filePath: "/Users/demo/arcade-studio/projects/demo-proj/frames/home/index.tsx",
-          composites: ["Hero", "Button"],
-          updatedAt: Date.now(),
-        }}
-      />,
-    );
-    expect(container.querySelector('[data-testid="frame-skeleton"]')).not.toBeNull();
+    const iframe = container.querySelector("iframe")!;
+    fireEvent.load(iframe);
+    expect(onIframeLoaded).toHaveBeenCalledWith("home");
   });
 });
 
@@ -152,12 +108,6 @@ describe("FrameCard wipe animation", () => {
         projectMode="light"
         zoom={1}
         phase="running"
-        agentCursor={{
-          frame: "home",
-          action: "writing",
-          composites: [],
-          updatedAt: Date.now(),
-        }}
       />,
     );
     const iframe = container.querySelector("iframe")!;
@@ -176,7 +126,6 @@ describe("FrameCard wipe animation", () => {
         projectMode="light"
         zoom={1}
         phase="idle"
-        agentCursor={null}
       />,
     );
     const iframe = container.querySelector("iframe")!;
@@ -195,12 +144,6 @@ describe("FrameCard wipe animation", () => {
         projectMode="light"
         zoom={1}
         phase="running"
-        agentCursor={{
-          frame: "home",
-          action: "writing",
-          composites: [],
-          updatedAt: Date.now(),
-        }}
       />,
     );
     const iframe = container.querySelector("iframe")!;
@@ -208,29 +151,5 @@ describe("FrameCard wipe animation", () => {
     const wrapper = iframe.parentElement!;
     fireEvent.animationEnd(wrapper);
     expect(wrapper.classList.contains("arcade-studio-frame-wipe")).toBe(false);
-  });
-
-  it("hides skeleton after iframe load", () => {
-    const { container } = render(
-      <FrameCard
-        projectSlug="demo"
-        frame={demoFrame}
-        frameWidth={1440}
-        onFrameWidthChange={() => {}}
-        projectMode="light"
-        zoom={1}
-        phase="running"
-        agentCursor={{
-          frame: "home",
-          action: "writing",
-          composites: ["Hero"],
-          updatedAt: Date.now(),
-        }}
-      />,
-    );
-    expect(container.querySelector('[data-testid="frame-skeleton"]')).not.toBeNull();
-    const iframe = container.querySelector("iframe")!;
-    fireEvent.load(iframe);
-    expect(container.querySelector('[data-testid="frame-skeleton"]')).toBeNull();
   });
 });

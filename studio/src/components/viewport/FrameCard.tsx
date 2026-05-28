@@ -2,9 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUpRightSmall, IconButton, Tooltip, useToast } from "@xorkavi/arcade-gen";
 import type { Frame } from "../../../server/types";
 import { useTargetSelection } from "../../hooks/targetSelectionContext";
-import { FrameSkeleton } from "./FrameSkeleton";
-import type { StreamState, TurnPhase } from "../../hooks/chatStreamReducer";
-import { mapPathToFrame } from "../../lib/agentCursor";
+import { CodeStreamPanel } from "./CodeStreamPanel";
+import type { TurnPhase } from "../../hooks/chatStreamReducer";
 
 const FRAME_WIDTH_MIN = 320;
 const FRAME_WIDTH_MAX = 2560;
@@ -49,8 +48,9 @@ export function FrameCard({
   // from the spectator compile endpoint (which reads from the mirror
   // cache) instead of the host's `/api/frames/:slug/:frame` route.
   srcOverride,
-  agentCursor = null,
   phase = "idle",
+  activeWrite,
+  onIframeLoaded,
 }: {
   projectSlug: string;
   frame: Frame;
@@ -63,13 +63,20 @@ export function FrameCard({
   highlighted?: "target" | "missing" | null;
   readonly?: boolean;
   srcOverride?: (frameSlug: string) => string;
-  agentCursor?: StreamState["agentCursor"];
   phase?: TurnPhase;
+  /** When the agent is mid-Write/Edit on this frame's source file, the
+   *  Viewport hands us the partial content. Mounting `<CodeStreamPanel>`
+   *  over the iframe surfaces what's being written. Cleared by the
+   *  reducer on `tool_input_complete` or turn end. */
+  activeWrite?: { partialContent: string; filePath: string };
+  /** Notifies the Viewport when the iframe finishes loading. The
+   *  Viewport tracks this set to gate the `<EditCursor>` overlay (only
+   *  shown for frames whose iframe has actually mounted). */
+  onIframeLoaded?: (slug: string) => void;
 }) {
   const [resizing, setResizing] = useState(false);
   const [hoverHandle, setHoverHandle] = useState(false);
   const [picking, setPicking] = useState(false);
-  const [justWiped, setJustWiped] = useState(false);
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const wipeWrapperRef = useRef<HTMLDivElement | null>(null);
@@ -164,6 +171,7 @@ export function FrameCard({
   }, [picking, frame.slug, setTarget]);
 
   function onIframeLoad() {
+    if (onIframeLoaded) onIframeLoaded(frame.slug);
     if (phase !== "running") return;
     const wrapper = wipeWrapperRef.current;
     if (!wrapper) return;
@@ -172,12 +180,10 @@ export function FrameCard({
     // Force reflow so adding the class restarts the animation.
     void wrapper.offsetWidth;
     wrapper.classList.add("arcade-studio-frame-wipe");
-    setJustWiped(true);
   }
 
   function onWrapperAnimationEnd() {
     wipeWrapperRef.current?.classList.remove("arcade-studio-frame-wipe");
-    setJustWiped(false);
   }
 
   function startResize(e: React.MouseEvent) {
@@ -200,9 +206,6 @@ export function FrameCard({
     : `/api/frames/${projectSlug}/${frame.slug}?mode=${projectMode}`;
   const isTargetedFrame =
     target !== null && target.frameSlug === frame.slug;
-  const resolvedSlug = agentCursor?.frame ?? mapPathToFrame(agentCursor?.filePath ?? "", [frame]);
-  const isTargeted = phase === "running" && resolvedSlug === frame.slug;
-  const composites = agentCursor?.composites ?? [];
 
   return (
     <div
@@ -324,7 +327,6 @@ export function FrameCard({
             transition: "box-shadow 0.2s ease",
           }}
         >
-          <FrameSkeleton visible={isTargeted && !justWiped} composites={composites} />
           <iframe
             ref={iframeRef}
             key={projectMode}
@@ -338,6 +340,12 @@ export function FrameCard({
               pointerEvents: resizing ? "none" : "auto",
             }}
           />
+          {activeWrite && (
+            <CodeStreamPanel
+              partial={activeWrite.partialContent}
+              filePath={activeWrite.filePath}
+            />
+          )}
         </div>
         <div
           role="separator"

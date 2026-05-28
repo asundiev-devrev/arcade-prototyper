@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { IconButton, Tooltip } from "@xorkavi/arcade-gen";
 import { Viewport } from "../components/viewport/Viewport";
 import { ChatPane } from "../components/chat/ChatPane";
@@ -341,6 +341,22 @@ function ProjectDetailShell({
     }
   }
 
+  // Most-recent tool the agent invoked, surfaced by the
+  // `<NarrationTicker>` as the right-side ••• <toolname> badge. Walk
+  // from the end so we don't have to reverse a potentially long array.
+  // Defensive `?? []` because some test harnesses stub chatStream.state
+  // with a partial shape (no `items`).
+  const lastTool = useMemo(() => {
+    const items = chatStream.state.items ?? [];
+    for (let i = items.length - 1; i >= 0; i -= 1) {
+      const item = items[i];
+      if (item.kind === "tool") {
+        return { name: item.tool, pretty: item.pretty };
+      }
+    }
+    return null;
+  }, [chatStream.state.items]);
+
   if (!project)
     return (
       <div
@@ -477,6 +493,8 @@ function ProjectDetailShell({
             agentCursor={chatStream.state.agentCursor}
             phase={chatStream.state.phase}
             narrations={chatStream.state.narrations}
+            activeWrites={chatStream.state.activeWrites}
+            lastTool={lastTool}
           />
         </main>
         {!isSpectator && devOpen && <DevModePanel slug={project.slug} />}

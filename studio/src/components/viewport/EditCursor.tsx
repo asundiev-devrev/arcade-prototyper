@@ -22,7 +22,7 @@ export function EditCursor({
   loadedSlugs,
 }: {
   agentCursor: StreamState["agentCursor"];
-  containerRef: RefObject<HTMLDivElement>;
+  containerRef: RefObject<HTMLDivElement | null>;
   frames: Frame[];
   loadedSlugs: ReadonlySet<string>;
 }) {
@@ -41,18 +41,27 @@ export function EditCursor({
       setPos(null);
       return;
     }
-    const container = containerRef.current;
-    if (!container) return;
-    const cardEl = container.querySelector<HTMLElement>(`[data-frame-slug="${slug}"]`);
-    if (!cardEl) return;
-    const cardRect = cardEl.getBoundingClientRect();
-    const containerRect = container.getBoundingClientRect();
-    const seed = (agentCursor.filePath ?? "") + (agentCursor.narration ?? "");
-    const local = _hashCoords(seed.slice(0, 64), cardRect.width, cardRect.height);
-    setPos({
-      x: cardRect.left - containerRect.left + local.x,
-      y: cardRect.top - containerRect.top + local.y,
-    });
+    function recompute() {
+      const container = containerRef.current;
+      if (!container) return;
+      const cardEl = container.querySelector<HTMLElement>(`[data-frame-slug="${slug}"]`);
+      if (!cardEl) return;
+      const cardRect = cardEl.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      const seed = (agentCursor!.filePath ?? "") + (agentCursor!.narration ?? "");
+      const local = _hashCoords(seed.slice(0, 64), cardRect.width, cardRect.height);
+      setPos({
+        x: cardRect.left - containerRect.left + local.x,
+        y: cardRect.top - containerRect.top + local.y,
+      });
+    }
+    recompute();
+    window.addEventListener("scroll", recompute, true);
+    window.addEventListener("resize", recompute);
+    return () => {
+      window.removeEventListener("scroll", recompute, true);
+      window.removeEventListener("resize", recompute);
+    };
   }, [shouldShow, slug, agentCursor, containerRef]);
 
   if (!shouldShow || !pos) return null;
