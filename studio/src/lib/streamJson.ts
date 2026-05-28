@@ -331,6 +331,13 @@ export function parseStreamLineAll(line: string): StudioEvent[] {
   }
 
   if (ev.type === "result") {
+    // A `result` event terminates the turn — drop any partial-content
+    // block buffers. Without this, an abnormal termination (is_error
+    // mid-block, or a success that arrived before all content_block_stop
+    // events were observed) would leak entries into the next turn,
+    // where a stale `content_block_stop` would synthesize a phantom
+    // tool_call.
+    partialBuffers.clear();
     // claude's "result" event can say `subtype: "success"` while still
     // being a failure — it sets `is_error: true` and puts the message in
     // `result`. AWS SSO expiry hits this exact shape:

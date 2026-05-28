@@ -55,7 +55,14 @@ export interface ProjectShellSource {
 export function useProjectFromHost(slug: string): ProjectShellSource {
   const [project, setProject] = useState<Project | null>(null);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
-  const chatStream = useChatStream(slug);
+  // Pass the project's known frames to `useChatStream` so the reducer can
+  // resolve streamed `tool_input_partial` filePaths to a frame slug. We
+  // use `project?.frames ?? []` rather than `useFrames` here because
+  // `useFrames` lives inside `Viewport` (intentional — see comment below)
+  // and the project record is refreshed on every turn anyway, which is
+  // recent-enough for the live cursor to find the right slug.
+  const projectFrames = project?.frames ?? [];
+  const chatStream = useChatStream(slug, projectFrames);
   const { state: chat, send } = chatStream;
   const { host, guests } = useProjectPresence(slug);
 

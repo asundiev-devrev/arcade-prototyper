@@ -66,7 +66,10 @@ function parseFrame(eventName: string, dataLine: string): ServerFrame | null {
  * passive viewing from another tab) show the same thing: whatever events
  * have been buffered so far, plus live updates.
  */
-export function useChatStream(slug: string) {
+export function useChatStream(
+  slug: string,
+  frames: ReadonlyArray<{ slug: string }> = [],
+) {
   const [state, setState] = useState<StreamState>(INITIAL_STATE);
   const mountedRef = useRef(true);
   const phaseRef = useRef<TurnPhase>("idle");
@@ -76,6 +79,12 @@ export function useChatStream(slug: string) {
   const controllerRef = useRef<AbortController | null>(null);
   /** Poked by `send()` to wake the pump loop when it's parked waiting for work. */
   const wakeRef = useRef<(() => void) | null>(null);
+  /** Live frames ref so the reducer can resolve filePaths to slugs without
+   *  baking the latest frame list into the SSE pump's closure. */
+  const framesRef = useRef<ReadonlyArray<{ slug: string }>>(frames);
+  useEffect(() => {
+    framesRef.current = frames;
+  }, [frames]);
 
   const safeSetState = useCallback((updater: (s: StreamState) => StreamState) => {
     if (!mountedRef.current) return;
@@ -91,7 +100,7 @@ export function useChatStream(slug: string) {
    *  Reducer logic lives in `./chatStreamReducer` so the spectator hook can
    *  drive the same state shape from `agent_event` payloads. */
   const applyEvent = useCallback((ev: StudioEvent) => {
-    safeSetState((s) => applyStudioEvent(s, ev));
+    safeSetState((s) => applyStudioEvent(s, ev, framesRef.current));
   }, [safeSetState]);
 
   useEffect(() => {

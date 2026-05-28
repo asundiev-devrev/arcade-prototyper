@@ -169,4 +169,30 @@ describe("parseStreamLineAll — partial messages", () => {
     });
     expect(parseStreamLineAll(delta)).toEqual([]);
   });
+
+  it("clears partial buffer on result events to prevent leaks across turns", () => {
+    const start = JSON.stringify({
+      type: "stream_event",
+      event: {
+        type: "content_block_start",
+        index: 1,
+        content_block: { type: "tool_use", id: "toolu_X", name: "Write", input: {} },
+      },
+    });
+    parseStreamLineAll(start);
+
+    const result = JSON.stringify({
+      type: "result",
+      subtype: "success",
+      is_error: false,
+    });
+    parseStreamLineAll(result);
+
+    // Now a stop for index 1 from a stale buffer should be ignored.
+    const stop = JSON.stringify({
+      type: "stream_event",
+      event: { type: "content_block_stop", index: 1 },
+    });
+    expect(parseStreamLineAll(stop)).toEqual([]);
+  });
 });

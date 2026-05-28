@@ -1,4 +1,5 @@
 import type { StudioEvent } from "../lib/streamJson";
+import { mapPathToFrame } from "../lib/agentCursor";
 
 /**
  * Pure reducer for the chat stream state.
@@ -66,6 +67,17 @@ export interface StreamState {
     narration?: string;
     updatedAt: number;
   } | null;
+  /** In-flight Write/Edit tool calls keyed by toolUseId. Seeded on the
+   *  first `tool_input_partial` whose `filePath` resolves to a frame slug
+   *  via `mapPathToFrame`, updated on each subsequent partial, and
+   *  dropped on `tool_input_complete` or turn end. The viewport reads
+   *  this to drive the live-cursor / phantom-skeleton overlays. */
+  activeWrites: Record<string, {
+    slug: string;
+    filePath: string;
+    partialContent: string;
+    startedAt: number;
+  }>;
 }
 
 const AUTH_EXPIRED = /sso|credential|expired|unauthorized/i;
@@ -87,6 +99,7 @@ export const INITIAL_STREAM_STATE: StreamState = {
   turnStartedAt: null,
   turnEndedAt: null,
   agentCursor: null,
+  activeWrites: {},
 };
 
 function appendItem(items: ChatTurnItem[], next: ChatTurnItem): ChatTurnItem[] {
@@ -127,8 +140,19 @@ function attachResultToLastTool(
  * Replayed and live events go through the same reducer so a reconnect
  * (host) or initial `cache_replay` (spectator) reconstructs the exact
  * same UI as a live stream.
+ *
+ * `frames` is the project's current frame list. Used to resolve
+ * `tool_input_partial` filePaths to a frame slug via `mapPathToFrame`
+ * so the reducer can populate `activeWrites` only for paths that
+ * actually correspond to a frame in the project. Defaults to `[]` so
+ * legacy callers that don't yet pass frames degrade gracefully (no
+ * activeWrites entries — same as a path mismatch).
  */
-export function applyStudioEvent(s: StreamState, ev: StudioEvent): StreamState {
+export function applyStudioEvent(
+  s: StreamState,
+  ev: StudioEvent,
+  frames: ReadonlyArray<{ slug: string }> = [],
+): StreamState {
   if (ev.kind === "origin") {
     return { ...s, lastEvent: ev, source: ev.source };
   }
@@ -182,6 +206,7 @@ export function applyStudioEvent(s: StreamState, ev: StudioEvent): StreamState {
         phase: "done",
         turnEndedAt: Date.now(),
         agentCursor: null,
+        activeWrites: {},
       };
     }
     if (ev.cancelled) {
@@ -194,6 +219,7 @@ export function applyStudioEvent(s: StreamState, ev: StudioEvent): StreamState {
         errorKind: undefined,
         turnEndedAt: Date.now(),
         agentCursor: null,
+        activeWrites: {},
       };
     }
     const err = ev.error ?? "unknown error";
@@ -206,6 +232,7 @@ export function applyStudioEvent(s: StreamState, ev: StudioEvent): StreamState {
       errorKind: classifyError(err),
       turnEndedAt: Date.now(),
       agentCursor: null,
+      activeWrites: {},
     };
   }
   if (ev.kind === "agent_cursor") {
@@ -221,6 +248,41 @@ export function applyStudioEvent(s: StreamState, ev: StudioEvent): StreamState {
         updatedAt: Date.now(),
       },
     };
+  }
+  if (ev.kind === "tool_call_started") {
+    // No-op until we know the filePath; that arrives on the first
+    // tool_input_partial. Recorded only via lastEvent for debug.
+    return { ...s, lastEvent: ev };
+  }
+  if (ev.kind === "tool_input_partial") {
+    const slug = ev.filePath ? mapPathToFrame(ev.filePath, frames) : null;
+    if (!slug || !ev.filePath) {
+      // Path outside frames or unknown — drop. The cursor system parks
+      // for these too; we follow the same policy here.
+      return { ...s, lastEvent: ev };
+    }
+    const existing = s.activeWrites[ev.toolUseId];
+    return {
+      ...s,
+      lastEvent: ev,
+      activeWrites: {
+        ...s.activeWrites,
+        [ev.toolUseId]: {
+          slug,
+          filePath: ev.filePath,
+          partialContent: ev.partialContent,
+          startedAt: existing?.startedAt ?? Date.now(),
+        },
+      },
+    };
+  }
+  if (ev.kind === "tool_input_complete") {
+    if (!(ev.toolUseId in s.activeWrites)) {
+      return { ...s, lastEvent: ev };
+    }
+    const next = { ...s.activeWrites };
+    delete next[ev.toolUseId];
+    return { ...s, lastEvent: ev, activeWrites: next };
   }
   return { ...s, lastEvent: ev };
 }

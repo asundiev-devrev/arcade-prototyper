@@ -283,7 +283,12 @@ export function useProjectFromMirror(id: string): ProjectShellSource {
       if (type === "agent_event") {
         const inner = ev.event;
         if (isStudioEvent(inner)) {
-          setChat((s) => applyStudioEvent(s, inner));
+          // Build frames list from the live framesRef so the reducer can
+          // resolve `tool_input_partial` filePaths to a slug. We pass the
+          // frame slug directly (the synthesized `Frame.slug` is the
+          // frameId from `frame_written`, e.g. "hero").
+          const framesList = Object.keys(framesRef.current).map((slug) => ({ slug }));
+          setChat((s) => applyStudioEvent(s, inner, framesList));
         }
         return;
       }
