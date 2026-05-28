@@ -22,6 +22,7 @@ interface PromptInputProps {
   busy: boolean;
   projectSlug: string;
   onSend: (prompt: string, images: string[]) => void;
+  onStop?: () => void;
   seedRef?: MutableRefObject<((text: string) => void) | null>;
   /**
    * When set, the input runs in spectator/comment mode: same chrome, but
@@ -66,7 +67,7 @@ function buildTargetPreamble(t: TargetSelection): string {
   ].join("\n");
 }
 
-export function PromptInput({ busy, projectSlug, onSend, seedRef, commentMode }: PromptInputProps) {
+export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commentMode }: PromptInputProps) {
   const isComment = !!commentMode;
   const [text, setText] = useState("");
   const [images, setImages] = useState<string[]>([]);
@@ -550,7 +551,14 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef, commentMode }:
         trailing={
           <>
             {!isComment && <ChatInput.AddAttachmentButton onClick={handlePickImage} />}
-            <ChatInput.SendButton onClick={() => void submit()} disabled={!text.trim() || effectiveBusy} />
+            {effectiveBusy && onStop && !isComment ? (
+              <ChatInput.StopButton onClick={onStop} />
+            ) : (
+              <ChatInput.SendButton
+                onClick={() => void submit()}
+                disabled={!text.trim() || effectiveBusy}
+              />
+            )}
           </>
         }
       />
