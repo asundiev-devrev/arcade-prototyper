@@ -71,3 +71,22 @@ export function extractComposites(content: string): string[] {
     .sort((a, b) => a[1] - b[1])
     .map((e) => e[0]);
 }
+
+/**
+ * Resolve a tool_call file_path to a frame slug. Returns the slug when
+ * the path contains `/frames/<slug>/...` AND `<slug>` is in the project's
+ * frame list. Returns null otherwise — caller parks the cursor.
+ *
+ * Frame slugs are constrained to [a-z0-9-]+ server-side
+ * (see projectSchema in server/types.ts).
+ */
+export function mapPathToFrame(
+  path: string,
+  frames: ReadonlyArray<{ slug: string }>,
+): string | null {
+  if (!path) return null;
+  const m = /\/frames\/([a-z0-9-]+)\//i.exec(path);
+  if (!m) return null;
+  const slug = m[1];
+  return frames.some((f) => f.slug === slug) ? slug : null;
+}

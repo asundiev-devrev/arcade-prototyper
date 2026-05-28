@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractComposites } from "../../src/lib/agentCursor";
+import { extractComposites, mapPathToFrame } from "../../src/lib/agentCursor";
 
 describe("extractComposites", () => {
   it("returns [] for empty input", () => {
@@ -44,5 +44,38 @@ describe("extractComposites", () => {
   it("extracts mixed default + named imports from composites path", () => {
     const src = `import Hero, { Footer } from "../prototype-kit/composites/HeroKit";`;
     expect(extractComposites(src)).toEqual(["Hero", "Footer"]);
+  });
+});
+
+const FRAMES = [
+  { slug: "home", name: "Home" },
+  { slug: "details", name: "Details" },
+] as { slug: string; name: string }[];
+
+describe("mapPathToFrame", () => {
+  it("returns null for an empty path", () => {
+    expect(mapPathToFrame("", FRAMES)).toBeNull();
+  });
+
+  it("returns null when the path has no /frames/ segment", () => {
+    expect(mapPathToFrame("/Users/x/projects/app/index.tsx", FRAMES)).toBeNull();
+  });
+
+  it("returns the slug when the path contains /frames/<slug>/...", () => {
+    expect(
+      mapPathToFrame(
+        "/Users/x/projects/app/frames/home/index.tsx",
+        FRAMES,
+      ),
+    ).toBe("home");
+  });
+
+  it("returns null when the slug is not in the frames list", () => {
+    expect(
+      mapPathToFrame(
+        "/Users/x/projects/app/frames/about/index.tsx",
+        FRAMES,
+      ),
+    ).toBeNull();
   });
 });
