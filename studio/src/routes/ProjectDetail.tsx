@@ -474,6 +474,8 @@ function ProjectDetailShell({
             onSeedChat={(text) => seedChatRef.current?.(text)}
             readonly={isSpectator}
             frameSrcOverride={frameSrcOverride}
+            agentCursor={chatStream.state.agentCursor}
+            phase={chatStream.state.phase}
           />
         </main>
         {!isSpectator && devOpen && <DevModePanel slug={project.slug} />}
