@@ -168,6 +168,71 @@ function toolUseToCursor(name: string, input: any): StudioEvent {
   return { kind: "agent_cursor", frame: null, action: "thinking" };
 }
 
+type PartialBufferEntry = {
+  toolUseId: string;
+  toolName: string;
+  buffer: string;
+};
+const partialBuffers = new Map<number, PartialBufferEntry>();
+
+export function _resetPartialBuffer(): void {
+  partialBuffers.clear();
+}
+
+/**
+ * Extract a string field's value from a possibly-incomplete JSON buffer.
+ * The buffer might end mid-string ('"content":"impo'), mid-escape, or
+ * before the field even appears. Returns the unescaped value, or undefined
+ * if the field hasn't been opened yet.
+ *
+ * `allowOpen` true → return whatever has been captured so far even when
+ * the closing quote isn't present (used for content/new_string streams).
+ * `allowOpen` false → only return on a complete "key":"value" pair.
+ */
+function extractStringField(
+  buffer: string,
+  fieldName: string,
+  allowOpen = false,
+): string | undefined {
+  const opener = `"${fieldName}":"`;
+  const start = buffer.indexOf(opener);
+  if (start === -1) return undefined;
+  const valueStart = start + opener.length;
+  let i = valueStart;
+  let result = "";
+  while (i < buffer.length) {
+    const ch = buffer[i];
+    if (ch === "\\") {
+      const next = buffer[i + 1];
+      if (next === undefined) {
+        return allowOpen ? result : undefined;
+      }
+      if (next === "n") result += "\n";
+      else if (next === "r") result += "\r";
+      else if (next === "t") result += "\t";
+      else if (next === '"') result += '"';
+      else if (next === "\\") result += "\\";
+      else if (next === "/") result += "/";
+      else if (next === "u") {
+        const hex = buffer.slice(i + 2, i + 6);
+        if (hex.length < 4) return allowOpen ? result : undefined;
+        result += String.fromCharCode(parseInt(hex, 16));
+        i += 4;
+      } else {
+        result += next;
+      }
+      i += 2;
+      continue;
+    }
+    if (ch === '"') {
+      return result;
+    }
+    result += ch;
+    i += 1;
+  }
+  return allowOpen ? result : undefined;
+}
+
 export function parseStreamLine(line: string): StudioEvent | null {
   const events = parseStreamLineAll(line);
   return events.length > 0 ? events[0] : null;
@@ -181,6 +246,56 @@ export function parseStreamLineAll(line: string): StudioEvent[] {
 
   if (ev.type === "system" && ev.subtype === "init" && ev.session_id) {
     return [{ kind: "session", sessionId: ev.session_id }];
+  }
+
+  if (ev.type === "stream_event" && ev.event) {
+    const e = ev.event;
+    if (e.type === "content_block_start" && e.content_block?.type === "tool_use") {
+      const toolUseId = String(e.content_block.id ?? "");
+      const toolName = String(e.content_block.name ?? "");
+      partialBuffers.set(Number(e.index), { toolUseId, toolName, buffer: "" });
+      const pretty = prettyTool(toolName, {}).pretty;
+      return [{ kind: "tool_call_started", toolUseId, tool: toolName, pretty }];
+    }
+    if (e.type === "content_block_delta" && e.delta?.type === "input_json_delta") {
+      const entry = partialBuffers.get(Number(e.index));
+      if (!entry) return [];
+      entry.buffer += String(e.delta.partial_json ?? "");
+      if (entry.toolName !== "Write" && entry.toolName !== "Edit") return [];
+      const action: "writing" | "editing" = entry.toolName === "Write" ? "writing" : "editing";
+      const filePath = extractStringField(entry.buffer, "file_path");
+      const contentField = entry.toolName === "Write" ? "content" : "new_string";
+      const partialContent = extractStringField(entry.buffer, contentField, /*allowOpen*/ true) ?? "";
+      return [
+        {
+          kind: "tool_input_partial",
+          toolUseId: entry.toolUseId,
+          action,
+          filePath,
+          partialContent,
+        },
+      ];
+    }
+    if (e.type === "content_block_stop") {
+      const entry = partialBuffers.get(Number(e.index));
+      if (!entry) return [];
+      partialBuffers.delete(Number(e.index));
+      if (entry.toolName !== "Write" && entry.toolName !== "Edit") return [];
+      let parsed: any = {};
+      try {
+        parsed = JSON.parse(entry.buffer);
+      } catch {
+        parsed = {};
+      }
+      const out: StudioEvent[] = [
+        { kind: "tool_input_complete", toolUseId: entry.toolUseId },
+      ];
+      const pr = prettyTool(entry.toolName, parsed);
+      out.push({ kind: "tool_call", ...pr });
+      out.push(toolUseToCursor(entry.toolName, parsed));
+      return out;
+    }
+    return [];
   }
 
   if (ev.type === "assistant" && ev.message?.content) {
