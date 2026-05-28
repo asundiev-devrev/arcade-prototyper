@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup } from "@testing-library/react";
+import { render, cleanup, fireEvent } from "@testing-library/react";
 
 // Mock @xorkavi/arcade-gen — same pattern as viewport-live-cursor.test.tsx.
 vi.mock("@xorkavi/arcade-gen", async () => {
@@ -115,6 +115,100 @@ describe("FrameCard skeleton integration", () => {
       />,
     );
     // No skeleton rendered
+    expect(container.querySelector('[data-testid="frame-skeleton"]')).toBeNull();
+  });
+});
+
+describe("FrameCard wipe animation", () => {
+  it("adds wipe class on iframe load while turn is running", () => {
+    const { container } = render(
+      <FrameCard
+        projectSlug="demo"
+        frame={demoFrame}
+        frameWidth={1440}
+        onFrameWidthChange={() => {}}
+        projectMode="light"
+        zoom={1}
+        phase="running"
+        agentCursor={{
+          frame: "home",
+          action: "writing",
+          composites: [],
+          updatedAt: Date.now(),
+        }}
+      />,
+    );
+    const iframe = container.querySelector("iframe")!;
+    fireEvent.load(iframe);
+    const wrapper = iframe.parentElement!;
+    expect(wrapper.classList.contains("arcade-studio-frame-wipe")).toBe(true);
+  });
+
+  it("does NOT add wipe class on iframe load when phase is not running", () => {
+    const { container } = render(
+      <FrameCard
+        projectSlug="demo"
+        frame={demoFrame}
+        frameWidth={1440}
+        onFrameWidthChange={() => {}}
+        projectMode="light"
+        zoom={1}
+        phase="idle"
+        agentCursor={null}
+      />,
+    );
+    const iframe = container.querySelector("iframe")!;
+    fireEvent.load(iframe);
+    const wrapper = iframe.parentElement!;
+    expect(wrapper.classList.contains("arcade-studio-frame-wipe")).toBe(false);
+  });
+
+  it("removes wipe class on animationend", () => {
+    const { container } = render(
+      <FrameCard
+        projectSlug="demo"
+        frame={demoFrame}
+        frameWidth={1440}
+        onFrameWidthChange={() => {}}
+        projectMode="light"
+        zoom={1}
+        phase="running"
+        agentCursor={{
+          frame: "home",
+          action: "writing",
+          composites: [],
+          updatedAt: Date.now(),
+        }}
+      />,
+    );
+    const iframe = container.querySelector("iframe")!;
+    fireEvent.load(iframe);
+    const wrapper = iframe.parentElement!;
+    fireEvent.animationEnd(wrapper);
+    expect(wrapper.classList.contains("arcade-studio-frame-wipe")).toBe(false);
+  });
+
+  it("hides skeleton after iframe load", () => {
+    const { container } = render(
+      <FrameCard
+        projectSlug="demo"
+        frame={demoFrame}
+        frameWidth={1440}
+        onFrameWidthChange={() => {}}
+        projectMode="light"
+        zoom={1}
+        phase="running"
+        agentCursor={{
+          frame: "home",
+          action: "writing",
+          composites: ["Hero"],
+          updatedAt: Date.now(),
+        }}
+      />,
+    );
+    expect(container.querySelector('[data-testid="frame-skeleton"]')).not.toBeNull();
+    const iframe = container.querySelector("iframe")!;
+    fireEvent.load(iframe);
     expect(container.querySelector('[data-testid="frame-skeleton"]')).toBeNull();
   });
 });

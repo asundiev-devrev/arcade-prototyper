@@ -68,8 +68,10 @@ export function FrameCard({
   const [resizing, setResizing] = useState(false);
   const [hoverHandle, setHoverHandle] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [justWiped, setJustWiped] = useState(false);
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const wipeWrapperRef = useRef<HTMLDivElement | null>(null);
   const { target, setTarget } = useTargetSelection();
   const { toast } = useToast();
 
@@ -159,6 +161,23 @@ export function FrameCard({
       );
     };
   }, [picking, frame.slug, setTarget]);
+
+  function onIframeLoad() {
+    if (phase !== "running") return;
+    const wrapper = wipeWrapperRef.current;
+    if (!wrapper) return;
+    // Restart animation cleanly if a previous wipe is still mid-flight.
+    wrapper.classList.remove("arcade-studio-frame-wipe");
+    // Force reflow so adding the class restarts the animation.
+    void wrapper.offsetWidth;
+    wrapper.classList.add("arcade-studio-frame-wipe");
+    setJustWiped(true);
+  }
+
+  function onWrapperAnimationEnd() {
+    wipeWrapperRef.current?.classList.remove("arcade-studio-frame-wipe");
+    setJustWiped(false);
+  }
 
   function startResize(e: React.MouseEvent) {
     e.preventDefault();
@@ -288,6 +307,8 @@ export function FrameCard({
           />
         )}
         <div
+          ref={wipeWrapperRef}
+          onAnimationEnd={onWrapperAnimationEnd}
           style={{
             position: "absolute",
             inset: 0,
@@ -301,11 +322,13 @@ export function FrameCard({
             transition: "box-shadow 0.2s ease",
           }}
         >
+          <FrameSkeleton visible={isTargeted && !justWiped} composites={composites} />
           <iframe
             ref={iframeRef}
             key={projectMode}
             title={frame.name}
             src={frameUrl}
+            onLoad={onIframeLoad}
             style={{
               width: "100%",
               height: "100%",
@@ -313,7 +336,6 @@ export function FrameCard({
               pointerEvents: resizing ? "none" : "auto",
             }}
           />
-          <FrameSkeleton visible={isTargeted} composites={composites} />
         </div>
         <div
           role="separator"

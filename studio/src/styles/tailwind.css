@@ -193,3 +193,37 @@ textarea[data-hero-input]::placeholder {
   from { opacity: 0.6; }
   to   { opacity: 0.9; }
 }
+
+/* ─── Top-down wipe animation on iframe HMR reload ─── */
+.arcade-studio-frame-wipe { position: relative; overflow: hidden; }
+.arcade-studio-frame-wipe::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--surface-overlay);
+  clip-path: inset(0 0 100% 0);
+  animation: arcade-studio-wipe 450ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  pointer-events: none;
+  z-index: 1;
+}
+.arcade-studio-frame-wipe::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  background: var(--component-button-primary-bg-idle);
+  box-shadow: 0 0 12px var(--component-button-primary-bg-idle);
+  animation: arcade-studio-wipe-edge 450ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  pointer-events: none;
+  z-index: 2;
+}
+@keyframes arcade-studio-wipe {
+  from { clip-path: inset(0 0 100% 0); }
+  to   { clip-path: inset(100% 0 0 0); }
+}
+@keyframes arcade-studio-wipe-edge {
+  from { top: 0; opacity: 1; }
+  to   { top: 100%; opacity: 0; }
+}
