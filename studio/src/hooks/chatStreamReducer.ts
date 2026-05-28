@@ -56,6 +56,16 @@ export interface StreamState {
   turnStartedAt: number | null;
   /** Wall-clock time the current turn ended on the server (ms). */
   turnEndedAt: number | null;
+  /** Live cursor state derived from agent_cursor + narration events.
+   *  Null when no turn is running or when a turn just ended. */
+  agentCursor: {
+    frame: string | null;
+    action: "reading" | "writing" | "editing" | "thinking";
+    filePath?: string;
+    composites: string[];
+    narration?: string;
+    updatedAt: number;
+  } | null;
 }
 
 const AUTH_EXPIRED = /sso|credential|expired|unauthorized/i;
@@ -76,6 +86,7 @@ export const INITIAL_STREAM_STATE: StreamState = {
   source: "claude",
   turnStartedAt: null,
   turnEndedAt: null,
+  agentCursor: null,
 };
 
 function appendItem(items: ChatTurnItem[], next: ChatTurnItem): ChatTurnItem[] {
@@ -125,11 +136,21 @@ export function applyStudioEvent(s: StreamState, ev: StudioEvent): StreamState {
     return { ...s, lastEvent: ev };
   }
   if (ev.kind === "narration") {
+    const cursor = s.agentCursor
+      ? { ...s.agentCursor, narration: ev.text, updatedAt: Date.now() }
+      : {
+          frame: null,
+          action: "thinking" as const,
+          composites: [],
+          narration: ev.text,
+          updatedAt: Date.now(),
+        };
     return {
       ...s,
       lastEvent: ev,
       narrations: [...s.narrations, ev.text],
       items: appendItem(s.items, { kind: "narration", text: ev.text }),
+      agentCursor: cursor,
     };
   }
   if (ev.kind === "tool_call") {
@@ -160,6 +181,7 @@ export function applyStudioEvent(s: StreamState, ev: StudioEvent): StreamState {
         busy: false,
         phase: "done",
         turnEndedAt: Date.now(),
+        agentCursor: null,
       };
     }
     if (ev.cancelled) {
@@ -171,6 +193,7 @@ export function applyStudioEvent(s: StreamState, ev: StudioEvent): StreamState {
         error: null,
         errorKind: undefined,
         turnEndedAt: Date.now(),
+        agentCursor: null,
       };
     }
     const err = ev.error ?? "unknown error";
@@ -182,6 +205,21 @@ export function applyStudioEvent(s: StreamState, ev: StudioEvent): StreamState {
       error: err,
       errorKind: classifyError(err),
       turnEndedAt: Date.now(),
+      agentCursor: null,
+    };
+  }
+  if (ev.kind === "agent_cursor") {
+    return {
+      ...s,
+      lastEvent: ev,
+      agentCursor: {
+        frame: ev.frame,
+        action: ev.action,
+        filePath: ev.filePath,
+        composites: ev.composites ?? [],
+        narration: s.agentCursor?.narration,
+        updatedAt: Date.now(),
+      },
     };
   }
   return { ...s, lastEvent: ev };
