@@ -131,6 +131,10 @@ export async function runClaudeTurn(opts: RunTurnOptions): Promise<void> {
     "-p", decoratePrompt(opts.prompt, opts.images),
     "--output-format", "stream-json",
     "--verbose",
+    // `--include-partial-messages` makes the CLI emit `content_block_delta`
+    // events with `input_json_delta` chunks so we can stream tool input
+    // character-by-character. Required by the v2 live-cursor pipeline.
+    "--include-partial-messages",
     "--bare",
     "--settings", settings,
     "--dangerously-skip-permissions",

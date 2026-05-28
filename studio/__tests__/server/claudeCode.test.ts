@@ -58,6 +58,24 @@ describe("runClaudeTurn", () => {
     }
   });
 
+  it("passes --include-partial-messages so we get content_block_delta events", async () => {
+    // Required by the v2 live-cursor pipeline: the parser needs
+    // input_json_delta chunks (only emitted when this flag is set) to
+    // stream tool input character-by-character.
+    const spy = path.join(__dirname, "../fixtures/fake-claude-partial-spy.sh");
+    const logFile = path.join(os.tmpdir(), `claude-partial-${Date.now()}.log`);
+    fs.writeFileSync(spy, `#!/usr/bin/env bash\necho "$@" >> ${logFile}\nprintf '{"type":"result","subtype":"success"}\\n'\n`, { mode: 0o755 });
+    fs.writeFileSync(logFile, "");
+    try {
+      await runClaudeTurn({ cwd: os.tmpdir(), prompt: "hi", bin: spy, onEvent: () => {} });
+      const args = fs.readFileSync(logFile, "utf-8");
+      expect(args).toMatch(/--include-partial-messages/);
+    } finally {
+      fs.rmSync(spy, { force: true });
+      fs.rmSync(logFile, { force: true });
+    }
+  });
+
   it("strips CLAUDE_CODE_* and CLAUDECODE_* vars from child env", async () => {
     const spy = path.join(__dirname, "../fixtures/fake-claude-env-spy.sh");
     const logFile = path.join(os.tmpdir(), `claude-env-${Date.now()}.log`);
