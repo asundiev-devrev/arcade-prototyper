@@ -63,6 +63,51 @@ describe("ShareModal SSL probe", () => {
     expect(probeAttempts).toBeGreaterThanOrEqual(2);
   });
 
+  it("does not hang when a probe fetch never resolves (Cloudflare Access redirect chain)", async () => {
+    // Regression for 0.22.5: a no-cors fetch to a Cloudflare Pages URL
+    // sitting behind Access OTP would never resolve nor reject, so the
+    // global probeTimeoutMs never fired. The per-attempt timeout makes
+    // each hung fetch count as a failed probe and lets the loop progress.
+    let attempts = 0;
+    const url = "https://hero.test-proj.pages.dev/";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo, init?: RequestInit) => {
+        const u = String(input);
+        if (u.endsWith("/share") && init?.method === "POST") {
+          return new Response(JSON.stringify({ url, deployId: "abc" }), { status: 200 });
+        }
+        attempts += 1;
+        // Hung forever unless the caller aborts.
+        return await new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(new DOMException("aborted", "AbortError"));
+          });
+        });
+      }),
+    );
+
+    render(
+      <ShareModal
+        open={true}
+        onClose={() => {}}
+        projectSlug="test-proj"
+        frames={FRAMES}
+        probeIntervalMs={5}
+        probeTimeoutMs={200}
+        probeAttemptTimeoutMs={20}
+      />,
+    );
+
+    fireEvent.click(screen.getByDisplayValue("hero"));
+    fireEvent.click(screen.getByText("Deploy to Cloudflare"));
+
+    await waitFor(() =>
+      expect(screen.getByText(/URL isn't responding yet/i)).toBeTruthy(),
+    );
+    expect(attempts).toBeGreaterThanOrEqual(2);
+  });
+
   it("shows the timeout warning if the probe never succeeds", async () => {
     const url = "https://hero.test-proj.pages.dev/";
     vi.stubGlobal(

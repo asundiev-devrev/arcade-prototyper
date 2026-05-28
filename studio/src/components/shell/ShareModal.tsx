@@ -8,10 +8,12 @@ interface ShareModalProps {
   onClose: () => void;
   projectSlug: string;
   frames: Frame[];
-  // Test seams. The defaults (3s / 90s) match what real users experience;
-  // tests pass tiny values so the probe loop runs in milliseconds.
+  // Test seams. The defaults (3s / 90s / 5s) match what real users
+  // experience; tests pass tiny values so the probe loop runs in
+  // milliseconds.
   probeIntervalMs?: number;
   probeTimeoutMs?: number;
+  probeAttemptTimeoutMs?: number;
 }
 
 // First deploy on a freshly-created Cloudflare Pages project triggers
@@ -25,6 +27,11 @@ interface ShareModalProps {
 // spinning forever.
 const PROBE_INTERVAL_MS = 3000;
 const PROBE_TIMEOUT_MS = 90_000;
+// Per-attempt cap so a single hung fetch can't block the loop. Cloudflare
+// Access on *.pages.dev can redirect through an OTP gate that never
+// resolves a no-cors fetch; without this, the global timeout never fires
+// because the inner await sits forever.
+const PROBE_ATTEMPT_TIMEOUT_MS = 5000;
 
 type DeployPhase = "idle" | "deploying" | "provisioning" | "ready" | "timeout";
 
@@ -35,6 +42,7 @@ export function ShareModal({
   frames,
   probeIntervalMs = PROBE_INTERVAL_MS,
   probeTimeoutMs = PROBE_TIMEOUT_MS,
+  probeAttemptTimeoutMs = PROBE_ATTEMPT_TIMEOUT_MS,
 }: ShareModalProps) {
   const [selectedFrame, setSelectedFrame] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -109,23 +117,37 @@ export function ShareModal({
     // — same code path the user's browser would hit on the URL itself,
     // which is the signal we want.
     while (!ctl.signal.aborted) {
+      // Per-attempt timeout: Cloudflare Access can swallow a no-cors fetch
+      // forever on a fresh project (redirect chain through an OTP gate that
+      // never resolves). Race against an attempt-level abort so a hung
+      // fetch counts as a failed probe instead of stalling the loop.
+      const attemptCtl = new AbortController();
+      const attemptTimer = setTimeout(
+        () => attemptCtl.abort(),
+        probeAttemptTimeoutMs,
+      );
+      const onOuterAbort = () => attemptCtl.abort();
+      ctl.signal.addEventListener("abort", onOuterAbort);
       try {
         await fetch(url, {
           method: "GET",
           mode: "no-cors",
           cache: "no-store",
-          signal: ctl.signal,
+          signal: attemptCtl.signal,
         });
         if (ctl.signal.aborted) return;
         setPhase("ready");
         return;
       } catch (err: any) {
-        if (ctl.signal.aborted || err?.name === "AbortError") return;
+        if (ctl.signal.aborted) return;
         if (Date.now() - start >= probeTimeoutMs) {
           setPhase("timeout");
           return;
         }
         await new Promise((r) => setTimeout(r, probeIntervalMs));
+      } finally {
+        clearTimeout(attemptTimer);
+        ctl.signal.removeEventListener("abort", onOuterAbort);
       }
     }
   }
@@ -197,8 +219,9 @@ export function ShareModal({
                 {phase === "provisioning" && (
                   <div style={{ fontSize: 12, color: "var(--fg-neutral-subtle)" }}>
                     Cloudflare issues a fresh wildcard certificate for new
-                    projects. This usually takes 30–90 seconds. The link will
-                    open automatically once it's ready.
+                    projects. This usually takes 30–90 seconds. You can open
+                    the link now — your browser will show an SSL error until
+                    the certificate lands, then load on refresh.
                   </div>
                 )}
                 {phase === "timeout" && (
@@ -292,7 +315,6 @@ export function ShareModal({
               <Button
                 variant="secondary"
                 onClick={() => window.open(shareUrl, "_blank")}
-                disabled={phase === "provisioning"}
               >
                 Open in New Tab
               </Button>
