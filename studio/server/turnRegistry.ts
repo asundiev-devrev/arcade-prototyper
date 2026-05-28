@@ -150,7 +150,8 @@ function finalize(
     lastEvent &&
     lastEvent.kind === "end" &&
     lastEvent.ok === terminal.ok &&
-    (lastEvent as { error?: string }).error === (terminal as { error?: string }).error;
+    (lastEvent as { error?: string }).error === (terminal as { error?: string }).error &&
+    (lastEvent as { cancelled?: boolean }).cancelled === (terminal as { cancelled?: boolean }).cancelled;
   if (!alreadyHasTerminal && turn.events.length < MAX_EVENTS_PER_TURN) {
     turn.events.push(terminal);
     for (const fn of turn.subscribers) {
