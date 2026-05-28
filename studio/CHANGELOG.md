@@ -6,6 +6,15 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.23.1] — 2026-05-28
+
+### Added
+- Hero submit on the homepage now redirects to the new project's screen and starts streaming there.
+- Stop button replaces Send while a turn is running; click to cancel.
+
+### Changed
+- Cancelled turns no longer render as errors. A neutral "Cancelled" marker appears in the chat instead.
+
 ## [0.23.0] — 2026-05-27
 
 ### Changed
