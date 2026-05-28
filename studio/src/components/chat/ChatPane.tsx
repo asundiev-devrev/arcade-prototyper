@@ -36,7 +36,7 @@ export function ChatPane({
   readonly?: boolean;
   postComment?: (text: string) => Promise<void>;
 }) {
-  const { state, send, retry } = useChatStreamContext();
+  const { state, send, retry, cancel } = useChatStreamContext();
 
   const enhancedSend = (prompt: string, images: string[] = []) => {
     const url = extractFigmaUrl(prompt);
@@ -88,6 +88,7 @@ export function ChatPane({
         busy={state.phase === "running"}
         projectSlug={projectSlug}
         onSend={enhancedSend}
+        onStop={readonly ? undefined : cancel}
         seedRef={seedRef}
         commentMode={
           readonly
