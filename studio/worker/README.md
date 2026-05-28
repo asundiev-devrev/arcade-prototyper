@@ -94,6 +94,27 @@ export const SHARE_WORKER_URL = "https://arcade-studio-share.devrev-product-desi
 
 If your deploy printed a different URL, update that constant and rebuild the `.dmg`.
 
+### 7. Provision the rendezvous KV namespace (one-time, 0.21+)
+
+Studio 0.21.0 onwards stores the host's current relay URL per shared
+project in a Workers KV namespace named `KV_RENDEZVOUS`. Without this
+namespace `wrangler deploy` will fail.
+
+```
+cd studio/worker
+wrangler kv namespace create RENDEZVOUS
+# Wrangler prints something like:
+#   id = "abcdef0123456789..."
+# Paste that id into wrangler.toml's [[kv_namespaces]] block, replacing
+# the REPLACE_WITH_REAL_NAMESPACE_ID placeholder.
+wrangler deploy
+```
+
+The namespace TTL is set per-write to 7 days, so stale entries auto-expire.
+You don't need to clean it up manually. `pnpm run worker:deploy` (from the
+repo root) wraps `wrangler deploy` with a lint that fails loudly if the
+placeholder id is still present in `wrangler.toml`.
+
 ---
 
 ## Managing teammates

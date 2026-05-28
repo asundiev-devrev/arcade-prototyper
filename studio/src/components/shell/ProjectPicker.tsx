@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Project } from "../../../server/types";
 import { api } from "../../lib/api";
+import { BackButton } from "./BackButton";
 
 export function ProjectPicker({
   project,
@@ -70,30 +71,7 @@ export function ProjectPicker({
 
   return (
     <span ref={rootRef} style={{ display: "flex", alignItems: "center", gap: 4, position: "relative" }}>
-      <button
-        type="button"
-        onClick={onHome}
-        title="Back to projects"
-        style={{
-          background: "transparent",
-          border: "none",
-          padding: "2px 6px",
-          margin: "0 -6px",
-          borderRadius: 4,
-          font: "inherit",
-          color: "inherit",
-          cursor: onHome ? "pointer" : "default",
-        }}
-        onMouseEnter={(e) => {
-          if (onHome) (e.currentTarget as HTMLButtonElement).style.background = "var(--surface-shallow)";
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-        }}
-      >
-        Studio
-      </button>
-      <span style={{ color: "var(--fg-neutral-subtle)" }}>·</span>
+      <BackButton onClick={onHome} />
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}

@@ -54,6 +54,7 @@ export const clientCommandSchema = z.discriminatedUnion("type", [
     turnId: z.string().min(1),
     ok: z.boolean(),
     error: z.string().optional(),
+    cancelled: z.boolean().optional(),
   }),
   z.object({
     type: z.literal("comment_posted"),
@@ -122,6 +123,7 @@ export const relayEventSchema = z.discriminatedUnion("type", [
     turnId: z.string(),
     ok: z.boolean(),
     error: z.string().optional(),
+    cancelled: z.boolean().optional(),
   }),
   z.object({
     type: z.literal("comment_posted"),

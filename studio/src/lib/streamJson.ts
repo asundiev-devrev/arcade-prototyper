@@ -19,7 +19,7 @@ export type StudioEvent =
       snippet?: string;
     }
   | { kind: "end"; ok: true }
-  | { kind: "end"; ok: false; error: string };
+  | { kind: "end"; ok: false; error: string; cancelled?: boolean };
 
 function prettyTool(
   name: string,

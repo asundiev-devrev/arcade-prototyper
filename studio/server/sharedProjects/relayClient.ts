@@ -9,6 +9,8 @@ import {
 import { drainComments, enqueueComment } from "./commentQueue";
 import { getDevRevPat } from "../secrets/keychain";
 import { relayEventSchema } from "../relay/types";
+import { fetchRendezvous, RendezvousNotFoundError } from "../cloudflare/rendezvous";
+import { getShareKey } from "../secrets/shareKey";
 
 /**
  * Server-side WebSocket client per shared-project mirror.
@@ -29,6 +31,10 @@ interface MirrorClient {
 
 const clients = new Map<string, MirrorClient>();
 
+let __lastUrl: string | null = null;
+/** Test-only: inspect the last URL passed to `new WebSocket(...)`. */
+export const __test__ = { lastUrl: () => __lastUrl };
+
 export function getMirrorBus(id: string): EventEmitter | null {
   return clients.get(id)?.bus ?? null;
 }
@@ -45,7 +51,35 @@ export async function connectMirror(id: string): Promise<void> {
     closed: false,
   };
   clients.set(id, client);
-  await openSocket(client, meta.relayUrl);
+  // meta.relayUrl is now optional (0.21+ resolves it via Worker rendezvous);
+  // pass whatever's stored as the fallback hint.
+  await openSocket(client, meta.relayUrl ?? "");
+}
+
+/**
+ * Resolve the live relay URL for a mirror. Tries the Worker rendezvous first
+ * (so guests survive host tunnel rotations) and falls back to the URL
+ * captured at import time (`storedRelayUrl`) on 404 or network failure.
+ *
+ * Returns "" only when both rendezvous and the stored value are empty —
+ * caller is expected to treat that as offline and reconnect later.
+ */
+async function resolveRelayUrl(shareId: string, storedRelayUrl: string): Promise<string> {
+  const key = await getShareKey();
+  if (!key) return storedRelayUrl; // Pre-share-key beta tester; nothing we can do.
+  try {
+    const record = await fetchRendezvous({ shareKey: key, shareId });
+    return record.relayUrl;
+  } catch (err) {
+    if (err instanceof RendezvousNotFoundError) {
+      return storedRelayUrl; // Legacy 0.20.x mirror or host hasn't republished.
+    }
+    console.warn(
+      `[shared-projects] rendezvous fetch failed for ${shareId}:`,
+      (err as Error).message,
+    );
+    return storedRelayUrl;
+  }
 }
 
 export async function disconnectMirror(id: string): Promise<void> {
@@ -60,7 +94,7 @@ export async function sendComment(
   id: string,
   text: string,
   mentions: string[] = [],
-): Promise<void> {
+): Promise<{ id: string; queued: boolean }> {
   const c = clients.get(id);
   const cmd = {
     type: "comment_posted",
@@ -70,22 +104,41 @@ export async function sendComment(
   };
   if (c?.ws?.readyState === WebSocket.OPEN) {
     c.ws.send(JSON.stringify(cmd));
-  } else {
-    await enqueueComment(id, {
-      id: cmd.id,
-      text,
-      mentions,
-      ts: Date.now(),
-    });
+    return { id: cmd.id, queued: false };
   }
+  await enqueueComment(id, {
+    id: cmd.id,
+    text,
+    mentions,
+    ts: Date.now(),
+  });
+  return { id: cmd.id, queued: true };
 }
 
 async function openSocket(
   client: MirrorClient,
-  relayUrl: string,
+  storedRelayUrl: string,
 ): Promise<void> {
+  const relayUrl = await resolveRelayUrl(client.id, storedRelayUrl);
+  if (!relayUrl) {
+    // Both rendezvous and stored URL are empty — emit offline and back off.
+    // Reconnect timer will retry rendezvous, picking up a fresh URL once the
+    // host comes back online and republishes.
+    client.bus.emit("status", "offline");
+    client.ws = null;
+    if (!client.closed) {
+      setTimeout(() => {
+        if (clients.has(client.id) && !client.closed) {
+          openSocket(client, storedRelayUrl).catch(() => {});
+        }
+      }, client.reconnectMs);
+      client.reconnectMs = Math.min(client.reconnectMs * 2, 30_000);
+    }
+    return;
+  }
   const pat = (await getDevRevPat()) || process.env.DEVREV_PAT || "";
   const url = `${relayUrl}?projectShareId=${client.id}&asRole=guest&pat=${encodeURIComponent(pat)}`;
+  __lastUrl = url;
   const ws = new WebSocket(url);
   client.ws = ws;
 
@@ -138,7 +191,9 @@ async function openSocket(
     if (client.closed) return;
     setTimeout(() => {
       if (clients.has(client.id) && !client.closed) {
-        openSocket(client, relayUrl).catch(() => {});
+        // Re-resolve via rendezvous on each reconnect so a new ephemeral
+        // tunnel URL after a host restart is picked up automatically.
+        openSocket(client, storedRelayUrl).catch(() => {});
       }
     }, client.reconnectMs);
     client.reconnectMs = Math.min(client.reconnectMs * 2, 30_000);

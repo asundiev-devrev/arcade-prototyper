@@ -15,7 +15,7 @@ import type { StudioEvent } from "../src/lib/streamJson";
  * the terminal status instead of "no turn running".
  */
 
-export type TurnStatus = "running" | "done" | "error";
+export type TurnStatus = "running" | "done" | "error" | "cancelled";
 
 export interface Turn {
   slug: string;
@@ -25,11 +25,13 @@ export interface Turn {
   endedAt?: number;
   status: TurnStatus;
   error?: string;
+  cancelled?: boolean;
   events: StudioEvent[];
   /** Active subscribers. Runner calls `emit`; subscribers fan out to SSE. */
   subscribers: Set<(ev: StudioEvent) => void>;
   /** Fired once the turn transitions to done/error; SSE handlers use this to close. */
   terminators: Set<() => void>;
+  abortController: AbortController;
 }
 
 const turns = new Map<string, Turn>();
@@ -49,7 +51,11 @@ export interface StartTurnInit {
    * registry owns the terminal transition; the runner is only responsible
    * for emitting events while the subprocess is alive.
    */
-  run: (api: { emit: (ev: StudioEvent) => void; end: (result: { ok: boolean; error?: string }) => void }) => void | Promise<void>;
+  run: (api: {
+    emit: (ev: StudioEvent) => void;
+    end: (result: { ok: boolean; error?: string }) => void;
+    signal: AbortSignal;
+  }) => void | Promise<void>;
 }
 
 function randomId(): string {
@@ -79,6 +85,7 @@ export function startTurn(slug: string, init: StartTurnInit): Turn {
     events: [],
     subscribers: new Set(),
     terminators: new Set(),
+    abortController: new AbortController(),
   };
   turns.set(slug, turn);
 
@@ -103,7 +110,7 @@ export function startTurn(slug: string, init: StartTurnInit): Turn {
   };
 
   try {
-    const ret = init.run({ emit, end });
+    const ret = init.run({ emit, end, signal: turn.abortController.signal });
     if (ret && typeof (ret as Promise<void>).catch === "function") {
       (ret as Promise<void>).catch((err) => {
         finalize(turn, { ok: false, error: err?.message ?? String(err) });
@@ -116,22 +123,35 @@ export function startTurn(slug: string, init: StartTurnInit): Turn {
   return turn;
 }
 
-function finalize(turn: Turn, result: { ok: boolean; error?: string }): void {
+function finalize(
+  turn: Turn,
+  result: { ok: boolean; error?: string; cancelled?: boolean },
+): void {
   if (turn.status !== "running") return;
-  turn.status = result.ok ? "done" : "error";
-  turn.error = result.ok ? undefined : result.error ?? "Unknown error.";
+  if (result.cancelled) {
+    turn.status = "cancelled";
+    turn.cancelled = true;
+    turn.error = result.error ?? "Cancelled by user.";
+  } else {
+    turn.status = result.ok ? "done" : "error";
+    turn.error = result.ok ? undefined : result.error ?? "Unknown error.";
+  }
   turn.endedAt = Date.now();
-  // Synthesize an `end` event so late subscribers that replay the buffer
-  // always see a terminal marker, even if the runner ended abruptly.
   const terminal: StudioEvent = result.ok
     ? { kind: "end", ok: true }
-    : { kind: "end", ok: false, error: turn.error! };
+    : {
+        kind: "end",
+        ok: false,
+        error: turn.error!,
+        ...(result.cancelled ? { cancelled: true } : {}),
+      };
   const lastEvent = turn.events[turn.events.length - 1];
   const alreadyHasTerminal =
     lastEvent &&
     lastEvent.kind === "end" &&
-    ((lastEvent.ok === true && result.ok) ||
-      (lastEvent.ok === false && !result.ok && (lastEvent as { error?: string }).error === turn.error));
+    lastEvent.ok === terminal.ok &&
+    (lastEvent as { error?: string }).error === (terminal as { error?: string }).error &&
+    (lastEvent as { cancelled?: boolean }).cancelled === (terminal as { cancelled?: boolean }).cancelled;
   if (!alreadyHasTerminal && turn.events.length < MAX_EVENTS_PER_TURN) {
     turn.events.push(terminal);
     for (const fn of turn.subscribers) {
@@ -145,8 +165,6 @@ function finalize(turn: Turn, result: { ok: boolean; error?: string }): void {
   turn.terminators.clear();
 
   const timer = setTimeout(() => {
-    // Only evict if this turn is still the one we recorded (a newer turn
-    // for the same slug may have replaced it in the meantime).
     if (turns.get(turn.slug) === turn) turns.delete(turn.slug);
     retentionTimers.delete(turn.slug);
   }, TURN_RETENTION_MS);
@@ -156,6 +174,14 @@ function finalize(turn: Turn, result: { ok: boolean; error?: string }): void {
 
 export function getTurn(slug: string): Turn | undefined {
   return turns.get(slug);
+}
+
+export function cancelTurn(slug: string): boolean {
+  const turn = turns.get(slug);
+  if (!turn || turn.status !== "running") return false;
+  turn.abortController.abort(new Error("cancelled by user"));
+  finalize(turn, { ok: false, cancelled: true, error: "Cancelled by user." });
+  return true;
 }
 
 export interface Subscription {

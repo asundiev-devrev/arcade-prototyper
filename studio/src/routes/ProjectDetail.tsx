@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { IconButton, Tooltip } from "@xorkavi/arcade-gen";
-import type { Project } from "../../server/types";
 import { Viewport } from "../components/viewport/Viewport";
 import { ChatPane } from "../components/chat/ChatPane";
 import { DevModePanel } from "../components/devmode/DevModePanel";
@@ -10,11 +9,16 @@ import { ShareButton } from "../components/shell/ShareButton";
 import { CanvasToggle } from "../components/shell/CanvasToggle";
 import { ChatToggle } from "../components/shell/ChatToggle";
 import { ProjectPicker } from "../components/shell/ProjectPicker";
+import { BackButton } from "../components/shell/BackButton";
 import { SharePanel } from "../components/multiplayer/SharePanel";
 import { PresenceStrip } from "../components/multiplayer/PresenceStrip";
 import { ChatStreamProvider } from "../hooks/chatStreamContext";
 import { TargetSelectionProvider } from "../hooks/targetSelectionContext";
-import { useProjectPresence } from "../hooks/useProjectPresence";
+import { useProjectFromHost, type ProjectShellSource } from "../hooks/useProjectFromHost";
+import { useProjectFromMirror } from "../hooks/useProjectFromMirror";
+import { takePendingPrompt } from "../lib/pendingPrompt";
+import { decoratePromptWithFigma } from "../lib/figmaUrl";
+import { api } from "../lib/api";
 
 function TeammatesIcon() {
   return (
@@ -47,7 +51,64 @@ const FRAME_WIDTH_DEFAULT = 1440;
 const ZOOM_STORAGE_PREFIX = "studio:zoom:";
 const ZOOM_DEFAULT = 1.0;
 
-export function ProjectDetail({
+/**
+ * `ProjectDetail` is the single authoring shell that hosts (`mode="author"`)
+ * and spectators (`mode="spectator"`) both render through. Two modes pull
+ * from different data sources but share JSX:
+ *
+ *   - Author:    `useProjectFromHost(slug)`  — host fetch + chat SSE.
+ *   - Spectator: `useProjectFromMirror(id)`  — mirror cache + relay SSE.
+ *
+ * Both hooks return the same `ProjectShellSource` shape, so the inner
+ * `ProjectDetailShell` stays mode-agnostic. Spectator-only gates here:
+ *
+ *   - `readonly` flag threaded into Viewport + ChatPane (Tasks 5/6 wire
+ *     the actual readonly behaviour into those children; Task 4 just
+ *     plumbs the prop).
+ *   - Host-only chrome (ProjectPicker, ShareButton, SharePanel toggle,
+ *     DevModePanel toggle, ThemeToggle) is hidden in spectator mode —
+ *     those mutate host state a guest can't drive.
+ *
+ * The wrapper-per-mode shape is deliberate: each wrapper calls exactly
+ * one data hook so we never spin up the unused hook's fetch + SSE just
+ * to discard it. Mode does not change for the lifetime of an instance
+ * (App.tsx renders a fresh tree on route swap), so the wrapper split
+ * doesn't lose any behaviour.
+ */
+export type ProjectDetailProps =
+  | {
+      mode: "author";
+      slug: string;
+      onBack: () => void;
+      onOpenProject: (slug: string) => void;
+    }
+  | {
+      mode: "spectator";
+      id: string;
+      onBack: () => void;
+      onOpenProject: (slug: string) => void;
+    };
+
+export function ProjectDetail(props: ProjectDetailProps) {
+  if (props.mode === "spectator") {
+    return (
+      <ProjectDetailSpectator
+        id={props.id}
+        onBack={props.onBack}
+        onOpenProject={props.onOpenProject}
+      />
+    );
+  }
+  return (
+    <ProjectDetailAuthor
+      slug={props.slug}
+      onBack={props.onBack}
+      onOpenProject={props.onOpenProject}
+    />
+  );
+}
+
+function ProjectDetailAuthor({
   slug,
   onBack,
   onOpenProject,
@@ -56,7 +117,113 @@ export function ProjectDetail({
   onBack: () => void;
   onOpenProject: (slug: string) => void;
 }) {
-  const [project, setProject] = useState<Project | null>(null);
+  const source = useProjectFromHost(slug);
+  const send = source.send;
+  const consumedRef = useRef(false);
+
+  useEffect(() => {
+    if (consumedRef.current) return;
+    if (!send) return;
+    const pending = takePendingPrompt(slug);
+    if (!pending) return;
+    consumedRef.current = true;
+
+    let cancelled = false;
+    (async () => {
+      let images = pending.imagePaths;
+      if (images.length > 0) {
+        try {
+          const adoption = await api.adoptUploads(slug, images);
+          images = images.map((old) => adoption.mapping[old] ?? old);
+        } catch {
+          images = [];
+        }
+      }
+      if (cancelled) return;
+      const decorated = pending.figmaUrl
+        ? decoratePromptWithFigma(pending.prompt, pending.figmaUrl)
+        : pending.prompt;
+      send(decorated, images);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, send]);
+
+  return (
+    <ProjectDetailShell
+      mode="author"
+      routeKey={slug}
+      source={source}
+      onBack={onBack}
+      onOpenProject={onOpenProject}
+    />
+  );
+}
+
+function ProjectDetailSpectator({
+  id,
+  onBack,
+  onOpenProject,
+}: {
+  id: string;
+  onBack: () => void;
+  onOpenProject: (slug: string) => void;
+}) {
+  const source = useProjectFromMirror(id);
+  // Spectator iframes hit the shared-projects compile endpoint — host's
+  // `/api/frames/:slug/:frame` 404s for guests because the TSX lives in
+  // the mirror cache, not under `projects/`. Memoize keyed on `id` so
+  // child memoized iframes don't see a fresh function identity each render
+  // and re-mount unnecessarily.
+  const frameSrcOverride = useCallback(
+    (slug: string) =>
+      `/api/shared-projects/${encodeURIComponent(id)}/frame/${encodeURIComponent(slug)}`,
+    [id],
+  );
+  return (
+    <ProjectDetailShell
+      mode="spectator"
+      routeKey={id}
+      source={source}
+      onBack={onBack}
+      onOpenProject={onOpenProject}
+      frameSrcOverride={frameSrcOverride}
+    />
+  );
+}
+
+function ProjectDetailShell({
+  mode,
+  routeKey,
+  source,
+  onBack,
+  onOpenProject,
+  frameSrcOverride,
+}: {
+  mode: "author" | "spectator";
+  routeKey: string;
+  source: ProjectShellSource;
+  onBack: () => void;
+  onOpenProject: (slug: string) => void;
+  frameSrcOverride?: (frameSlug: string) => string;
+}) {
+  const isSpectator = mode === "spectator";
+  // Optimistic local override for the theme toggle. Author-only path:
+  // spectators never call `toggleProjectMode`, so the override stays null
+  // for them. Kept here (rather than nested in the author wrapper) to
+  // avoid re-mounting state on a hypothetical future mode-flip — and to
+  // keep one shared shell.
+  const [localModeOverride, setLocalModeOverride] =
+    useState<"light" | "dark" | null>(null);
+  const project = source.project
+    ? localModeOverride
+      ? { ...source.project, mode: localModeOverride }
+      : source.project
+    : null;
+  const { presence, refresh: refreshProject, chatStream, chatHistory, postComment } = source;
+  const { host, guests } = presence;
   const [devOpen, setDevOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [frameWidth, setFrameWidth] = useState<number>(() => {
@@ -68,7 +235,7 @@ export function ProjectDetail({
   });
   const [zoom, setZoom] = useState<number>(() => {
     if (typeof window === "undefined") return ZOOM_DEFAULT;
-    const stored = window.localStorage.getItem(`${ZOOM_STORAGE_PREFIX}${slug}`);
+    const stored = window.localStorage.getItem(`${ZOOM_STORAGE_PREFIX}${routeKey}`);
     const parsed = stored ? Number(stored) : NaN;
     if (!Number.isFinite(parsed) || parsed <= 0) return ZOOM_DEFAULT;
     return parsed;
@@ -89,7 +256,6 @@ export function ProjectDetail({
   const resizeStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const seedChatRef = useRef<((text: string) => void) | null>(null);
   const [showShare, setShowShare] = useState(false);
-  const { host, guests } = useProjectPresence(slug);
 
   useEffect(() => {
     window.localStorage.setItem(CHAT_OPEN_STORAGE_KEY, String(chatOpen));
@@ -104,8 +270,8 @@ export function ProjectDetail({
   }, [frameWidth]);
 
   useEffect(() => {
-    window.localStorage.setItem(`${ZOOM_STORAGE_PREFIX}${slug}`, String(zoom));
-  }, [slug, zoom]);
+    window.localStorage.setItem(`${ZOOM_STORAGE_PREFIX}${routeKey}`, String(zoom));
+  }, [routeKey, zoom]);
 
   useEffect(() => {
     if (!resizing) return;
@@ -143,32 +309,30 @@ export function ProjectDetail({
     setChatWidth(CHAT_WIDTH_DEFAULT);
   }
 
-  const refreshProject = useCallback(async () => {
-    const res = await fetch(`/api/projects/${slug}`);
-    if (!res.ok) return;
-    const p = (await res.json()) as Project;
-    setProject(p);
-  }, [slug]);
-
-  useEffect(() => {
-    void refreshProject();
-  }, [refreshProject]);
-
   async function toggleProjectMode() {
-    if (!project) return;
+    // Theme toggle is a host-only mutation (`PATCH /api/projects/:slug`);
+    // the spectator UI never renders ThemeToggle, so this guard is
+    // belt-and-suspenders.
+    if (!project || isSpectator) return;
     const previous = project.mode;
     const next = previous === "dark" ? "light" : "dark";
-    setProject({ ...project, mode: next });
+    setLocalModeOverride(next);
     try {
-      const res = await fetch(`/api/projects/${slug}`, {
+      const res = await fetch(`/api/projects/${routeKey}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode: next }),
       });
       if (!res.ok) throw new Error("Failed to save theme");
       setReloadKey((k) => k + 1);
+      // Re-pull the canonical record before clearing the local override —
+      // otherwise we briefly render the stale pre-PATCH `source.project`
+      // (with the old mode) between the clear and the refetch landing,
+      // producing a visible theme flash.
+      await refreshProject();
+      setLocalModeOverride(null);
     } catch {
-      setProject({ ...project, mode: previous });
+      setLocalModeOverride(previous);
     }
   }
 
@@ -188,40 +352,51 @@ export function ProjectDetail({
     );
 
   return (
-    <ChatStreamProvider projectSlug={project.slug}>
+    <ChatStreamProvider value={chatStream}>
     <TargetSelectionProvider>
     <div style={{ display: "grid", gridTemplateRows: "48px 1fr", height: "100vh" }}>
       <StudioHeader
         title={
           <>
             <ChatToggle active={chatOpen} onToggle={() => setChatOpen((o) => !o)} />
-            <ProjectPicker
-              project={project}
-              onHome={onBack}
-              onOpenProject={onOpenProject}
-              onRenamed={() => void refreshProject()}
-            />
+            {!isSpectator ? (
+              <ProjectPicker
+                project={project}
+                onHome={onBack}
+                onOpenProject={onOpenProject}
+                onRenamed={() => refreshProject()}
+              />
+            ) : (
+              <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <BackButton onClick={onBack} />
+                <span>{project.name}</span>
+              </span>
+            )}
           </>
         }
         right={
           <>
             <PresenceStrip host={host} guests={guests} />
-            <ThemeToggle mode={project.mode} onToggle={toggleProjectMode} />
-            <Tooltip content="Share with teammates">
-              <IconButton
-                aria-label="Share with teammates"
-                variant={showShare ? "primary" : "tertiary"}
-                onClick={() => setShowShare((s) => !s)}
-              >
-                <TeammatesIcon />
-              </IconButton>
-            </Tooltip>
-            <ShareButton project={project} />
-            <CanvasToggle active={devOpen} onToggle={() => setDevOpen((o) => !o)} />
+            {!isSpectator && (
+              <>
+                <ThemeToggle mode={project.mode} onToggle={toggleProjectMode} />
+                <Tooltip content="Share with teammates">
+                  <IconButton
+                    aria-label="Share with teammates"
+                    variant={showShare ? "primary" : "tertiary"}
+                    onClick={() => setShowShare((s) => !s)}
+                  >
+                    <TeammatesIcon />
+                  </IconButton>
+                </Tooltip>
+                <ShareButton project={project} />
+                <CanvasToggle active={devOpen} onToggle={() => setDevOpen((o) => !o)} />
+              </>
+            )}
           </>
         }
       />
-      {showShare && (
+      {!isSpectator && showShare && (
         <SharePanel slug={project.slug} onClose={() => setShowShare(false)} />
       )}
       <div
@@ -245,7 +420,13 @@ export function ProjectDetail({
             position: "relative",
           }}
         >
-          <ChatPane projectSlug={project.slug} seedRef={seedChatRef} />
+          <ChatPane
+            projectSlug={project.slug}
+            history={chatHistory}
+            seedRef={seedChatRef}
+            readonly={isSpectator}
+            postComment={postComment}
+          />
           {chatOpen && (
             <div
               role="separator"
@@ -286,9 +467,11 @@ export function ProjectDetail({
             zoom={zoom}
             onZoomChange={setZoom}
             onSeedChat={(text) => seedChatRef.current?.(text)}
+            readonly={isSpectator}
+            frameSrcOverride={frameSrcOverride}
           />
         </main>
-        {devOpen && <DevModePanel slug={project.slug} />}
+        {!isSpectator && devOpen && <DevModePanel slug={project.slug} />}
       </div>
     </div>
     </TargetSelectionProvider>

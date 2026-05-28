@@ -69,6 +69,69 @@ describe("shared-projects cache", () => {
     expect(frames["frame-02"]).toBe("<other>");
   });
 
+  it("resolveFrameFsPath finds the modern .tsx filename", async () => {
+    const { createMirror, writeFrame, resolveFrameFsPath } = await import(
+      "../../../server/sharedProjects/cache"
+    );
+    await createMirror({
+      id: "abc",
+      relayUrl: "x",
+      hostDevu: "h",
+      hostDisplayName: "A",
+      projectSlug: "p",
+    });
+    await writeFrame("abc", "frame-01", "<jsx>");
+    const found = await resolveFrameFsPath("abc", "frame-01");
+    expect(found).toMatch(/frame-01\.tsx$/);
+  });
+
+  it("resolveFrameFsPath falls back to legacy extension-less mirror files", async () => {
+    // Pre-0.23 mirrors stored the file without the `.tsx` extension. The
+    // spectator frame compile endpoint must still find them so older
+    // mirrors keep rendering until the next cache_replay refreshes them.
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const { createMirror, resolveFrameFsPath } = await import(
+      "../../../server/sharedProjects/cache"
+    );
+    const { sharedProjectDir } = await import("../../../server/paths");
+    await createMirror({
+      id: "abc",
+      relayUrl: "x",
+      hostDevu: "h",
+      hostDisplayName: "A",
+      projectSlug: "p",
+    });
+    const dir = path.join(sharedProjectDir("abc"), "frames");
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, "frame-old"), "<legacy>");
+    const found = await resolveFrameFsPath("abc", "frame-old");
+    expect(found).toMatch(/frame-old$/);
+  });
+
+  it("readFrames keys map by logical slug regardless of file extension", async () => {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const { createMirror, writeFrame, readFrames } = await import(
+      "../../../server/sharedProjects/cache"
+    );
+    const { sharedProjectDir } = await import("../../../server/paths");
+    await createMirror({
+      id: "abc",
+      relayUrl: "x",
+      hostDevu: "h",
+      hostDisplayName: "A",
+      projectSlug: "p",
+    });
+    await writeFrame("abc", "frame-modern", "<jsx>");
+    // Drop a legacy-style file straight on disk to mirror older mirrors.
+    const dir = path.join(sharedProjectDir("abc"), "frames");
+    await fs.writeFile(path.join(dir, "frame-old"), "<legacy>");
+    const frames = await readFrames("abc");
+    expect(frames["frame-modern"]).toBe("<jsx>");
+    expect(frames["frame-old"]).toBe("<legacy>");
+  });
+
   it("deleteMirror removes the directory", async () => {
     const { createMirror, deleteMirror, readMirror } = await import(
       "../../../server/sharedProjects/cache"

@@ -6,6 +6,159 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.23.1] — 2026-05-28
+
+### Added
+- Hero submit on the homepage now redirects to the new project's screen and starts streaming there.
+- Stop button replaces Send while a turn is running; click to cancel.
+
+### Changed
+- Cancelled turns no longer render as errors. A neutral "Cancelled" marker appears in the chat instead.
+
+## [0.23.0] — 2026-05-27
+
+### Changed
+- **Shared projects now use the same authoring shell as your own
+  projects.** The bespoke "view-only mirror" UI is gone. When you open
+  a project a teammate shared with you, you see the exact same chrome
+  the host sees: the same header, viewport grid, frame cards, prompt
+  composer. Affordances that don't make sense for a guest are hidden —
+  no "New frame" tile, no per-frame delete, the prompt input keeps the
+  same chrome but submits as a comment to the host instead of driving
+  a turn. This is the visual parity beta testers asked for: no more
+  "this looks like a different app".
+- **Header back button replaces the "Studio" wordmark** on the project
+  page. One affordance does the same job — clicking it returns to the
+  projects list. Available in both author and spectator views.
+- **Frames in shared projects render as compiled HTML, not raw TSX.**
+  Previously, a guest opening a shared project saw the source code of
+  each frame as text. The mirror now exposes a per-project frame
+  endpoint that compiles cached TSX through the same pipeline the host
+  uses, so guests see the live output their teammate is generating.
+
+### Fixed
+- **Prompt input recovers from network errors in comment mode.** A
+  failed comment post used to leave the textarea full and stuck busy
+  forever. The input now re-enables on failure, preserves the typed
+  text, and shows an inline error message so the user can retry.
+- **Comments appear immediately, even while the host is offline.**
+  Previously a posted comment vanished until the host's WebSocket came
+  back and echoed it. The spectator now optimistically appends the
+  comment on success and dedupes against the relay echo when it
+  eventually arrives.
+- **Spectator no longer sees author-only "Try starting with…"
+  suggestions** in the empty chat state. Guests can only comment, so
+  prompt suggestions were misleading.
+
+### Internal
+- Extracted `useProjectFromHost` and `useProjectFromMirror` hooks so the
+  same `ProjectDetail` route serves both modes via a `mode` prop.
+  Deleted `studio/src/routes/SharedProject.tsx`. Added 30+ tests across
+  hooks, components, and the new spectator frame endpoint, including
+  regressions for slug-change race, theme-toggle flash, frame replay
+  merging, path-traversal protection, and comment-post error handling.
+
+## [0.22.4] — 2026-05-27
+
+### Fixed
+- **A project shared mid-session now includes the host's existing
+  frames in the guest's first cache replay.** The boot-time disk seed
+  added in 0.22.3 only runs once at startup, so a project newly
+  created (or first shared) AFTER boot got an empty replay buffer —
+  guests connecting saw nothing until the host generated more frames.
+  Sharing a project now triggers a per-project disk seed, closing the
+  gap regardless of when the project was added to the registry.
+
+## [0.22.3] — 2026-05-27
+
+### Fixed
+- **Frames generated in previous Studio sessions now sync to guests on
+  reconnect.** The replay buffer is in-memory, so every host restart
+  wiped knowledge of frames that already lived on disk. Combined with
+  the file watcher's `ignoreInitial: true`, this meant guests could
+  only ever see frames generated *after* both sides were online at the
+  same time. Studio now seeds the replay buffer from disk at boot for
+  every shared project the host owns, so a guest who joins later gets
+  the full frame set via `cache_replay`.
+
+## [0.22.2] — 2026-05-27
+
+### Fixed
+- **Frames generated before any guest connects now actually reach the
+  guest's mirror.** The host's relay-side replay buffer was created
+  lazily on the first guest WebSocket connection, which meant every
+  frame the host wrote before that point was silently dropped. Late-
+  joining guests then saw an empty viewport even when the host had
+  generated dozens of frames. The buffer is now materialized on first
+  write, so guests joining later get the full set via `cache_replay`.
+
+## [0.22.1] — 2026-05-27
+
+### Fixed
+- **Shared-project viewport is no longer blank when no frames have arrived
+  yet.** The guest view used to render nothing under the offline banner,
+  which made it look like the page was broken. It now shows an
+  empty-state card explaining what to expect (host status, when frames
+  will sync) so guests don't think they're staring at a stuck screen.
+- **Comments sidebar shows actual comments instead of a JSON dump of every
+  relay event.** Filters the event stream to `comment_posted` and renders
+  display name + text only. Frame-write/presence noise stays out of the
+  reader's way.
+
+## [0.22.0] — 2026-05-27
+
+### Changed
+- **Studio is now a real Electron app instead of a bash launcher + browser tab.** Double-click opens a dedicated window. No more "did I close the tab or quit the app?" confusion. Cmd-Q quits the whole thing — Vite child dies cleanly with the window. Native menu bar (File/Edit/View/Window/Help — Electron's defaults; custom menu coming later if useful).
+- **In-app auto-update.** First launch on 0.22.0 polls the public mirror for newer versions. When a new release lands, you'll see a "Quit and install" prompt — no more downloading DMGs by hand. Powered by `electron-updater` against the same `asundiev-devrev/arcade-studio-releases` repo the old "update available" banner used.
+- **Build chain swapped to `electron-builder`.** The 11-script bash chain (`build.sh`, `dmg.sh`, `codesign.sh`, `notarize.sh`, `notarize-app.sh`, `install-deps.sh`, `copy-sources.sh`, `download-{node,awscli,cloudflared}.sh`, `launcher.sh`) is replaced by a single `electron-builder.yml` declarative config. `pnpm run studio:pack` and `pnpm run studio:release` work the same — the implementation under the hood just changed.
+- `metadata.json.relayUrl` in shared-project mirrors is now an optional
+  hint, used only as a fallback when the Worker has no current
+  rendezvous (legacy 0.20.x mirrors). New mirrors imported under 0.22+
+  omit it entirely.
+- Offline banner copy: "Gil is offline — viewing cached state." → "Gil
+  hasn't been online recently — viewing cached state. New comments will
+  be sent when they're back."
+
+### Fixed
+- **Multiplayer survives host Studio restarts.** Quick-tunnel hostnames
+  (`*.trycloudflare.com`) regenerate every time the host restarts Studio,
+  which previously left every guest's mirror permanently offline until
+  the host re-shared the project. The host now publishes its current
+  relay URL to the share Worker on every tunnel acquire and on every
+  Studio boot; guests look it up before connecting and on every
+  reconnect attempt, so a host restart is invisible to a guest beyond a
+  brief offline blip.
+- **"Deploy failed: 400" when sharing a frame to Cloudflare Pages.** The
+  multiplayer invite middleware introduced in 0.18.x claimed
+  `POST /api/projects/:slug/share` for adding a collaborator, which
+  collided with the pre-existing Cloudflare deploy route on the same
+  path. The collaborator middleware ran first and rejected the deploy
+  body for missing `devu`, surfacing as a generic 400 in the Share
+  modal. The collaborator routes are now mounted under
+  `/api/projects/:slug/collaborators` instead, so frame deploys reach
+  the Cloudflare middleware again. Added a regression test asserting
+  `projectSharing` does not intercept `/share`.
+
+### Added
+- New share Worker routes `POST /rendezvous/:shareId` and
+  `GET /rendezvous/:shareId`, backed by Workers KV with a 7-day TTL.
+  Authenticated with the same `ALLOWED_KEYS` Bearer keys as `/share`.
+- A `pnpm run worker:deploy` script that lints `wrangler.toml` for the
+  KV namespace placeholder before delegating to `wrangler deploy`.
+
+### Migration notes
+- Drag the old `Arcade Studio.app` to the trash before installing 0.22.0. Bundle ID is the same (`ai.devrev.internal.ArcadeStudio`), so projects/settings persist via `~/Library/Application Support/arcade-studio/`. macOS may re-prompt once for keychain access (Electron's signature differs from the bash launcher's).
+- Bundle is bigger: ~400 MB DMG vs the previous ~270 MB. Electron runtime (~150 MB) is the cost of the native window. Trade is worth it for the UX gain.
+
+### Operator notes
+- One-time: provision the new KV namespace
+  (`wrangler kv namespace create RENDEZVOUS`), paste the id into
+  `studio/worker/wrangler.toml`, then redeploy with
+  `pnpm run worker:deploy`.
+- Existing 0.20.x guests don't need to re-import; the next time the
+  host launches 0.22.0 their mirror auto-upgrades on the next reconnect
+  attempt.
+
 ## [0.21.1] — 2026-05-15
 
 ### Fixed

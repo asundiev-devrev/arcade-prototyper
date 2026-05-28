@@ -20,7 +20,10 @@ import { projectSharingMiddleware } from "./server/middleware/projectSharing";
 import { sharedProjectsMiddleware } from "./server/middleware/sharedProjects";
 import { attachRelayToHttpServer } from "./server/relay/wsServer";
 import { hydrateSessionRegistry } from "./server/relay/sessionRegistry";
-import { hydrateProjectRegistry } from "./server/relay/projectRegistry";
+import { hydrateProjectRegistry, republishAllRendezvous } from "./server/relay/projectRegistry";
+import { seedReplayBuffersFromDisk } from "./server/relay/seedReplayBuffers";
+import { getDevRevPat } from "./server/secrets/keychain";
+import { resolveDevuFromPat } from "./server/relay/auth";
 import { listMirrors } from "./server/sharedProjects/cache";
 import { connectMirror } from "./server/sharedProjects/relayClient";
 import { settingsMiddleware } from "./server/middleware/settings";
@@ -75,9 +78,25 @@ function apiPlugin(): import("vite").Plugin {
         hydrateSessionRegistry().catch((err) => {
           console.warn("[studio/multiplayer] hydrate failed:", err);
         }),
-        hydrateProjectRegistry().catch((err) => {
-          console.warn("[studio/shared-projects] hydrate failed:", err);
-        }),
+        hydrateProjectRegistry()
+          .then(async () => {
+            // Seed in-memory replay buffers from disk so guests joining
+            // after a host restart see frames the host generated in prior
+            // sessions. Best-effort — silent if no PAT yet.
+            try {
+              const pat = (await getDevRevPat()) || process.env.DEVREV_PAT || "";
+              if (pat) {
+                const id = await resolveDevuFromPat(pat);
+                if (id?.id) await seedReplayBuffersFromDisk(id.id);
+              }
+            } catch (err) {
+              console.warn("[studio/shared-projects] seed replay failed:", err);
+            }
+            await republishAllRendezvous();
+          })
+          .catch((err) => {
+            console.warn("[studio/shared-projects] hydrate/republish failed:", err);
+          }),
       ]);
       server.httpServer?.once("listening", () => {
         const http = server.httpServer;

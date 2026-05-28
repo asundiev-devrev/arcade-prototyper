@@ -17,7 +17,10 @@ import { sharedProjectDir, sharedProjectsRoot } from "../paths";
 
 export interface MirrorMetadata {
   id: string;
-  relayUrl: string;
+  // Optional from 0.21+: resolved at connect time via Worker rendezvous.
+  // Older mirrors imported under 0.20.x still have this populated; new
+  // ones from 0.21+ omit it entirely.
+  relayUrl?: string;
   hostDevu: string;
   hostDisplayName: string;
   projectSlug: string;
@@ -27,7 +30,7 @@ export interface MirrorMetadata {
 
 export async function createMirror(input: {
   id: string;
-  relayUrl: string;
+  relayUrl?: string;
   hostDevu: string;
   hostDisplayName: string;
   projectSlug: string;
@@ -71,12 +74,50 @@ export async function readChat(id: string): Promise<unknown[]> {
   }
 }
 
+/**
+ * Sanitize an arbitrary frame path into a filesystem-safe filename. Same
+ * regex used by `writeFrame` so call sites that need to look up the file
+ * (e.g. the spectator frame compile endpoint) can resolve the on-disk
+ * path without re-implementing the rule.
+ */
+export function sanitizeFramePathForFs(framePath: string): string {
+  return framePath.replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
+/**
+ * Resolve the on-disk path for a cached frame. Looks for the modern
+ * `<safe>.tsx` filename first, falls back to the legacy extension-less
+ * `<safe>` for mirrors that pre-date 0.23 (those will refresh on the
+ * next `cache_replay`, but until they do we still want to serve them).
+ * Returns null if neither exists.
+ */
+export async function resolveFrameFsPath(
+  id: string,
+  framePath: string,
+): Promise<string | null> {
+  const dir = path.join(sharedProjectDir(id), "frames");
+  const safe = sanitizeFramePathForFs(framePath);
+  const withExt = path.join(dir, `${safe}.tsx`);
+  try {
+    await fs.access(withExt);
+    return withExt;
+  } catch {}
+  const legacy = path.join(dir, safe);
+  try {
+    await fs.access(legacy);
+    return legacy;
+  } catch {}
+  return null;
+}
+
 export async function writeFrame(id: string, framePath: string, content: string): Promise<void> {
   const dir = path.join(sharedProjectDir(id), "frames");
   await fs.mkdir(dir, { recursive: true });
   // Frame paths are slugs, but we still sanitize to prevent path traversal.
-  const safe = framePath.replace(/[^a-zA-Z0-9._-]/g, "_");
-  await fs.writeFile(path.join(dir, safe), content, "utf-8");
+  // The `.tsx` extension is appended so Vite's transform pipeline can pick
+  // up the file when the spectator frame compile endpoint imports it.
+  const safe = sanitizeFramePathForFs(framePath);
+  await fs.writeFile(path.join(dir, `${safe}.tsx`), content, "utf-8");
 }
 
 export async function readFrames(id: string): Promise<Record<string, string>> {
@@ -85,7 +126,12 @@ export async function readFrames(id: string): Promise<Record<string, string>> {
     const entries = await fs.readdir(dir);
     const out: Record<string, string> = {};
     for (const name of entries) {
-      out[name] = await fs.readFile(path.join(dir, name), "utf-8");
+      // Strip the `.tsx` extension so consumers (the spectator React shell)
+      // see the same logical key the host's `frame_written` event used.
+      // Legacy mirrors (pre-0.23) wrote files without the extension; pass
+      // those through as-is so the slug stays stable.
+      const key = name.endsWith(".tsx") ? name.slice(0, -4) : name;
+      out[key] = await fs.readFile(path.join(dir, name), "utf-8");
     }
     return out;
   } catch {

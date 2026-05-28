@@ -48,7 +48,7 @@ export function multiplayerInviteMiddleware() {
 
     // DEPRECATED (Plan 2b): This endpoint creates a per-mention session, which
     // the new shared-project model replaces. Kept for one release so 0.18.6
-    // clients can still invite. New code paths must use POST /api/projects/:slug/share.
+    // clients can still invite. New code paths must use POST /api/projects/:slug/collaborators.
 
     let body: any;
     try {

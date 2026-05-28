@@ -22,7 +22,18 @@ interface PromptInputProps {
   busy: boolean;
   projectSlug: string;
   onSend: (prompt: string, images: string[]) => void;
+  onStop?: () => void;
   seedRef?: MutableRefObject<((text: string) => void) | null>;
+  /**
+   * When set, the input runs in spectator/comment mode: same chrome, but
+   * submitting calls `commentMode.onSubmit(text)` instead of driving an
+   * agent turn. We hide authoring-only affordances (image upload,
+   * @-mentions, Figma URL paste, target chip, Computer/#frame attachments)
+   * because those mutate host state guests can't drive. On rejection the
+   * text is preserved and an inline error is surfaced; busy resets so the
+   * guest can retry.
+   */
+  commentMode?: { onSubmit: (text: string) => Promise<void> };
 }
 
 /**
@@ -56,12 +67,15 @@ function buildTargetPreamble(t: TargetSelection): string {
   ].join("\n");
 }
 
-export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputProps) {
+export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commentMode }: PromptInputProps) {
+  const isComment = !!commentMode;
   const [text, setText] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [imagePaths, setImagePaths] = useState<string[]>([]);
   const [detectedFigmaUrl, setDetectedFigmaUrl] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [commentBusy, setCommentBusy] = useState(false);
+  const [commentError, setCommentError] = useState<string | null>(null);
   const { target, clear: clearTarget } = useTargetSelection();
   const { toast } = useToast();
   const [users, setUsers] = useState<UserMentionInput[]>([]);
@@ -85,6 +99,7 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
   }, []);
 
   useEffect(() => {
+    if (isComment) return;
     let cancelled = false;
     async function load() {
       try {
@@ -111,7 +126,7 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
     }
     void load();
     return () => { cancelled = true; };
-  }, []);
+  }, [isComment]);
 
   useEffect(() => {
     if (!seedRef) return;
@@ -128,7 +143,7 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
   }, [seedRef]);
 
   useEffect(() => {
-    if (!detectedFigmaUrl) return;
+    if (isComment || !detectedFigmaUrl) return;
     const ctrl = new AbortController();
     fetch("/api/figma/ingest", {
       method: "POST",
@@ -137,7 +152,7 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
       signal: ctrl.signal,
     }).catch(() => { /* fire-and-forget; server logs real failures */ });
     return () => ctrl.abort();
-  }, [detectedFigmaUrl]);
+  }, [isComment, detectedFigmaUrl]);
 
   function scheduleErrorClear() {
     if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
@@ -166,6 +181,7 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
   }
 
   async function addFiles(files: File[] | FileList) {
+    if (isComment) return;
     const arr = Array.from(files).filter((f) => f.type.startsWith("image/"));
     for (const f of arr) {
       try {
@@ -228,7 +244,29 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
     // the popover in that state.
     if (mention) return;
     const p = text.trim();
-    if (!p || busy) return;
+    if (!p) return;
+
+    if (commentMode) {
+      // Spectator branch: post a comment to the host instead of driving a
+      // turn. Preserve text on rejection so guests can retry; clear busy
+      // and surface the error inline either way.
+      if (commentBusy) return;
+      setCommentBusy(true);
+      setCommentError(null);
+      try {
+        await commentMode.onSubmit(p);
+        if (!mountedRef.current) return;
+        setText("");
+      } catch (err) {
+        if (!mountedRef.current) return;
+        setCommentError(err instanceof Error ? err.message : "Failed to post comment");
+      } finally {
+        if (mountedRef.current) setCommentBusy(false);
+      }
+      return;
+    }
+
+    if (busy) return;
 
     // Detect user @-mentions in the current text against our known users list.
     // Token form is @<handle>. The handle is the email local-part with the
@@ -258,7 +296,7 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
       try {
         // Fetch current shared_with to avoid re-confirming for collaborators
         // who are already on the project.
-        const curRes = await fetch(`/api/projects/${projectSlug}/share`);
+        const curRes = await fetch(`/api/projects/${projectSlug}/collaborators`);
         const cur = (await curRes.json().catch(() => ({}))) as {
           shared_with?: { devu: string }[];
         };
@@ -272,7 +310,7 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
             // Keep the input intact so the host can edit and try again.
             return;
           }
-          const shareRes = await fetch(`/api/projects/${projectSlug}/share`, {
+          const shareRes = await fetch(`/api/projects/${projectSlug}/collaborators`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ devu: guest.devu, displayName: guest.displayName }),
@@ -362,19 +400,61 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
     }
   }
 
-  const hasComputerMention = /@Computer\b/i.test(text);
-  const hasFrameTrigger = /#frame\b/i.test(text);
+  const hasComputerMention = !isComment && /@Computer\b/i.test(text);
+  const hasFrameTrigger = !isComment && /#frame\b/i.test(text);
+  const effectiveBusy = isComment ? commentBusy : busy;
 
   return (
-    <div ref={containerRef} onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        hidden
-        onChange={onFilePicked}
-      />
+    <div
+      ref={containerRef}
+      onDrop={isComment ? undefined : onDrop}
+      onDragOver={isComment ? undefined : (e) => e.preventDefault()}
+    >
+      {!isComment && (
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          hidden
+          onChange={onFilePicked}
+        />
+      )}
+      {commentError && (
+        <div
+          role="alert"
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 8,
+            padding: "6px 12px",
+            margin: "0 16px 8px",
+            borderRadius: 8,
+            color: "var(--fg-alert-prominent)",
+            background: "var(--bg-alert-subtle)",
+            border: "1px solid var(--stroke-alert-subtle)",
+            fontSize: 12,
+          }}
+        >
+          <span>{commentError}</span>
+          <button
+            type="button"
+            onClick={() => setCommentError(null)}
+            aria-label="Dismiss error"
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "var(--fg-alert-prominent)",
+              cursor: "pointer",
+              fontSize: 16,
+              padding: 0,
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
       {uploadError && (
         <div
           role="alert"
@@ -422,6 +502,10 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
           const el = e.target as HTMLInputElement | HTMLTextAreaElement;
           const next = el.value;
           setText(next);
+          if (isComment) {
+            if (commentError) setCommentError(null);
+            return;
+          }
           // Check for Figma URL as user types
           const url = extractFigmaUrl(next);
           setDetectedFigmaUrl(url);
@@ -432,8 +516,9 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
           if (mention) return;
           void submit();
         }}
-        placeholder="Ask me anything"
+        placeholder={isComment ? "Comment on this prototype…" : "Ask me anything"}
         attachments={
+          !isComment &&
           (images.length > 0 || detectedFigmaUrl || hasComputerMention || hasFrameTrigger || target) ? (
             <>
               {target && (
@@ -465,8 +550,15 @@ export function PromptInput({ busy, projectSlug, onSend, seedRef }: PromptInputP
         }
         trailing={
           <>
-            <ChatInput.AddAttachmentButton onClick={handlePickImage} />
-            <ChatInput.SendButton onClick={() => void submit()} disabled={!text.trim() || busy} />
+            {!isComment && <ChatInput.AddAttachmentButton onClick={handlePickImage} />}
+            {effectiveBusy && onStop && !isComment ? (
+              <ChatInput.StopButton onClick={onStop} />
+            ) : (
+              <ChatInput.SendButton
+                onClick={() => void submit()}
+                disabled={!text.trim() || effectiveBusy}
+              />
+            )}
           </>
         }
       />

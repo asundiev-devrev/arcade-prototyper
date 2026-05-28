@@ -1,4 +1,4 @@
-import { useEffect, useState, type MutableRefObject } from "react";
+import { type MutableRefObject } from "react";
 import { MessageList } from "./MessageList";
 import { PromptInput } from "./PromptInput";
 import { useChatStreamContext } from "../../hooks/chatStreamContext";
@@ -8,37 +8,35 @@ import { extractFigmaUrl, decoratePromptWithFigma } from "../../lib/figmaUrl";
 import { ErrorBanner } from "../feedback/ErrorBanner";
 import { AuthExpiredNotice } from "../feedback/AuthExpiredNotice";
 
+/**
+ * Persisted chat history is owned by `useProjectFromHost` (or the spectator
+ * equivalent) and threaded down via the `history` prop. ChatPane intentionally
+ * does NOT fetch `/api/projects/:slug/history` itself — the source hook does
+ * that exactly once per relevant trigger. Earlier versions duplicated the
+ * fetch here; that double-fired on every phase transition out of `running`
+ * and on every `arcade-studio:refresh-chat-history` window event.
+ *
+ * Spectator mode (`readonly={true}`) reuses the same `PromptInput` chrome —
+ * placeholder, attach button, and authoring affordances are gated inside
+ * PromptInput's `commentMode` branch. We pass `commentMode.onSubmit` so the
+ * input posts to `/api/shared-projects/:id/comment` instead of driving a
+ * turn. Identical chrome was a deliberate Figma-parity ask: guests should
+ * not get a visibly downgraded composer.
+ */
 export function ChatPane({
   projectSlug,
+  history,
   seedRef,
+  readonly = false,
+  postComment,
 }: {
   projectSlug: string;
+  history: ChatMessage[];
   seedRef?: MutableRefObject<((text: string) => void) | null>;
+  readonly?: boolean;
+  postComment?: (text: string) => Promise<void>;
 }) {
-  const [history, setHistory] = useState<ChatMessage[]>([]);
-  const { state, send, retry } = useChatStreamContext();
-
-  // Refresh persisted chat history whenever a turn transitions out of
-  // `running`. The hook already streams live events for the current turn;
-  // history only needs to be re-read when the server has written a new
-  // final assistant message to disk.
-  useEffect(() => {
-    let cancelled = false;
-    async function refresh() {
-      const r = await fetch(`/api/projects/${projectSlug}/history`);
-      if (!cancelled && r.ok) setHistory(await r.json());
-    }
-    if (state.phase !== "running") void refresh();
-    // Also refresh when an @-mention invite writes a system message —
-    // those don't go through the chat-stream pipeline, so the phase
-    // transition above wouldn't fire for them.
-    const onInviteRefresh = () => void refresh();
-    window.addEventListener("arcade-studio:refresh-chat-history", onInviteRefresh);
-    return () => {
-      cancelled = true;
-      window.removeEventListener("arcade-studio:refresh-chat-history", onInviteRefresh);
-    };
-  }, [projectSlug, state.phase]);
+  const { state, send, retry, cancel } = useChatStreamContext();
 
   const enhancedSend = (prompt: string, images: string[] = []) => {
     const url = extractFigmaUrl(prompt);
@@ -64,7 +62,7 @@ export function ChatPane({
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {showEmpty ? (
         <>
-          <EmptyStatePrompts onPick={(p) => enhancedSend(p)} />
+          {readonly ? null : <EmptyStatePrompts onPick={(p) => enhancedSend(p)} />}
           <div style={{ flex: 1 }} />
         </>
       ) : (
@@ -86,7 +84,18 @@ export function ChatPane({
           onRetry={state.phase !== "running" && state.lastPrompt ? retry : undefined}
         />
       )}
-      <PromptInput busy={state.phase === "running"} projectSlug={projectSlug} onSend={enhancedSend} seedRef={seedRef} />
+      <PromptInput
+        busy={state.phase === "running"}
+        projectSlug={projectSlug}
+        onSend={enhancedSend}
+        onStop={readonly ? undefined : cancel}
+        seedRef={seedRef}
+        commentMode={
+          readonly
+            ? { onSubmit: async (text) => { await postComment?.(text); } }
+            : undefined
+        }
+      />
     </div>
   );
 }

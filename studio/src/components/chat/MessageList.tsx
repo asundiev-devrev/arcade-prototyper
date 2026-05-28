@@ -275,6 +275,18 @@ export function MessageList({
               endedAt={turnEndedAt}
             />
           )}
+          {phase === "cancelled" && (
+            <div
+              style={{
+                textAlign: "center",
+                fontSize: 13,
+                color: "var(--fg-neutral-subtle)",
+                padding: "4px 16px",
+              }}
+            >
+              Cancelled
+            </div>
+          )}
         </>
       )}
     </div>

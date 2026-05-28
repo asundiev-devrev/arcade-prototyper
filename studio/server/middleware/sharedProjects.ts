@@ -84,7 +84,10 @@ async function show(res: ServerResponse, id: string) {
 async function importMirror(req: IncomingMessage, res: ServerResponse) {
   let body: any;
   try { body = await readJson(req); } catch { return json(res, 400, { error: "bad_json" }); }
-  const required = ["projectShareId", "relayUrl", "hostDevu", "hostDisplayName", "projectSlug"];
+  // relayUrl became optional in 0.21+ — guests resolve the live URL via the
+  // Worker rendezvous on every connect. Hosts on 0.20.x still send it; we
+  // accept and store it as a fallback when present.
+  const required = ["projectShareId", "hostDevu", "hostDisplayName", "projectSlug"];
   for (const k of required) {
     if (!body[k]) return json(res, 400, { error: `${k} required` });
   }
@@ -104,8 +107,11 @@ async function comment(req: IncomingMessage, res: ServerResponse, id: string) {
   try { body = await readJson(req); } catch { return json(res, 400, { error: "bad_json" }); }
   const text = String(body.text ?? "").trim();
   if (!text) return json(res, 400, { error: "text required" });
-  await sendComment(id, text);
-  json(res, 200, { ok: true });
+  const result = await sendComment(id, text);
+  // Echo the assigned id + ts so the spectator UI can optimistically append
+  // without waiting for the relay broadcast (which never arrives when the
+  // host is offline — the comment is queued server-side and replayed later).
+  json(res, 200, { ok: true, id: result.id, queued: result.queued, ts: Date.now() });
 }
 
 async function remove(res: ServerResponse, id: string) {

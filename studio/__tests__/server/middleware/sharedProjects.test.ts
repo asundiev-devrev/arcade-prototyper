@@ -12,7 +12,7 @@ let port: number;
 vi.mock("../../../server/sharedProjects/relayClient", () => ({
   connectMirror: vi.fn(async () => {}),
   disconnectMirror: vi.fn(async () => {}),
-  sendComment: vi.fn(async () => {}),
+  sendComment: vi.fn(async () => ({ id: "c-mock", queued: true })),
   getMirrorBus: () => ({ on: () => {}, off: () => {} }),
 }));
 

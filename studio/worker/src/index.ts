@@ -26,6 +26,7 @@ export interface Env {
   ALLOWED_KEYS: string;     // secret, comma-separated hex strings
   CF_ACCOUNT_ID: string;    // var
   ACCESS_POLICY_ID: string; // var — reusable Access policy, allowlist for shared frames
+  KV_RENDEZVOUS: KVNamespace;
 }
 
 interface ShareRequest {
@@ -36,6 +37,12 @@ interface ShareRequest {
 }
 
 const CF_API = "https://api.cloudflare.com/client/v4";
+
+// Validation regexes for the rendezvous routes. Defined at module scope so
+// the route handler doesn't recompile them on every request.
+const VALID_SHARE_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const VALID_RELAY_RE = /^wss:\/\/[a-z0-9-]+\.trycloudflare\.com\/api\/multiplayer\/ws$/i;
+const VALID_DEVU_RE = /^don:identity:[a-z0-9-]+:devo\/\d+:devu\/\d+$/i;
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
@@ -78,30 +85,73 @@ export default {
       }
     }
 
+    // ---- rendezvous routes ------------------------------------------------
+    // GET/POST /rendezvous/:shareId — host Studios publish their current relay
+    // URL here on tunnel acquire and on every boot; guests fetch it before
+    // opening the multiplayer WS. Backed by Workers KV with a 7-day TTL.
+    const rendezvousMatch = /^\/rendezvous\/([^\/]+)\/?$/.exec(url.pathname);
+    if (rendezvousMatch) {
+      // Authenticate before validating the shareId — unauthenticated callers
+      // shouldn't be able to probe whether a given shareId would be
+      // syntactically accepted.
+      const authCheck = checkBearer(req, env);
+      if (authCheck) return cors(authCheck);
+      const shareId = rendezvousMatch[1];
+      if (!VALID_SHARE_ID_RE.test(shareId)) {
+        return cors(json(400, { error: { code: "bad_share_id", message: "shareId must be a UUID" } }));
+      }
+
+      if (req.method === "GET") {
+        const raw = await env.KV_RENDEZVOUS.get(`r:${shareId}`);
+        if (!raw) return cors(json(404, { error: { code: "not_found", message: "No rendezvous for shareId" } }));
+        return cors(new Response(raw, {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }));
+      }
+
+      if (req.method === "POST") {
+        let body: any;
+        try { body = await req.json(); } catch {
+          return cors(json(400, { error: { code: "bad_json", message: "Body is not valid JSON" } }));
+        }
+        const relayUrl = String(body?.relayUrl ?? "");
+        const hostDevu = String(body?.hostDevu ?? "");
+        const hostDisplayName = String(body?.hostDisplayName ?? "");
+        if (!VALID_RELAY_RE.test(relayUrl)) {
+          return cors(json(400, { error: { code: "bad_relay_url", message: "relayUrl must be wss://*.trycloudflare.com/api/multiplayer/ws" } }));
+        }
+        if (!VALID_DEVU_RE.test(hostDevu)) {
+          return cors(json(400, { error: { code: "bad_host_devu", message: "hostDevu must look like don:identity:..." } }));
+        }
+        if (!hostDisplayName || hostDisplayName.length > 200) {
+          return cors(json(400, { error: { code: "bad_host_name", message: "hostDisplayName 1..200 chars" } }));
+        }
+        const record = {
+          shareId,
+          relayUrl,
+          hostDevu,
+          hostDisplayName,
+          publishedAt: Date.now(),
+        };
+        // 7-day TTL — host republishes on every boot, so this only matters
+        // when the host hasn't been online for a week.
+        await env.KV_RENDEZVOUS.put(`r:${shareId}`, JSON.stringify(record), {
+          expirationTtl: 7 * 24 * 60 * 60,
+        });
+        return cors(new Response(null, { status: 204 }));
+      }
+
+      return cors(json(405, { error: { code: "method_not_allowed", message: "GET or POST only" } }));
+    }
+
     if (req.method !== "POST" || url.pathname !== "/share") {
       return cors(json(404, { error: { code: "not_found", message: "POST /share, GET /project/<id>, or GET /join/<id> only" } }));
     }
 
     // ---- auth -------------------------------------------------------------
-    const authHeader = req.headers.get("authorization") ?? "";
-    const match = /^Bearer\s+(.+)$/i.exec(authHeader);
-    if (!match) {
-      return cors(json(401, { error: { code: "missing_key", message: "Missing Authorization: Bearer <key>" } }));
-    }
-    const providedKey = match[1].trim();
-
-    const allowed = new Set(
-      (env.ALLOWED_KEYS ?? "")
-        .split(",")
-        .map((k) => k.trim())
-        .filter(Boolean),
-    );
-    // Constant-time-ish check: Set.has is O(1) and doesn't short-circuit
-    // on first char mismatch. Hex keys are fixed-length so timing leaks
-    // there are already minimal, but this is the right default.
-    if (!allowed.has(providedKey)) {
-      return cors(json(401, { error: { code: "invalid_key", message: "Share key is not recognized" } }));
-    }
+    const authCheck = checkBearer(req, env);
+    if (authCheck) return cors(authCheck);
 
     // ---- body -------------------------------------------------------------
     let body: ShareRequest;
@@ -330,6 +380,26 @@ export default {
   },
 };
 
+// Verify a request's Bearer token against ALLOWED_KEYS. Returns null on
+// success (caller continues) or a 401 Response on failure (caller should
+// `return cors(...)` it). Shared by /share and /rendezvous so both routes
+// stay in lockstep on auth behavior.
+function checkBearer(req: Request, env: Env): Response | null {
+  const authHeader = req.headers.get("authorization") ?? "";
+  const match = /^Bearer\s+(.+)$/i.exec(authHeader);
+  if (!match) {
+    return json(401, { error: { code: "missing_key", message: "Missing Authorization: Bearer <key>" } });
+  }
+  const providedKey = match[1].trim();
+  const allowed = new Set(
+    (env.ALLOWED_KEYS ?? "").split(",").map((k) => k.trim()).filter(Boolean),
+  );
+  if (!allowed.has(providedKey)) {
+    return json(401, { error: { code: "invalid_key", message: "Share key is not recognized" } });
+  }
+  return null;
+}
+
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -343,7 +413,7 @@ function cors(res: Response): Response {
   // fetches work and so we could tighten this later (e.g. by checking
   // against a specific origin) without re-deploying clients.
   res.headers.set("Access-Control-Allow-Origin", "*");
-  res.headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type");
   return res;
 }

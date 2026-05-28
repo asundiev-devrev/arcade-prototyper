@@ -5,7 +5,24 @@ type ChatStream = ReturnType<typeof useChatStream>;
 
 const Ctx = createContext<ChatStream | null>(null);
 
-export function ChatStreamProvider({
+/**
+ * Provide a chat stream to descendants. Either pass a `projectSlug` to have
+ * the provider mount its own `useChatStream` (legacy behavior) or pass a
+ * pre-built `value` from a parent that already owns the stream — used by
+ * `useProjectFromHost` so the SSE connection isn't double-mounted.
+ */
+export function ChatStreamProvider(
+  props:
+    | { projectSlug: string; value?: never; children: ReactNode }
+    | { projectSlug?: never; value: ChatStream; children: ReactNode },
+) {
+  if ("value" in props && props.value) {
+    return <Ctx.Provider value={props.value}>{props.children}</Ctx.Provider>;
+  }
+  return <ChatStreamProviderFromSlug projectSlug={props.projectSlug!}>{props.children}</ChatStreamProviderFromSlug>;
+}
+
+function ChatStreamProviderFromSlug({
   projectSlug,
   children,
 }: {

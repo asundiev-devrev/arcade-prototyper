@@ -17,7 +17,7 @@ import { buildFigmaContextBlock } from "../figma/promptBlock";
 import { getFigmaSystemIngest, type FigmaSystemIngest } from "../figmaSystemIngest";
 import { renderDesignMd } from "../figma/systemRender";
 import { designMdPath } from "../paths";
-import { startTurn, subscribe, getTurn } from "../turnRegistry";
+import { startTurn, subscribe, getTurn, cancelTurn } from "../turnRegistry";
 import { hasDeviationsSection, DEVIATIONS_MISSING_TRAILER } from "../deviationsContract";
 import { recordChatEventForReplay, type ProjectRef } from "./chatRelayMirror";
 import { resolveDevuFromPat } from "../relay/auth";
@@ -83,6 +83,7 @@ async function readFrameSources(slug: string): Promise<string> {
 
 const STREAM_URL = /^\/api\/chat\/stream\/([a-z0-9][a-z0-9-]{0,62})$/i;
 const STATUS_URL = /^\/api\/chat\/status\/([a-z0-9][a-z0-9-]{0,62})$/i;
+const CANCEL_URL = /^\/api\/chat\/cancel\/([a-z0-9][a-z0-9-]{0,62})$/i;
 
 export function chatMiddleware() {
   return async (req: IncomingMessage, res: ServerResponse, next?: () => void) => {
@@ -96,6 +97,8 @@ export function chatMiddleware() {
     }
 
     if (req.url.startsWith("/api/chat") && req.method === "POST") {
+      const cancelMatch = req.url.match(CANCEL_URL);
+      if (cancelMatch) return handleCancel(res, cancelMatch[1].toLowerCase());
       return handleStart(req, res);
     }
 
@@ -187,7 +190,7 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
 
   const turn = startTurn(slug, {
     prompt,
-    run: ({ emit, end }) => {
+    run: ({ emit, end, signal }) => {
       const wrappedEmit = projectRef
         ? (ev: StudioEvent) => {
             emit(ev);
@@ -210,8 +213,8 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
           }
         : end;
       const task = isComputerTurn
-        ? runComputerBranch({ emit: wrappedEmit, slug, prompt, project })
-        : runClaudeBranch({ emit: wrappedEmit, slug, prompt, images, project });
+        ? runComputerBranch({ emit: wrappedEmit, slug, prompt, project, signal })
+        : runClaudeBranch({ emit: wrappedEmit, slug, prompt, images, project, signal });
       task.then(
         (result) => wrappedEnd(result),
         (err) => wrappedEnd({ ok: false, error: err?.message ?? String(err) }),
@@ -229,6 +232,23 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
       byDevu: projectRef.hostDevu,
       text: prompt,
     });
+
+    // Mirror cancel-by-user: cancelTurn() finalizes the registry directly,
+    // bypassing wrappedEnd. Subscribe to the turn's terminator so guests
+    // still see turn_ended with cancelled:true in their replay.
+    const capturedRef = projectRef;
+    const sub = subscribe(slug, () => {}, () => {
+      const final = getTurn(slug);
+      if (!final || !final.cancelled) return;
+      recordChatEventForReplay(capturedRef, {
+        type: "turn_ended",
+        turnId: turn.id,
+        ok: false,
+        error: final.error,
+        cancelled: true,
+      });
+    });
+    void sub;
   }
 
   res.writeHead(202, { "Content-Type": "application/json" });
@@ -331,6 +351,21 @@ function handleStatus(res: ServerResponse, slug: string): void {
       error: turn.error,
     }),
   );
+}
+
+function handleCancel(res: ServerResponse, slug: string): void {
+  const ok = cancelTurn(slug);
+  if (!ok) {
+    res.writeHead(409, { "Content-Type": "application/json" });
+    res.end(
+      JSON.stringify({
+        error: { code: "no_running_turn", message: "No turn is running for this project." },
+      }),
+    );
+    return;
+  }
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ cancelled: true, slug }));
 }
 
 async function enrichPromptWithFigmaContext(
@@ -465,8 +500,9 @@ async function runClaudeBranch(ctx: {
   prompt: string;
   images?: string[];
   project: { sessionId?: string };
+  signal: AbortSignal;
 }): Promise<{ ok: boolean; error?: string }> {
-  const { emit, slug, project } = ctx;
+  const { emit, slug, project, signal } = ctx;
   const figmaUrl = extractFigmaUrl(ctx.prompt);
   const parsed = figmaUrl ? parseFigmaUrl(figmaUrl) : null;
 
@@ -507,6 +543,7 @@ async function runClaudeBranch(ctx: {
       bin: resolveClaudeBin(),
       images,
       model,
+      signal,
       onEvent: (ev) => {
         if (ev.kind === "session") capturedSessionId = ev.sessionId;
         if (ev.kind === "narration") narrationTexts.push(ev.text);
@@ -594,8 +631,9 @@ async function runComputerBranch(ctx: {
   slug: string;
   prompt: string;
   project: { computerConversationId?: string };
+  signal: AbortSignal;
 }): Promise<{ ok: boolean; error?: string }> {
-  const { emit, slug, prompt, project } = ctx;
+  const { emit, slug, prompt, project, signal } = ctx;
   const wantsFrameContext = FRAME_TRIGGER.test(prompt);
   const cleaned = prompt
     .replace(COMPUTER_MENTION_GLOBAL, "")
@@ -624,6 +662,7 @@ async function runComputerBranch(ctx: {
   const result = await runComputerTurn({
     prompt: finalPrompt,
     conversationId: project.computerConversationId,
+    signal,
     onEvent: (ev) => {
       if (ev.kind === "end") {
         endResult = ev.ok ? { ok: true } : { ok: false, error: ev.error };

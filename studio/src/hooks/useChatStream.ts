@@ -1,96 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { StudioEvent } from "../lib/streamJson";
+import {
+  applyStudioEvent,
+  classifyError,
+  INITIAL_STREAM_STATE,
+  type ChatTurnItem,
+  type ErrorKind,
+  type StreamState,
+  type TurnPhase,
+} from "./chatStreamReducer";
 
-export type ErrorKind = "auth" | "generic";
+// Re-export for callers that imported these symbols from `useChatStream`
+// before the reducer was extracted into its own module. New code should
+// prefer importing directly from `./chatStreamReducer`.
+export type { ChatTurnItem, ErrorKind, StreamState, TurnPhase };
+export { classifyError };
 
-export type ChatTurnItem =
-  | { kind: "narration"; text: string }
-  | {
-      kind: "tool";
-      tool: string;
-      pretty: string;
-      /** Raw call input (full path / full command / full pattern). */
-      details?: string;
-      /** Full tool result once it arrives. `undefined` while call is in-flight. */
-      ok?: boolean;
-      snippet?: string;
-      /** Wall-clock time the tool call was dispatched, for elapsed display. */
-      startedAt: number;
-      /** Wall-clock time the tool result arrived. */
-      endedAt?: number;
-    };
-
-export type TurnPhase = "idle" | "running" | "done" | "error";
-
-export interface StreamState {
-  /** True while a turn is in flight. Alias for `phase === "running"`. */
-  busy: boolean;
-  phase: TurnPhase;
-  error: string | null;
-  errorKind?: ErrorKind;
-  narrations: string[];
-  items: ChatTurnItem[];
-  lastEvent: StudioEvent | null;
-  lastPrompt: string;
-  /** Which agent is producing the current/last turn. Defaults to claude. */
-  source: "claude" | "computer";
-  /** Wall-clock time the current turn started on the server (ms). */
-  turnStartedAt: number | null;
-  /** Wall-clock time the current turn ended on the server (ms). */
-  turnEndedAt: number | null;
-}
-
-const AUTH_EXPIRED = /sso|credential|expired|unauthorized/i;
-
-export function classifyError(message: string): ErrorKind {
-  return AUTH_EXPIRED.test(message) ? "auth" : "generic";
-}
-
-const INITIAL_STATE: StreamState = {
-  busy: false,
-  phase: "idle",
-  error: null,
-  errorKind: undefined,
-  narrations: [],
-  items: [],
-  lastEvent: null,
-  lastPrompt: "",
-  source: "claude",
-  turnStartedAt: null,
-  turnEndedAt: null,
-};
-
-function appendItem(items: ChatTurnItem[], next: ChatTurnItem): ChatTurnItem[] {
-  if (next.kind === "tool") {
-    const last = items[items.length - 1];
-    if (
-      last &&
-      last.kind === "tool" &&
-      last.tool === next.tool &&
-      last.pretty === next.pretty &&
-      last.details === next.details
-    ) {
-      return items;
-    }
-  }
-  return [...items, next];
-}
-
-function attachResultToLastTool(
-  items: ChatTurnItem[],
-  ok: boolean,
-  snippet?: string,
-): ChatTurnItem[] {
-  for (let i = items.length - 1; i >= 0; i -= 1) {
-    const entry = items[i];
-    if (entry.kind === "tool" && entry.ok === undefined) {
-      const updated = [...items];
-      updated[i] = { ...entry, ok, snippet, endedAt: Date.now() };
-      return updated;
-    }
-  }
-  return items;
-}
+const INITIAL_STATE = INITIAL_STREAM_STATE;
 
 /** Envelope that the server's /api/chat/stream emits before replaying events. */
 interface TurnHeader {
@@ -161,66 +87,11 @@ export function useChatStream(slug: string) {
   }, []);
 
   /** Apply a StudioEvent to the stream state. Replayed and live events go
-   *  through the same reducer so a reconnect reconstructs the exact same UI. */
+   *  through the same reducer so a reconnect reconstructs the exact same UI.
+   *  Reducer logic lives in `./chatStreamReducer` so the spectator hook can
+   *  drive the same state shape from `agent_event` payloads. */
   const applyEvent = useCallback((ev: StudioEvent) => {
-    safeSetState((s) => {
-      if (ev.kind === "origin") {
-        return { ...s, lastEvent: ev, source: ev.source };
-      }
-      if (ev.kind === "session") {
-        return { ...s, lastEvent: ev };
-      }
-      if (ev.kind === "narration") {
-        return {
-          ...s,
-          lastEvent: ev,
-          narrations: [...s.narrations, ev.text],
-          items: appendItem(s.items, { kind: "narration", text: ev.text }),
-        };
-      }
-      if (ev.kind === "tool_call") {
-        return {
-          ...s,
-          lastEvent: ev,
-          items: appendItem(s.items, {
-            kind: "tool",
-            tool: ev.tool,
-            pretty: ev.pretty,
-            details: ev.details,
-            startedAt: Date.now(),
-          }),
-        };
-      }
-      if (ev.kind === "tool_result") {
-        return {
-          ...s,
-          lastEvent: ev,
-          items: attachResultToLastTool(s.items, ev.ok, ev.snippet),
-        };
-      }
-      if (ev.kind === "end") {
-        if (ev.ok) {
-          return {
-            ...s,
-            lastEvent: ev,
-            busy: false,
-            phase: "done",
-            turnEndedAt: Date.now(),
-          };
-        }
-        const err = ev.error ?? "unknown error";
-        return {
-          ...s,
-          lastEvent: ev,
-          busy: false,
-          phase: "error",
-          error: err,
-          errorKind: classifyError(err),
-          turnEndedAt: Date.now(),
-        };
-      }
-      return { ...s, lastEvent: ev };
-    });
+    safeSetState((s) => applyStudioEvent(s, ev));
   }, [safeSetState]);
 
   useEffect(() => {
@@ -416,5 +287,16 @@ export function useChatStream(slug: string) {
     void send(prompt);
   }, [send, state.lastPrompt]);
 
-  return { state, send, retry };
+  const cancel = useCallback(async () => {
+    try {
+      await fetch(`/api/chat/cancel/${slug}`, { method: "POST" });
+    } catch {
+      // Terminal `end` event from SSE drives state. If cancel POST fails
+      // (rare; e.g. server restart), the stream itself will eventually
+      // disconnect; user can retry. The server returns 409 if no turn is
+      // running, which is also fine — UI doesn't read the response.
+    }
+  }, [slug]);
+
+  return { state, send, retry, cancel };
 }

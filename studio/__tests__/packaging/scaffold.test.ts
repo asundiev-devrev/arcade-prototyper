@@ -40,8 +40,12 @@ describe("electron-builder configuration", () => {
     expect(config.mac?.identity).not.toContain("Developer ID Application:");
   });
 
-  it("notarizes via the correct team ID", () => {
-    expect(config.mac?.notarize?.teamId).toBe("NJDA6Y3XRS");
+  it("disables electron-builder's auto-notarize", () => {
+    // electron-builder 25 only accepts APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD
+    // env vars for notarize and ignores keychain profiles. We notarize
+    // manually post-pack via `xcrun notarytool submit ... --keychain-profile`.
+    // See studio/CLAUDE.md "Releasing a new version" for the full flow.
+    expect(config.mac?.notarize).toBe(false);
   });
 
   it("registers the arcade-studio:// URL scheme", () => {
