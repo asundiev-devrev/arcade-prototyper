@@ -1,5 +1,26 @@
 /* Studio-only overrides. Frames do NOT load this file. */
 :root { color-scheme: light dark; }
+
+/* Brighter surface for live skeleton blocks during generation. The base
+ * --surface-overlay token from arcade-gen sits too close to the viewport
+ * background to be visible while pulsing. We define a sibling here only
+ * for the PhantomSkeleton component. */
+:root {
+  --surface-overlay-strong: rgba(120, 120, 140, 0.18);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-overlay-strong: rgba(255, 255, 255, 0.12);
+  }
+}
+
+/* PhantomSkeleton block pulse — alternates between overlay and
+ * overlay-strong so blocks remain visible against either viewport bg. */
+@keyframes arcade-studio-phantom-pulse {
+  0%, 100% { background: var(--surface-overlay); }
+  50%      { background: var(--surface-overlay-strong); }
+}
+
 html, body, #root { height: 100%; margin: 0; }
 
 /* Expandable tool-call rows use <details>; hide the default disclosure
