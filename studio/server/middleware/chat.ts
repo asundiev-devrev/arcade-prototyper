@@ -232,6 +232,23 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
       byDevu: projectRef.hostDevu,
       text: prompt,
     });
+
+    // Mirror cancel-by-user: cancelTurn() finalizes the registry directly,
+    // bypassing wrappedEnd. Subscribe to the turn's terminator so guests
+    // still see turn_ended with cancelled:true in their replay.
+    const capturedRef = projectRef;
+    const sub = subscribe(slug, () => {}, () => {
+      const final = getTurn(slug);
+      if (!final || !final.cancelled) return;
+      recordChatEventForReplay(capturedRef, {
+        type: "turn_ended",
+        turnId: turn.id,
+        ok: false,
+        error: final.error,
+        cancelled: true,
+      });
+    });
+    void sub;
   }
 
   res.writeHead(202, { "Content-Type": "application/json" });
