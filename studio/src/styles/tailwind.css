@@ -187,3 +187,9 @@ textarea[data-hero-input]::placeholder {
   color: var(--fg-neutral-prominent, #211e20);
   opacity: 0.48;
 }
+
+/* ─── Live cursor skeleton pulse animation ─── */
+@keyframes arcade-studio-skeleton-pulse {
+  from { opacity: 0.6; }
+  to   { opacity: 0.9; }
+}
