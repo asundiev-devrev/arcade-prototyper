@@ -21,6 +21,7 @@ import { sharedProjectsMiddleware } from "./server/middleware/sharedProjects";
 import { attachRelayToHttpServer } from "./server/relay/wsServer";
 import { hydrateSessionRegistry } from "./server/relay/sessionRegistry";
 import { hydrateProjectRegistry, republishAllRendezvous } from "./server/relay/projectRegistry";
+import { attachHostCommentInbox } from "./server/relay/hostCommentInbox";
 import { seedReplayBuffersFromDisk } from "./server/relay/seedReplayBuffers";
 import { getDevRevPat } from "./server/secrets/keychain";
 import { resolveDevuFromPat } from "./server/relay/auth";
@@ -87,7 +88,13 @@ function apiPlugin(): import("vite").Plugin {
               const pat = (await getDevRevPat()) || process.env.DEVREV_PAT || "";
               if (pat) {
                 const id = await resolveDevuFromPat(pat);
-                if (id?.id) await seedReplayBuffersFromDisk(id.id);
+                if (id?.id) {
+                  await seedReplayBuffersFromDisk(id.id);
+                  // Mirror incoming `comment_posted` events into the host's
+                  // local chat-history.json so spectator comments are
+                  // visible (and reload-safe) on the host's chat pane.
+                  attachHostCommentInbox(id.id);
+                }
               }
             } catch (err) {
               console.warn("[studio/shared-projects] seed replay failed:", err);

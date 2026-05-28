@@ -118,6 +118,42 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
     };
   }, [slug, chat.phase]);
 
+  // Subscribe to the host-side relay SSE so spectator comments paint live
+  // in the host's chat pane. Server already persists comments into
+  // `chat-history.json` via the host comment inbox, so the next history
+  // pull would also pick them up — but appending here gives instant
+  // feedback without waiting for the next turn to end. Dedupe by id so
+  // the eventual history reload doesn't double-render.
+  useEffect(() => {
+    if (!slug) return;
+    const es = new EventSource(`/api/projects/${slug}/presence-stream`);
+    const onRelay = (e: MessageEvent) => {
+      try {
+        const ev = JSON.parse(e.data);
+        if (!ev || ev.type !== "comment_posted") return;
+        const id = `comment:${String(ev.id ?? "")}`;
+        if (id === "comment:") return;
+        const text = String(ev.text ?? "");
+        if (!text) return;
+        const ts = typeof ev.ts === "number" ? ev.ts : Date.now();
+        const msg: ChatMessage = {
+          id,
+          role: "user",
+          content: text,
+          createdAt: new Date(ts).toISOString(),
+        };
+        setChatHistory((h) => (h.some((m) => m.id === id) ? h : [...h, msg]));
+      } catch {
+        // ignore malformed frames
+      }
+    };
+    es.addEventListener("relay", onRelay as EventListener);
+    return () => {
+      es.removeEventListener("relay", onRelay as EventListener);
+      es.close();
+    };
+  }, [slug]);
+
   return {
     project,
     chatHistory,

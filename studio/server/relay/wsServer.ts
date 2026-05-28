@@ -69,6 +69,21 @@ export function onProjectEvent(
   };
 }
 
+/**
+ * Subscribe to broadcast events across every project. Useful for global
+ * mirrors that need to see events from projects that may not exist at the
+ * time the listener attaches (e.g. host comment inbox — projects can be
+ * shared after boot).
+ */
+export function onAnyProjectEvent(
+  listener: (projectShareId: string, ev: RelayEvent) => void,
+): () => void {
+  projectBus.on("event", listener);
+  return () => {
+    projectBus.off("event", listener);
+  };
+}
+
 const HEARTBEAT_MS = 15_000;
 const PING_TIMEOUT_MS = 40_000;
 
