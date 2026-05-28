@@ -14,6 +14,23 @@ export type StudioEvent =
       details?: string;
     }
   | {
+      kind: "tool_call_started";
+      toolUseId: string;
+      tool: string;
+      pretty: string;
+    }
+  | {
+      kind: "tool_input_partial";
+      toolUseId: string;
+      action: "writing" | "editing";
+      filePath?: string;
+      partialContent: string;
+    }
+  | {
+      kind: "tool_input_complete";
+      toolUseId: string;
+    }
+  | {
       kind: "tool_result";
       tool: string;
       ok: boolean;
