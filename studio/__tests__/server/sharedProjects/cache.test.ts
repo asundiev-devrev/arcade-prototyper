@@ -132,6 +132,34 @@ describe("shared-projects cache", () => {
     expect(frames["frame-old"]).toBe("<legacy>");
   });
 
+  it("listMirrors skips a single corrupt mirror instead of hiding the rest", async () => {
+    // Regression for 0.23.2: a zero-byte metadata.json (e.g. a crash mid
+    // mkdir+write) used to throw SyntaxError out of readMirror, which
+    // listMirrors caught at the outer level and returned `[]` for —
+    // every shared project disappeared from the user's home view.
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const { createMirror, listMirrors } = await import(
+      "../../../server/sharedProjects/cache"
+    );
+    const { sharedProjectDir } = await import("../../../server/paths");
+
+    await createMirror({
+      id: "good",
+      relayUrl: "x",
+      hostDevu: "h",
+      hostDisplayName: "A",
+      projectSlug: "p",
+    });
+
+    const badDir = sharedProjectDir("bad");
+    await fs.mkdir(badDir, { recursive: true });
+    await fs.writeFile(path.join(badDir, "metadata.json"), "");
+
+    const list = await listMirrors();
+    expect(list.map((m) => m.id)).toEqual(["good"]);
+  });
+
   it("deleteMirror removes the directory", async () => {
     const { createMirror, deleteMirror, readMirror } = await import(
       "../../../server/sharedProjects/cache"

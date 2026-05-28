@@ -51,7 +51,11 @@ export async function readMirror(id: string): Promise<MirrorMetadata | null> {
     const raw = await fs.readFile(path.join(sharedProjectDir(id), "metadata.json"), "utf-8");
     return JSON.parse(raw);
   } catch (err: any) {
-    if (err?.code === "ENOENT") return null;
+    // Treat truncated/invalid JSON the same as a missing file. Without this
+    // a single corrupt mirror (e.g. zero-byte metadata.json from a crash
+    // mid-write) propagates through listMirrors() and hides every other
+    // shared project from the user.
+    if (err?.code === "ENOENT" || err instanceof SyntaxError) return null;
     throw err;
   }
 }
@@ -140,17 +144,23 @@ export async function readFrames(id: string): Promise<Record<string, string>> {
 }
 
 export async function listMirrors(): Promise<MirrorMetadata[]> {
+  let entries: string[];
   try {
-    const entries = await fs.readdir(sharedProjectsRoot());
-    const out: MirrorMetadata[] = [];
-    for (const id of entries) {
-      const meta = await readMirror(id);
-      if (meta) out.push(meta);
-    }
-    return out;
+    entries = await fs.readdir(sharedProjectsRoot());
   } catch {
     return [];
   }
+  const out: MirrorMetadata[] = [];
+  for (const id of entries) {
+    // Skip per-entry failures so one bad mirror can't hide the rest.
+    try {
+      const meta = await readMirror(id);
+      if (meta) out.push(meta);
+    } catch (err) {
+      console.warn(`[sharedProjects] skipping unreadable mirror ${id}:`, err);
+    }
+  }
+  return out;
 }
 
 export async function deleteMirror(id: string): Promise<void> {
