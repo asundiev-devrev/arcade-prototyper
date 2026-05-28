@@ -17,7 +17,7 @@ import { buildFigmaContextBlock } from "../figma/promptBlock";
 import { getFigmaSystemIngest, type FigmaSystemIngest } from "../figmaSystemIngest";
 import { renderDesignMd } from "../figma/systemRender";
 import { designMdPath } from "../paths";
-import { startTurn, subscribe, getTurn } from "../turnRegistry";
+import { startTurn, subscribe, getTurn, cancelTurn } from "../turnRegistry";
 import { hasDeviationsSection, DEVIATIONS_MISSING_TRAILER } from "../deviationsContract";
 import { recordChatEventForReplay, type ProjectRef } from "./chatRelayMirror";
 import { resolveDevuFromPat } from "../relay/auth";
@@ -83,6 +83,7 @@ async function readFrameSources(slug: string): Promise<string> {
 
 const STREAM_URL = /^\/api\/chat\/stream\/([a-z0-9][a-z0-9-]{0,62})$/i;
 const STATUS_URL = /^\/api\/chat\/status\/([a-z0-9][a-z0-9-]{0,62})$/i;
+const CANCEL_URL = /^\/api\/chat\/cancel\/([a-z0-9][a-z0-9-]{0,62})$/i;
 
 export function chatMiddleware() {
   return async (req: IncomingMessage, res: ServerResponse, next?: () => void) => {
@@ -96,6 +97,8 @@ export function chatMiddleware() {
     }
 
     if (req.url.startsWith("/api/chat") && req.method === "POST") {
+      const cancelMatch = req.url.match(CANCEL_URL);
+      if (cancelMatch) return handleCancel(res, cancelMatch[1].toLowerCase());
       return handleStart(req, res);
     }
 
@@ -331,6 +334,21 @@ function handleStatus(res: ServerResponse, slug: string): void {
       error: turn.error,
     }),
   );
+}
+
+function handleCancel(res: ServerResponse, slug: string): void {
+  const ok = cancelTurn(slug);
+  if (!ok) {
+    res.writeHead(409, { "Content-Type": "application/json" });
+    res.end(
+      JSON.stringify({
+        error: { code: "no_running_turn", message: "No turn is running for this project." },
+      }),
+    );
+    return;
+  }
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ cancelled: true, slug }));
 }
 
 async function enrichPromptWithFigmaContext(
