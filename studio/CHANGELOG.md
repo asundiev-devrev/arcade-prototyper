@@ -32,6 +32,14 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   failed comment post used to leave the textarea full and stuck busy
   forever. The input now re-enables on failure, preserves the typed
   text, and shows an inline error message so the user can retry.
+- **Comments appear immediately, even while the host is offline.**
+  Previously a posted comment vanished until the host's WebSocket came
+  back and echoed it. The spectator now optimistically appends the
+  comment on success and dedupes against the relay echo when it
+  eventually arrives.
+- **Spectator no longer sees author-only "Try starting with…"
+  suggestions** in the empty chat state. Guests can only comment, so
+  prompt suggestions were misleading.
 
 ### Internal
 - Extracted `useProjectFromHost` and `useProjectFromMirror` hooks so the
