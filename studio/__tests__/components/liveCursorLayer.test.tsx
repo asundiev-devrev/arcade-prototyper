@@ -11,6 +11,7 @@ vi.mock("@xorkavi/arcade-gen", () => ({}));
 function Harness(props: {
   agentCursor: any;
   phase: any;
+  narrations?: string[];
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   return (
@@ -21,6 +22,7 @@ function Harness(props: {
         phase={props.phase}
         containerRef={ref as RefObject<HTMLDivElement>}
         frames={[{ slug: "home", name: "Home" }] as any}
+        narrations={props.narrations}
       />
     </div>
   );
@@ -80,7 +82,7 @@ describe("LiveCursorLayer", () => {
     expect(container.querySelector('[data-testid="live-cursor"]')).not.toBeNull();
   });
 
-  it("renders a bubble when narration is present", () => {
+  it("renders a bubble when narrations array is provided", () => {
     const { container } = render(
       <Harness
         phase="running"
@@ -88,9 +90,9 @@ describe("LiveCursorLayer", () => {
           frame: null,
           action: "thinking",
           composites: [],
-          narration: "Reading existing frames",
           updatedAt: Date.now(),
         }}
+        narrations={["Reading existing frames"]}
       />,
     );
     const bubble = container.querySelector(
@@ -98,5 +100,25 @@ describe("LiveCursorLayer", () => {
     ) as HTMLElement | null;
     expect(bubble).not.toBeNull();
     expect(bubble!.textContent).toContain("Reading");
+  });
+
+  it("renders a stack of narrations when narrations array is provided", () => {
+    const { container, getByText } = render(
+      <Harness
+        phase="running"
+        agentCursor={{
+          frame: null,
+          action: "thinking",
+          composites: [],
+          updatedAt: Date.now(),
+        }}
+        narrations={["First thought", "Second thought", "Third thought"]}
+      />,
+    );
+    const stack = container.querySelector('[data-testid="live-cursor-bubble-stack"]');
+    expect(stack).not.toBeNull();
+    expect(getByText("First thought")).toBeDefined();
+    expect(getByText("Second thought")).toBeDefined();
+    expect(getByText("Third thought")).toBeDefined();
   });
 });

@@ -39,11 +39,13 @@ export function LiveCursorLayer({
   phase,
   containerRef,
   frames,
+  narrations = [],
 }: {
   agentCursor: StreamState["agentCursor"];
   phase: TurnPhase;
   containerRef: RefObject<HTMLDivElement>;
   frames: Frame[];
+  narrations?: string[];
 }) {
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
 
@@ -85,7 +87,8 @@ export function LiveCursorLayer({
 
   if (phase !== "running" || !agentCursor || !pos) return null;
 
-  const bubbleText = agentCursor.narration?.slice(0, 80) ?? "";
+  // Show last 5 narrations, newest at bottom
+  const recentNarrations = narrations.slice(-5);
 
   return (
     <>
@@ -119,32 +122,49 @@ export function LiveCursorLayer({
           />
         </svg>
       </div>
-      {bubbleText && (
+      {recentNarrations.length > 0 && (
         <div
-          data-testid="live-cursor-bubble"
-          title={agentCursor.narration ?? ""}
+          data-testid="live-cursor-bubble-stack"
           style={{
             position: "absolute",
             left: 0,
             top: 0,
             transform: `translate(${pos.x + 16}px, ${pos.y - 8}px)`,
             transition: "transform 250ms cubic-bezier(0.4, 0, 0.2, 1)",
-            background: "var(--surface-overlay)",
-            color: "var(--fg-neutral-medium)",
-            border: "1px solid var(--stroke-neutral-subtle)",
-            borderRadius: 8,
-            padding: "4px 8px",
-            fontSize: 12,
-            maxWidth: 240,
-            display: "-webkit-box",
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column-reverse",
+            gap: 4,
             pointerEvents: "none",
             zIndex: 5,
           }}
         >
-          {bubbleText}
+          {recentNarrations.map((narration, i) => {
+            const opacity = 0.4 + 0.15 * (i / Math.max(1, recentNarrations.length - 1));
+            const truncated = narration.slice(0, 80);
+            return (
+              <div
+                key={i}
+                data-testid="live-cursor-bubble"
+                title={narration}
+                style={{
+                  background: "var(--surface-overlay)",
+                  color: "var(--fg-neutral-medium)",
+                  border: "1px solid var(--stroke-neutral-subtle)",
+                  borderRadius: 8,
+                  padding: "4px 8px",
+                  fontSize: 12,
+                  maxWidth: 240,
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                  overflow: "hidden",
+                  opacity,
+                }}
+              >
+                {truncated}
+              </div>
+            );
+          })}
         </div>
       )}
     </>

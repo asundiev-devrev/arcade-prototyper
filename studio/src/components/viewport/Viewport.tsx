@@ -30,6 +30,7 @@ export function Viewport({
   frameSrcOverride,
   agentCursor = null,
   phase = "idle",
+  narrations = [],
 }: {
   project: Project;
   frameWidth: number;
@@ -41,6 +42,7 @@ export function Viewport({
   frameSrcOverride?: (frameSlug: string) => string;
   agentCursor?: StreamState["agentCursor"];
   phase?: TurnPhase;
+  narrations?: string[];
 }) {
   // Pass `enabled: !isReadonly` so the polling timer and host fetch
   // don't run for spectators — see useFrames docstring.
@@ -223,6 +225,7 @@ export function Viewport({
               phase={phase}
               containerRef={containerRef}
               frames={frames}
+              narrations={narrations}
             />
           </div>
         </ViewportPreview>
@@ -286,6 +289,7 @@ export function Viewport({
           phase={phase}
           containerRef={containerRef}
           frames={frames}
+          narrations={narrations}
         />
       </div>
     </ViewportPreview>

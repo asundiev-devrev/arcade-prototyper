@@ -476,6 +476,7 @@ function ProjectDetailShell({
             frameSrcOverride={frameSrcOverride}
             agentCursor={chatStream.state.agentCursor}
             phase={chatStream.state.phase}
+            narrations={chatStream.state.narrations}
           />
         </main>
         {!isSpectator && devOpen && <DevModePanel slug={project.slug} />}
