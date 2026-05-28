@@ -48,4 +48,13 @@ describe("POST /api/chat/cancel/:slug", () => {
     expect(status).toBe(409);
     expect(body.error.code).toBe("no_running_turn");
   });
+
+  it("returns 409 on a second cancel after the turn already finalized", async () => {
+    startTurn("gamma", { prompt: "hi", run: () => { /* hangs */ } });
+    const first = await postJson(`${baseUrl}/api/chat/cancel/gamma`);
+    expect(first.status).toBe(200);
+    const second = await postJson(`${baseUrl}/api/chat/cancel/gamma`);
+    expect(second.status).toBe(409);
+    expect(second.body.error.code).toBe("no_running_turn");
+  });
 });
