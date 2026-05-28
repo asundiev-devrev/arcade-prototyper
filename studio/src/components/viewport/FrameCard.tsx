@@ -4,6 +4,7 @@ import type { Frame } from "../../../server/types";
 import { useTargetSelection } from "../../hooks/targetSelectionContext";
 import { FrameSkeleton } from "./FrameSkeleton";
 import type { StreamState, TurnPhase } from "../../hooks/chatStreamReducer";
+import { mapPathToFrame } from "../../lib/agentCursor";
 
 const FRAME_WIDTH_MIN = 320;
 const FRAME_WIDTH_MAX = 2560;
@@ -199,7 +200,8 @@ export function FrameCard({
     : `/api/frames/${projectSlug}/${frame.slug}?mode=${projectMode}`;
   const isTargetedFrame =
     target !== null && target.frameSlug === frame.slug;
-  const isTargeted = phase === "running" && agentCursor?.frame === frame.slug;
+  const resolvedSlug = agentCursor?.frame ?? mapPathToFrame(agentCursor?.filePath ?? "", [frame]);
+  const isTargeted = phase === "running" && resolvedSlug === frame.slug;
   const composites = agentCursor?.composites ?? [];
 
   return (

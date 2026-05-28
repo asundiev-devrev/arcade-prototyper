@@ -117,6 +117,28 @@ describe("FrameCard skeleton integration", () => {
     // No skeleton rendered
     expect(container.querySelector('[data-testid="frame-skeleton"]')).toBeNull();
   });
+
+  it("renders skeleton when agentCursor has frame=null but filePath contains this frame slug", () => {
+    const { container } = render(
+      <FrameCard
+        projectSlug="demo"
+        frame={demoFrame}
+        frameWidth={1440}
+        onFrameWidthChange={() => {}}
+        projectMode="light"
+        zoom={1}
+        phase="running"
+        agentCursor={{
+          frame: null,
+          action: "writing",
+          filePath: "/Users/demo/arcade-studio/projects/demo-proj/frames/home/index.tsx",
+          composites: ["Hero", "Button"],
+          updatedAt: Date.now(),
+        }}
+      />,
+    );
+    expect(container.querySelector('[data-testid="frame-skeleton"]')).not.toBeNull();
+  });
 });
 
 describe("FrameCard wipe animation", () => {
