@@ -719,8 +719,11 @@ async function runComputerBranch(ctx: {
  * mapping — broadcasting only schema-valid events is safer than emitting
  * bogus ones that guests can't parse.
  *
- * - `narration` / `tool_call` / `tool_result` / `session` / `origin` →
- *   `agent_event` with the original StudioEvent embedded under `event`.
+ * - `narration` / `tool_call` / `tool_result` / `session` / `origin` /
+ *   `agent_cursor` / `tool_call_started` / `tool_input_partial` /
+ *   `tool_input_complete` → `agent_event` with the original StudioEvent
+ *   embedded under `event`. Spectators replay these verbatim, so adding a
+ *   new event kind upstream auto-propagates here without a separate path.
  * - `end` is handled by the wrapper around the registry's `end` callback,
  *   which translates it to `turn_ended` and includes the result; we return
  *   null here so it's not double-emitted.
@@ -736,6 +739,10 @@ function mapStudioEventToRelayEvent(ev: StudioEvent, turnId: string): RelayEvent
     case "tool_result":
     case "session":
     case "origin":
+    case "agent_cursor":
+    case "tool_call_started":
+    case "tool_input_partial":
+    case "tool_input_complete":
       return { type: "agent_event", turnId, event: ev };
     case "end":
       // Translated to turn_ended by the wrapper; don't double-emit.
