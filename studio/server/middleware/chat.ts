@@ -187,7 +187,7 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
 
   const turn = startTurn(slug, {
     prompt,
-    run: ({ emit, end }) => {
+    run: ({ emit, end, signal }) => {
       const wrappedEmit = projectRef
         ? (ev: StudioEvent) => {
             emit(ev);
@@ -210,8 +210,8 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
           }
         : end;
       const task = isComputerTurn
-        ? runComputerBranch({ emit: wrappedEmit, slug, prompt, project })
-        : runClaudeBranch({ emit: wrappedEmit, slug, prompt, images, project });
+        ? runComputerBranch({ emit: wrappedEmit, slug, prompt, project, signal })
+        : runClaudeBranch({ emit: wrappedEmit, slug, prompt, images, project, signal });
       task.then(
         (result) => wrappedEnd(result),
         (err) => wrappedEnd({ ok: false, error: err?.message ?? String(err) }),
@@ -465,8 +465,9 @@ async function runClaudeBranch(ctx: {
   prompt: string;
   images?: string[];
   project: { sessionId?: string };
+  signal: AbortSignal;
 }): Promise<{ ok: boolean; error?: string }> {
-  const { emit, slug, project } = ctx;
+  const { emit, slug, project, signal } = ctx;
   const figmaUrl = extractFigmaUrl(ctx.prompt);
   const parsed = figmaUrl ? parseFigmaUrl(figmaUrl) : null;
 
@@ -507,6 +508,7 @@ async function runClaudeBranch(ctx: {
       bin: resolveClaudeBin(),
       images,
       model,
+      signal,
       onEvent: (ev) => {
         if (ev.kind === "session") capturedSessionId = ev.sessionId;
         if (ev.kind === "narration") narrationTexts.push(ev.text);
@@ -594,8 +596,9 @@ async function runComputerBranch(ctx: {
   slug: string;
   prompt: string;
   project: { computerConversationId?: string };
+  signal: AbortSignal;
 }): Promise<{ ok: boolean; error?: string }> {
-  const { emit, slug, prompt, project } = ctx;
+  const { emit, slug, prompt, project, signal } = ctx;
   const wantsFrameContext = FRAME_TRIGGER.test(prompt);
   const cleaned = prompt
     .replace(COMPUTER_MENTION_GLOBAL, "")
@@ -624,6 +627,7 @@ async function runComputerBranch(ctx: {
   const result = await runComputerTurn({
     prompt: finalPrompt,
     conversationId: project.computerConversationId,
+    signal,
     onEvent: (ev) => {
       if (ev.kind === "end") {
         endResult = ev.ok ? { ok: true } : { ok: false, error: ev.error };
