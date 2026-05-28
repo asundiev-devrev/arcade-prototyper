@@ -6,6 +6,14 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.25.0] — 2026-05-28
+
+### Changed
+- **Live cursor v2.** Studio's generation feedback is now driven by the Anthropic SDK's partial-message stream (`--include-partial-messages`), not just completed tool calls. During a turn you now see: a bright phantom skeleton + bottom narration ticker through the read/scan phase, a code panel that types Write content character-by-character into the frame card during scaffolding, and a cursor sprite that hops over the rendered iframe during follow-up edits. The previous LiveCursorLayer + FrameSkeleton are retired.
+
+### Fixed
+- **Spectators now see the live cursor.** A pre-existing 0.24.x bug in `mapStudioEventToRelayEvent` was silently dropping `agent_cursor` events from the spectator stream. Now forwarded through the `agent_event` envelope alongside the new partial events.
+
 ## [0.24.1] — 2026-05-28
 
 ### Fixed
