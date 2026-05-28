@@ -62,7 +62,7 @@ export function ChatPane({
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {showEmpty ? (
         <>
-          <EmptyStatePrompts onPick={(p) => enhancedSend(p)} />
+          {readonly ? null : <EmptyStatePrompts onPick={(p) => enhancedSend(p)} />}
           <div style={{ flex: 1 }} />
         </>
       ) : (
