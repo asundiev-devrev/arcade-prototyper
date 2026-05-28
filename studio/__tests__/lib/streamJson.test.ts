@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseStreamLine, type StudioEvent } from "../../src/lib/streamJson";
+import { parseStreamLine, parseStreamLineAll, type StudioEvent } from "../../src/lib/streamJson";
 
 describe("parseStreamLine", () => {
   it("ignores blank lines", () => {
@@ -65,5 +65,105 @@ describe("parseStreamLine", () => {
 
   it("returns null for unrelated garbage", () => {
     expect(parseStreamLine("not json")).toBeNull();
+  });
+});
+
+describe("parseStreamLineAll: agent_cursor", () => {
+  it("emits agent_cursor reading after a Read tool_call", () => {
+    const events = parseStreamLineAll(JSON.stringify({
+      type: "assistant",
+      message: {
+        content: [
+          {
+            type: "tool_use",
+            name: "Read",
+            input: { file_path: "/p/frames/home/index.tsx" },
+          },
+        ],
+      },
+    }));
+    expect(events).toEqual([
+      expect.objectContaining({ kind: "tool_call", tool: "Read" }),
+      {
+        kind: "agent_cursor",
+        frame: null,
+        action: "reading",
+        filePath: "/p/frames/home/index.tsx",
+      },
+    ]);
+  });
+
+  it("emits agent_cursor writing with composites for Write", () => {
+    const events = parseStreamLineAll(JSON.stringify({
+      type: "assistant",
+      message: {
+        content: [
+          {
+            type: "tool_use",
+            name: "Write",
+            input: {
+              file_path: "/p/frames/home/index.tsx",
+              content: 'import { Button } from "@xorkavi/arcade-gen";',
+            },
+          },
+        ],
+      },
+    }));
+    const cursor = events.find((e) => e.kind === "agent_cursor");
+    expect(cursor).toEqual({
+      kind: "agent_cursor",
+      frame: null,
+      action: "writing",
+      filePath: "/p/frames/home/index.tsx",
+      composites: ["Button"],
+    });
+  });
+
+  it("emits agent_cursor editing with composites for Edit", () => {
+    const events = parseStreamLineAll(JSON.stringify({
+      type: "assistant",
+      message: {
+        content: [
+          {
+            type: "tool_use",
+            name: "Edit",
+            input: {
+              file_path: "/p/frames/home/index.tsx",
+              new_string: 'import { Card } from "@xorkavi/arcade-gen";',
+            },
+          },
+        ],
+      },
+    }));
+    const cursor = events.find((e) => e.kind === "agent_cursor");
+    expect(cursor).toEqual({
+      kind: "agent_cursor",
+      frame: null,
+      action: "editing",
+      filePath: "/p/frames/home/index.tsx",
+      composites: ["Card"],
+    });
+  });
+
+  it("emits agent_cursor thinking with frame=null for Bash", () => {
+    const events = parseStreamLineAll(JSON.stringify({
+      type: "assistant",
+      message: {
+        content: [
+          { type: "tool_use", name: "Bash", input: { command: "ls" } },
+        ],
+      },
+    }));
+    const cursor = events.find((e) => e.kind === "agent_cursor");
+    expect(cursor).toEqual({ kind: "agent_cursor", frame: null, action: "thinking" });
+  });
+
+  it("does not emit agent_cursor for plain narration", () => {
+    const events = parseStreamLineAll(JSON.stringify({
+      type: "assistant",
+      message: { content: [{ type: "text", text: "Building Home" }] },
+    }));
+    expect(events.find((e) => e.kind === "agent_cursor")).toBeUndefined();
+    expect(events.find((e) => e.kind === "narration")).toBeDefined();
   });
 });

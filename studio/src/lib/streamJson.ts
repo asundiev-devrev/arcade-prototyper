@@ -1,3 +1,5 @@
+import { extractComposites } from "./agentCursor";
+
 export type StudioEvent =
   | { kind: "session"; sessionId: string }
   | { kind: "origin"; source: "claude" | "computer" }
@@ -17,6 +19,15 @@ export type StudioEvent =
       ok: boolean;
       /** Full result content (not truncated). UI decides how much to show. */
       snippet?: string;
+    }
+  | {
+      kind: "agent_cursor";
+      /** Frame slug being targeted, or null = parked (no clear target).
+       *  Parser leaves this as null; client resolves via mapPathToFrame. */
+      frame: string | null;
+      action: "reading" | "writing" | "editing" | "thinking";
+      filePath?: string;
+      composites?: string[];
     }
   | { kind: "end"; ok: true }
   | { kind: "end"; ok: false; error: string; cancelled?: boolean };
@@ -110,6 +121,36 @@ function basename(p?: string): string {
   return parts[parts.length - 1] || p;
 }
 
+function toolUseToCursor(name: string, input: any): StudioEvent {
+  if (name === "Read") {
+    return {
+      kind: "agent_cursor",
+      frame: null,
+      action: "reading",
+      filePath: input?.file_path ? String(input.file_path) : undefined,
+    };
+  }
+  if (name === "Write") {
+    return {
+      kind: "agent_cursor",
+      frame: null,
+      action: "writing",
+      filePath: input?.file_path ? String(input.file_path) : undefined,
+      composites: extractComposites(String(input?.content ?? "")),
+    };
+  }
+  if (name === "Edit") {
+    return {
+      kind: "agent_cursor",
+      frame: null,
+      action: "editing",
+      filePath: input?.file_path ? String(input.file_path) : undefined,
+      composites: extractComposites(String(input?.new_string ?? "")),
+    };
+  }
+  return { kind: "agent_cursor", frame: null, action: "thinking" };
+}
+
 export function parseStreamLine(line: string): StudioEvent | null {
   const events = parseStreamLineAll(line);
   return events.length > 0 ? events[0] : null;
@@ -133,6 +174,7 @@ export function parseStreamLineAll(line: string): StudioEvent[] {
       } else if (c.type === "tool_use") {
         const pr = prettyTool(c.name, c.input);
         out.push({ kind: "tool_call", ...pr });
+        out.push(toolUseToCursor(c.name, c.input));
       }
     }
     return out;
