@@ -38,7 +38,7 @@ export type ChatTurnItem =
       endedAt?: number;
     };
 
-export type TurnPhase = "idle" | "running" | "done" | "error";
+export type TurnPhase = "idle" | "running" | "done" | "error" | "cancelled";
 
 export interface StreamState {
   /** True while a turn is in flight. Alias for `phase === "running"`. */
@@ -159,6 +159,17 @@ export function applyStudioEvent(s: StreamState, ev: StudioEvent): StreamState {
         lastEvent: ev,
         busy: false,
         phase: "done",
+        turnEndedAt: Date.now(),
+      };
+    }
+    if (ev.cancelled) {
+      return {
+        ...s,
+        lastEvent: ev,
+        busy: false,
+        phase: "cancelled",
+        error: null,
+        errorKind: undefined,
         turnEndedAt: Date.now(),
       };
     }
