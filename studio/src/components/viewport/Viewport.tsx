@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import type { Project } from "../../../server/types";
 import { useFrames } from "../../hooks/useFrames";
 import { FrameCard } from "./FrameCard";
@@ -6,6 +6,8 @@ import { EmptyViewport } from "./EmptyViewport";
 import { ViewportPreview } from "./ViewportPreview";
 import { NewFrameCard } from "./NewFrameCard";
 import { api } from "../../lib/api";
+import { LiveCursorLayer } from "./LiveCursorLayer";
+import type { StreamState, TurnPhase } from "../../hooks/chatStreamReducer";
 
 export function Viewport({
   project,
@@ -25,6 +27,8 @@ export function Viewport({
   // endpoint. Author mode leaves this undefined → FrameCard falls back
   // to its existing `/api/frames/:slug/:frame` URL.
   frameSrcOverride,
+  agentCursor = null,
+  phase = "idle",
 }: {
   project: Project;
   frameWidth: number;
@@ -34,6 +38,8 @@ export function Viewport({
   onSeedChat: (text: string) => void;
   readonly?: boolean;
   frameSrcOverride?: (frameSlug: string) => string;
+  agentCursor?: StreamState["agentCursor"];
+  phase?: TurnPhase;
 }) {
   // Pass `enabled: !isReadonly` so the polling timer and host fetch
   // don't run for spectators — see useFrames docstring.
@@ -43,6 +49,7 @@ export function Viewport({
     slug: string;
     kind: "target" | "missing";
   } | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   async function handleCreateFrame() {
     if (creatingFrame) return;
@@ -165,7 +172,9 @@ export function Viewport({
   return (
     <ViewportPreview zoom={zoom} onZoomChange={onZoomChange}>
       <div
+        ref={containerRef}
         style={{
+          position: "relative",
           display: "flex",
           gap: 64,
           padding: 32,
@@ -191,6 +200,12 @@ export function Viewport({
         {!isReadonly && (
           <NewFrameCard onClick={handleCreateFrame} busy={creatingFrame} />
         )}
+        <LiveCursorLayer
+          agentCursor={agentCursor}
+          phase={phase}
+          containerRef={containerRef}
+          frames={frames}
+        />
       </div>
     </ViewportPreview>
   );
