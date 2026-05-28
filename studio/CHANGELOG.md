@@ -6,6 +6,12 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.23.2] — 2026-05-28
+
+### Fixed
+- Hero submit on the homepage paints the user's prompt and a "Working…" indicator immediately on the new project's screen, instead of a blank chat with prompt suggestions. The prior empty-state suggestion list is gone.
+- Spectator comments posted into a shared project's chat pane now persist into the host's chat history and appear live in the host's chat pane. Previously they were broadcast to live sockets but lost on the host side, leaving the host unaware they had been left.
+
 ## [0.23.1] — 2026-05-28
 
 ### Added
