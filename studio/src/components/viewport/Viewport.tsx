@@ -7,6 +7,7 @@ import { ViewportPreview } from "./ViewportPreview";
 import { NewFrameCard } from "./NewFrameCard";
 import { api } from "../../lib/api";
 import { LiveCursorLayer } from "./LiveCursorLayer";
+import { FrameSkeleton } from "./FrameSkeleton";
 import type { StreamState, TurnPhase } from "../../hooks/chatStreamReducer";
 
 export function Viewport({
@@ -147,11 +148,7 @@ export function Viewport({
 
   if (!frames.length) {
     // Spectator-side empty state: the host hasn't generated anything yet.
-    // Don't show a "+ New frame" CTA — guests can't author. This is the
-    // canonical waiting-for-host surface now that ProjectDetail spectator
-    // mode owns the full shared-project shell (the bespoke SharedProject
-    // route was retired in this plan).
-    if (isReadonly) {
+    if (isReadonly && phase !== "running") {
       return (
         <div
           style={{
@@ -166,7 +163,89 @@ export function Viewport({
         </div>
       );
     }
-    return <EmptyViewport onCreateFrame={handleCreateFrame} busy={creatingFrame} />;
+    // Author empty state while turn is running: show phantom skeleton + cursor
+    // so the live cursor + skeleton are visible during the scaffolding phase.
+    if (phase === "running") {
+      const clampedWidth = Math.min(2560, Math.max(320, frameWidth));
+      return (
+        <ViewportPreview zoom={zoom} onZoomChange={onZoomChange}>
+          <div
+            ref={containerRef}
+            style={{
+              position: "relative",
+              display: "flex",
+              gap: 64,
+              padding: 32,
+              height: "100%",
+              width: "fit-content",
+              minWidth: "100%",
+            }}
+          >
+            <div
+              style={{ flex: "none" }}
+              data-frame-slug="__phantom__"
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  marginBottom: 8,
+                  fontSize: 12,
+                  color: "var(--fg-neutral-medium)",
+                }}
+              >
+                <span>Generating…</span>
+              </div>
+              <div
+                style={{
+                  position: "relative",
+                  width: clampedWidth,
+                  height: "calc(100vh - 180px)",
+                }}
+              >
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    background: "var(--surface-overlay)",
+                    border: "1px solid var(--stroke-neutral-subtle)",
+                    borderRadius: 12,
+                    overflow: "hidden",
+                  }}
+                >
+                  <FrameSkeleton visible={true} composites={agentCursor?.composites ?? []} />
+                </div>
+              </div>
+            </div>
+            <LiveCursorLayer
+              agentCursor={agentCursor}
+              phase={phase}
+              containerRef={containerRef}
+              frames={frames}
+            />
+          </div>
+        </ViewportPreview>
+      );
+    }
+    // Author empty state while idle: show "+ New frame" CTA.
+    if (!isReadonly) {
+      return <EmptyViewport onCreateFrame={handleCreateFrame} busy={creatingFrame} />;
+    }
+    // Readonly + not running: should never happen but fall back to waiting message.
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          height: "100%",
+          color: "var(--fg-neutral-subtle)",
+        }}
+      >
+        Waiting for the host to generate frames…
+      </div>
+    );
   }
 
   return (

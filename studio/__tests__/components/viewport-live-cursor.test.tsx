@@ -158,4 +158,35 @@ describe("Viewport live cursor integration", () => {
     // No cursor rendered when phase defaults to idle
     expect(container.querySelector('[data-testid="live-cursor"]')).toBeNull();
   });
+
+  it("renders phantom skeleton when frames=[] and phase=running", () => {
+    const projectEmpty: Project = {
+      slug: "demo",
+      name: "Demo",
+      theme: "arcade",
+      mode: "light",
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
+      frames: [],
+    };
+    const { container } = render(
+      <Viewport
+        project={projectEmpty}
+        frameWidth={1440}
+        onFrameWidthChange={() => {}}
+        zoom={1}
+        onZoomChange={() => {}}
+        onSeedChat={() => {}}
+        phase="running"
+        agentCursor={{
+          frame: null,
+          action: "thinking",
+          composites: ["Hero", "Button"],
+          updatedAt: Date.now(),
+        }}
+      />,
+    );
+    expect(container.querySelector('[data-testid="frame-skeleton"]')).not.toBeNull();
+    expect(container.querySelector('[data-frame-slug="__phantom__"]')).not.toBeNull();
+  });
 });
