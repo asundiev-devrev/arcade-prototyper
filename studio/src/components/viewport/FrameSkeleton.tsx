@@ -7,11 +7,12 @@ const FALLBACK: Array<{ name: string; shape: SkeletonShape }> = [
   { name: "Footer", shape: SHAPES.Footer },
 ];
 
-function blockStyle(): React.CSSProperties {
+function blockStyle(index: number): React.CSSProperties {
   return {
     background: "var(--surface-overlay-2, rgba(255,255,255,0.08))",
     borderRadius: 8,
     animation: "arcade-studio-skeleton-pulse 1.6s ease-in-out infinite alternate",
+    animationDelay: `${index * 200}ms`,
   };
 }
 
@@ -38,6 +39,8 @@ export function FrameSkeleton({
     e.shape.kind !== "bar" && e.shape.kind !== "rail",
   );
 
+  let blockIndex = 0;
+
   return (
     <div
       data-testid="frame-skeleton"
@@ -49,6 +52,7 @@ export function FrameSkeleton({
         flexDirection: "column",
         gap: 16,
         pointerEvents: "none",
+        borderRadius: 12,
       }}
       aria-hidden="true"
     >
@@ -56,7 +60,7 @@ export function FrameSkeleton({
         <div
           key={`top-${e.name}-${i}`}
           data-skeleton-block={e.name}
-          style={{ ...blockStyle(), height: (e.shape as any).height }}
+          style={{ ...blockStyle(blockIndex++), height: (e.shape as any).height }}
         />
       ))}
       <div style={{ flex: 1, display: "flex", gap: 16 }}>
@@ -64,7 +68,7 @@ export function FrameSkeleton({
           <div
             key={`left-${e.name}-${i}`}
             data-skeleton-block={e.name}
-            style={{ ...blockStyle(), width: (e.shape as any).width }}
+            style={{ ...blockStyle(blockIndex++), width: (e.shape as any).width }}
           />
         ))}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16 }}>
@@ -75,7 +79,7 @@ export function FrameSkeleton({
                   key={`tile-${e.name}-${i}-${j}`}
                   data-skeleton-block={e.name}
                   style={{
-                    ...blockStyle(),
+                    ...blockStyle(blockIndex++),
                     aspectRatio: e.shape.aspect,
                     flex: 1,
                   }}
@@ -96,7 +100,7 @@ export function FrameSkeleton({
                   key={`center-${e.name}-${i}`}
                   data-skeleton-block={e.name}
                   style={{
-                    ...blockStyle(),
+                    ...blockStyle(blockIndex++),
                     width: e.shape.width,
                     height: e.shape.height,
                     alignSelf: "center",
@@ -109,7 +113,7 @@ export function FrameSkeleton({
               <div
                 key={`block-${e.name}-${i}`}
                 data-skeleton-block={e.name}
-                style={{ ...blockStyle(), height: (e.shape as any).height ?? "100%" }}
+                style={{ ...blockStyle(blockIndex++), height: (e.shape as any).height ?? "100%" }}
               />,
             ];
           })}
@@ -118,7 +122,7 @@ export function FrameSkeleton({
           <div
             key={`right-${e.name}-${i}`}
             data-skeleton-block={e.name}
-            style={{ ...blockStyle(), width: (e.shape as any).width }}
+            style={{ ...blockStyle(blockIndex++), width: (e.shape as any).width }}
           />
         ))}
       </div>
@@ -126,7 +130,7 @@ export function FrameSkeleton({
         <div
           key={`bottom-${e.name}-${i}`}
           data-skeleton-block={e.name}
-          style={{ ...blockStyle(), height: (e.shape as any).height }}
+          style={{ ...blockStyle(blockIndex++), height: (e.shape as any).height }}
         />
       ))}
     </div>
