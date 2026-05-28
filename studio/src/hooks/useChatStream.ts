@@ -287,5 +287,16 @@ export function useChatStream(slug: string) {
     void send(prompt);
   }, [send, state.lastPrompt]);
 
-  return { state, send, retry };
+  const cancel = useCallback(async () => {
+    try {
+      await fetch(`/api/chat/cancel/${slug}`, { method: "POST" });
+    } catch {
+      // Terminal `end` event from SSE drives state. If cancel POST fails
+      // (rare; e.g. server restart), the stream itself will eventually
+      // disconnect; user can retry. The server returns 409 if no turn is
+      // running, which is also fine — UI doesn't read the response.
+    }
+  }, [slug]);
+
+  return { state, send, retry, cancel };
 }
