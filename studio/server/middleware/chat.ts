@@ -732,7 +732,7 @@ async function runComputerBranch(ctx: {
  * stream) so they're not mirrored here. They only flow through the relay
  * when a remote driver issues a `frame_write` command directly.
  */
-function mapStudioEventToRelayEvent(ev: StudioEvent, turnId: string): RelayEvent | null {
+export function mapStudioEventToRelayEvent(ev: StudioEvent, turnId: string): RelayEvent | null {
   switch (ev.kind) {
     case "narration":
     case "tool_call":
