@@ -6,6 +6,11 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.24.1] — 2026-05-28
+
+### Fixed
+- **Live cursor actually fires now.** The skeleton + cursor were hiding behind a filePath/slug mismatch and the empty-viewport early-return. Phantom skeleton now paints from the moment a turn starts (even when no frames exist yet); narration bubble shows a fading stack of recent thoughts (last 5, newest brightest at the bottom) instead of a single truncated line.
+
 ## [0.24.0] — 2026-05-28
 
 ### Added
