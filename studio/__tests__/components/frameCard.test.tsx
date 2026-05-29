@@ -39,64 +39,6 @@ const demoFrame: Frame = {
   createdAt: "2026-01-01T00:00:00Z",
 };
 
-describe("FrameCard CodeStreamPanel integration", () => {
-  it("renders <CodeStreamPanel> when activeWrite is provided", () => {
-    const { container } = render(
-      <FrameCard
-        projectSlug="demo"
-        frame={demoFrame}
-        frameWidth={1440}
-        onFrameWidthChange={() => {}}
-        projectMode="light"
-        zoom={1}
-        phase="running"
-        activeWrite={{
-          partialContent: "export function Home() {",
-          filePath: "/p/frames/home/index.tsx",
-        }}
-      />,
-    );
-    expect(
-      container.querySelector('[data-testid="code-stream-panel"]'),
-    ).not.toBeNull();
-  });
-
-  it("does NOT render <CodeStreamPanel> when activeWrite is undefined", () => {
-    const { container } = render(
-      <FrameCard
-        projectSlug="demo"
-        frame={demoFrame}
-        frameWidth={1440}
-        onFrameWidthChange={() => {}}
-        projectMode="light"
-        zoom={1}
-        phase="running"
-      />,
-    );
-    expect(
-      container.querySelector('[data-testid="code-stream-panel"]'),
-    ).toBeNull();
-  });
-
-  it("calls onIframeLoaded(frame.slug) when iframe finishes loading", () => {
-    const onIframeLoaded = vi.fn();
-    const { container } = render(
-      <FrameCard
-        projectSlug="demo"
-        frame={demoFrame}
-        frameWidth={1440}
-        onFrameWidthChange={() => {}}
-        projectMode="light"
-        zoom={1}
-        onIframeLoaded={onIframeLoaded}
-      />,
-    );
-    const iframe = container.querySelector("iframe")!;
-    fireEvent.load(iframe);
-    expect(onIframeLoaded).toHaveBeenCalledWith("home");
-  });
-});
-
 describe("FrameCard wipe animation", () => {
   it("adds wipe class on iframe load while turn is running", () => {
     const { container } = render(

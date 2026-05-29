@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useEffect, useState, useRef } from "react";
 import type { Project } from "../../../server/types";
 import { useFrames } from "../../hooks/useFrames";
 import { FrameCard } from "./FrameCard";
@@ -6,10 +6,8 @@ import { EmptyViewport } from "./EmptyViewport";
 import { ViewportPreview } from "./ViewportPreview";
 import { NewFrameCard } from "./NewFrameCard";
 import { api } from "../../lib/api";
-import { PhantomSkeleton } from "./PhantomSkeleton";
-import { NarrationTicker } from "./NarrationTicker";
-import { EditCursor } from "./EditCursor";
-import type { StreamState, TurnPhase } from "../../hooks/chatStreamReducer";
+import { LoadingShow } from "./LoadingShow";
+import type { TurnPhase } from "../../hooks/chatStreamReducer";
 
 export function Viewport({
   project,
@@ -29,11 +27,7 @@ export function Viewport({
   // endpoint. Author mode leaves this undefined → FrameCard falls back
   // to its existing `/api/frames/:slug/:frame` URL.
   frameSrcOverride,
-  agentCursor = null,
   phase = "idle",
-  narrations = [],
-  activeWrites = {},
-  lastTool = null,
 }: {
   project: Project;
   frameWidth: number;
@@ -43,17 +37,7 @@ export function Viewport({
   onSeedChat: (text: string) => void;
   readonly?: boolean;
   frameSrcOverride?: (frameSlug: string) => string;
-  agentCursor?: StreamState["agentCursor"];
   phase?: TurnPhase;
-  narrations?: string[];
-  /** In-flight Write/Edit tool calls keyed by toolUseId. The Viewport
-   *  re-keys by frame slug so each `<FrameCard>` can mount its own
-   *  `<CodeStreamPanel>` while a write to that frame's source file is
-   *  streaming. Cleared by the reducer on tool_input_complete or turn end. */
-  activeWrites?: StreamState["activeWrites"];
-  /** Most recent tool the agent invoked. Drives the right-side
-   *  ••• <toolname> indicator on the `<NarrationTicker>`. */
-  lastTool?: { name: string; pretty: string } | null;
 }) {
   // Pass `enabled: !isReadonly` so the polling timer and host fetch
   // don't run for spectators — see useFrames docstring.
@@ -63,36 +47,7 @@ export function Viewport({
     slug: string;
     kind: "target" | "missing";
   } | null>(null);
-  // Tracks which frame iframes have fired their `load` event. Drives the
-  // `<EditCursor>` overlay — we only show the cursor for frames whose
-  // iframe has actually mounted (otherwise the cursor lands on an empty
-  // wipe wrapper). Replaced (not mutated) on each add so React notices.
-  const [loadedSlugs, setLoadedSlugs] = useState<ReadonlySet<string>>(
-    () => new Set<string>(),
-  );
   const containerRef = useRef<HTMLDivElement | null>(null);
-
-  const onIframeLoaded = (slug: string) => {
-    setLoadedSlugs((prev) => {
-      if (prev.has(slug)) return prev;
-      const next = new Set(prev);
-      next.add(slug);
-      return next;
-    });
-  };
-
-  // Re-key activeWrites by frame slug so each FrameCard can pick up
-  // its own write without scanning the whole map. The reducer guarantees
-  // at most one entry per slug at a time (Claude doesn't pipeline writes
-  // to the same file), so a flat record is fine here.
-  const writesBySlug = useMemo(() => {
-    const out: Record<string, { partialContent: string; filePath: string }> =
-      {};
-    for (const w of Object.values(activeWrites)) {
-      out[w.slug] = { partialContent: w.partialContent, filePath: w.filePath };
-    }
-    return out;
-  }, [activeWrites]);
 
   async function handleCreateFrame() {
     if (creatingFrame) return;
@@ -205,10 +160,9 @@ export function Viewport({
         </div>
       );
     }
-    // Empty state while turn is running: show phantom skeleton + ticker
-    // so the live cursor + skeleton are visible during the scaffolding phase.
+    // Empty + turn running: show the LoadingShow scene loop centered in
+    // the viewport. Disappears as soon as the first frame mounts.
     if (phase === "running") {
-      const clampedWidth = Math.min(2560, Math.max(320, frameWidth));
       return (
         <ViewportPreview zoom={zoom} onZoomChange={onZoomChange}>
           <div
@@ -219,29 +173,12 @@ export function Viewport({
               gap: 64,
               padding: 32,
               height: "100%",
-              width: "fit-content",
+              width: "100%",
               minWidth: "100%",
             }}
+            data-frame-slug="__loading__"
           >
-            <div
-              style={{
-                flex: "none",
-                width: clampedWidth,
-                height: "calc(100vh - 180px)",
-                position: "relative",
-              }}
-              data-frame-slug="__phantom__"
-            >
-              <PhantomSkeleton
-                visible={true}
-                composites={agentCursor?.composites ?? []}
-              />
-            </div>
-            <NarrationTicker
-              narrations={narrations}
-              lastTool={lastTool ?? null}
-              phase={phase}
-            />
+            <LoadingShow />
           </div>
         </ViewportPreview>
       );
@@ -293,24 +230,11 @@ export function Viewport({
             readonly={isReadonly}
             srcOverride={frameSrcOverride}
             phase={phase}
-            activeWrite={writesBySlug[f.slug]}
-            onIframeLoaded={onIframeLoaded}
           />
         ))}
         {!isReadonly && (
           <NewFrameCard onClick={handleCreateFrame} busy={creatingFrame} />
         )}
-        <EditCursor
-          agentCursor={agentCursor}
-          containerRef={containerRef}
-          frames={frames}
-          loadedSlugs={loadedSlugs}
-        />
-        <NarrationTicker
-          narrations={narrations}
-          lastTool={lastTool ?? null}
-          phase={phase}
-        />
       </div>
     </ViewportPreview>
   );

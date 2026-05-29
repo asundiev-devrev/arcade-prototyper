@@ -6,6 +6,11 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.25.1] — 2026-05-29
+
+### Changed
+- **Loading show replaces the live cursor.** In 0.24/0.25 we tried to make the empty viewport feel alive by streaming a skeleton, narration ticker, code panel, and a follow-along cursor. In real generations (5–10 minutes long) it still felt empty and the cursor never moved enough to land. Replaced with a single centered SVG scene loop — six hand-authored stages (Thinking → Reading context → Sketching layout → Adding components → Choosing colors → Polishing) crossfade every 50 seconds with a matching caption. Plays while the viewport is empty during a turn, disappears as soon as the first frame mounts. Removed PhantomSkeleton, NarrationTicker, CodeStreamPanel, EditCursor and the Viewport's UI-only props. The partial-message parser stays in place.
+
 ## [0.25.0] — 2026-05-28
 
 ### Changed

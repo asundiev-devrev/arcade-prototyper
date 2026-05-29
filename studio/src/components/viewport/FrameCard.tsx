@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUpRightSmall, IconButton, Tooltip, useToast } from "@xorkavi/arcade-gen";
 import type { Frame } from "../../../server/types";
 import { useTargetSelection } from "../../hooks/targetSelectionContext";
-import { CodeStreamPanel } from "./CodeStreamPanel";
 import type { TurnPhase } from "../../hooks/chatStreamReducer";
 
 const FRAME_WIDTH_MIN = 320;
@@ -49,8 +48,6 @@ export function FrameCard({
   // cache) instead of the host's `/api/frames/:slug/:frame` route.
   srcOverride,
   phase = "idle",
-  activeWrite,
-  onIframeLoaded,
 }: {
   projectSlug: string;
   frame: Frame;
@@ -64,15 +61,6 @@ export function FrameCard({
   readonly?: boolean;
   srcOverride?: (frameSlug: string) => string;
   phase?: TurnPhase;
-  /** When the agent is mid-Write/Edit on this frame's source file, the
-   *  Viewport hands us the partial content. Mounting `<CodeStreamPanel>`
-   *  over the iframe surfaces what's being written. Cleared by the
-   *  reducer on `tool_input_complete` or turn end. */
-  activeWrite?: { partialContent: string; filePath: string };
-  /** Notifies the Viewport when the iframe finishes loading. The
-   *  Viewport tracks this set to gate the `<EditCursor>` overlay (only
-   *  shown for frames whose iframe has actually mounted). */
-  onIframeLoaded?: (slug: string) => void;
 }) {
   const [resizing, setResizing] = useState(false);
   const [hoverHandle, setHoverHandle] = useState(false);
@@ -171,7 +159,6 @@ export function FrameCard({
   }, [picking, frame.slug, setTarget]);
 
   function onIframeLoad() {
-    if (onIframeLoaded) onIframeLoaded(frame.slug);
     if (phase !== "running") return;
     const wrapper = wipeWrapperRef.current;
     if (!wrapper) return;
@@ -340,12 +327,6 @@ export function FrameCard({
               pointerEvents: resizing ? "none" : "auto",
             }}
           />
-          {activeWrite && (
-            <CodeStreamPanel
-              partial={activeWrite.partialContent}
-              filePath={activeWrite.filePath}
-            />
-          )}
         </div>
         <div
           role="separator"
