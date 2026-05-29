@@ -41,10 +41,29 @@ function ActivityRow({ item }: { item: ChatTurnItem }) {
   if (item.kind === "narration") {
     return (
       <div
+        data-kind="narration"
         style={{
           padding: "6px 12px",
           color: "var(--fg-neutral-prominent)",
           fontSize: 13,
+          lineHeight: 1.5,
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
+        }}
+      >
+        {item.text}
+      </div>
+    );
+  }
+  if (item.kind === "journey") {
+    return (
+      <div
+        data-kind="journey"
+        style={{
+          padding: "3px 12px",
+          color: "var(--fg-neutral-medium)",
+          fontSize: 12.5,
+          fontStyle: "italic",
           lineHeight: 1.5,
           whiteSpace: "pre-wrap",
           wordBreak: "break-word",
@@ -66,6 +85,7 @@ function ActivityRow({ item }: { item: ChatTurnItem }) {
 
   const summary = (
     <div
+      data-kind="tool"
       style={{
         display: "flex",
         alignItems: "baseline",
@@ -194,6 +214,9 @@ export function MessageList({
   const liveTools = (currentItems ?? [])
     .filter((i): i is Extract<ChatTurnItem, { kind: "tool" }> => i.kind === "tool")
     .map((i) => i.pretty);
+  const liveJourney = (currentItems ?? []).filter(
+    (i): i is Extract<ChatTurnItem, { kind: "journey" }> => i.kind === "journey",
+  );
 
   const isComputerLive = source === "computer" && busy;
   // Once any turn ends, the persisted assistant message is the canonical
@@ -253,7 +276,16 @@ export function MessageList({
 
       {/* Live turn rendering */}
       {isComputerLive ? (
-        <ComputerLive thoughts={liveTools} narrations={liveNarrations} />
+        <>
+          {liveJourney.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 2, marginLeft: -16, marginRight: -16 }}>
+              {liveJourney.map((item, i) => (
+                <ActivityRow key={`j-${i}`} item={item} />
+              ))}
+            </div>
+          )}
+          <ComputerLive thoughts={liveTools} narrations={liveNarrations} />
+        </>
       ) : (
         <>
           {hasActivity && !suppressActivity && (
