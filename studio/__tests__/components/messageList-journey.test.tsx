@@ -83,4 +83,44 @@ describe("MessageList: journey items", () => {
     const journeyRow = container.querySelector('[data-kind="journey"]');
     expect(journeyRow).not.toBeNull();
   });
+
+  it("renders mid-turn narration with the same journey row style", () => {
+    // Plan B: while busy, narration items render as italic muted rows in the
+    // activity stream — same visual treatment as journey rows. This unifies
+    // the three competing styles previously visible during a live turn.
+    const { container } = render(
+      <MessageList
+        history={[]}
+        currentItems={[{ kind: "narration", text: "Reading the navigation pattern" }]}
+        busy
+        phase="running"
+        source="claude"
+      />,
+    );
+    const row = container.querySelector('[data-kind="narration"]') as HTMLElement | null;
+    expect(row).not.toBeNull();
+    expect(row?.textContent).toContain("Reading the navigation pattern");
+    expect(row?.style.fontStyle).toBe("italic");
+    expect(row?.style.color).toBe("var(--fg-neutral-medium)");
+  });
+
+  it("does not render computer-source narration as a ComputerMessage while busy", () => {
+    // Mid-turn narration must flow through the activity stream, not collapse
+    // into a <ComputerMessage> bubble. The persisted bubble takes over after
+    // the turn ends via history.
+    const { container } = render(
+      <MessageList
+        history={[]}
+        currentItems={[
+          { kind: "narration", text: "Reading the navigation pattern" },
+          { kind: "tool", tool: "Read", pretty: "Reading", startedAt: 0 },
+        ]}
+        busy
+        phase="running"
+        source="computer"
+      />,
+    );
+    const narrationRow = container.querySelector('[data-kind="narration"]');
+    expect(narrationRow).not.toBeNull();
+  });
 });

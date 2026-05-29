@@ -38,27 +38,13 @@ function Elapsed({ startedAt, endedAt }: { startedAt: number; endedAt?: number }
 }
 
 function ActivityRow({ item }: { item: ChatTurnItem }) {
-  if (item.kind === "narration") {
+  // Mid-turn narration and journey lines share one visual treatment so the
+  // activity stream reads as a single voice. The persisted assistant bubble
+  // (rendered from history after the turn ends) keeps its own style.
+  if (item.kind === "narration" || item.kind === "journey") {
     return (
       <div
-        data-kind="narration"
-        style={{
-          padding: "6px 12px",
-          color: "var(--fg-neutral-prominent)",
-          fontSize: 13,
-          lineHeight: 1.5,
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
-        }}
-      >
-        {item.text}
-      </div>
-    );
-  }
-  if (item.kind === "journey") {
-    return (
-      <div
-        data-kind="journey"
+        data-kind={item.kind}
         style={{
           padding: "3px 12px",
           color: "var(--fg-neutral-medium)",
@@ -208,14 +194,16 @@ export function MessageList({
   turnEndedAt?: number | null;
 }) {
   const hasActivity = !!currentItems && currentItems.length > 0;
-  const liveNarrations = (currentItems ?? [])
-    .filter((i): i is Extract<ChatTurnItem, { kind: "narration" }> => i.kind === "narration")
-    .map((i) => i.text);
   const liveTools = (currentItems ?? [])
     .filter((i): i is Extract<ChatTurnItem, { kind: "tool" }> => i.kind === "tool")
     .map((i) => i.pretty);
-  const liveJourney = (currentItems ?? []).filter(
-    (i): i is Extract<ChatTurnItem, { kind: "journey" }> => i.kind === "journey",
+  // Mid-turn prose (journey + narration) renders as italic muted rows in
+  // stream order. Narrations are no longer aggregated into a ComputerMessage
+  // bubble while busy — the persisted bubble takes over from history once
+  // the turn ends.
+  const liveProse = (currentItems ?? []).filter(
+    (i): i is Extract<ChatTurnItem, { kind: "journey" | "narration" }> =>
+      i.kind === "journey" || i.kind === "narration",
   );
 
   const isComputerLive = source === "computer" && busy;
@@ -277,14 +265,14 @@ export function MessageList({
       {/* Live turn rendering */}
       {isComputerLive ? (
         <>
-          {liveJourney.length > 0 && (
+          {liveProse.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 2, marginLeft: -16, marginRight: -16 }}>
-              {liveJourney.map((item, i) => (
-                <ActivityRow key={`j-${i}`} item={item} />
+              {liveProse.map((item, i) => (
+                <ActivityRow key={`p-${i}`} item={item} />
               ))}
             </div>
           )}
-          <ComputerLive thoughts={liveTools} narrations={liveNarrations} />
+          <ComputerLive thoughts={liveTools} hasProse={liveProse.length > 0} />
         </>
       ) : (
         <>
@@ -325,19 +313,17 @@ export function MessageList({
   );
 }
 
-function ComputerLive({ thoughts, narrations }: { thoughts: string[]; narrations: string[] }) {
-  const hasReply = narrations.length > 0;
-  if (hasReply) {
-    return <ComputerMessage content={narrations.join("\n\n")} />;
-  }
+function ComputerLive({ thoughts, hasProse }: { thoughts: string[]; hasProse: boolean }) {
   return (
     <div className="flex flex-col">
       {thoughts.length > 0 ? (
         <ComputerThinkingRow thoughts={thoughts} />
       ) : null}
-      <div className="ml-3 text-(--fg-neutral-prominent)">
-        <DottedLoader />
-      </div>
+      {!hasProse && (
+        <div className="ml-3 text-(--fg-neutral-prominent)">
+          <DottedLoader />
+        </div>
+      )}
     </div>
   );
 }
