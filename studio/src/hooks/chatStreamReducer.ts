@@ -24,6 +24,7 @@ export type ErrorKind = "auth" | "generic";
 
 export type ChatTurnItem =
   | { kind: "narration"; text: string }
+  | { kind: "journey"; text: string }
   | {
       kind: "tool";
       tool: string;
@@ -175,6 +176,13 @@ export function applyStudioEvent(
       narrations: [...s.narrations, ev.text],
       items: appendItem(s.items, { kind: "narration", text: ev.text }),
       agentCursor: cursor,
+    };
+  }
+  if (ev.kind === "journey") {
+    return {
+      ...s,
+      lastEvent: ev,
+      items: appendItem(s.items, { kind: "journey", text: ev.text }),
     };
   }
   if (ev.kind === "tool_call") {
