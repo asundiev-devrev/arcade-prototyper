@@ -38,9 +38,9 @@ function Elapsed({ startedAt, endedAt }: { startedAt: number; endedAt?: number }
 }
 
 function ActivityRow({ item }: { item: ChatTurnItem }) {
-  // Mid-turn narration and journey lines share one visual treatment so the
-  // activity stream reads as a single voice. The persisted assistant bubble
-  // (rendered from history after the turn ends) keeps its own style.
+  // Mid-turn narration and journey lines share tool-row visual treatment so
+  // the activity stream reads as a single voice. The persisted assistant
+  // bubble (rendered from history after the turn ends) keeps its own style.
   if (item.kind === "narration" || item.kind === "journey") {
     return (
       <div
@@ -48,8 +48,8 @@ function ActivityRow({ item }: { item: ChatTurnItem }) {
         style={{
           padding: "3px 12px",
           color: "var(--fg-neutral-medium)",
-          fontSize: 12.5,
-          fontStyle: "italic",
+          fontSize: 12,
+          fontFamily: "var(--font-family-mono, ui-monospace, monospace)",
           lineHeight: 1.5,
           whiteSpace: "pre-wrap",
           wordBreak: "break-word",

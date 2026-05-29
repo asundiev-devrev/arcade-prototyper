@@ -100,7 +100,7 @@ describe("MessageList: journey items", () => {
     const row = container.querySelector('[data-kind="narration"]') as HTMLElement | null;
     expect(row).not.toBeNull();
     expect(row?.textContent).toContain("Reading the navigation pattern");
-    expect(row?.style.fontStyle).toBe("italic");
+    expect(row?.style.fontFamily).toContain("monospace");
     expect(row?.style.color).toBe("var(--fg-neutral-medium)");
   });
 
