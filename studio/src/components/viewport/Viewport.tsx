@@ -161,27 +161,13 @@ export function Viewport({
       );
     }
     // Empty + turn running: show the LoadingShow scene loop centered in
-    // the viewport. Disappears as soon as the first frame mounts.
+    // the viewport. Skips ViewportPreview wrapper — the loading scene is
+    // a centered overlay, not a pannable/zoomable canvas, and putting it
+    // through ViewportPreview's ResizeObserver-driven sizing collapses
+    // the absolute layout to 0 height. Disappears as soon as the first
+    // frame mounts.
     if (phase === "running") {
-      return (
-        <ViewportPreview zoom={zoom} onZoomChange={onZoomChange}>
-          <div
-            ref={containerRef}
-            style={{
-              position: "relative",
-              display: "flex",
-              gap: 64,
-              padding: 32,
-              height: "100%",
-              width: "100%",
-              minWidth: "100%",
-            }}
-            data-frame-slug="__loading__"
-          >
-            <LoadingShow />
-          </div>
-        </ViewportPreview>
-      );
+      return <LoadingShow />;
     }
     // Author empty state while idle: show "+ New frame" CTA.
     if (!isReadonly) {

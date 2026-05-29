@@ -6,6 +6,11 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.25.2] — 2026-05-29
+
+### Fixed
+- **LoadingShow now actually paints.** 0.25.1 mounted the scene loop inside `ViewportPreview`, whose ResizeObserver measured the absolutely-positioned overlay as 0×0 and collapsed the zoom canvas around it. Result: only the caption survived, anchored to the viewport top-left. LoadingShow now renders directly inside the `<main>` slot — it's a centered overlay, not a pannable/zoomable canvas, and shouldn't have been wrapped to begin with.
+
 ## [0.25.1] — 2026-05-29
 
 ### Changed

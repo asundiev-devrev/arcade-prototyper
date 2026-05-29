@@ -350,14 +350,15 @@ export function LoadingShow({
       aria-live="polite"
       aria-label={active.caption}
       style={{
-        position: "absolute",
-        inset: 0,
+        width: "100%",
+        height: "100%",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         flexDirection: "column",
         gap: 24,
         pointerEvents: "none",
+        background: "var(--bg-neutral-soft)",
       }}
     >
       <div
@@ -365,6 +366,7 @@ export function LoadingShow({
           position: "relative",
           width: 480,
           height: 320,
+          flex: "none",
         }}
       >
         {SCENES.map((scene, i) => (
