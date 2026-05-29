@@ -6,6 +6,14 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.25.4] — 2026-05-29
+
+### Added
+- **Journey narration in chat.** During long generation turns the chat pane was mostly raw tool rows with one or two short sentences from Claude. The prompt now asks Claude to emit short designer-friendly journey lines (e.g. "Scanning the design system", "Sketching the page body") between phases of work, prefixed with a `→ ` sentinel. The parser routes those lines into a separate `journey` event; the reducer interleaves them with tool rows in stream order. Journey lines are ephemeral — they show during the live turn and disappear after, leaving only the persisted summary in history. Spectators see them too via the relay.
+
+### Changed
+- **Unified mid-turn activity styling.** Mid-turn narration, journey lines, and tool rows now share the same monospace muted-medium treatment so the activity stream reads as one consistent voice instead of three competing fonts. The persisted assistant bubble (rendered from history after the turn) keeps its original style.
+
 ## [0.25.3] — 2026-05-29
 
 ### Fixed
