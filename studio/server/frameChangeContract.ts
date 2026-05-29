@@ -37,6 +37,11 @@ const SNAPSHOT_EXTENSIONS = [".tsx", ".ts", ".jsx", ".js", ".css", ".md"];
  * whatever the agent wrote above. We do NOT include a `### Deviations`
  * heading here because this trailer fires only when narration already has
  * one — i.e. the contract was satisfied on shape but failed on substance.
+ *
+ * The client splits the persisted message on the "⚠ Studio detected no frame
+ * changes this turn" sentinel and renders a dedicated warning banner instead
+ * of inline prose — keep the prefix in lockstep with
+ * studio/src/components/chat/NoFrameChangesBanner.tsx (SENTINEL constant).
  */
 export const NO_CHANGES_TRAILER =
   "\n\n⚠ Studio detected no frame changes this turn — the agent's reply describes edits that didn't actually happen. Try rephrasing, pointing at the element again, or asking what went wrong.";

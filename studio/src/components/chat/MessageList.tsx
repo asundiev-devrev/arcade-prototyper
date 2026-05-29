@@ -6,6 +6,7 @@ import type { ChatTurnItem, TurnPhase } from "../../hooks/useChatStream";
 import { ComputerMessage, markdownComponents } from "./computer/ComputerMessage";
 import { ComputerThinkingRow } from "./computer/ComputerThinkingRow";
 import { DottedLoader } from "./computer/DottedLoader";
+import { NoFrameChangesBanner, splitNoChangesTrailer } from "./NoFrameChangesBanner";
 import { TurnStatusRow } from "./TurnStatusRow";
 
 function toolIcon(tool: string): string {
@@ -247,15 +248,29 @@ export function MessageList({
             </div>
           );
         }
-        return m.role === "assistant" && m.source === "computer" ? (
-          <ComputerMessage key={m.id} content={m.content} />
-        ) : (
-          <BubbleRow key={m.id} role={m.role === "user" ? "user" : "assistant"}>
-            {m.role === "assistant" ? (
-              <ReactMarkdown components={markdownComponents}>{m.content}</ReactMarkdown>
-            ) : (
-              m.content
-            )}
+        if (m.role === "assistant" && m.source === "computer") {
+          const { body, hasWarning } = splitNoChangesTrailer(m.content);
+          return (
+            <div key={m.id} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <ComputerMessage content={body} />
+              {hasWarning && <NoFrameChangesBanner />}
+            </div>
+          );
+        }
+        if (m.role === "assistant") {
+          const { body, hasWarning } = splitNoChangesTrailer(m.content);
+          return (
+            <div key={m.id} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <BubbleRow role="assistant">
+                <ReactMarkdown components={markdownComponents}>{body}</ReactMarkdown>
+              </BubbleRow>
+              {hasWarning && <NoFrameChangesBanner />}
+            </div>
+          );
+        }
+        return (
+          <BubbleRow key={m.id} role="user">
+            {m.content}
           </BubbleRow>
         );
       })}
