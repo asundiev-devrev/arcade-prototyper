@@ -4,6 +4,7 @@ export type StudioEvent =
   | { kind: "session"; sessionId: string }
   | { kind: "origin"; source: "claude" | "computer" }
   | { kind: "narration"; text: string }
+  | { kind: "journey"; text: string }
   | {
       kind: "tool_call";
       tool: string;
@@ -48,6 +49,49 @@ export type StudioEvent =
     }
   | { kind: "end"; ok: true }
   | { kind: "end"; ok: false; error: string; cancelled?: boolean };
+
+/**
+ * Split an `assistant` text block into journey lines (sentineled with `→ `
+ * at line start, after stripping ASCII spaces/tabs) and a single
+ * narration block (everything else).
+ *
+ * Returns:
+ *   - `journeys`: array of journey-line texts with sentinel + leading
+ *     whitespace stripped and trailing whitespace trimmed.
+ *   - `narration`: the un-sentineled lines joined with `\n`, trimmed of
+ *     trailing whitespace; empty string if no un-sentineled content
+ *     remains after removing journey lines and surrounding blank lines.
+ *
+ * Rules pinned by tests in `__tests__/lib/streamJson-journey.test.ts`:
+ *   - Sentinel is exactly `→ ` (U+2192 + space) at the start of the line
+ *     after stripping leading ASCII spaces/tabs. No other prefixes (e.g.
+ *     `> → `, `* → `) are recognized.
+ *   - Mid-line `→ ` is not a sentinel.
+ *   - Blank lines around journey lines are dropped from the narration
+ *     side; blank lines inside the un-sentineled remainder are
+ *     preserved.
+ */
+export function splitJourneyAndNarration(text: string): {
+  journeys: string[];
+  narration: string;
+} {
+  const lines = text.split("\n");
+  const journeys: string[] = [];
+  const narrationLines: string[] = [];
+  for (const line of lines) {
+    const stripped = line.replace(/^[ \t]+/, "");
+    if (stripped.startsWith("→ ")) {
+      journeys.push(stripped.slice(2).replace(/\s+$/, ""));
+    } else {
+      narrationLines.push(line);
+    }
+  }
+  // Trim leading/trailing blank lines from the narration side.
+  while (narrationLines.length && narrationLines[0].trim() === "") narrationLines.shift();
+  while (narrationLines.length && narrationLines[narrationLines.length - 1].trim() === "") narrationLines.pop();
+  const narration = narrationLines.join("\n");
+  return { journeys, narration };
+}
 
 function prettyTool(
   name: string,
@@ -302,7 +346,9 @@ export function parseStreamLineAll(line: string): StudioEvent[] {
     const out: StudioEvent[] = [];
     for (const c of ev.message.content) {
       if (c.type === "text" && typeof c.text === "string" && c.text.trim()) {
-        out.push({ kind: "narration", text: c.text });
+        const { journeys, narration } = splitJourneyAndNarration(c.text);
+        for (const j of journeys) out.push({ kind: "journey", text: j });
+        if (narration) out.push({ kind: "narration", text: narration });
       } else if (c.type === "tool_use") {
         const pr = prettyTool(c.name, c.input);
         out.push({ kind: "tool_call", ...pr });
