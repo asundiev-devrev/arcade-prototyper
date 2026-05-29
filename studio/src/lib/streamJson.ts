@@ -70,6 +70,8 @@ export type StudioEvent =
  *   - Blank lines around journey lines are dropped from the narration
  *     side; blank lines inside the un-sentineled remainder are
  *     preserved.
+ *   - Bare sentinels (no text or whitespace-only text after `→ `) are
+ *     dropped, NOT emitted as empty journey events.
  */
 export function splitJourneyAndNarration(text: string): {
   journeys: string[];
@@ -81,7 +83,8 @@ export function splitJourneyAndNarration(text: string): {
   for (const line of lines) {
     const stripped = line.replace(/^[ \t]+/, "");
     if (stripped.startsWith("→ ")) {
-      journeys.push(stripped.slice(2).replace(/\s+$/, ""));
+      const text = stripped.slice(2).replace(/\s+$/, "");
+      if (text) journeys.push(text);
     } else {
       narrationLines.push(line);
     }

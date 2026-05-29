@@ -89,4 +89,19 @@ describe("parseStreamLineAll: journey sentinel", () => {
       { kind: "narration", text: "Line A.\n\nLine B." },
     ]);
   });
+
+  it("skips bare sentinel lines (no text after the sentinel) instead of emitting an empty journey", () => {
+    const events = parseStreamLineAll(asAssistantText("→ Sketching\n→ \n→ Done"));
+    expect(events).toEqual<StudioEvent[]>([
+      { kind: "journey", text: "Sketching" },
+      { kind: "journey", text: "Done" },
+    ]);
+  });
+
+  it("skips sentinel lines whose only content after the sentinel is whitespace", () => {
+    const events = parseStreamLineAll(asAssistantText("→ \t\n→ Real"));
+    expect(events).toEqual<StudioEvent[]>([
+      { kind: "journey", text: "Real" },
+    ]);
+  });
 });
