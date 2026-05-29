@@ -199,6 +199,15 @@ export const PRIMITIVE_MAPPINGS: MappingEntry[] = [
     translationClass: "mechanical",
   },
   {
+    studio: { source: "arcade", name: "Menu" },
+    production: { source: PROD_SOURCE, name: "Menu" },
+    propDeltas: [],
+    slotNotes: [
+      "Both expose a Radix dropdown-menu surface (Menu.Root, Menu.Trigger, Menu.Content, Menu.Item, Menu.Separator). API shape matches; mechanical.",
+    ],
+    translationClass: "mechanical",
+  },
+  {
     // Corrected 2026-05-12: prior mapping said "TabList" but production
     // re-exports the component as `Tabs` from raw-design-system. Drift
     // audit caught the inconsistency. The subcomponent shape (Tabs.List,
@@ -301,6 +310,27 @@ export const PRIMITIVE_MAPPINGS: MappingEntry[] = [
           "Studio's contextBadge maps to production Avatar's `context` slot, but the mask behavior differs. Review per call site.",
       },
     ],
+  },
+  {
+    // Studio's ChatBubble (sender|receiver variants, optional tail + timestamp)
+    // is part of arcade-gen's prototyping kit. Production raw-design-system
+    // has no direct equivalent — chat surfaces in devrev-web hand-roll bubble
+    // styling at the feature level. Translation is a judgment call: surface
+    // the bubble as a div + Tailwind classes matching the surrounding feature's
+    // chat treatment (search the target feature for prior art).
+    studio: { source: "arcade", name: "ChatBubble" },
+    production: { source: PROD_SOURCE, name: "ChatBubble" },
+    propDeltas: [
+      { from: "variant", to: "variant", note: "Studio variants are 'sender'|'receiver'. Production has no first-class ChatBubble — translate to the host feature's bubble pattern (typically a styled <div> with sender/receiver-specific classes)." },
+      { from: "tail", to: "tail" },
+      { from: "timestamp", to: "timestamp" },
+    ],
+    slotNotes: [
+      "No 1:1 production component. Search target feature (e.g. agent-platform/feature/chat) for prior art before translating; otherwise render as a styled div using surrounding chat-bubble tokens.",
+    ],
+    translationClass: "judgment",
+    judgmentNote:
+      "Production raw-design-system does not export ChatBubble. Translate by lifting the host feature's bubble markup pattern (variant 'sender' = right-aligned filled, 'receiver' = left-aligned subtle).",
   },
   {
     studio: { source: "arcade", name: "Tag" },

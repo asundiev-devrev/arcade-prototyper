@@ -29,6 +29,17 @@ function claudeDirFor(cwd: string): string {
   return path.join(fakeHome, ".claude", "projects", encoded);
 }
 
+// createProject seeds frames/00-computer-reference/ as a designer-facing
+// starter (see scaffoldComputerReferenceFrame in server/projects.ts). Tests
+// that exercise reconcile semantics on hand-crafted frame fixtures should
+// remove it first so assertions stay focused on the fixtures under test.
+function clearSeededFrames(slug: string): void {
+  const framesDir = path.join(tmp, "projects", slug, "frames");
+  for (const entry of fs.readdirSync(framesDir, { withFileTypes: true })) {
+    if (entry.isDirectory()) fs.rmSync(path.join(framesDir, entry.name), { recursive: true, force: true });
+  }
+}
+
 describe("projects CRUD", () => {
   it("creates a project with scaffolded files", async () => {
     const p = await createProject({ name: "My Project", theme: "arcade", mode: "light" });
@@ -172,6 +183,7 @@ describe("reconcileFrames", () => {
 
   it("adds on-disk frames not listed in project.json", async () => {
     const p = await createProject({ name: "Discover", theme: "arcade", mode: "light" });
+    clearSeededFrames(p.slug);
     const framesDir = path.join(tmp, "projects", p.slug, "frames");
     for (const slug of ["welcome-screen", "home-page"]) {
       const d = path.join(framesDir, slug);
@@ -191,6 +203,7 @@ describe("reconcileFrames", () => {
 
   it("does not rewrite project.json when on-disk frames match exactly", async () => {
     const p = await createProject({ name: "Match", theme: "arcade", mode: "light" });
+    clearSeededFrames(p.slug);
     const framesDir = path.join(tmp, "projects", p.slug, "frames");
     const frameSlug = "only-frame";
     const frameDir = path.join(framesDir, frameSlug);
@@ -216,6 +229,7 @@ describe("reconcileFrames", () => {
 
   it("prunes frames when their directories are removed from disk", async () => {
     const p = await createProject({ name: "Prune", theme: "arcade", mode: "light" });
+    clearSeededFrames(p.slug);
     const framesDir = path.join(tmp, "projects", p.slug, "frames");
     for (const slug of ["keeper", "doomed"]) {
       const d = path.join(framesDir, slug);
@@ -234,6 +248,7 @@ describe("reconcileFrames", () => {
 
   it("deduplicates concurrent calls for the same slug", async () => {
     const p = await createProject({ name: "Race", theme: "arcade", mode: "light" });
+    clearSeededFrames(p.slug);
     const framesDir = path.join(tmp, "projects", p.slug, "frames");
     const d = path.join(framesDir, "only");
     fs.mkdirSync(d, { recursive: true });

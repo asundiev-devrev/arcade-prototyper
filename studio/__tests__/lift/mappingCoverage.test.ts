@@ -76,13 +76,22 @@ describe("mapping-table coverage", () => {
     // when composites pull in new plain-noun icons.
     const NON_MAPPED_ICON_NAMES = new Set([
       "AgentStudio",
+      "Bell",
       "ChatBubbles",
       "Clock",
       "Computer",
       "Document",
+      "DotInLeftWindow",
+      "DotInRightWindow",
+      "Globe",
+      "HumanSilhouetteWithPlus",
+      "MagnifyingGlass",
+      "Pencil",
       "PlusInChatBubble",
+      "ThreeDotsHorizontal",
       "ThumbsDown",
       "ThumbsUp",
+      "TrashBin",
       "TwoSquaresOverlapping",
     ]);
     const reachable = new Set<string>();

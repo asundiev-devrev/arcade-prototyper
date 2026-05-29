@@ -121,11 +121,44 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
     }));
     await fs.writeFile(chatHistoryPath(slug), "[]");
     await scaffoldDevRevHelper(slug);
+    await scaffoldComputerReferenceFrame(dir);
   } catch (err) {
     await fs.rm(dir, { recursive: true, force: true });
     throw err;
   }
   return project;
+}
+
+/**
+ * Seed every new project with a working Computer / Agent Studio reference
+ * frame. The frame is a single-line `<ComputerScene />` — the populated-by-
+ * default scene composite. This serves two audiences:
+ *
+ *  1. Designers see a fully realised Computer prototype the moment they
+ *     create a project. They can keep it, mutate it, or delete it.
+ *  2. The generator agent has a concrete on-disk reference to read
+ *     ("frames/00-computer-reference/index.tsx") whenever the prompt asks
+ *     for a Computer screen. Copy-and-mutate beats slot-graph reasoning
+ *     when the prompt is generic ("a Computer chat screen").
+ *
+ * Numbered `00-` so it sits ahead of any frame the user generates with the
+ * `01-…` two-digit prefix scheme.
+ */
+async function scaffoldComputerReferenceFrame(dir: string): Promise<void> {
+  const frameDir = path.join(dir, "frames", "00-computer-reference");
+  await fs.mkdir(frameDir, { recursive: true });
+  const source = `import * as React from "react";
+import { ComputerScene } from "arcade-prototypes";
+
+// Reference frame for Computer / Agent Studio chat screens.
+// Mutate this frame, copy it as a starting point for new ones, or delete it.
+// To swap to the empty-state wordmark: <ComputerScene state="empty" />
+// To add the right-hand artefacts panel: <ComputerScene withCanvasPanel />
+export default function ComputerReference() {
+  return <ComputerScene />;
+}
+`;
+  await fs.writeFile(path.join(frameDir, "index.tsx"), source);
 }
 
 function renderTemplate(tpl: string, vars: Record<string, string>): string {

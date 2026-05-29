@@ -58,10 +58,29 @@ import {
 } from "react";
 import { Button, IconButton, ArrowUpSmall, PlusSmall, Computer } from "@xorkavi/arcade-gen";
 
+/**
+ * Inline pause-glyph (two vertical bars) used by the default ChatInput leading
+ * when the caller doesn't override. Mirrors the colleague Computer prototype.
+ */
+function PauseGlyph({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <rect x="4" y="3.5" width="2.25" height="9" rx="0.75" />
+      <rect x="9.75" y="3.5" width="2.25" height="9" rx="0.75" />
+    </svg>
+  );
+}
+
 /* ─── Root ──────────────────────────────────────────────────────────────── */
 
 type RootProps = {
   attachments?: ReactNode;
+  /**
+   * Optional hint row rendered ABOVE the input row — used for status text like
+   * "This session is filling up. Start a fresh session in this topic?". When
+   * set, renders centered, muted text with optional inline link.
+   */
+  hint?: ReactNode;
   leading?: ReactNode;
   trailing?: ReactNode;
   placeholder?: string;
@@ -83,6 +102,7 @@ type RootProps = {
 
 function Root({
   attachments,
+  hint,
   leading,
   trailing,
   placeholder = "Ask me anything",
@@ -96,18 +116,19 @@ function Root({
   maxRows = 8,
 }: RootProps) {
   return (
-    <div className="flex flex-col gap-3 w-full px-6 py-4 border-t border-(--stroke-neutral-subtle) bg-(--surface-overlay)">
+    <div className="flex flex-col gap-2 w-full px-4 py-3 border-t border-(--stroke-neutral-subtle) bg-(--surface-overlay)">
       {attachments ? (
         <div className="flex items-center gap-2 overflow-x-auto scrollbar-none -mx-1 px-1">
           {attachments}
         </div>
       ) : null}
-      <div className={`flex gap-3 min-w-0 ${multiline ? "items-end" : "items-center"}`}>
-        <span
-          className={`shrink-0 flex items-center justify-center w-6 h-6 text-(--fg-neutral-prominent) ${
-            multiline ? "mb-1" : ""
-          }`}
-        >
+      {hint ? (
+        <div className="flex items-center justify-center text-caption text-(--fg-neutral-subtle) px-2">
+          {hint}
+        </div>
+      ) : null}
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="shrink-0 flex items-center justify-center text-(--fg-neutral-prominent)">
           {leading ?? <DefaultLeading />}
         </span>
         {multiline ? (
@@ -203,9 +224,22 @@ const AutoGrowTextarea = forwardRef<HTMLTextAreaElement, AutoGrowTextareaProps>(
   },
 );
 
-/* ─── Default leading (Computer logomark) ───────────────────────────────── */
+/* ─── Default leading (pause glyph — matches colleague Computer prototype) ─ */
 
 function DefaultLeading() {
+  return (
+    <button
+      type="button"
+      aria-label="Pause"
+      className="flex items-center justify-center w-8 h-8 rounded-square text-(--fg-neutral-subtle) hover:bg-(--bg-neutral-soft) hover:text-(--fg-neutral-prominent) transition-colors"
+    >
+      <PauseGlyph size={16} />
+    </button>
+  );
+}
+
+/** Opt-in Computer logomark leading. Pass `leading={<ChatInput.ComputerLogo />}`. */
+function ComputerLogo() {
   return <Computer size={20} />;
 }
 
@@ -277,18 +311,27 @@ function AddAttachmentButton(props: {
   "aria-label"?: string;
 }) {
   return (
-    <IconButton
+    <button
+      type="button"
       aria-label={props["aria-label"] ?? "Add attachment"}
-      variant="secondary"
-      size="md"
       onClick={props.onClick}
+      className="shrink-0 flex items-center justify-center w-10 h-10 rounded-square-x2 bg-(--bg-neutral-soft) text-(--fg-neutral-prominent) hover:bg-(--bg-neutral-subtle) transition-colors"
     >
-      <PlusSmall />
-    </IconButton>
+      <PlusSmall size={20} />
+    </button>
   );
 }
 
-function SendButton(props: { onClick?: () => void; disabled?: boolean }) {
+function SendButton(props: {
+  onClick?: () => void;
+  disabled?: boolean;
+  /** When provided, the button hides itself while the value is empty/whitespace.
+   *  Mirrors the colleague Computer prototype where the send affordance only
+   *  appears once the user begins typing. Pass the same string you bind to
+   *  ChatInput's `value`. Omit to keep the button always visible. */
+  value?: string;
+}) {
+  if (typeof props.value === "string" && props.value.trim() === "") return null;
   return (
     <Button
       type="button"
@@ -296,7 +339,7 @@ function SendButton(props: { onClick?: () => void; disabled?: boolean }) {
       aria-label="Send"
       onClick={props.onClick}
       disabled={props.disabled}
-      className="shrink-0 w-9 h-9 p-0"
+      className="shrink-0 w-10 h-10 p-0 rounded-circle-x2"
     >
       <ArrowUpSmall size={18} />
     </Button>
@@ -331,6 +374,7 @@ export const ChatInput = Object.assign(Root, {
   AddAttachmentButton,
   SendButton,
   StopButton,
+  ComputerLogo,
 });
 
 // Re-export forwardRef helper for callers needing imperative focus

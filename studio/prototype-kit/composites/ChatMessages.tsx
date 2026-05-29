@@ -4,8 +4,8 @@
  * Matches Figma "chat" (node 161:9716 in the "Untitled" prototype file).
  * The transcript contains two kinds of blocks:
  *
- *   - Sender / receiver bubbles — use the arcade `<ChatBubble variant="user" />`
- *     / `<ChatBubble variant="assistant" />` component directly.
+ *   - Sender / receiver bubbles — use the arcade `<ChatBubble variant="sender" />`
+ *     / `<ChatBubble variant="receiver" />` component directly.
  *   - `ChatMessages.Agent` — agent's turn: a pause/running icon, an optional
  *     expandable "Thoughts" block, and body text below.
  *
@@ -17,8 +17,8 @@
  * Usage:
  *
  *   <ChatMessages>
- *     <ChatBubble variant="user">Help me create a presentation…</ChatBubble>
- *     <ChatBubble variant="assistant">Sure — what's the topic?</ChatBubble>
+ *     <ChatBubble variant="sender">Help me create a presentation…</ChatBubble>
+ *     <ChatBubble variant="receiver">Sure — what's the topic?</ChatBubble>
  *     <ChatMessages.Agent
  *       thoughts={<ChatMessages.Thoughts label="Thought for 4s" />}
  *     >
@@ -320,7 +320,7 @@ function Actions({ onCopy, onThumbUp, onThumbDown, rating = null }: ActionsProps
   return (
     <div className="flex items-center gap-1 mt-1 text-(--fg-neutral-subtle)">
       <IconButton aria-label="Copy" variant="tertiary" size="sm" onClick={onCopy}>
-        <TwoSquaresOverlapping />
+        <TwoSquaresOverlapping size={16} />
       </IconButton>
       <IconButton
         aria-label="Good response"
@@ -329,7 +329,7 @@ function Actions({ onCopy, onThumbUp, onThumbDown, rating = null }: ActionsProps
         onClick={onThumbUp}
         data-active={rating === "up" ? "true" : undefined}
       >
-        <ThumbsUp />
+        <ThumbsUp size={16} />
       </IconButton>
       <IconButton
         aria-label="Bad response"
@@ -338,7 +338,7 @@ function Actions({ onCopy, onThumbUp, onThumbDown, rating = null }: ActionsProps
         onClick={onThumbDown}
         data-active={rating === "down" ? "true" : undefined}
       >
-        <ThumbsDown />
+        <ThumbsDown size={16} />
       </IconButton>
     </div>
   );

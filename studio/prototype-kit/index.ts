@@ -15,6 +15,8 @@ export { CanvasPanel } from "./composites/CanvasPanel.js";
 export { ChatInput } from "./composites/ChatInput.js";
 export { ChatEmptyState } from "./composites/ChatEmptyState.js";
 export { ChatMessages } from "./composites/ChatMessages.js";
+export { ComputerScene } from "./composites/ComputerScene.js";
+export type { ComputerSceneProps } from "./composites/ComputerScene.js";
 export { SettingsCard } from "./composites/SettingsCard.js";
 export { SettingsRow } from "./composites/SettingsRow.js";
 export { VistaHeader } from "./composites/VistaHeader.js";
@@ -29,3 +31,4 @@ export { FrameLink } from "./composites/FrameLink.js";
 // Templates
 export { SettingsPage } from "./templates/SettingsPage.js";
 export { VistaPage } from "./templates/VistaPage.js";
+export { ComputerPage } from "./templates/ComputerPage.js";

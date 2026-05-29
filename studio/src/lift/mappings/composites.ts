@@ -275,6 +275,28 @@ export const COMPOSITE_MAPPINGS: MappingEntry[] = [
     ],
     translationClass: "mechanical",
   },
+  {
+    studio: { source: "arcade-prototypes", name: "ComputerPage" },
+    production: { source: "n/a", name: "n/a" },
+    propDeltas: [],
+    slotNotes: [
+      "Slot graph for the Computer / Agent Studio app shell (sidebar + header + chatInput + body + optional panel). Studio-specific UI; no production equivalent.",
+    ],
+    translationClass: "judgment",
+    judgmentNote:
+      "Computer is a Studio-only app shell. When lifting individual frames, drop ComputerPage and translate just the body content into the host feature. Keep only when lifting the whole Computer experience.",
+  },
+  {
+    studio: { source: "arcade-prototypes", name: "ComputerScene" },
+    production: { source: "n/a", name: "n/a" },
+    propDeltas: [],
+    slotNotes: [
+      "Populated-by-default Computer scene built on ComputerPage. Carries baked-in sessions, chats, header title, transcript and optional CanvasPanel — entirely Studio prototype data.",
+    ],
+    translationClass: "judgment",
+    judgmentNote:
+      "ComputerScene is a Studio prototype convenience — its baked-in roster (Ava Wright, sessions, chats, transcript) has no production analogue. Drop the wrapper and lift only the underlying body content the design actually targets.",
+  },
   // --- Multi-frame navigation (prototype-only) --------------------------
   {
     studio: { source: "arcade-prototypes", name: "FrameLink" },

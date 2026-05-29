@@ -52,6 +52,8 @@ import {
   AgentStudio,
   IconButton,
   Button,
+  ThreeDotsHorizontal,
+  DotInLeftWindow,
 } from "@xorkavi/arcade-gen";
 
 /* ─── Root ──────────────────────────────────────────────────────────────── */
@@ -96,7 +98,7 @@ function Root({
     agentStudioLink === ACTION_ROW_UNSET ? <DefaultAgentStudioLink /> : agentStudioLink;
 
   return (
-    <div className="flex flex-col h-full w-64 shrink-0 bg-(--surface-shallow) border-r border-(--stroke-neutral-subtle)">
+    <div className="flex flex-col h-full w-64 shrink-0 bg-(--surface-overlay) border-r border-(--stroke-neutral-subtle)">
       {showWindowChrome ? <WindowChrome /> : null}
 
       {workspace ? <Brand label={workspace} /> : null}
@@ -116,8 +118,8 @@ function Root({
       {agentStudio ? <div className="px-2 pb-1 shrink-0">{agentStudio}</div> : null}
 
       {user ? (
-        <div className="flex items-center gap-3 px-3 h-14 shrink-0 border-t border-(--stroke-neutral-subtle)">
-          <div className="flex-1 min-w-0">{user}</div>
+        <div className="flex items-center gap-2 px-2 py-2 shrink-0">
+          <div className="flex-1 min-w-0 px-1">{user}</div>
           {footerAction ? <div className="shrink-0">{footerAction}</div> : null}
         </div>
       ) : null}
@@ -134,18 +136,17 @@ function WindowChrome() {
       <IconButton
         aria-label="Toggle sidebar"
         variant="tertiary"
-        size="sm"
-        className="text-(--fg-neutral-subtle)"
+        className="text-(--fg-neutral-prominent)"
       >
-        <SidebarCollapseIcon />
+        <DotInLeftWindow size={16} aria-hidden="true" />
       </IconButton>
       <div className="flex-1" />
-      <div className="flex items-center gap-0.5 text-(--fg-neutral-subtle)">
+      <div className="flex items-center gap-0.5 text-(--fg-neutral-prominent)">
         <IconButton aria-label="Back" variant="tertiary" size="sm">
-          <ChevronLeftSmall />
+          <ChevronLeftSmall size={16} />
         </IconButton>
         <IconButton aria-label="Forward" variant="tertiary" size="sm">
-          <ChevronRightSmall />
+          <ChevronRightSmall size={16} />
         </IconButton>
       </div>
     </div>
@@ -159,22 +160,6 @@ function TrafficLights() {
       <span className="w-3 h-3 rounded-circle bg-[#FEBC2E]" />
       <span className="w-3 h-3 rounded-circle bg-[#28C840]" />
     </div>
-  );
-}
-
-function SidebarCollapseIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <rect x="2" y="3" width="12" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.25" />
-      <line x1="6" y1="3.5" x2="6" y2="12.5" stroke="currentColor" strokeWidth="1.25" />
-    </svg>
   );
 }
 
@@ -220,9 +205,11 @@ function DevRevMark() {
 
 function DefaultPrimaryAction() {
   return (
-    <Button variant="secondary" size="lg" className="flex-1 justify-center gap-2">
-      <PlusInChatBubble size={16} />
-      New Chat
+    <Button variant="secondary" size="lg" className="flex-1 justify-center">
+      <span className="inline-flex items-center gap-2">
+        <PlusInChatBubble size={16} />
+        New Chat
+      </span>
     </Button>
   );
 }
@@ -230,7 +217,7 @@ function DefaultPrimaryAction() {
 function DefaultHistoryAction() {
   return (
     <IconButton aria-label="History" variant="secondary" size="lg">
-      <Clock />
+      <Clock size={20} />
     </IconButton>
   );
 }
@@ -239,7 +226,7 @@ function DefaultAgentStudioLink() {
   return (
     <button
       type="button"
-      className="flex items-center gap-2 w-full px-2 py-1.5 rounded-square text-system text-(--fg-neutral-subtle) hover:bg-(--control-bg-neutral-subtle-hover) hover:text-(--fg-neutral-prominent)"
+      className="flex items-center gap-2.5 w-full px-3 py-1.5 rounded-square text-body text-(--fg-neutral-prominent) hover:bg-(--control-bg-neutral-subtle-hover)"
     >
       <span className="shrink-0 w-5 h-5 flex items-center justify-center">
         <AgentStudio size={16} />
@@ -259,9 +246,9 @@ type GroupProps = {
 
 function Group({ title, trailing, children }: GroupProps) {
   return (
-    <div className="py-2">
+    <div className="pt-1.5 pb-1">
       {title || trailing ? (
-        <div className="flex items-center justify-between px-3 pb-1">
+        <div className="flex items-center justify-between px-3 py-2 mx-1 rounded-square hover:bg-(--bg-neutral-soft) transition-colors">
           <span className="text-caption text-(--fg-neutral-subtle)">
             {title}
           </span>
@@ -269,9 +256,9 @@ function Group({ title, trailing, children }: GroupProps) {
             <button
               type="button"
               aria-label="Add"
-              className="text-(--fg-neutral-subtle) hover:text-(--fg-neutral-prominent) p-0.5 rounded-square hover:bg-(--control-bg-neutral-subtle-hover)"
+              className="text-(--fg-neutral-subtle) hover:text-(--fg-neutral-prominent) w-[22px] h-[22px] flex items-center justify-center rounded-square hover:bg-(--control-bg-neutral-subtle-hover)"
             >
-              <PlusSmall size={16} />
+              <PlusSmall size={14} />
             </button>
           )}
         </div>
@@ -288,13 +275,22 @@ type ItemProps = {
   trailing?: ReactNode;
   children: ReactNode;
   active?: boolean;
+  /** Visual emphasis. Use "strong" for unread chat/session names — renders
+   *  prominent fg colour and semibold weight even when inactive. Default
+   *  "normal" uses the subtle fg colour for read items. */
+  emphasis?: "normal" | "strong";
   onClick?: () => void;
+  /** When provided, a three-dots icon button appears on hover (right side)
+   *  and the existing `trailing` content hides while hovered. Click invokes
+   *  the handler — the caller is responsible for opening any menu UI. */
+  onMenu?: (e: React.MouseEvent<HTMLButtonElement>) => void;
 };
 
 const Item = forwardRef<HTMLDivElement, ItemProps>(function Item(
-  { leading, trailing, children, active, onClick },
+  { leading, trailing, children, active, emphasis = "normal", onClick, onMenu },
   ref,
 ) {
+  const strong = active || emphasis === "strong";
   return (
     <div
       ref={ref}
@@ -303,15 +299,35 @@ const Item = forwardRef<HTMLDivElement, ItemProps>(function Item(
       data-active={active ? "true" : undefined}
       onClick={onClick}
       className={[
-        "flex items-center gap-2 px-2 py-1 rounded-square text-system cursor-pointer select-none",
+        "group/item flex items-center gap-2.5 h-9 pl-3 pr-2.5 rounded-square-x2 text-body cursor-pointer select-none transition-colors",
         active
-          ? "bg-(--control-bg-neutral-subtle-active) text-(--fg-neutral-prominent)"
-          : "text-(--fg-neutral-subtle) hover:bg-(--control-bg-neutral-subtle-hover) hover:text-(--fg-neutral-prominent)",
+          ? "bg-(--control-bg-neutral-subtle-active)"
+          : "hover:bg-(--bg-neutral-soft)",
+        strong ? "text-(--fg-neutral-prominent) font-semibold" : "text-(--fg-neutral-prominent)",
       ].join(" ")}
     >
-      {leading ? <span className="shrink-0 w-5 h-5 flex items-center justify-center text-caption">{leading}</span> : null}
+      {leading ? <span className="shrink-0 w-5 h-5 flex items-center justify-center text-(--fg-neutral-subtle)">{leading}</span> : null}
       <span className="flex-1 min-w-0 truncate">{children}</span>
-      {trailing ? <span className="shrink-0">{trailing}</span> : null}
+      {onMenu || trailing ? (
+        <span className="shrink-0 flex items-center gap-1.5">
+          {trailing ? (
+            <span className={onMenu ? "group-hover/item:hidden" : undefined}>{trailing}</span>
+          ) : null}
+          {onMenu ? (
+            <button
+              type="button"
+              aria-label="More"
+              onClick={(e) => {
+                e.stopPropagation();
+                onMenu(e);
+              }}
+              className="hidden group-hover/item:flex items-center justify-center w-[22px] h-[22px] rounded-square text-(--fg-neutral-subtle) hover:bg-(--bg-neutral-subtle) hover:text-(--fg-neutral-prominent)"
+            >
+              <ThreeDotsHorizontal size={14} />
+            </button>
+          ) : null}
+        </span>
+      ) : null}
     </div>
   );
 });
@@ -322,16 +338,26 @@ type UserProps = {
   avatar: ReactNode;
   name: ReactNode;
   subtitle?: ReactNode;
+  /** Render a green presence dot bottom-right of the avatar. Default true. */
+  presence?: boolean;
 };
 
-function User({ avatar, name, subtitle }: UserProps) {
+function User({ avatar, name, subtitle, presence = true }: UserProps) {
   return (
-    <div className="flex items-center gap-2 min-w-0">
-      <div className="shrink-0">{avatar}</div>
+    <div className="flex items-center gap-2.5 min-w-0">
+      <div className="relative shrink-0">
+        {avatar}
+        {presence ? (
+          <span
+            className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-circle bg-(--bg-success-prominent) ring-2 ring-(--surface-shallow)"
+            aria-label="Online"
+          />
+        ) : null}
+      </div>
       <div className="flex flex-col min-w-0">
-        <span className="text-system text-(--fg-neutral-prominent) truncate">{name}</span>
+        <span className="text-body-medium text-(--fg-neutral-prominent) truncate">{name}</span>
         {subtitle ? (
-          <span className="text-caption text-(--fg-neutral-subtle) truncate">{subtitle}</span>
+          <span className="text-system text-(--fg-neutral-subtle) truncate">{subtitle}</span>
         ) : null}
       </div>
     </div>

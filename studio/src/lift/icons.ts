@@ -21,20 +21,26 @@
 const PLAIN_NOUN_ICON_NAMES = new Set<string>([
   "AgentStudio",
   "Bell",
-  "ChatBubble",
   "ChatBubbles",
   "Clock",
   "Computer",
   "Document",
+  "DotInLeftWindow",
+  "DotInRightWindow",
+  "Globe",
   "HumanSilhouette",
+  "HumanSilhouetteWithPlus",
   "LightingBolt", // arcade-gen spelling (sic)
   "PlusInChatBubble",
+  "ThreeDotsHorizontal",
+  "ThreeDotsVertical",
   "ThumbsDown",
   "ThumbsUp",
   "TrashBin",
   "TwoSquaresOverlapping",
   // Common arcade-gen icon nouns that don't carry a size suffix.
   "MagnifyingGlass",
+  "Pencil",
   "Link", // NOTE: arcade exports both a Link ICON and a Link COMPONENT. See
   // `LINK_IS_AMBIGUOUS` below — we treat Link as a component, not an icon,
   // because the mapping table has a component entry.
@@ -47,7 +53,7 @@ const PLAIN_NOUN_ICON_NAMES = new Set<string>([
  * manifest's default-mapping convention can handle unknown components
  * gracefully; it cannot handle a component mis-classified as an icon.
  */
-const NOT_ICONS = new Set<string>(["Link"]);
+const NOT_ICONS = new Set<string>(["Link", "ChatBubble"]);
 
 /**
  * True when `name` is an arcade-gen icon export. Used by buildManifest to

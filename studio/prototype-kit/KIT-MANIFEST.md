@@ -6,10 +6,87 @@
 > template source; if a prop signature here is enough, skip the extra
 > `Read`. Open the `.tsx` only when you need the full rendered markup.
 
-_22 entries — 20 composites, 2 templates._
+_24 entries — 21 composites, 3 templates._
 
 ## Templates
 
+
+## ComputerPage (template)
+_source: `templates/ComputerPage.tsx`_
+
+ComputerPage — Computer / Agent Studio chat-screen page template.
+
+Composes ComputerSidebar (with its own window chrome) + ComputerHeader +
+a scrolling body slot + ChatInput, with an optional right-hand panel
+(typically a CanvasPanel) as a sibling of the chat column:
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │ ComputerSidebar │  ComputerHeader (title pill | actions)             │
+  │  (own chrome,   ├─────────────────────────────────────────┬──────────┤
+  │   New Chat,     │  body (ChatMessages / ChatEmptyState)   │  panel   │
+  │   sessions,     │  …                                      │ (Canvas  │
+  │   chats, user)  ├─────────────────────────────────────────┤   Panel) │
+  │                 │  ChatInput (full-width, bottom-flush)   │          │
+  └─────────────────┴─────────────────────────────────────────┴──────────┘
+
+Why a template, not a composite: like SettingsPage / VistaPage, this
+encodes the *relationship* between the Computer composites. A generated
+Computer frame collapses from ~250 hand-rolled lines (including window
+chrome, sidebar, message area, composer, optional details rail) to ~40
+declarative slots.
+
+Intentional opinions:
+- The template does NOT use AppShell. ComputerSidebar already owns the
+  window chrome (traffic lights, collapse, nav arrows) — wrapping it in
+  AppShell would stack two title bars. The outer flex row + window
+  surface is owned here.
+- The body is ALWAYS scrollable, ALWAYS bordered above the ChatInput
+  (top border on ChatInput) and below the ComputerHeader (no border —
+  header sits flush against the body surface). Don't add your own.
+- `chatInput` is a separate slot from `children` because it never lives
+  inside the scrolling body — it sits below it as a sibling of the
+  scroll container, full-width.
+- `panel` is the right-hand side panel (CanvasPanel by convention). When
+  omitted, the chat column fills the full width to the right of the
+  sidebar. The panel supplies its own border-l / surface tokens.
+
+Slots:
+- `sidebar` (required) — typically <ComputerSidebar>…</ComputerSidebar>.
+- `header` (required) — typically <ComputerHeader title="…" actions={…} />.
+- `chatInput` (required) — typically <ChatInput trailing={…} />.
+- `children` — body content. Typically <ChatMessages>…</ChatMessages> for
+  an active conversation, or <ChatEmptyState /> for a fresh chat.
+- `panel` (optional) — right-hand artefacts panel (CanvasPanel by
+  convention). When omitted, no right rail is rendered.
+
+
+```ts
+type ComputerPageProps = {
+  sidebar: ReactNode;
+  header: ReactNode;
+  chatInput: ReactNode;
+  children: ReactNode;
+  panel?: ReactNode;
+}
+```
+
+**When NOT to use this:**
+- Do NOT also pass a TitleBar (via AppShell or directly). ComputerSidebar OWNS the window chrome; doubling up stacks two title bars. The chat column is deliberately chromeless above the ComputerHeader.
+- Do NOT wrap the ChatInput in extra padding or a max-width column. It is designed to be full-width and bottom-flush; padding lives inside the composite.
+- Do NOT render the chat body inside a max-width="640" wrapper at the template level — `ChatMessages` and its message bubbles already cap their own widths. The scroll container should fill the chat column so the empty-state wordmark centers correctly.
+- Do NOT re-implement `ComputerPage` locally in the frame (`function ComputerPage(…) { return <div className="flex">…</div> }`). Import it from `arcade-prototypes`. Same for `ComputerSidebar`, `ComputerHeader`, `ChatInput`, `ChatMessages`, `ChatEmptyState`, `CanvasPanel`.
+- Do NOT use `SettingsPage` or `VistaPage` for a Computer chat screen — those wire DevRev SoR chrome (TitleBar + NavSidebar + breadcrumb / VistaHeader + VistaToolbar). Computer screens have a fundamentally different shape: chat-style sidebar, conversation header, scrolling transcript, command bar.
+
+**Tokens commonly needed inside this composite's user slot:**
+
+Canvas tokens most likely to be referenced inside the body slot:
+
+| Intent                      | Token                           |
+|---|---|
+| Body surface                | `--surface-overlay` (already applied by template) |
+| Sidebar surface             | `--surface-shallow` (already applied via ComputerSidebar) |
+| Window backdrop             | `--surface-backdrop`            |
+| Divider / border            | `--stroke-neutral-subtle`       |
 
 ## SettingsPage (template)
 _source: `templates/SettingsPage.tsx`_
@@ -358,7 +435,7 @@ Compound:
 - `ChatInput.SendButton` — filled accent circle with an up-arrow.
 - `ChatInput.StopButton` — secondary circle with a stop square.
 
-**Compound:** `ChatInput.ContextAttachment`, `ChatInput.FileAttachment`, `ChatInput.AddAttachmentButton`, `ChatInput.SendButton`, `ChatInput.StopButton`
+**Compound:** `ChatInput.ContextAttachment`, `ChatInput.FileAttachment`, `ChatInput.AddAttachmentButton`, `ChatInput.SendButton`, `ChatInput.StopButton`, `ChatInput.ComputerLogo`
 
 ## ChatMessages (composite)
 _source: `composites/ChatMessages.tsx`_
@@ -368,8 +445,8 @@ ChatMessages — conversation transcript composite for Computer / Agent Studio.
 Matches Figma "chat" (node 161:9716 in the "Untitled" prototype file).
 The transcript contains two kinds of blocks:
 
-  - Sender / receiver bubbles — use the arcade `<ChatBubble variant="user" />`
-    / `<ChatBubble variant="assistant" />` component directly.
+  - Sender / receiver bubbles — use the arcade `<ChatBubble variant="sender" />`
+    / `<ChatBubble variant="receiver" />` component directly.
   - `ChatMessages.Agent` — agent's turn: a pause/running icon, an optional
     expandable "Thoughts" block, and body text below.
 
@@ -381,8 +458,8 @@ export.
 Usage:
 
   <ChatMessages>
-    <ChatBubble variant="user">Help me create a presentation…</ChatBubble>
-    <ChatBubble variant="assistant">Sure — what's the topic?</ChatBubble>
+    <ChatBubble variant="sender">Help me create a presentation…</ChatBubble>
+    <ChatBubble variant="receiver">Sure — what's the topic?</ChatBubble>
     <ChatMessages.Agent
       thoughts={<ChatMessages.Thoughts label="Thought for 4s" />}
     >
@@ -439,11 +516,123 @@ Slots:
 ```ts
 type ComputerHeaderProps = {
   title: ReactNode;
+  /** Leading icon for the title pill. Pass to add one — by default the title
+   *  renders without any icon, matching the colleague Computer prototype. */
   icon?: ReactNode;
   onTitleClick?: () => void;
   actions?: ReactNode;
+  /**
+   * Right-most action: the canvas / artefacts panel toggle. **Defaults to a
+   *  built-in `DotInRightWindow` IconButton** so every Computer screen carries
+   *  the canvas opener without the caller having to remember it. Pass `null`
+   *  to suppress; pass your own IconButton to override (e.g. to wire it to
+   *  your own panel state). Rendered AFTER the `actions` slot.
+   */
+  panelToggle?: ReactNode;
+  /**
+   * Conversation menu rendered when the chevron is clicked. **Defaults to a
+   * Rename / Inspect Session / Delete menu** — pass `null` to suppress, pass a
+   * custom `<Menu.Content />` body (or `<>` of `<Menu.Item>`s) to override.
+   */
+  conversationMenu?: ReactNode;
+  /** Handlers for the default conversation menu items. */
+  onRename?: () => void;
+  onInspect?: () => void;
+  onDelete?: () => void;
+  /**
+   * Optional secondary row rendered below the title pill — typically a row of
+   * meta chips ("# Q3 Strategy", "Today", "1 related"). Caller renders the
+   * chips; the header just provides the row.
+   */
+  meta?: ReactNode;
 }
 ```
+
+## ComputerScene (composite)
+_source: `composites/ComputerScene.tsx`_
+
+ComputerScene — populated, interactive Computer / Agent Studio chat screen.
+
+The "batteries-included" sibling of `ComputerPage`. While `ComputerPage`
+is a slot graph (caller fills sidebar + header + chatInput + body),
+`ComputerScene` is a *complete*, working scene: a sessions list (clickable,
+swaps the active session and the header title), a chats list, a transcript
+the user can extend by typing into the command bar, an optional artefacts
+panel, and a user footer.
+
+  <ComputerScene />                 // full populated, interactive scene
+  <ComputerScene state="empty" />   // wordmark empty state
+  <ComputerScene withCanvasPanel /> // mounts the right-hand artefacts panel
+
+Why this exists:
+- Designers prompting "make a Computer chat screen" want the WHOLE
+  prototype on the first turn — sessions populated, chats populated,
+  header populated, transcript populated, AND clickable / typeable. Not
+  an empty `<ComputerPage />` skeleton.
+- The agent reaches for `<ComputerScene />` and cannot under-populate the
+  kit by accident. Overrides are limited to values designers most often
+  tweak (state, header title, canvas panel, user identity, sessions).
+
+Interactivity (built-in, no caller wiring required):
+- Clicking a session in the sidebar swaps the active session and the
+  header title to that session's `topic`.
+- Typing into the bottom command bar and pressing Enter appends a user
+  bubble; an agent reply follows ~700ms later (deterministic placeholder
+  text). Shift+Enter inserts a newline.
+- Toggling the right-hand artefacts panel via header — when
+  `withCanvasPanel` is left at default, the header carries a toggle button.
+
+
+```ts
+type ComputerSceneProps = {
+  /**
+   * Body content state. Default `"transcript"` (a settled multi-turn
+   * conversation the user can extend by typing). `"empty"` shows the
+   * centered Computer wordmark; `"streaming"` ends the seed with a
+   * working-thoughts agent turn.
+   */
+  state?: "empty" | "streaming" | "transcript";
+  /**
+   * Mount the right-hand artefacts panel. When `undefined` (default), the
+   * header carries a toggle and the panel can be opened/closed at runtime.
+   * Pass `true`/`false` to fix it open or closed.
+   */
+  withCanvasPanel?: boolean;
+  /**
+   * Conversation title in the ComputerHeader. When omitted, derived from
+   * the active session.
+   */
+  headerTitle?: React.ReactNode;
+  /** Sidebar user-footer overrides. */
+  userName?: React.ReactNode;
+  userSubtitle?: React.ReactNode;
+  userAvatarSrc?: string;
+  /** Active session id. Default `"strategic"`. */
+  activeSessionId?: string;
+  /** Override the default sessions roster. */
+  sessions?: Session[];
+  /** Placeholder for the bottom command bar. */
+  chatInputPlaceholder?: string;
+}
+```
+
+**When NOT to use this:**
+- Do NOT wrap `<ComputerScene />` in a `<ComputerPage>`. ComputerScene already IS a full Computer page (it composes ComputerPage internally). Wrapping it doubles the chrome.
+- Do NOT use ComputerScene when the designer asks for a *custom* sidebar / header / transcript shape. Use `ComputerPage` (the slot graph) for that. Reach for ComputerScene only when the prompt is generic ("a Computer chat screen", "Agent Studio screen") and the designer wants the canonical kit layout.
+- Do NOT pass children to `<ComputerScene>{...}</ComputerScene>` — it accepts none. The body is selected by the `state` prop.
+
+**Tokens commonly needed inside this composite's user slot:**
+
+| Intent                        | Token                              |
+ |---|---|
+ | Window backdrop               | `--surface-backdrop` (applied by ComputerPage) |
+ | Sidebar surface               | `--surface-shallow` (applied by ComputerSidebar) |
+ | Body surface                  | `--surface-overlay` (applied by ComputerPage) |
+ | Active sidebar item           | `--control-bg-neutral-subtle-active` |
+ | Sidebar item hover            | `--control-bg-neutral-subtle-hover` |
+ | Section label / muted text    | `--fg-neutral-subtle`              |
+ | Primary text                  | `--fg-neutral-prominent`           |
+ | Divider above ChatInput       | `--stroke-neutral-subtle`          |
 
 ## ComputerSidebar (composite)
 _source: `composites/ComputerSidebar.tsx`_

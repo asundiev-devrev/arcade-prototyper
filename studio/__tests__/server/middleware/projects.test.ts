@@ -31,6 +31,16 @@ async function req(method: string, path: string, body?: unknown) {
   return { status: res.status, body: text ? JSON.parse(text) : null };
 }
 
+// createProject seeds frames/00-computer-reference/ as a designer-facing
+// starter. Tests that assert on hand-crafted frame fixtures need to drop it
+// first so reconcile output matches what the test wrote.
+function clearSeededFrames(slug: string): void {
+  const framesDir = path.join(tmp, "projects", slug, "frames");
+  for (const entry of fs.readdirSync(framesDir, { withFileTypes: true })) {
+    if (entry.isDirectory()) fs.rmSync(path.join(framesDir, entry.name), { recursive: true, force: true });
+  }
+}
+
 describe("/api/projects", () => {
   it("POST creates a project", async () => {
     const r = await req("POST", "/api/projects", { name: "X", theme: "arcade", mode: "light" });
@@ -64,6 +74,7 @@ describe("/api/projects", () => {
     // EmptyViewport. The GET handler should reconcile before responding.
     const c = await req("POST", "/api/projects", { name: "A", theme: "arcade", mode: "light" });
     const slug = c.body.slug as string;
+    clearSeededFrames(slug);
     const frameDir = path.join(tmp, "projects", slug, "frames", "01-orphan");
     fs.mkdirSync(frameDir, { recursive: true });
     fs.writeFileSync(path.join(frameDir, "index.tsx"), "export default function F() { return null; }");
@@ -82,6 +93,7 @@ describe("/api/projects", () => {
     const a = await req("POST", "/api/projects", { name: "A", theme: "arcade", mode: "light" });
     const b = await req("POST", "/api/projects", { name: "B", theme: "arcade", mode: "light" });
     for (const slug of [a.body.slug, b.body.slug]) {
+      clearSeededFrames(slug);
       const d = path.join(tmp, "projects", slug, "frames", "orphan");
       fs.mkdirSync(d, { recursive: true });
       fs.writeFileSync(path.join(d, "index.tsx"), "export default () => null;");

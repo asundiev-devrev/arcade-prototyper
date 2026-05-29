@@ -6,6 +6,15 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.25.5] — 2026-05-29
+
+### Added
+- **`ComputerScene` + `ComputerPage` composites.** A populated, interactive Computer / Agent Studio chat screen exported from the prototype kit. Every new project is seeded with a `00-computer-reference` frame that renders `<ComputerScene />` so designers see a realistic prototype on first load and the generator agent has a concrete on-disk reference to copy when prompts ask for a Computer screen.
+- **Conversation menu in `ComputerHeader`.** The chevron next to the title now opens an arcade-gen `Menu` with default Rename / Inspect Session / Delete items. Pass `conversationMenu`, `onRename`, `onInspect`, `onDelete` to override.
+
+### Fixed
+- **Computer composite polish.** Round of fixes against the colleague Computer prototype: the title pill is no longer interactive (only the chevron is), the duplicate canvas-toggle in the header is gone, the meta row ("# Q3 Strategy / Today / 1 related") and the "session is filling up" hint are removed, the bell notification badge is repositioned, the divider above the user footer is dropped, the Agent Studio link uses the prominent foreground colour, and the "Show more" affordance becomes a `ThreeDotsHorizontal` + "More" item. Sidebar collapse + canvas toggle adopt the Studio shell's default-size `IconButton` shape with `size={16}` icon children. All composite `IconButton`s now pass an explicit `size` to their icon child so arcade-gen renders correct breathing room around the glyph.
+
 ## [0.25.4] — 2026-05-29
 
 ### Added

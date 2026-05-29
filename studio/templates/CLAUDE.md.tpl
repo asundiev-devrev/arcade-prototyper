@@ -72,7 +72,7 @@ Do NOT explain what you did. The deviations section IS the explanation. Do NOT p
 - **No CSS variable names.** Say "neutral soft background", not `--bg-neutral-soft`.
 - **No component prop syntax.** Say "used the info-tinted variant", not `intent="info" appearance="tinted"`.
 - **No internal icon identifiers.** Say "a triangle/play icon" or "chose a best-guess icon for Pipeline", not `TwoCirclesConnectedWithCurvedLine`.
-- **No composite/primitive source-code names unless the designer already uses them** (the designer will recognize `AppShell`, `NavSidebar`, `PageBody`, `SettingsCard`, `SettingsRow`, `VistaPage` — they talk about those in design reviews). Internal-ish names like `AvatarCount`, `VistaRow.Priority`, `ChatInput.ContextAttachment` are jargon; paraphrase them ("avatar overflow badge").
+- **No composite/primitive source-code names unless the designer already uses them** (the designer will recognize `AppShell`, `NavSidebar`, `PageBody`, `SettingsCard`, `SettingsRow`, `VistaPage`, `ComputerPage`, `ComputerScene` — they talk about those in design reviews). Internal-ish names like `AvatarCount`, `VistaRow.Priority`, `ChatInput.ContextAttachment` are jargon; paraphrase them ("avatar overflow badge").
 
 Phrase each bullet as: what the *design* deviates on, what the choice was in plain terms, and (when relevant) what you'd like the designer to confirm. Example:
 
@@ -170,7 +170,7 @@ If you catch yourself writing any of the left-column patterns, stop and revise. 
 
 You have THREE layers of building blocks. Always reach for the highest layer that fits before dropping down.
 
-1. **`arcade-prototypes` / templates** — whole-page compositions. Today only `SettingsPage` exists. Pick it if the Figma frame matches; otherwise drop to composites. **Do not import any other template name** (no `ChatPage`, `AgentPage`, etc.) — the import will fail.
+1. **`arcade-prototypes` / templates and full-scene composites** — whole-page compositions. Today `SettingsPage`, `VistaPage`, and `ComputerPage` exist as templates; `ComputerScene` is a zero-prop *populated-by-default* scene built on `ComputerPage`. Pick one if the Figma frame matches; otherwise drop to composites. **Do not import any other template name** (no `ChatPage`, `AgentPage`, etc.) — the import will fail.
 2. **`arcade-prototypes` / composites** — opinionated chrome pieces like `AppShell`, `NavSidebar`, `PageHeader`, `PageBody`, `SettingsCard`, `SettingsRow`. Use these when no template matches, or as slots inside a template.
 3. **`arcade` / components** — primitives like `Button`, `Switch`, `Input`, `Breadcrumb`, `Avatar`, `IconButton`. Use these as leaves inside composites, or directly when you really are rendering just one control.
 
@@ -181,7 +181,7 @@ Hand-rolled `<div>` + Tailwind is a LAST resort. Every time you are about to wri
 - `arcade-prototypes` is for prototyping only. It is **not** a production package and exists purely inside this studio.
 - `arcade` is the production design system. Use its components as the atomic building blocks.
 - Import paths:
-  - `import { SettingsPage, AppShell, TitleBar, BreadcrumbBar, PageBody, NavSidebar, ComputerSidebar, ComputerHeader, CanvasPanel, ChatInput, ChatEmptyState, ChatMessages, SettingsCard, SettingsRow, VistaPage, VistaHeader, VistaToolbar, VistaGroupRail, VistaRow } from "arcade-prototypes";`
+  - `import { SettingsPage, ComputerPage, ComputerScene, AppShell, TitleBar, BreadcrumbBar, PageBody, NavSidebar, ComputerSidebar, ComputerHeader, CanvasPanel, ChatInput, ChatEmptyState, ChatMessages, SettingsCard, SettingsRow, VistaPage, VistaHeader, VistaToolbar, VistaGroupRail, VistaRow } from "arcade-prototypes";`
   - `import { Button, Switch, Breadcrumb, Avatar, IconButton, Separator } from "arcade/components";`
 - Never write relative paths (`../...`) or filesystem paths. Only these two aliases.
 
@@ -197,6 +197,46 @@ Cross-cutting rules for settings pages:
 - `sidebar={<NavSidebar workspace="DevRev" />}` with no children when Figma sidebar has no nav items — never invent sections.
 - `actions` is the TitleBar's trailing cluster (top-right). `pageActions` is the breadcrumb-row cluster.
 - `SettingsCard` inserts separators between children automatically — never pass `<Separator />` manually.
+
+### `ComputerScene` — first pick for any generic Computer / Agent Studio prompt
+
+`ComputerScene` is a **populated-by-default** composite. Zero props produce a complete, demo-quality Computer chat screen: realistic Sessions list, Chats list, thread title, transcript, user footer. Override props pick the body state (`empty | streaming | transcript`), toggle the right-hand `panel` (`withCanvasPanel`), or change the user identity. Full prop signature in `KIT-MANIFEST.md`.
+
+```tsx
+// One line is the whole frame.
+import { ComputerScene } from "arcade-prototypes";
+export default function Frame() { return <ComputerScene />; }
+```
+
+**When the prompt says ANY of these, `<ComputerScene />` is the right starting point** — do NOT hand-roll a `ComputerPage` slot graph from scratch:
+
+- "a Computer chat screen", "a Computer chat", "Computer screen"
+- "Agent Studio screen", "Agent Studio chat"
+- "the Maple chat", "a Maple screen"
+- "a chat screen with sessions and chats" (without further specifics)
+- Anything that names Computer / Agent Studio without spelling out a *specific* sidebar / header / panel shape that differs from the canonical scene.
+
+**Reference frame on disk.** Every project is seeded with `frames/00-computer-reference/index.tsx` containing exactly `<ComputerScene />`. When asked for a Computer screen, the cheapest path is:
+
+1. `Read frames/00-computer-reference/index.tsx`.
+2. Copy it as your new frame and override props for the requested deviation (e.g. `<ComputerScene state="empty" headerTitle="Untitled" />`).
+
+This is faster, more accurate, and harder to under-populate than re-deriving the slot tree from `ComputerPage`. Use this copy-and-mutate pattern unless the prompt explicitly asks for a *custom* sidebar / header / transcript shape that the override props don't cover.
+
+**Don't create a duplicate of the reference frame.** The seeded `00-computer-reference/index.tsx` already renders zero-prop `<ComputerScene />`. If the prompt is a generic Computer / Agent Studio request with **no override** ("build me a Computer chat screen", "Agent Studio screen", "Maple chat", etc.), do NOT create a second frame that is also bare `<ComputerScene />` — that ships the user two identical frames. Instead, in the chat reply, point them at `00-computer-reference` and ask what variant they want next (e.g. empty state, with the artefacts panel, a custom title). Only create a new frame when the prompt names a *deviation* the reference frame does not show — a different state, the panel toggled, a renamed thread, a custom roster, etc. The new frame should differ from `00-computer-reference` by at least one prop override.
+
+### `ComputerPage` — for custom Computer page shapes
+
+For Computer / Agent Studio chat screens whose **shape** differs from the canonical scene (a different sidebar, a custom transcript, a non-default header). `ComputerPage` is the slot graph: caller provides `sidebar`, `header`, `chatInput`, `children`, optional `panel`. Composes `ComputerSidebar` (which OWNS its own window chrome) + `ComputerHeader` + a body slot + `ChatInput`. Full prop signature + slot docs are in `KIT-MANIFEST.md`.
+
+**Pick `ComputerPage` over `ComputerScene` only when** the override props on `ComputerScene` (state, withCanvasPanel, headerTitle, user fields, activeSessionId) cannot express the requested deviation — i.e. when the *shape* of the sidebar / header / transcript itself differs from the canonical scene. If the prompt is generic, default to `ComputerScene`.
+
+Cross-cutting rules for Computer pages:
+- Computer pages do NOT use a `TitleBar`. `ComputerSidebar` owns the window chrome (traffic lights, collapse, nav arrows). Stacking a `TitleBar` on top doubles the chrome.
+- The `header` slot is `ComputerHeader` — borderless 48px row with the conversation title pill on the left and an action cluster on the right. Do NOT wrap it in your own `<header>` or add a bottom border; the body sits flush against it.
+- The `chatInput` slot is `ChatInput` — full-width, bottom-flush, with its own top border. Do NOT wrap it in extra padding or a max-width column at the template level.
+- Body content is `ChatMessages` for an active conversation or `ChatEmptyState` for a fresh chat. Render exactly one of them as the only child of the body slot — don't mix transcript markup and the empty wordmark.
+- The optional `panel` is a `CanvasPanel` (or compatible aside) — it supplies its own width / border-l / surface tokens.
 
 ### `VistaPage`
 
@@ -584,6 +624,7 @@ Figma → prototype-kit hints:
 | Figma name contains | Use |
 |---|---|
 | Sidebar / My Work + Teams + Multiplayer Sidebar (or any DevRev SoR app sidebar) | `NavSidebar` |
+| Whole Computer / Agent Studio chat screen (chat-style sidebar + thread title + transcript or empty wordmark + command bar at bottom, optionally with an artefacts rail) | `ComputerScene` (zero-prop populated scene). Drop to `ComputerPage` only when the requested shape differs from the canonical scene. |
 | _Sidebar / Computer sidebar (chat/agent UI with New Chat + chat history) | `ComputerSidebar` |
 | Computer Input Field / chat command bar / "Ask me anything" pill | `ChatInput` |
 | Top bar with conversation title + chevron + right-side action cluster (Computer chat) | `ComputerHeader` |
