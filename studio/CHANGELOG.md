@@ -6,6 +6,11 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.25.3] — 2026-05-29
+
+### Fixed
+- **LoadingShow palette + composition.** 0.25.2 shipped scenes in a hard-coded purple that clashed with Studio's monochrome theme, the "Thinking" rings stacked into a muddy blob, and "Adding components" rendered a broken avatar with a face. Scenes now use `currentColor` against a neutral wrapper (`--fg-neutral-medium`), so they inherit the theme. "Thinking" became a single rolling ripple — three rings expanding outward in sequence with a new `arcade-studio-loading-ripple` keyframe. "Adding components" is now four clean rows of UI primitives (header bar + badge, primary + ghost buttons, full-width input, three chips) — no avatars.
+
 ## [0.25.2] — 2026-05-29
 
 ### Fixed

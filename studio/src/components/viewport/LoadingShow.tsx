@@ -9,40 +9,31 @@ type Scene = {
   render: () => ReactElement;
 };
 
-const PURPLE = "#6E56F4";
-const PURPLE_SOFT = "rgba(110, 86, 244, 0.22)";
-const PURPLE_FILL = "rgba(110, 86, 244, 0.10)";
+// All scene art uses `currentColor` so it inherits the wrapper's
+// `color`. The wrapper sets `color: var(--fg-neutral-medium)` so scenes
+// stay neutral and theme-aware. Per-element opacity provides hierarchy.
+const STROKE_STRONG = 0.55;
+const STROKE_SOFT = 0.18;
+const FILL_SOFT = 0.06;
+const ACCENT = 0.78;
 
-function FrameOutline({
-  width = 480,
-  height = 320,
-  dashed = true,
-  drift = true,
-}: {
-  width?: number;
-  height?: number;
-  dashed?: boolean;
-  drift?: boolean;
-}) {
+function FrameOutline() {
   return (
     <rect
       x={1}
       y={1}
-      width={width - 2}
-      height={height - 2}
+      width={478}
+      height={318}
       rx={14}
       fill="none"
-      stroke={PURPLE_SOFT}
+      stroke="currentColor"
+      strokeOpacity={STROKE_SOFT}
       strokeWidth={1.5}
-      strokeDasharray={dashed ? "8 8" : undefined}
-      style={
-        dashed && drift
-          ? {
-              animation:
-                "arcade-studio-loading-dash-drift 2400ms linear infinite",
-            }
-          : undefined
-      }
+      strokeDasharray="8 8"
+      style={{
+        animation:
+          "arcade-studio-loading-dash-drift 2400ms linear infinite",
+      }}
       className="arcade-studio-loading-frame"
     />
   );
@@ -51,25 +42,28 @@ function FrameOutline({
 const sceneThinking = (): ReactElement => (
   <svg viewBox="0 0 480 320" width="100%" height="100%" aria-hidden="true">
     <FrameOutline />
+    {/* Three rings expanding outward in sequence, only one fully visible
+     *  at a time — staggered animation creates a single ripple effect
+     *  rather than three independent pulses. */}
     {[0, 1, 2].map((i) => (
       <circle
         key={i}
         cx={240}
         cy={160}
-        r={36 + i * 26}
+        r={20}
         fill="none"
-        stroke={PURPLE}
-        strokeOpacity={0.22 - i * 0.06}
+        stroke="currentColor"
         strokeWidth={1.5}
         style={{
           transformOrigin: "240px 160px",
-          animation: `arcade-studio-loading-glyph-pulse ${2200 + i * 400}ms ease-in-out infinite`,
-          animationDelay: `${i * 200}ms`,
+          animation:
+            "arcade-studio-loading-ripple 2400ms ease-out infinite",
+          animationDelay: `${i * 800}ms`,
         }}
         className="arcade-studio-loading-glyph"
       />
     ))}
-    <circle cx={240} cy={160} r={6} fill={PURPLE} />
+    <circle cx={240} cy={160} r={6} fill="currentColor" fillOpacity={ACCENT} />
   </svg>
 );
 
@@ -80,8 +74,8 @@ const sceneReading = (): ReactElement => (
       <g
         key={i}
         style={{
-          transformOrigin: "240px 160px",
-          animation: `arcade-studio-loading-glyph-pulse ${3000}ms ease-in-out infinite`,
+          transformOrigin: `${240 + i * 14}px ${160 + i * 14}px`,
+          animation: `arcade-studio-loading-glyph-pulse 3000ms ease-in-out infinite`,
           animationDelay: `${i * 700}ms`,
         }}
         className="arcade-studio-loading-glyph"
@@ -92,8 +86,10 @@ const sceneReading = (): ReactElement => (
           width={200}
           height={100}
           rx={10}
-          fill={PURPLE_FILL}
-          stroke={PURPLE_SOFT}
+          fill="currentColor"
+          fillOpacity={FILL_SOFT}
+          stroke="currentColor"
+          strokeOpacity={STROKE_SOFT}
           strokeWidth={1.5}
           strokeDasharray="6 6"
         />
@@ -102,7 +98,8 @@ const sceneReading = (): ReactElement => (
           y1={134 + i * 14}
           x2={300 + i * 14}
           y2={134 + i * 14}
-          stroke={PURPLE_SOFT}
+          stroke="currentColor"
+          strokeOpacity={STROKE_SOFT}
           strokeWidth={4}
           strokeLinecap="round"
         />
@@ -111,7 +108,8 @@ const sceneReading = (): ReactElement => (
           y1={154 + i * 14}
           x2={260 + i * 14}
           y2={154 + i * 14}
-          stroke={PURPLE_SOFT}
+          stroke="currentColor"
+          strokeOpacity={STROKE_SOFT}
           strokeWidth={4}
           strokeLinecap="round"
         />
@@ -120,7 +118,8 @@ const sceneReading = (): ReactElement => (
           y1={174 + i * 14}
           x2={280 + i * 14}
           y2={174 + i * 14}
-          stroke={PURPLE_SOFT}
+          stroke="currentColor"
+          strokeOpacity={STROKE_SOFT}
           strokeWidth={4}
           strokeLinecap="round"
         />
@@ -145,9 +144,10 @@ const sceneSketching = (): ReactElement => (
         width={b.w}
         height={b.h}
         rx={8}
-        fill={PURPLE_FILL}
-        stroke={PURPLE}
-        strokeOpacity={0.55}
+        fill="currentColor"
+        fillOpacity={FILL_SOFT}
+        stroke="currentColor"
+        strokeOpacity={STROKE_STRONG}
         strokeWidth={1.5}
         strokeDasharray="6 6"
         style={{
@@ -161,115 +161,88 @@ const sceneSketching = (): ReactElement => (
   </svg>
 );
 
-const sceneComponents = (): ReactElement => (
-  <svg viewBox="0 0 480 320" width="100%" height="100%" aria-hidden="true">
-    <FrameOutline />
-    {/* button */}
-    <rect
-      x={140}
-      y={120}
-      width={120}
-      height={36}
-      rx={18}
-      fill={PURPLE}
-      style={{ animation: "arcade-studio-loading-glyph-pulse 2400ms ease-in-out infinite" }}
-      className="arcade-studio-loading-glyph"
-    />
-    {/* avatar */}
-    <circle
-      cx={300}
-      cy={138}
-      r={18}
-      fill="none"
-      stroke={PURPLE}
-      strokeWidth={2}
-      style={{
-        animation: "arcade-studio-loading-glyph-pulse 2400ms ease-in-out infinite",
-        animationDelay: "200ms",
-      }}
-      className="arcade-studio-loading-glyph"
-    />
-    <circle
-      cx={300}
-      cy={132}
-      r={6}
-      fill={PURPLE}
-      style={{
-        animation: "arcade-studio-loading-glyph-pulse 2400ms ease-in-out infinite",
-        animationDelay: "200ms",
-      }}
-      className="arcade-studio-loading-glyph"
-    />
-    <path
-      d="M286 152 q14 -10 28 0"
-      stroke={PURPLE}
-      strokeWidth={2}
-      fill="none"
-      strokeLinecap="round"
-      style={{
-        animation: "arcade-studio-loading-glyph-pulse 2400ms ease-in-out infinite",
-        animationDelay: "200ms",
-      }}
-      className="arcade-studio-loading-glyph"
-    />
-    {/* chip */}
-    <rect
-      x={150}
-      y={186}
-      width={84}
-      height={24}
-      rx={12}
-      fill="none"
-      stroke={PURPLE}
-      strokeWidth={1.5}
-      style={{
-        animation: "arcade-studio-loading-glyph-pulse 2400ms ease-in-out infinite",
-        animationDelay: "400ms",
-      }}
-      className="arcade-studio-loading-glyph"
-    />
-    <circle cx={164} cy={198} r={4} fill={PURPLE} opacity={0.6} />
-    {/* input */}
-    <rect
-      x={250}
-      y={186}
-      width={108}
-      height={24}
-      rx={6}
-      fill="none"
-      stroke={PURPLE}
-      strokeOpacity={0.55}
-      strokeWidth={1.5}
-      style={{
-        animation: "arcade-studio-loading-glyph-pulse 2400ms ease-in-out infinite",
-        animationDelay: "600ms",
-      }}
-      className="arcade-studio-loading-glyph"
-    />
-  </svg>
-);
+const sceneComponents = (): ReactElement => {
+  // Three clean rows. No avatars/faces — small SVG portraits never look
+  // good. Each row is a stack of common UI primitives sized at the same
+  // baseline grid so the composition reads as a real component palette.
+  const rows = [
+    // Header row: title bar + small badge
+    [
+      { kind: "rect", x: 100, y: 70, w: 200, h: 14, r: 7, fill: STROKE_STRONG },
+      { kind: "rect", x: 320, y: 68, w: 60, h: 18, r: 9, fill: STROKE_SOFT, stroke: STROKE_STRONG },
+    ],
+    // Button row: primary button + ghost button
+    [
+      { kind: "rect", x: 100, y: 124, w: 110, h: 32, r: 16, fill: STROKE_STRONG },
+      { kind: "rect", x: 230, y: 124, w: 110, h: 32, r: 16, fill: 0, stroke: STROKE_STRONG },
+    ],
+    // Input row: full-width text input
+    [
+      { kind: "rect", x: 100, y: 184, w: 280, h: 32, r: 6, fill: 0, stroke: STROKE_STRONG },
+    ],
+    // Chip row: three pills
+    [
+      { kind: "rect", x: 100, y: 240, w: 70, h: 22, r: 11, fill: FILL_SOFT, stroke: STROKE_SOFT },
+      { kind: "rect", x: 180, y: 240, w: 90, h: 22, r: 11, fill: FILL_SOFT, stroke: STROKE_SOFT },
+      { kind: "rect", x: 280, y: 240, w: 60, h: 22, r: 11, fill: FILL_SOFT, stroke: STROKE_SOFT },
+    ],
+  ];
+  let idx = 0;
+  return (
+    <svg viewBox="0 0 480 320" width="100%" height="100%" aria-hidden="true">
+      <FrameOutline />
+      {rows.map((row, ri) =>
+        row.map((el) => {
+          const i = idx++;
+          return (
+            <rect
+              key={i}
+              x={el.x}
+              y={el.y}
+              width={el.w}
+              height={el.h}
+              rx={el.r}
+              fill={el.fill ? "currentColor" : "none"}
+              fillOpacity={el.fill || 0}
+              stroke={el.stroke ? "currentColor" : "none"}
+              strokeOpacity={el.stroke || 0}
+              strokeWidth={1.5}
+              style={{
+                transformOrigin: `${el.x + el.w / 2}px ${el.y + el.h / 2}px`,
+                animation:
+                  "arcade-studio-loading-glyph-pulse 2400ms ease-in-out infinite",
+                animationDelay: `${ri * 250 + i * 60}ms`,
+              }}
+              className="arcade-studio-loading-glyph"
+            />
+          );
+        }),
+      )}
+    </svg>
+  );
+};
 
 const sceneColors = (): ReactElement => (
   <svg viewBox="0 0 480 320" width="100%" height="100%" aria-hidden="true">
     <FrameOutline />
-    {[
-      "#6E56F4",
-      "#FF7A7A",
-      "#FFC857",
-      "#3CC79A",
-      "#4D9EE8",
-      "#B36CFF",
-    ].map((c, i) => (
-      <circle
-        key={c}
-        cx={120 + i * 48}
-        cy={160}
-        r={20}
-        fill={c}
-        opacity={0.85}
+    {/* Neutral palette: 6 swatches in a lightness gradient. Reads as a
+     *  swatch picker without breaking the monochrome rule. */}
+    {[0.08, 0.18, 0.32, 0.5, 0.7, 0.9].map((opacity, i) => (
+      <rect
+        key={i}
+        x={88 + i * 52}
+        y={140}
+        width={40}
+        height={40}
+        rx={20}
+        fill="currentColor"
+        fillOpacity={opacity}
+        stroke="currentColor"
+        strokeOpacity={STROKE_SOFT}
+        strokeWidth={1}
         style={{
-          transformOrigin: `${120 + i * 48}px 160px`,
-          animation: "arcade-studio-loading-glyph-pulse 2200ms ease-in-out infinite",
+          transformOrigin: `${108 + i * 52}px 160px`,
+          animation: "arcade-studio-loading-glyph-pulse 2400ms ease-in-out infinite",
           animationDelay: `${i * 220}ms`,
         }}
         className="arcade-studio-loading-glyph"
@@ -280,34 +253,84 @@ const sceneColors = (): ReactElement => (
 
 const scenePolishing = (): ReactElement => (
   <svg viewBox="0 0 480 320" width="100%" height="100%" aria-hidden="true">
-    <FrameOutline dashed={false} />
-    {/* Composed wireframe */}
-    <rect x={120} y={84} width={240} height={28} rx={6} fill={PURPLE_FILL} stroke={PURPLE_SOFT} />
-    <rect x={120} y={124} width={110} height={110} rx={10} fill={PURPLE_FILL} stroke={PURPLE_SOFT} />
-    <rect x={250} y={124} width={110} height={50} rx={8} fill={PURPLE_FILL} stroke={PURPLE_SOFT} />
-    <rect x={250} y={184} width={110} height={50} rx={8} fill={PURPLE_FILL} stroke={PURPLE_SOFT} />
-    {/* Sparkles */}
+    <rect
+      x={1}
+      y={1}
+      width={478}
+      height={318}
+      rx={14}
+      fill="none"
+      stroke="currentColor"
+      strokeOpacity={STROKE_SOFT}
+      strokeWidth={1.5}
+    />
+    <rect
+      x={120}
+      y={84}
+      width={240}
+      height={28}
+      rx={6}
+      fill="currentColor"
+      fillOpacity={FILL_SOFT}
+      stroke="currentColor"
+      strokeOpacity={STROKE_SOFT}
+    />
+    <rect
+      x={120}
+      y={124}
+      width={110}
+      height={110}
+      rx={10}
+      fill="currentColor"
+      fillOpacity={FILL_SOFT}
+      stroke="currentColor"
+      strokeOpacity={STROKE_SOFT}
+    />
+    <rect
+      x={250}
+      y={124}
+      width={110}
+      height={50}
+      rx={8}
+      fill="currentColor"
+      fillOpacity={FILL_SOFT}
+      stroke="currentColor"
+      strokeOpacity={STROKE_SOFT}
+    />
+    <rect
+      x={250}
+      y={184}
+      width={110}
+      height={50}
+      rx={8}
+      fill="currentColor"
+      fillOpacity={FILL_SOFT}
+      stroke="currentColor"
+      strokeOpacity={STROKE_SOFT}
+    />
+    {/* Subtle dots traveling around the composition. Fewer, smaller,
+     *  monochrome — no sparkles. */}
     {[
-      { x: 100, y: 80 },
-      { x: 380, y: 120 },
-      { x: 200, y: 240 },
-      { x: 360, y: 248 },
-      { x: 110, y: 200 },
+      { x: 96, y: 80 },
+      { x: 392, y: 110 },
+      { x: 200, y: 252 },
+      { x: 376, y: 252 },
+      { x: 96, y: 192 },
     ].map((s, i) => (
-      <g
+      <circle
         key={i}
+        cx={s.x}
+        cy={s.y}
+        r={4}
+        fill="currentColor"
+        fillOpacity={ACCENT}
         style={{
           transformOrigin: `${s.x}px ${s.y}px`,
-          animation: "arcade-studio-loading-glyph-pulse 1600ms ease-in-out infinite",
+          animation: "arcade-studio-loading-glyph-pulse 1800ms ease-in-out infinite",
           animationDelay: `${i * 280}ms`,
         }}
         className="arcade-studio-loading-glyph"
-      >
-        <path
-          d={`M${s.x} ${s.y - 10} L${s.x + 3} ${s.y - 3} L${s.x + 10} ${s.y} L${s.x + 3} ${s.y + 3} L${s.x} ${s.y + 10} L${s.x - 3} ${s.y + 3} L${s.x - 10} ${s.y} L${s.x - 3} ${s.y - 3} Z`}
-          fill={PURPLE}
-        />
-      </g>
+      />
     ))}
   </svg>
 );
@@ -359,6 +382,7 @@ export function LoadingShow({
         gap: 24,
         pointerEvents: "none",
         background: "var(--bg-neutral-soft)",
+        color: "var(--fg-neutral-medium)",
       }}
     >
       <div

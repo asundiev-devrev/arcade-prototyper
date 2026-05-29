@@ -27,6 +27,16 @@ html, body, #root { height: 100%; margin: 0; }
   50%      { opacity: 1;    transform: scale(1.04); }
 }
 
+/* LoadingShow ripple — sceneThinking expanding rings. Each ring starts
+ * small and invisible, fades in while scaling outward, then fades to 0
+ * as it crosses the frame. Three rings staggered by 800ms create a
+ * single rolling ripple instead of three pulses on top of each other. */
+@keyframes arcade-studio-loading-ripple {
+  0%   { transform: scale(0.4); opacity: 0; }
+  20%  { opacity: 0.9; }
+  100% { transform: scale(3.2); opacity: 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .arcade-studio-loading-scene { animation: none !important; }
   .arcade-studio-loading-frame { animation: none !important; }
