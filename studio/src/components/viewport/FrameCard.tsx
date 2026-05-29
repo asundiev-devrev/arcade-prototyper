@@ -219,7 +219,7 @@ export function FrameCard({
             color: "var(--fg-neutral-tertiary)",
           }}
         >
-          {clampedWidth}px
+          {Math.round(clampedWidth)}px
         </span>
         <div
           style={{
