@@ -12,6 +12,7 @@ vi.mock("@xorkavi/arcade-gen", async () => {
   return {
     IconButton: passthrough("button"),
     ArrowUpRightSmall: () => null,
+    TrashBin: () => null,
     Tooltip: ({ children }: any) => children,
     useToast: () => ({ toast: () => {} }),
   };

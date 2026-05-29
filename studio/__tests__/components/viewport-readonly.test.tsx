@@ -21,6 +21,7 @@ vi.mock("@xorkavi/arcade-gen", async () => {
     IconButton: passthrough("button"),
     ArrowUpRightSmall: () => null,
     ChevronDownSmall: () => null,
+    TrashBin: () => null,
     Tooltip: ({ children }: any) => React.createElement("div", null, children),
     useToast: () => ({ toast: () => {} }),
     Menu,

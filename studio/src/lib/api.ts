@@ -37,6 +37,10 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({}),
     }).then(j<Frame>),
+  deleteFrame: (slug: string, frameSlug: string) =>
+    fetch(`/api/projects/${slug}/frames/${frameSlug}`, {
+      method: "DELETE",
+    }).then(j<Project>),
   startChatTurn: (slug: string, prompt: string, images: string[]) =>
     fetch("/api/chat", {
       method: "POST",

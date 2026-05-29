@@ -6,6 +6,11 @@ and the patch is reserved for quick follow-up fixes.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- **Delete frame control.** Each frame header now has a trash-bin `IconButton` next to the element-picker and open-in-new-tab controls. Confirms before delete, removes the frame from disk + `project.json`, clears the targeted-element selection if it pointed at the deleted frame, and toasts the result. Hidden in spectator mode.
+
 ## [0.25.5] — 2026-05-29
 
 ### Added

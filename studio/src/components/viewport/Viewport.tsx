@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import { useToast } from "@xorkavi/arcade-gen";
 import type { Project } from "../../../server/types";
 import { useFrames } from "../../hooks/useFrames";
 import { FrameCard } from "./FrameCard";
@@ -7,6 +8,7 @@ import { ViewportPreview } from "./ViewportPreview";
 import { NewFrameCard } from "./NewFrameCard";
 import { api } from "../../lib/api";
 import { LoadingShow } from "./LoadingShow";
+import { useTargetSelection } from "../../hooks/targetSelectionContext";
 import type { TurnPhase } from "../../hooks/chatStreamReducer";
 
 export function Viewport({
@@ -41,8 +43,10 @@ export function Viewport({
 }) {
   // Pass `enabled: !isReadonly` so the polling timer and host fetch
   // don't run for spectators — see useFrames docstring.
-  const { frames } = useFrames(project, { enabled: !isReadonly });
+  const { frames, refresh } = useFrames(project, { enabled: !isReadonly });
   const [creatingFrame, setCreatingFrame] = useState(false);
+  const { target, setTarget } = useTargetSelection();
+  const { toast } = useToast();
   const [highlight, setHighlight] = useState<{
     slug: string;
     kind: "target" | "missing";
@@ -59,6 +63,24 @@ export function Viewport({
       console.warn("[Viewport] createFrame failed:", err);
     } finally {
       setCreatingFrame(false);
+    }
+  }
+
+  async function handleDeleteFrame(frameSlug: string) {
+    const frame = frames.find((f) => f.slug === frameSlug);
+    const label = frame?.name ?? frameSlug;
+    if (!confirm(`Delete "${label}"? This cannot be undone.`)) return;
+    try {
+      await api.deleteFrame(project.slug, frameSlug);
+      if (target?.frameSlug === frameSlug) setTarget(null);
+      void refresh();
+      toast({ title: "Frame deleted", intent: "success" });
+    } catch (e) {
+      toast({
+        title: "Delete failed",
+        description: e instanceof Error ? e.message : String(e),
+        intent: "alert",
+      });
     }
   }
 
@@ -216,6 +238,7 @@ export function Viewport({
             readonly={isReadonly}
             srcOverride={frameSrcOverride}
             phase={phase}
+            onDelete={isReadonly ? undefined : handleDeleteFrame}
           />
         ))}
         {!isReadonly && (

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowUpRightSmall, IconButton, Tooltip, useToast } from "@xorkavi/arcade-gen";
+import { ArrowUpRightSmall, IconButton, Tooltip, TrashBin, useToast } from "@xorkavi/arcade-gen";
 import type { Frame } from "../../../server/types";
 import { useTargetSelection } from "../../hooks/targetSelectionContext";
 import type { TurnPhase } from "../../hooks/chatStreamReducer";
@@ -48,6 +48,7 @@ export function FrameCard({
   // cache) instead of the host's `/api/frames/:slug/:frame` route.
   srcOverride,
   phase = "idle",
+  onDelete,
 }: {
   projectSlug: string;
   frame: Frame;
@@ -61,6 +62,7 @@ export function FrameCard({
   readonly?: boolean;
   srcOverride?: (frameSlug: string) => string;
   phase?: TurnPhase;
+  onDelete?: (frameSlug: string) => void;
 }) {
   const [resizing, setResizing] = useState(false);
   const [hoverHandle, setHoverHandle] = useState(false);
@@ -279,6 +281,17 @@ export function FrameCard({
           >
             <ArrowUpRightSmall size={16} aria-hidden="true" />
           </IconButton>
+          {!isReadonly && onDelete && (
+            <Tooltip content="Delete frame">
+              <IconButton
+                aria-label="Delete frame"
+                variant="tertiary"
+                onClick={() => onDelete(frame.slug)}
+              >
+                <TrashBin size={16} aria-hidden="true" />
+              </IconButton>
+            </Tooltip>
+          )}
         </div>
       </div>
       <div
