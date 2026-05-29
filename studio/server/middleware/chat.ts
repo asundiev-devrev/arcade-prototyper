@@ -735,6 +735,7 @@ async function runComputerBranch(ctx: {
 export function mapStudioEventToRelayEvent(ev: StudioEvent, turnId: string): RelayEvent | null {
   switch (ev.kind) {
     case "narration":
+    case "journey":
     case "tool_call":
     case "tool_result":
     case "session":
