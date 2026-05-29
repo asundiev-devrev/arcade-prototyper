@@ -38,7 +38,7 @@ final-summary + `### Deviations` contract.
 
 ## Architecture
 
-Three small changes, one per layer.
+Five small changes across the layers.
 
 ### 1. Prompt — `studio/templates/CLAUDE.md.tpl`
 
@@ -79,9 +79,13 @@ design terms, not *how*.
 When an `assistant` message contains a `text` block, split the block
 into lines:
 
-- Lines starting with `→ ` (after trimming leading whitespace) become
-  one `journey` event each, with the sentinel stripped.
-- Remaining lines (text not prefixed with `→ `) accumulate into a
+- A line is a "journey line" iff, after stripping ASCII spaces/tabs from
+  the start, it begins with the literal two-codepoint prefix `→ ` (U+2192
+  + space). No other quoting/prefix is recognized — markdown blockquote
+  prefixes like `> → …` are NOT journey lines.
+- Each journey line emits one `journey` event with the sentinel and the
+  preceding whitespace stripped, trailing whitespace trimmed.
+- Remaining lines (text not matching the rule above) accumulate into a
   single `narration` event with the original line breaks preserved.
 
 If a block is entirely sentineled, no `narration` event is emitted. If a
@@ -105,6 +109,15 @@ font, indented to match the tool-row gutter. They sit alongside tool
 rows in the activity stream, not as part of `ComputerLive`'s aggregated
 narration block.
 
+**Computer-source turns.** When `source === "computer"` and `busy`,
+`MessageList` currently renders `<ComputerLive>` (which collapses
+narrations into a single `<ComputerMessage>` if any narration exists,
+otherwise a `<ComputerThinkingRow>` over the tool labels). Journey
+items are **not** part of `ComputerLive`'s `narrations` prop; they are
+rendered as a separate stream of journey rows above or alongside the
+ComputerLive block, using the same ActivityRow journey styling. Journey
+items never collapse into `<ComputerMessage>`.
+
 ### 4. Server persistence — `studio/server/middleware/chat.ts`
 
 `onEvent` already only pushes `narration` events into `narrationTexts`,
@@ -113,6 +126,21 @@ events are a separate `kind`, they are **never** pushed into
 `narrationTexts`. Persisted history still contains only the final
 summary + Deviations text. No code change needed here beyond the
 TypeScript discriminated union covering the new variant.
+
+**Assumption.** The model's *final* text block in a turn carries the
+summary + `### Deviations` section and contains no `→ ` sentinels.
+Mid-turn text blocks are expected to be entirely sentineled. If a
+mid-turn block contains both sentineled lines AND un-sentineled prose,
+the un-sentineled portion will persist to history. The prompt
+explicitly tells Claude to keep mid-turn prose to journey lines only.
+
+### 5. Spectator relay — `studio/server/relay.ts` (or wherever `mapStudioEventToRelayEvent` lives)
+
+Add `journey` to the list of `StudioEvent` kinds forwarded into the
+`agent_event` envelope so multiplayer spectators see journey rows in
+sync with the host. Same shape as `narration`. Without this, spectators
+would see the same silent gap between tool rows that the host had
+before this change.
 
 ## Event Flow
 
@@ -185,8 +213,20 @@ the joined narration content. Journey lines are dropped from history.
 
 - **Reducer test (`__tests__/hooks/chatStreamReducer.test.ts`):**
   - Sequence: `narration` → `journey` → `tool_call` → `journey` →
-    `narration`. `currentItems` reflects all five in order. Persisted
-    `narrationTexts` contains only the two `narration` blocks joined.
+    `narration`. `currentItems` reflects all five in stream order. The
+    reducer's `narrations` slice (used by `ComputerLive`) contains
+    only the two `narration` texts.
+
+- **Server persistence test (`__tests__/server/chat.test.ts` or
+  similar):**
+  - Stream a turn whose `assistant` message text contains journey
+    sentinels followed by an un-sentineled summary block. Assert that
+    `appendHistory()` is called with content equal to the un-sentineled
+    block alone — no journey lines in persisted history.
+
+- **Relay test (`__tests__/server/relay.test.ts` or similar):**
+  - A `journey` event flows through `mapStudioEventToRelayEvent` and is
+    forwarded as an `agent_event` envelope to spectators.
 
 - **Component test (`__tests__/components/messageList.test.tsx`):**
   - `currentItems` containing one `journey` item renders a row with the
