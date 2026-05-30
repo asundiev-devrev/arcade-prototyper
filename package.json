@@ -11,6 +11,7 @@
     "studio:pack": "bash studio/packaging/scripts/fetch-cli-deps.sh && pnpm exec tsc -p electron/tsconfig.json && pnpm exec electron-builder --mac --config electron-builder.yml --publish never",
     "studio:release": "bash studio/packaging/scripts/fetch-cli-deps.sh && pnpm exec tsc -p electron/tsconfig.json && pnpm exec electron-builder --mac --config electron-builder.yml --publish always",
     "studio:audit": "DRIFT_AUDIT=1 vitest run --config studio/vitest.config.ts __tests__/lift/drift --reporter=verbose",
+    "sidecar": "pnpm exec tsx studio/server/sidecar/bin.ts --",
     "worker:deploy": "bash studio/worker/bin/check-wrangler.sh && cd studio/worker && wrangler deploy"
   },
   "dependencies": {
@@ -44,6 +45,7 @@
     "electron-builder": "^25.1.8",
     "jsdom": "^26.0.0",
     "playwright": "^1.59.1",
+    "tsx": "^4.22.3",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18",
     "yaml": "^2.9.0"
