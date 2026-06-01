@@ -212,6 +212,76 @@ function renderEntry(entry: KitManifestEntry): string {
   return [heading, fileLine, docBlock + subLine + propsBlock + counterBlock + tokensBlock].join("\n");
 }
 
+/** First sentence of the doc, collapsed to one line — the index one-liner. */
+function firstSentence(doc: string): string {
+  const flat = doc.replace(/\s+/g, " ").trim();
+  const m = flat.match(/^(.*?[.!?])(\s|$)/);
+  return (m ? m[1] : flat).slice(0, 200);
+}
+
+/** Top-level prop names (with `?` optionality) pulled from the props source,
+ *  comma-joined. Enough for the agent to know the shape from the index; full
+ *  types live in the per-entry detail. */
+function propsFieldList(propsSource?: string): string {
+  if (!propsSource) return "";
+  const names = [...propsSource.matchAll(/^\s{2,4}([a-zA-Z_]\w*)(\??)\s*:/gm)].map(
+    (m) => `${m[1]}${m[2]}`,
+  );
+  return [...new Set(names)].join(", ");
+}
+
+/** Render ONE entry's full detail (heading, diagram, props, counterexamples,
+ *  tokens). Served by `GET /manifest/:name`. */
+export function renderEntryDetail(entry: KitManifestEntry): string {
+  return renderEntry(entry);
+}
+
+/** Slim catalog: every entry as name + kind + one-liner + prop names + a
+ *  pointer to its detail route. Stays well under the agent runtime's tool-
+ *  output cap so the whole catalog survives a single fetch; the agent then
+ *  pulls full detail for only the 2-3 entries it actually uses. */
+export function renderManifestIndex(entries: KitManifestEntry[]): string {
+  const composites = entries.filter((e) => e.kind === "composite");
+  const templates = entries.filter((e) => e.kind === "template");
+  const header = [
+    "# Prototype kit manifest — index",
+    "",
+    "> This is the catalog of EVERY arcade composite and template. It is the",
+    "> closed list — if a component is not here, it does not exist.",
+    ">",
+    "> Each entry shows its name, a one-line summary, and its prop names. For",
+    "> the FULL detail of a component you intend to use (layout diagram, full",
+    "> prop types, examples, when-NOT-to-use), GET `/manifest/<Name>` — e.g.",
+    "> `/manifest/ComputerPage`. Fetch detail for the 2-3 you need before",
+    "> writing the frame; do NOT hand-roll a component that exists here.",
+    "",
+    `_${entries.length} entries — ${composites.length} composites, ${templates.length} templates._`,
+    "",
+  ].join("\n");
+  const line = (e: KitManifestEntry): string => {
+    const props = propsFieldList(e.propsSource);
+    const compound =
+      e.subcomponents.length > 0
+        ? `\ncompound: ${e.subcomponents.map((s) => `${e.name}.${s}`).join(", ")}`
+        : "";
+    return [
+      `### ${e.name} (${e.kind})`,
+      firstSentence(e.doc),
+      props ? `props: ${props}` : "",
+      `detail: GET /manifest/${e.name}`,
+    ]
+      .filter(Boolean)
+      .join("\n") + compound;
+  };
+  const body = [
+    "## Templates\n",
+    ...templates.map(line),
+    "\n## Composites\n",
+    ...composites.map(line),
+  ].join("\n\n");
+  return `${header}\n${body}\n`;
+}
+
 export function renderManifestMarkdown(entries: KitManifestEntry[]): string {
   const composites = entries.filter((e) => e.kind === "composite");
   const templates = entries.filter((e) => e.kind === "template");
