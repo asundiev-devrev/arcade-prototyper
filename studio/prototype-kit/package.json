@@ -29,7 +29,6 @@
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
-    "access": "restricted",
-    "provenance": true
+    "access": "restricted"
   }
 }
