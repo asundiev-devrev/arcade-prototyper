@@ -1,0 +1,98 @@
+# Publish @devrev-private/arcade-prototype-kit to npmjs on a GitHub Release.
+#
+# Auth model:
+# - Publish to registry.npmjs.org via OIDC trusted publishing (no stored npm
+#   token). The `id-token: write` permission below is what npmjs verifies
+#   against the trusted-publisher config (repo + this workflow filename).
+# - The build needs the @xorkavi/arcade-gen peer, which lives on GitHub
+#   Packages, so install needs a read:packages token (GITHUB_TOKEN_PACKAGES).
+#
+# Trigger: create a GitHub Release whose tag is the version (e.g. v0.1.1).
+name: Release
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Semver to publish (e.g. 0.1.1 or v0.1.1).'
+        required: true
+        type: string
+
+env:
+  PNPM_VERSION: 10.33.2
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.14.0'
+          registry-url: https://registry.npmjs.org
+          scope: '@devrev-private'
+
+      - name: Ensure npm 11.5.1+ (required for OIDC trusted publishing)
+        run: npm install -g 'npm@>=11.5.1'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Configure GitHub Packages auth for @xorkavi peer
+        env:
+          GITHUB_TOKEN_PACKAGES: ${{ secrets.GITHUB_TOKEN_PACKAGES }}
+        run: |
+          {
+            echo "@xorkavi:registry=https://npm.pkg.github.com"
+            echo "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN_PACKAGES}"
+          } >> .npmrc
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve version
+        id: meta
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          DISPATCH_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            RAW="${DISPATCH_VERSION:?version input required}"
+          else
+            RAW="${RELEASE_TAG:?release tag is empty}"
+          fi
+          VERSION="${RAW#v}"
+          [ -n "$VERSION" ] || { echo "Empty version (raw: ${RAW})"; exit 1; }
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Set kit version
+        working-directory: studio/prototype-kit
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Build kit
+        working-directory: studio/prototype-kit
+        run: pnpm run build
+
+      - name: Publish
+        working-directory: studio/prototype-kit
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          if npm view "@devrev-private/arcade-prototype-kit@${VERSION}" version >/dev/null 2>&1; then
+            echo "@devrev-private/arcade-prototype-kit@${VERSION} already published, skipping"
+            exit 0
+          fi
+          npm publish --provenance --access restricted
