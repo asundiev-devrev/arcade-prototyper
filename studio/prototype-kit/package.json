@@ -1,0 +1,35 @@
+{
+  "name": "@devrev-private/arcade-prototype-kit",
+  "version": "0.1.0",
+  "description": "Arcade prototyping composites and templates — the closed component kit the Computer/Studio agent builds frames from.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./components": {
+      "types": "./dist/arcade-components.d.ts",
+      "default": "./dist/arcade-components.js"
+    },
+    "./manifest": "./dist/KIT-MANIFEST.md"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsx scripts/build-package.mts",
+    "prepublishOnly": "pnpm run build"
+  },
+  "peerDependencies": {
+    "@xorkavi/arcade-gen": "^1.0.0",
+    "react": ">=19.0.0",
+    "react-dom": ">=19.0.0"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "restricted",
+    "provenance": true
+  }
+}

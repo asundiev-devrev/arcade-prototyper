@@ -90,12 +90,12 @@ function Root({
   // Render defaults when the caller omits both props; render nothing only if
   // the caller explicitly opts out with `primaryAction={null}`.
   const primary =
-    primaryAction === ACTION_ROW_UNSET ? <DefaultPrimaryAction /> : primaryAction;
+    (primaryAction as unknown) === ACTION_ROW_UNSET ? <DefaultPrimaryAction /> : primaryAction;
   const history =
-    historyAction === ACTION_ROW_UNSET ? <DefaultHistoryAction /> : historyAction;
+    (historyAction as unknown) === ACTION_ROW_UNSET ? <DefaultHistoryAction /> : historyAction;
   const hasActionRow = primary != null || history != null;
   const agentStudio =
-    agentStudioLink === ACTION_ROW_UNSET ? <DefaultAgentStudioLink /> : agentStudioLink;
+    (agentStudioLink as unknown) === ACTION_ROW_UNSET ? <DefaultAgentStudioLink /> : agentStudioLink;
 
   return (
     <div className="flex flex-col h-full w-64 shrink-0 bg-(--surface-overlay) border-r border-(--stroke-neutral-subtle)">

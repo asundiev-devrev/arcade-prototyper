@@ -88,9 +88,9 @@ export function ComputerHeader({
   meta,
 }: ComputerHeaderProps) {
   const resolvedPanelToggle =
-    panelToggle === PANEL_TOGGLE_UNSET ? <DefaultPanelToggle /> : panelToggle;
+    (panelToggle as unknown) === PANEL_TOGGLE_UNSET ? <DefaultPanelToggle /> : panelToggle;
   const resolvedMenu =
-    conversationMenu === CONVERSATION_MENU_UNSET ? (
+    (conversationMenu as unknown) === CONVERSATION_MENU_UNSET ? (
       <DefaultConversationMenu
         onRename={onRename}
         onInspect={onInspect}
