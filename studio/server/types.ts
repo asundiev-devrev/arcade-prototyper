@@ -11,6 +11,17 @@ export const frameSchema = z.object({
 });
 export type Frame = z.infer<typeof frameSchema>;
 
+export const chimeInSchema = z.object({
+  id: z.string(),
+  /** Frame the objection is about; used for staleness auto-dismiss. */
+  frameSlug: z.string(),
+  /** Computer's concrete product-truth objection. */
+  objection: z.string(),
+  createdAt: z.string(),
+  status: z.enum(["pending", "applied", "dismissed"]).default("pending"),
+});
+export type ChimeIn = z.infer<typeof chimeInSchema>;
+
 export const projectSchema = z.object({
   name: z.string().min(1).max(120),
   slug: z.string().regex(slugRegex),
@@ -20,6 +31,7 @@ export const projectSchema = z.object({
   mode: z.enum(["light", "dark"]).default("light"),
   sessionId: z.string().optional(),
   computerConversationId: z.string().optional(),
+  chimeIns: z.array(chimeInSchema).default([]),
   frames: z.array(frameSchema).default([]),
   coverThumbnail: z.string().optional(),
   deployments: z.array(z.object({
