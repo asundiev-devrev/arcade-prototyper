@@ -4,7 +4,7 @@
 
 **Goal:** Let a desktop Computer user type `@Arcade <prompt>` and get a full-fidelity Arcade prototype rendered on Computer's canvas — natively, no separate Studio app.
 
-**Architecture:** Agent-driven, sidecar-assisted. A tiny localhost HTTP service ("arcade-sidecar") in the arcade-prototyper repo exposes the already-proven `buildFrameBundle` packer (Tailwind v4 + arcade kit). When a turn is tagged `@Arcade`, Computer injects an "arcade prototype" instruction block into its existing agent (via the agent-runner `systemPromptSections` hook), gated behind a feature flag. The Computer agent writes a `.tsx` frame, calls the sidecar to compile it into one self-contained `.html`, writes that `.html` with its own Write tool, then runs the **make-page-interactive** skill over it in place to add the DevRev annotate/comment layer — so Computer's existing canvas tracks and renders the interactive page in the sandboxed iframe (the canvas auto-refreshes from disk on turn-complete). No new render surface in Computer; the Tailwind-v4 packer and the annotation runtime both stay in the skill/repo that already works. **Editing is out of scope for now** — the loop is comment → regenerate; true inline click-and-type editing is a later exploration (see Out of scope).
+**Architecture:** Agent-driven, sidecar-assisted. A tiny localhost HTTP service ("arcade-sidecar") in the arcade-prototyper repo exposes the already-proven `buildFrameBundle` packer (Tailwind v4 + arcade kit). When a turn is tagged `@Arcade`, Computer injects an "arcade prototype" instruction block into its existing agent (via the agent-runner `systemPromptSections` hook), gated behind a feature flag. The Computer agent writes a `.tsx` frame, calls the sidecar to compile it into one self-contained `.html`, writes that `.html` with its own Write tool, then runs the **make-page-interactive** skill over it in place to add the DevRev annotate/comment layer — so Computer's existing canvas tracks and renders the interactive page in the sandboxed iframe (the canvas auto-refreshes from disk on turn-complete). No new render surface in Computer; the Tailwind-v4 packer and the annotation runtime both stay in the skill/repo that already works. **Editing is out of scope for now** — the loop is comment → regenerate; true inline click-and-type editing is a later exploration (see Out of scope). **Sharing is opt-in**: when the `ui-publisher` skill is installed, the agent can publish a prototype to a DevRev link (personal / org-wide / public) on the designer's explicit request — never automatically.
 
 **Tech Stack:** Node/TS (sidecar: http + existing `buildFrameBundle`), devrev-web Electron main (`apps/product-native`, webpack-bundled, Node 22), `@devrev-private/agent-runner` 0.1.78, React/arcade-gen kit.
 
@@ -408,6 +408,22 @@ describe('buildArcadeSystemSection', () => {
     expect(out).toContain(`"${SCRIPT}" prototype.html prototype.html`); // overwrite in place
     expect(out).toContain('annotate/comment bar'); // explains what it does, in design terms
   });
+
+  it('omits the publish block when ui-publisher is not installed', () => {
+    const out = buildArcadeSystemSection({ enabled: true, sidecarUrl: 'http://127.0.0.1:7799', makeInteractiveScript: SCRIPT });
+    expect(out).not.toContain('Sharing a prototype');
+    expect(out).not.toContain('publisher.py');
+  });
+
+  it('includes an opt-in publish block when ui-publisher IS installed', () => {
+    const PUB = '/skills/ui-publisher/scripts/publisher.py';
+    const out = buildArcadeSystemSection({ enabled: true, sidecarUrl: 'http://127.0.0.1:7799', makeInteractiveScript: SCRIPT, publisherScript: PUB });
+    expect(out).toContain('Sharing a prototype (ONLY when the designer asks)');
+    expect(out).toContain(PUB); // the publisher path is injected
+    expect(out).toContain('Do NOT publish automatically'); // opt-in is explicit
+    expect(out).toContain('--access'); // teaches personal/internal/public
+    expect(out).toContain('markdown_link'); // returns a clickable link, not raw URL
+  });
 });
 ```
 
@@ -425,6 +441,13 @@ export interface ArcadeSectionInput {
   sidecarUrl: string;
   /** Absolute path to make-page-interactive/make-interactive.mjs in the agent's skills dir. */
   makeInteractiveScript: string;
+  /**
+   * Absolute path to ui-publisher/scripts/publisher.py in the agent's skills dir,
+   * or undefined when the ui-publisher skill is not installed. When undefined, the
+   * "share this prototype" capability is omitted from the prompt entirely (the
+   * agent must not invent a publish command).
+   */
+  publisherScript?: string;
 }
 
 // Compact, self-contained system-prompt section that turns a normal Computer
@@ -432,7 +455,7 @@ export interface ArcadeSectionInput {
 // templates/CLAUDE.md.tpl — kept inline because systemPromptSections output is
 // plain text, not a file import. When `enabled` is false, returns '' so the
 // runner skips it.
-export function buildArcadeSystemSection({ enabled, sidecarUrl, makeInteractiveScript }: ArcadeSectionInput): string {
+export function buildArcadeSystemSection({ enabled, sidecarUrl, makeInteractiveScript, publisherScript }: ArcadeSectionInput): string {
   if (!enabled) return '';
   return [
     '# Arcade prototype mode',
@@ -448,6 +471,24 @@ export function buildArcadeSystemSection({ enabled, sidecarUrl, makeInteractiveS
     '   This wraps the page in the DevRev annotate/comment bar (defaults to passive View mode; the designer toggles Annotate to leave comments and @-mention you). Run it with the Bash tool. Do NOT read the output file back into context — it is large (~4MB); the canvas reads it from disk on its own.',
     '5. Reply to the designer in ONE sentence describing the screen, in design language (no file paths, no component prop names, no code). If anything diverged from the kit, add a short `### Deviations` list; otherwise append `### Deviations` then `None.`',
     '',
+    // Publishing is OPT-IN, never automatic: it mints a DevRev article + link and
+    // needs an access-mode choice. Only emit this block when the ui-publisher skill
+    // is installed (publisherScript provided). Absent it, the agent has no publish
+    // capability and must say so rather than invent one.
+    ...(publisherScript
+      ? [
+          '## Sharing a prototype (ONLY when the designer asks)',
+          'Do NOT publish automatically. Publish ONLY when the designer says something like "share this", "get me a link", "send this to <person/team>", or "make this public". Otherwise never run this.',
+          'When asked:',
+          'a. Pick the file to publish: prefer the interactive `prototype.html` (so reviewers get the comment bar) unless the designer explicitly wants a clean, non-commentable page.',
+          'b. Ask which audience if not already clear: just the designer (`personal`), the whole org (`internal`), or anyone with the link for 7 days (`public`). If they named people/teams, use `personal` plus `--share-with-emails`/`--share-with-groups` and resolve names to DevRev emails/groups first (confirm if ambiguous).',
+          'c. Run the publisher with the Bash tool (it reads `DEVREV_TOKEN` from env; never ask for a token in chat, never print it):',
+          '   `python3 "' + publisherScript + '" --file prototype.html --name "<short page title>" --access <personal|internal|public> [--share-with-emails ...] [--share-with-groups ...]`',
+          'd. The script returns JSON. Give the designer the `markdown_link` value as a clickable link — never the raw URL. For `public`, also tell them it expires (`expires_at`, ~7 days).',
+          'e. If the script returns `{ "error": true }`, tell the designer plainly what failed (e.g. token missing/expired) and do not retry blindly.',
+          '',
+        ]
+      : []),
     '## Rules',
     '- Never invent components outside the arcade kit. If unsure a component exists, choose the closest kit primitive.',
     '- If the /pack call returns an error, fix the reported issue in `frame.tsx` and retry once before reporting failure to the designer.',
@@ -643,13 +684,26 @@ const ARCADE_SIDECAR_URL = process.env.ARCADE_SIDECAR_URL || 'http://127.0.0.1:7
 const ARCADE_MAKE_INTERACTIVE_SCRIPT =
   process.env.ARCADE_MAKE_INTERACTIVE_SCRIPT ||
   `${agentSkillsDir}/make-page-interactive/make-interactive.mjs`;
+
+// Optional: the ui-publisher skill enables "share this prototype" (a DevRev
+// article + link). Resolve its script only if the skill is installed; pass
+// undefined otherwise so the publish block is omitted from the prompt entirely.
+// Env override supports the dev-branch phase.
+import fs from 'node:fs';
+const arcadePublisherCandidate =
+  process.env.ARCADE_PUBLISHER_SCRIPT || `${agentSkillsDir}/ui-publisher/scripts/publisher.py`;
+const ARCADE_PUBLISHER_SCRIPT = fs.existsSync(arcadePublisherCandidate)
+  ? arcadePublisherCandidate
+  : undefined;
 ```
 
 `agentSkillsDir` is the resolved per-identity skills directory (e.g.
 `~/.devrev/computer/<identity>/agent/skills`) — use whatever constant the module
 already has for locating agent skills. If none exists, derive it the same way the
 arcade skill itself is located. The path must be absolute so the agent's Bash tool
-runs it regardless of working directory.
+runs it regardless of working directory. The `ui-publisher` skill is independent of
+arcade mode — the prototype workflow works without it; only the share step is gated
+on its presence.
 
 - [ ] **Step 3: Register the provider in the `AgentRunnerConfig`**
 
@@ -668,6 +722,7 @@ const config: AgentRunnerConfig = {
           this.arcadeModeByChat.get(ctx.chatId) === true,
         sidecarUrl: ARCADE_SIDECAR_URL,
         makeInteractiveScript: ARCADE_MAKE_INTERACTIVE_SCRIPT,
+        publisherScript: ARCADE_PUBLISHER_SCRIPT,
       }),
   ],
   // ...rest unchanged (spawnClaudeCodeProcess, tracing, logging, etc.)
@@ -736,6 +791,10 @@ Expected: the agent narrates in design language, a `prototype.html` artifact chi
 
 The canvas iframe runs with `sandbox="allow-scripts"` only (no `allow-forms`). The make-page-interactive composer is a script-driven `<textarea>` (commits on Enter, not HTML form submit), so it should work under script-only. Verify: click **Annotate**, click an element, type a comment, press Enter — the pin + comment must persist. If typing/commit silently fails, the sandbox needs `allow-forms` added in `html-artifact-renderer.tsx` (a devrev-web change + security review) — record it as a follow-up, do not loosen the sandbox ad hoc.
 
+- [ ] **Step 3c: (Only if the `ui-publisher` skill is installed) test opt-in sharing.**
+
+Prereqs: `ui-publisher` cloned into the agent skills dir, and `DEVREV_TOKEN` exported in the Computer process env. In the same chat after a prototype is on canvas, send: `share this prototype with me only`. Expected: the agent asks/confirms `personal` access, runs `publisher.py --file prototype.html --access personal`, and replies with a clickable markdown link (not a raw URL). Open the link in the artifact viewer; confirm it renders the prototype WITH the Annotate/View bar (proves the published file is the interactive one and ui-publisher hosts it verbatim, no re-flatten). Then send `make it public` and confirm a 7-day link with an expiry is returned. If `ui-publisher` is NOT installed, instead confirm the agent has no publish block: ask `share this` and it should say it can't publish (rather than inventing a command). 
+
 - [ ] **Step 4: Send a normal (non-`@Arcade`) prompt** and confirm Computer behaves exactly as before (no arcade section, no sidecar call). This guards the gating.
 
 - [ ] **Step 5: Record outcomes** (screenshots, any failures) in the smoke doc and commit it.
@@ -775,4 +834,6 @@ cd /Users/andrey.sundiev/devrev-web && git push -u origin <computer-arcade-branc
 3. If Phase 0.2 fails: wire `artifactViewer.openArtifact(...)` programmatically (fallback noted in Task 0.2).
 4. How the runner resolves the agent skills dir for `ARCADE_MAKE_INTERACTIVE_SCRIPT` (Task 4.1, Step 2) — reuse the existing skills-root constant if one exists, else derive it the way the arcade skill is located. Env override (`ARCADE_MAKE_INTERACTIVE_SCRIPT`) covers the dev-branch phase regardless.
 5. Whether Computer's canvas sandbox (`allow-scripts` only) lets the comment composer commit. Code read says yes (script-driven textarea, no form submit); Task 5.1 Step 3b confirms live. If not, adding `allow-forms` is a separate devrev-web change + security review.
+6. How `DEVREV_TOKEN` reaches the publisher when the user shares (Task 2.1 publish block / Task 5.1 Step 3c). ui-publisher reads it from env; confirm the Computer agent's Bash environment has a DevRev PAT, or whether `pat-manager` (also a Ribhu skill) should be the supported fallback. Sharing is opt-in, so this never blocks the core generate→comment loop.
+7. Whether `ui-publisher`'s artifact viewer (`devrev-artifact-viewer.vercel.app`) renders our interactive `prototype.html` (React-on-`#root` + annotate bar) byte-for-byte. Reading the skill says it hosts the file verbatim and renders `original_url`; Task 5.1 Step 3c confirms live. If the viewer sandboxes more tightly than Computer's own canvas, comments may view-only there — acceptable (the canvas remains the authoring surface), but note it.
 ```
