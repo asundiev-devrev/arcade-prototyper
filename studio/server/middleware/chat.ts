@@ -9,7 +9,8 @@ import { readGlobalSettings } from "./settings";
 import { chatHistoryPath, lastErrorLogPath, lastStdoutLogPath, projectDir } from "../paths";
 import { runComputerTurn } from "../devrev/computerAgent";
 import { buildComputerContext } from "../devrev/computerContext";
-import { pendingObjections } from "../chimeIns";
+import { runDriftCheck } from "../devrev/driftCheck";
+import { pendingObjections, markStaleByFrame } from "../chimeIns";
 import type { ChatMessage, ChimeIn } from "../types";
 import type { StudioEvent } from "../../src/lib/streamJson";
 import { extractFigmaUrl } from "../../src/lib/figmaUrl";
@@ -79,6 +80,23 @@ async function readFrameSources(slug: string): Promise<string> {
     used += body.length;
   }
   return parts.join("");
+}
+
+/**
+ * Pick the frame slug a snapshot diff is "about". Snapshot keys look like
+ * `frames/<slug>/index.tsx` or `shared/...`. We prefer added frames, then
+ * changed ones, and only consider paths under `frames/`. Returns null when
+ * the diff touched nothing under frames/ (e.g. only shared/ changed).
+ */
+export function frameSlugFromDiff(diff: { added: string[]; changed: string[]; removed: string[] }): string | null {
+  const pick = (paths: string[]): string | null => {
+    for (const p of paths) {
+      const m = p.match(/^frames\/([^/]+)\//);
+      if (m) return m[1];
+    }
+    return null;
+  };
+  return pick(diff.added) ?? pick(diff.changed);
 }
 
 const STREAM_URL = /^\/api\/chat\/stream\/([a-z0-9][a-z0-9-]{0,62})$/i;
@@ -634,6 +652,30 @@ async function runClaudeBranch(ctx: {
       if (!hasAnyChange(diff)) {
         emit({ kind: "narration", text: NO_CHANGES_TRAILER.trimStart() });
         narrationTexts.push(NO_CHANGES_TRAILER.trimStart());
+      }
+
+      // A frame changed this turn — (1) stale-dismiss any pending chime-ins
+      // about it (the objection may no longer apply) and (2) fire a silent
+      // background drift check. Both are best-effort and never block the turn.
+      const changedFrame = frameSlugFromDiff(diff);
+      if (changedFrame) {
+        try {
+          const current = await getProject(slug);
+          if (current) {
+            const staled = markStaleByFrame(current.chimeIns ?? [], changedFrame);
+            if (JSON.stringify(staled) !== JSON.stringify(current.chimeIns ?? [])) {
+              await updateProject(slug, { chimeIns: staled });
+            }
+          }
+        } catch (err) {
+          console.warn(`[studio] stale-dismiss failed for ${slug}:`, err);
+        }
+
+        // Fire-and-forget: do not await. The turn ends; the chime-in (if any)
+        // shows up a few seconds later via the chime-ins poll.
+        void readFrameSources(slug).then((frameSource) =>
+          runDriftCheck(slug, { frameSource, frameSlug: changedFrame }),
+        );
       }
     }
 
