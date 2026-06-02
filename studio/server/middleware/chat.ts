@@ -4,11 +4,13 @@ import fs from "node:fs/promises";
 import { runClaudeTurnWithRetry } from "../claudeCode";
 import { resolveClaudeBin } from "../claudeBin";
 import { hasBedrockAuth } from "../awsPreflight";
-import { getProject, updateProject, appendHistory } from "../projects";
+import { getProject, updateProject, appendHistory, readHistory } from "../projects";
 import { readGlobalSettings } from "./settings";
 import { chatHistoryPath, lastErrorLogPath, lastStdoutLogPath, projectDir } from "../paths";
 import { runComputerTurn } from "../devrev/computerAgent";
-import type { ChatMessage } from "../types";
+import { buildComputerContext } from "../devrev/computerContext";
+import { pendingObjections } from "../chimeIns";
+import type { ChatMessage, ChimeIn } from "../types";
 import type { StudioEvent } from "../../src/lib/streamJson";
 import { extractFigmaUrl } from "../../src/lib/figmaUrl";
 import { parseFigmaUrl } from "../figmaCli";
@@ -658,11 +660,10 @@ async function runComputerBranch(ctx: {
   emit: (ev: StudioEvent) => void;
   slug: string;
   prompt: string;
-  project: { computerConversationId?: string };
+  project: { name?: string; theme?: string; computerConversationId?: string; chimeIns?: ChimeIn[] };
   signal: AbortSignal;
 }): Promise<{ ok: boolean; error?: string }> {
   const { emit, slug, prompt, project, signal } = ctx;
-  const wantsFrameContext = FRAME_TRIGGER.test(prompt);
   const cleaned = prompt
     .replace(COMPUTER_MENTION_GLOBAL, "")
     .replace(FRAME_TRIGGER_GLOBAL, "")
@@ -673,13 +674,20 @@ async function runComputerBranch(ctx: {
     return { ok: false, error: "Mention Computer with a question or instruction after @Computer." };
   }
 
-  let finalPrompt = cleaned;
-  if (wantsFrameContext) {
-    const frameSources = await readFrameSources(slug);
-    if (frameSources) {
-      finalPrompt = `${cleaned}\n\n---\nFrame source (for context; cross-check against this):${frameSources}`;
-    }
-  }
+  // Build full project context for the summon: project summary + pending
+  // chime-ins + current frame source + recent chat history. The #frame
+  // trigger is now redundant for the in-view frames (always included) but
+  // we keep reading sources unconditionally so Computer always sees them.
+  const frameSource = await readFrameSources(slug);
+  const history = await readHistory(slug);
+  const recentHistory = history.slice(-12).map((m) => ({ role: m.role, content: m.content }));
+  const context = buildComputerContext({
+    projectSummary: `Project: ${project.name ?? slug} (theme: ${project.theme ?? "arcade"}).`,
+    pendingChimeIns: pendingObjections(project.chimeIns ?? []),
+    frameSource,
+    recentHistory,
+  });
+  const finalPrompt = `${context}\n\n---\n${cleaned}`;
 
   // Let the client know this turn is Computer-origin so it renders with the
   // Computer-branded components (thinking shimmer, markdown bubble, etc.).
