@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import fs from "node:fs/promises";
 import { createProject, deleteProject, listProjects, renameProject, updateProject, getProject, readHistory, fileTree, readProjectFile, reconcileFrames } from "../projects";
+import { dismissChimeIn, applyChimeIn } from "../chimeIns";
 import { frameDir } from "../paths";
 
 // Self-heal wrapper for GET handlers: if chokidar in projectWatchPlugin missed
@@ -35,6 +36,29 @@ export function projectsMiddleware() {
       const histMatch = url.match(/^\/api\/projects\/([a-z0-9-]+)\/history$/);
       if (req.method === "GET" && histMatch) {
         return send(res, 200, await readHistory(histMatch[1]));
+      }
+
+      const chimeListMatch = url
+        .replace(/\?.*$/, "")
+        .match(/^\/api\/projects\/([a-z0-9-]+)\/chime-ins$/);
+      if (req.method === "GET" && chimeListMatch) {
+        const p = await getProject(chimeListMatch[1]);
+        const pending = (p?.chimeIns ?? []).filter((c) => c.status === "pending");
+        return send(res, 200, pending);
+      }
+
+      const chimeActionMatch = url
+        .replace(/\?.*$/, "")
+        .match(/^\/api\/projects\/([a-z0-9-]+)\/chime-ins\/([a-z0-9-]+)\/(dismiss|apply)$/);
+      if (req.method === "POST" && chimeActionMatch) {
+        const [, slug, id, action] = chimeActionMatch;
+        const p = await getProject(slug);
+        if (!p) return send(res, 404, { error: { code: "not_found", message: "Project not found" } });
+        const next = action === "dismiss"
+          ? dismissChimeIn(p.chimeIns ?? [], id)
+          : applyChimeIn(p.chimeIns ?? [], id);
+        await updateProject(slug, { chimeIns: next });
+        return send(res, 204);
       }
 
       const treeMatch = url
