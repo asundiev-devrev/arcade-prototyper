@@ -283,13 +283,17 @@ function ProjectDetailShell({
 
   const handleApplyChimeIn = useCallback(
     async (c: ChimeIn) => {
+      // A turn is already running — re-prompting now would be rejected as
+      // "busy" and silently lost. Leave the note in place so the user can
+      // Apply again once the current turn finishes.
+      if (chatStream.state.phase === "running") return;
       await fetch(`/api/projects/${routeKey}/chime-ins/${c.id}/apply`, { method: "POST" });
       setChimeIns((list) => list.filter((x) => x.id !== c.id));
       source.send?.(
         `Computer flagged a product-truth issue: ${c.objection}. Please adjust the frame to match how DevRev actually works.`,
       );
     },
-    [routeKey, source],
+    [routeKey, source, chatStream.state.phase],
   );
 
   const handleDismissChimeIn = useCallback(

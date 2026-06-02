@@ -39,9 +39,8 @@ import type { RelayEvent } from "../relay/types";
 const COMPUTER_MENTION = /@Computer\b/i;
 const COMPUTER_MENTION_GLOBAL = /@Computer\b\s*/gi;
 
-// #frame trigger injects the current project's frame sources into the prompt
-// as context. Opt-in per turn.
-const FRAME_TRIGGER = /#frame\b/i;
+// #frame trigger is stripped from prompts for backward compatibility. Frame
+// sources are now always included in the Computer context (see runComputerBranch).
 const FRAME_TRIGGER_GLOBAL = /#frame\b\s*/gi;
 const FRAME_SOURCE_CHAR_BUDGET = 60_000;
 
@@ -672,10 +671,12 @@ async function runClaudeBranch(ctx: {
         }
 
         // Fire-and-forget: do not await. The turn ends; the chime-in (if any)
-        // shows up a few seconds later via the chime-ins poll.
-        void readFrameSources(slug).then((frameSource) =>
-          runDriftCheck(slug, { frameSource, frameSlug: changedFrame }),
-        );
+        // shows up a few seconds later via the chime-ins poll. The trailing
+        // .catch guarantees no unhandled rejection can escape even if the
+        // promise chain throws before runDriftCheck's own try/catch runs.
+        void readFrameSources(slug)
+          .then((frameSource) => runDriftCheck(slug, { frameSource, frameSlug: changedFrame }))
+          .catch((err) => console.warn(`[studio] drift check rejected for ${slug}:`, err));
       }
     }
 
