@@ -8,6 +8,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.26.1] — 2026-06-02
+
+### Fixed
+- **Hallucinated imports crash frames in the packaged app.** The write-time hook that blocks made-up component imports (e.g. `import { Inbox } from "arcade/components"`) only worked on a dev machine — it read its list of valid components from a `~/arcade-gen` source clone that beta testers don't have, so on a real install it silently did nothing and the bad import slipped through to a blank, broken frame. The hook now reads the component list from the arcade design-system package that actually ships inside the app, so it catches invented names (with "did you mean…" suggestions) on every machine.
+
 ## [0.26.0] — 2026-06-02
 
 ### Added
