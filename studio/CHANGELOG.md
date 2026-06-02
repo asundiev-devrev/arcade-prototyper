@@ -8,8 +8,17 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.26.0] — 2026-06-02
+
 ### Added
 - **Delete frame control.** Each frame header now has a trash-bin `IconButton` next to the element-picker and open-in-new-tab controls. Confirms before delete, removes the frame from disk + `project.json`, clears the targeted-element selection if it pointed at the deleted frame, and toasts the result. Hidden in spectator mode.
+- **Real Computer data in prototypes.** Prompts like "use my real Computer sessions and chats instead of mock data" now generate a live frame wired to the signed-in DevUser's actual threads. The generator fetches `internal/chats.list` + `timeline-entries.list` through the DevRev proxy and splits the sidebar into a **Sessions** group (the user's own Computer threads, `agent_metadata.is_agent_chat === true`) and a **Chats** group (human↔human DMs), loading each thread's real transcript on click.
+
+### Fixed
+- **Empty "Chats" group.** The chats.list example passed `dm:{is_default:false}`, which counter-intuitively excluded every human DM (those carry `is_default:true` while Computer sessions carry `false`) — so all threads piled into "Sessions" and "Chats" was always empty. Dropped the filter; the Sessions/Chats split is done client-side on `agent_metadata.is_agent_chat`.
+- **Seeded reference frame no longer clutters the viewport.** The `00-computer-reference` seed stays on disk for the generator to read/copy, but is hidden from the frame grid until it (or the agent) actually edits it — designers never ask for a generic Computer screen, so showing them an untouched canonical scene was just noise.
+- **Cold-start "dead window" on hero handoff.** Submitting from the home page navigated to the new project before its record finished loading, hiding the whole chat pane behind a full-screen "Loading project…" — so the turn already running server-side showed no "Working…", no Stop button, nothing. The pane now mounts immediately on an optimistic placeholder project and paints the live activity at once.
+- **New prompt typed mid-turn is preserved.** A prompt sent while a turn was still running hit a 409 and was silently dropped. The 409 now carries the live turn's prompt so the client can tell a genuine retry (latch onto the stream) from a new prompt (keep the composer text, toast the user to retry when idle).
 
 ## [0.25.5] — 2026-05-29
 
