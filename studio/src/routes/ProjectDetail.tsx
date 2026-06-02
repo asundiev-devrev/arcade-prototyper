@@ -15,8 +15,9 @@ import { PresenceStrip } from "../components/multiplayer/PresenceStrip";
 import { ChatStreamProvider } from "../hooks/chatStreamContext";
 import { TargetSelectionProvider } from "../hooks/targetSelectionContext";
 import { useProjectFromHost, type ProjectShellSource } from "../hooks/useProjectFromHost";
+import type { Project } from "../../server/types";
 import { useProjectFromMirror } from "../hooks/useProjectFromMirror";
-import { takePendingPrompt } from "../lib/pendingPrompt";
+import { takePendingPrompt, peekPendingPrompt } from "../lib/pendingPrompt";
 import { decoratePromptWithFigma } from "../lib/figmaUrl";
 import { api } from "../lib/api";
 
@@ -222,10 +223,35 @@ function ProjectDetailShell({
   // keep one shared shell.
   const [localModeOverride, setLocalModeOverride] =
     useState<"light" | "dark" | null>(null);
-  const project = source.project
+  // Hero-handoff cold start: when the user submits from the home page we
+  // create the project and navigate here BEFORE `GET /api/projects/:slug`
+  // has resolved. Blocking the whole route on `source.project` (the old
+  // behavior) hid the chat pane behind a full-screen "Loading project…",
+  // so the turn that's already running server-side showed no "Working…",
+  // no Stop button, nothing — the pane looked frozen for the first seconds.
+  //
+  // If a pending hero prompt exists for this slug, synthesize an optimistic
+  // placeholder project so the shell + ChatPane mount immediately and the
+  // optimistic "Working…" row paints at once. The real record replaces it
+  // a beat later when the fetch lands. Author route only — spectators never
+  // have a pending prompt.
+  const optimisticProject: Project | null =
+    !isSpectator && !source.project && peekPendingPrompt(routeKey)
+      ? {
+          name: routeKey,
+          slug: routeKey,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          theme: "arcade",
+          mode: "light",
+          frames: [],
+        }
+      : null;
+  const baseProject = source.project ?? optimisticProject;
+  const project = baseProject
     ? localModeOverride
-      ? { ...source.project, mode: localModeOverride }
-      : source.project
+      ? { ...baseProject, mode: localModeOverride }
+      : baseProject
     : null;
   const { presence, refresh: refreshProject, chatStream, chatHistory, postComment } = source;
   const { host, guests } = presence;

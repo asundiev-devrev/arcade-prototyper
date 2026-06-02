@@ -29,17 +29,24 @@ const { sendSpy, adoptSpy } = vi.hoisted(() => ({
   })),
 }));
 
+// Toggle whether the mocked host source has resolved its project record yet.
+// `false` simulates the cold-start window right after hero submit, before
+// GET /api/projects/:slug lands.
+let projectResolved = true;
+
 function makeSource() {
   return {
-    project: {
-      slug: "p-strict",
-      name: "Demo",
-      theme: "arcade" as const,
-      mode: "light" as const,
-      createdAt: "2026-01-01T00:00:00Z",
-      updatedAt: "2026-01-01T00:00:00Z",
-      frames: [],
-    },
+    project: projectResolved
+      ? {
+          slug: "p-strict",
+          name: "Demo",
+          theme: "arcade" as const,
+          mode: "light" as const,
+          createdAt: "2026-01-01T00:00:00Z",
+          updatedAt: "2026-01-01T00:00:00Z",
+          frames: [],
+        }
+      : null,
     chatHistory: [],
     chat: {} as any,
     chatStream: { state: {}, send: sendSpy, retry: () => {}, cancel: () => {} } as any,
@@ -122,6 +129,7 @@ beforeEach(() => {
   sendSpy.mockReset();
   adoptSpy.mockClear();
   __resetPendingPromptForTests();
+  projectResolved = true;
 });
 
 afterEach(() => {
@@ -179,5 +187,51 @@ describe("ProjectDetail hero handoff under StrictMode", () => {
       "Style this card",
       ["/uploads/staging/abc.png"],
     );
+  });
+
+  it("mounts the chat pane immediately on cold start (project not yet fetched) instead of a full-screen loader", async () => {
+    // Simulate the hero-handoff window: project record hasn't resolved yet,
+    // but a pending prompt for this slug exists.
+    projectResolved = false;
+    setPendingPrompt("p-strict-3", {
+      prompt: "Build a dashboard",
+      imagePaths: [],
+      figmaUrl: null,
+    });
+
+    const { queryByText, getByTestId } = render(
+      <ProjectDetail
+        mode="author"
+        slug="p-strict-3"
+        onBack={() => {}}
+        onOpenProject={() => {}}
+      />,
+    );
+
+    // The shell + chat pane mount immediately on the optimistic placeholder
+    // project — NOT the "Loading project…" full-screen gate.
+    await waitFor(() => {
+      expect(getByTestId("chatpane-stub")).toBeTruthy();
+    });
+    expect(queryByText("Loading project…")).toBeNull();
+  });
+
+  it("still shows the loader on cold start when there is NO pending prompt", async () => {
+    // Navigating to an existing project directly (no hero handoff): the
+    // optimistic placeholder must NOT kick in, so the loader still shows
+    // until the real record lands.
+    projectResolved = false;
+
+    const { queryByTestId, getByText } = render(
+      <ProjectDetail
+        mode="author"
+        slug="p-strict-4"
+        onBack={() => {}}
+        onOpenProject={() => {}}
+      />,
+    );
+
+    expect(getByText("Loading project…")).toBeTruthy();
+    expect(queryByTestId("chatpane-stub")).toBeNull();
   });
 });
