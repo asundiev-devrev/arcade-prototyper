@@ -130,6 +130,10 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
     res.end(JSON.stringify({
       error: { code: "turn_in_progress", message: "A turn is already running for this project." },
       turnId: running.id,
+      // The live turn's prompt lets the client tell a genuine retry (same
+      // prompt → latch onto the stream) apart from a NEW prompt typed while
+      // the turn is still running (must not be silently dropped).
+      prompt: running.prompt,
     }));
     return;
   }

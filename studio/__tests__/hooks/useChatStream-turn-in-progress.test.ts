@@ -66,6 +66,69 @@ describe("useChatStream.send — turn already running (409)", () => {
     });
   });
 
+  it("returns ok for a retry of the SAME prompt as the live turn", async () => {
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (typeof url === "string" && url.includes("/api/chat/stream/")) {
+        return streamResponse('event: idle\ndata: {"kind":"idle"}\n\n');
+      }
+      if (typeof url === "string" && url.endsWith("/api/chat") && init?.method === "POST") {
+        return new Response(
+          JSON.stringify({
+            error: { code: "turn_in_progress", message: "A turn is already running for this project." },
+            turnId: "t1",
+            prompt: "make it dark",
+          }),
+          { status: 409, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response("{}", { status: 404 });
+    });
+
+    const { result } = renderHook(() => useChatStream("alpha"));
+
+    let res: any;
+    await act(async () => {
+      res = await result.current.send("make it dark");
+    });
+
+    // Same prompt as the live turn → genuine retry, latch on.
+    expect(res).toEqual({ ok: true });
+  });
+
+  it("returns busy (and does NOT drop) for a NEW prompt typed mid-turn", async () => {
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (typeof url === "string" && url.includes("/api/chat/stream/")) {
+        return streamResponse('event: idle\ndata: {"kind":"idle"}\n\n');
+      }
+      if (typeof url === "string" && url.endsWith("/api/chat") && init?.method === "POST") {
+        return new Response(
+          JSON.stringify({
+            error: { code: "turn_in_progress", message: "A turn is already running for this project." },
+            turnId: "t1",
+            prompt: "make it dark",
+          }),
+          { status: 409, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response("{}", { status: 404 });
+    });
+
+    const { result } = renderHook(() => useChatStream("alpha"));
+
+    let res: any;
+    await act(async () => {
+      // A DIFFERENT prompt than the live turn ("make it dark") — the server
+      // refused it. Must report busy so the composer keeps the text.
+      res = await result.current.send("now add a footer");
+    });
+
+    expect(res).toEqual({ ok: false, reason: "busy" });
+    // Not surfaced as a hard error.
+    await waitFor(() => {
+      expect(result.current.state.phase).not.toBe("error");
+    });
+  });
+
   it("still surfaces a real error for non-409 POST failures", async () => {
     fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
       if (typeof url === "string" && url.includes("/api/chat/stream/")) {

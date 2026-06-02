@@ -18,6 +18,17 @@ export { classifyError };
 
 const INITIAL_STATE = INITIAL_STREAM_STATE;
 
+/**
+ * Outcome of a `send()` call. `{ ok: true }` means the turn started (or we
+ * latched onto a genuine retry of the live turn). `reason: "busy"` means a
+ * turn is already running and this prompt was NOT accepted — the caller
+ * should preserve the typed text and let the user resend when idle.
+ */
+export type SendResult =
+  | { ok: true }
+  | { ok: false; reason: "busy" }
+  | { ok: false; reason: "error"; message: string };
+
 /** Envelope that the server's /api/chat/stream emits before replaying events. */
 interface TurnHeader {
   kind: "turn";
@@ -265,8 +276,8 @@ export function useChatStream(
     wakeRef.current?.();
   }, []);
 
-  const send = useCallback(async (prompt: string, images?: string[]) => {
-    if (phaseRef.current === "running") return;
+  const send = useCallback(async (prompt: string, images?: string[]): Promise<SendResult> => {
+    if (phaseRef.current === "running") return { ok: false, reason: "busy" };
     // Optimistic local state so the prompt bubble paints immediately, before
     // the server's turn header arrives over SSE.
     safeSetState((s) => ({
@@ -285,12 +296,27 @@ export function useChatStream(
         body: JSON.stringify({ slug, prompt, images }),
       });
       if (res.status === 409) {
-        // A turn is already running for this slug (e.g. the user hit "Try
-        // again" while the first turn is still alive in the registry). The
-        // 409 body carries the live turnId — latch onto that stream instead
-        // of surfacing a dead-end error the user can only re-trigger.
+        // A turn is already running for this slug. Two very different cases:
+        //
+        // 1. Retry of the SAME prompt (user hit "Try again" while the first
+        //    turn is still alive) → latch onto the live stream. Reconnecting
+        //    re-syncs us to the server's turn header.
+        // 2. A NEW prompt typed mid-turn → the server refused it and never
+        //    persisted it. Reconnecting would wipe the optimistic bubble and
+        //    silently drop the user's text. Instead, signal "busy" so the
+        //    caller keeps the typed text and the user can resend when idle.
+        let runningPrompt: string | undefined;
+        try {
+          const data = await res.json();
+          runningPrompt = data?.prompt;
+        } catch {}
+        const isRetryOfLiveTurn =
+          typeof runningPrompt === "string" && runningPrompt === prompt;
+        // Re-sync to the live turn either way (the SSE header restores the
+        // real running state), but report "busy" for a dropped new prompt so
+        // the composer can preserve it.
         reconnect();
-        return;
+        return isRetryOfLiveTurn ? { ok: true } : { ok: false, reason: "busy" };
       }
       if (!res.ok) {
         let msg = `chat request failed: ${res.status}`;
@@ -301,6 +327,7 @@ export function useChatStream(
         throw new Error(msg);
       }
       reconnect();
+      return { ok: true };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       safeSetState((s) => ({
@@ -310,6 +337,7 @@ export function useChatStream(
         error: message,
         errorKind: classifyError(message),
       }));
+      return { ok: false, reason: "error", message };
     }
   }, [slug, safeSetState, reconnect]);
 

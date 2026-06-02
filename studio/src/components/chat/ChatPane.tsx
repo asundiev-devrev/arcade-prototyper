@@ -41,7 +41,7 @@ export function ChatPane({
   const enhancedSend = (prompt: string, images: string[] = []) => {
     const url = extractFigmaUrl(prompt);
     const decorated = url ? decoratePromptWithFigma(prompt, url) : prompt;
-    send(decorated, images);
+    return send(decorated, images);
   };
 
   // Optimistically show the user's prompt bubble if the latest turn's

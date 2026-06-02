@@ -17,11 +17,12 @@ import {
   type UserMentionInput,
 } from "./MentionPopover";
 import { useTargetSelection, type TargetSelection } from "../../hooks/targetSelectionContext";
+import type { SendResult } from "../../hooks/useChatStream";
 
 interface PromptInputProps {
   busy: boolean;
   projectSlug: string;
-  onSend: (prompt: string, images: string[]) => void;
+  onSend: (prompt: string, images: string[]) => void | Promise<SendResult>;
   onStop?: () => void;
   seedRef?: MutableRefObject<((text: string) => void) | null>;
   /**
@@ -375,7 +376,17 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commen
     }
 
     const finalPrompt = target ? `${buildTargetPreamble(target)}${p}` : p;
-    onSend(finalPrompt, imagePaths);
+    const result = await onSend(finalPrompt, imagePaths);
+    // When the stream rejects a NEW prompt because a turn is already running,
+    // keep the composer contents so the user can resend once it's idle —
+    // dropping the text silently was the worst failure mode here.
+    if (result && !result.ok && result.reason === "busy") {
+      toast({
+        title: "Still working on your last request — try again in a moment.",
+        intent: "info",
+      });
+      return;
+    }
     setText("");
     setImages([]);
     setImagePaths([]);

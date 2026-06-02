@@ -56,7 +56,7 @@ describe("useChatStream idle-frame race with send()", () => {
     // send() optimistically flips to running, POSTs /api/chat, then calls
     // reconnect() which wakes the pump for another GET. That second GET
     // returns idle again — and that's the race we're guarding against.
-    let sendPromise: Promise<void> | undefined;
+    let sendPromise: ReturnType<typeof result.current.send> | undefined;
     await act(async () => {
       sendPromise = result.current.send("hello world");
     });
