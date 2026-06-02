@@ -116,13 +116,16 @@ export async function runClaudeTurn(opts: RunTurnOptions): Promise<void> {
       PreToolUse: [
         {
           matcher: "Bash",
-          hooks: [{ type: "command", command: `node ${BLOCK_IMAGE_RESHAPE_HOOK}` }],
+          // Quote the hook path — in the packaged app it lives under
+          // ".../Arcade Studio.app/..." (spaces), and an unquoted command
+          // would split on the space and fail to launch the hook.
+          hooks: [{ type: "command", command: `node ${JSON.stringify(BLOCK_IMAGE_RESHAPE_HOOK)}` }],
         },
       ],
       PostToolUse: [
         {
           matcher: "Write|Edit",
-          hooks: [{ type: "command", command: `node ${VALIDATE_ARCADE_IMPORTS_HOOK}` }],
+          hooks: [{ type: "command", command: `node ${JSON.stringify(VALIDATE_ARCADE_IMPORTS_HOOK)}` }],
         },
       ],
     },

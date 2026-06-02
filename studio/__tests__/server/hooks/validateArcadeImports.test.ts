@@ -367,7 +367,14 @@ describe("validateArcadeImports hook (integration)", () => {
     expect(proc.stderr).toMatch(/ArrowsUpDownSmall/);
   });
 
-  it("fails open (exit 0) when barrels cannot be read", () => {
+  it("still validates when the dev arcade-gen source path is gone (resolves the shipped npm package)", () => {
+    // Regression for import-hook-dead-in-dmg: previously, pointing
+    // ARCADE_GEN_ROOT at a nonexistent path emptied the barrel and the hook
+    // failed open — which is exactly what happened on a beta tester's
+    // machine (no ~/arcade-gen clone). The hook now resolves the bundled
+    // @xorkavi/arcade-gen package instead, so a bad import is still caught
+    // even with no dev source path. arcade-prototypes still resolves via the
+    // hook's own module-relative fallback.
     const proc = runHook(
       {
         tool_name: "Write",
@@ -376,9 +383,39 @@ describe("validateArcadeImports hook (integration)", () => {
           content: `import { ArrowsUpDownSmall } from "arcade/components";`,
         },
       },
-      { ARCADE_GEN_ROOT: "/nonexistent/path", ARCADE_PROTOTYPER_ROOT: "/nonexistent/path" },
+      { ARCADE_GEN_ROOT: "/nonexistent/path" },
     );
-    expect(proc.status).toBe(0);
+    expect(proc.status).toBe(2);
+    expect(proc.stderr).toMatch(/ArrowsUpDownSmall/);
+  });
+
+  it("runs main() when invoked via a path containing spaces", () => {
+    // Regression: the run guard compared import.meta.url to a hand-built
+    // `file://${argv[1]}` string. With spaces in the path (".../Arcade
+    // Studio.app/...") import.meta.url is percent-encoded but the template
+    // literal is not, so they never matched and main() silently never ran —
+    // disabling the hook in the packaged app. Copy the hook to a spaced dir
+    // and confirm it still blocks a bad import.
+    const spacedDir = fs.mkdtempSync(path.join(__dirname, "Spaced Dir "));
+    try {
+      const spacedHook = path.join(spacedDir, "validateArcadeImports.mjs");
+      fs.copyFileSync(HOOK, spacedHook);
+      const proc = spawnSync("node", [spacedHook], {
+        input: JSON.stringify({
+          tool_name: "Write",
+          tool_input: {
+            file_path: "/tmp/frame.tsx",
+            content: `import { ArrowsUpDownSmall } from "arcade/components";`,
+          },
+        }),
+        env: { ...process.env, ARCADE_PROTOTYPER_ROOT: FIXTURES },
+        encoding: "utf-8",
+      });
+      expect(proc.status).toBe(2);
+      expect(proc.stderr).toMatch(/ArrowsUpDownSmall/);
+    } finally {
+      fs.rmSync(spacedDir, { recursive: true, force: true });
+    }
   });
 
   it("fails open on malformed JSON input", () => {

@@ -217,6 +217,7 @@ export function formatErrorMessage(violations, barrels, barrelPaths) {
 import path from "node:path";
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
+import { pathToFileURL } from "node:url";
 
 const HOME = process.env.HOME ?? "";
 const ARCADE_GEN_ROOT = process.env.ARCADE_GEN_ROOT
@@ -242,11 +243,15 @@ const ARCADE_PROTOTYPER_ROOT = process.env.ARCADE_PROTOTYPER_ROOT ?? "";
 function arcadeComponentsBarrelFiles() {
   const files = [];
   // 1. Bundled type declaration from the resolvable npm package.
+  //    Resolve the package MAIN entry, not "@xorkavi/arcade-gen/package.json"
+  //    — the package's `exports` map doesn't expose ./package.json, so that
+  //    subpath throws ERR_PACKAGE_PATH_NOT_EXPORTED in the packaged app. The
+  //    main entry resolves to dist/index.mjs, whose directory is `dist`.
   try {
     const require = createRequire(import.meta.url);
-    const pkgJson = require.resolve("@xorkavi/arcade-gen/package.json");
-    const dist = path.join(path.dirname(pkgJson), "dist");
-    for (const f of ["index.d.mts", "index.d.cts"]) {
+    const mainEntry = require.resolve("@xorkavi/arcade-gen");
+    const dist = path.dirname(mainEntry);
+    for (const f of ["index.d.mts", "index.d.cts", "index.d.ts"]) {
       const p = path.join(dist, f);
       if (existsSync(p)) { files.push(p); break; }
     }
@@ -584,6 +589,13 @@ async function main() {
 }
 
 // Allow importing for tests without running main().
-if (import.meta.url === `file://${process.argv[1]}`) {
+//
+// Compare resolved file URLs, NOT a hand-built `file://${argv[1]}` string:
+// when the path contains spaces (e.g. ".../Arcade Studio.app/...") the real
+// `import.meta.url` is percent-encoded (`Arcade%20Studio.app`) while a raw
+// template literal keeps the literal space, so the two never match and
+// `main()` silently never runs — disabling the hook in the packaged app.
+// `pathToFileURL` encodes argv[1] the same way import.meta.url is encoded.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch(() => process.exit(0));
 }
