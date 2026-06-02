@@ -144,10 +144,18 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
  * Numbered `00-` so it sits ahead of any frame the user generates with the
  * `01-…` two-digit prefix scheme.
  */
-async function scaffoldComputerReferenceFrame(dir: string): Promise<void> {
-  const frameDir = path.join(dir, "frames", "00-computer-reference");
-  await fs.mkdir(frameDir, { recursive: true });
-  const source = `import * as React from "react";
+/** Slug of the seeded Computer reference frame. */
+export const COMPUTER_REFERENCE_SLUG = "00-computer-reference";
+
+/**
+ * Exact source the reference frame is seeded with. Kept as a module constant
+ * so `reconcileFrames` can detect whether the user (or agent) has touched the
+ * frame yet: an UNMODIFIED seed is hidden from the viewport — designers never
+ * ask for a generic Computer screen, so showing them an untouched canonical
+ * scene is just noise. The file stays on disk either way, because the
+ * generator reads/copies it as a reference (see CLAUDE.md.tpl).
+ */
+const COMPUTER_REFERENCE_SOURCE = `import * as React from "react";
 import { ComputerScene } from "arcade-prototypes";
 
 // Reference frame for Computer / Agent Studio chat screens.
@@ -158,7 +166,29 @@ export default function ComputerReference() {
   return <ComputerScene />;
 }
 `;
-  await fs.writeFile(path.join(frameDir, "index.tsx"), source);
+
+async function scaffoldComputerReferenceFrame(dir: string): Promise<void> {
+  const frameDir = path.join(dir, "frames", COMPUTER_REFERENCE_SLUG);
+  await fs.mkdir(frameDir, { recursive: true });
+  await fs.writeFile(path.join(frameDir, "index.tsx"), COMPUTER_REFERENCE_SOURCE);
+}
+
+/**
+ * True when the reference frame is still the untouched seed. Compared against
+ * the on-disk source so any edit (by the user via the UI, or by the agent
+ * copying real data into it) flips it to "modified" and it becomes visible.
+ */
+async function isUnmodifiedReferenceFrame(slug: string, frameName: string): Promise<boolean> {
+  if (frameName !== COMPUTER_REFERENCE_SLUG) return false;
+  try {
+    const src = await fs.readFile(
+      path.join(projectDir(slug), "frames", frameName, "index.tsx"),
+      "utf-8",
+    );
+    return src === COMPUTER_REFERENCE_SOURCE;
+  } catch {
+    return false;
+  }
 }
 
 function renderTemplate(tpl: string, vars: Record<string, string>): string {
@@ -430,6 +460,11 @@ async function reconcileFramesInner(slug: string): Promise<Frame[]> {
   for (const name of entries) {
     const idx = path.join(framesDir, name, "index.tsx");
     try { await fs.access(idx); } catch { continue; }
+    // Hide the seeded Computer reference frame from the viewport until it's
+    // been modified. The file stays on disk for the generator to read/copy;
+    // the user just shouldn't see an untouched generic scene they never asked
+    // for. Once edited (by the user or the agent), it surfaces normally.
+    if (await isUnmodifiedReferenceFrame(slug, name)) continue;
     const prior = project.frames.find((f) => f.slug === name);
     if (!prior) {
       newFrames.push(name);

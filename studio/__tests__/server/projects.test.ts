@@ -181,6 +181,26 @@ describe("reconcileFrames", () => {
     expect(after).toBe(before);
   });
 
+  it("hides the unmodified seeded reference frame from the frame list", async () => {
+    const p = await createProject({ name: "Seeded", theme: "arcade", mode: "light" });
+    // The seed exists on disk...
+    const seedIdx = path.join(tmp, "projects", p.slug, "frames", "00-computer-reference", "index.tsx");
+    expect(fs.existsSync(seedIdx)).toBe(true);
+    // ...but reconcile must not surface it while it's untouched.
+    const result = await reconcileFrames(p.slug);
+    expect(result.map((f) => f.slug)).not.toContain("00-computer-reference");
+    expect(result).toEqual([]);
+  });
+
+  it("surfaces the reference frame once it has been modified", async () => {
+    const p = await createProject({ name: "Edited", theme: "arcade", mode: "light" });
+    const seedIdx = path.join(tmp, "projects", p.slug, "frames", "00-computer-reference", "index.tsx");
+    fs.writeFileSync(seedIdx, `export default () => <div>edited</div>;`);
+
+    const result = await reconcileFrames(p.slug);
+    expect(result.map((f) => f.slug)).toContain("00-computer-reference");
+  });
+
   it("adds on-disk frames not listed in project.json", async () => {
     const p = await createProject({ name: "Discover", theme: "arcade", mode: "light" });
     clearSeededFrames(p.slug);
