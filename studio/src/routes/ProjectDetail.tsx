@@ -15,7 +15,7 @@ import { PresenceStrip } from "../components/multiplayer/PresenceStrip";
 import { ChatStreamProvider } from "../hooks/chatStreamContext";
 import { TargetSelectionProvider } from "../hooks/targetSelectionContext";
 import { useProjectFromHost, type ProjectShellSource } from "../hooks/useProjectFromHost";
-import type { Project } from "../../server/types";
+import type { Project, ChimeIn } from "../../server/types";
 import { useProjectFromMirror } from "../hooks/useProjectFromMirror";
 import { takePendingPrompt, peekPendingPrompt } from "../lib/pendingPrompt";
 import { decoratePromptWithFigma } from "../lib/figmaUrl";
@@ -256,6 +256,50 @@ function ProjectDetailShell({
     : null;
   const { presence, refresh: refreshProject, chatStream, chatHistory, postComment } = source;
   const { host, guests } = presence;
+
+  // Chime-ins: product-truth notes the Computer raised about generated
+  // frames. Author-mode only — spectators are read-only and never trigger
+  // generation. Poll while mounted so a background drift check (which lands
+  // a few seconds after a turn ends) surfaces without a manual refresh.
+  const [chimeIns, setChimeIns] = useState<ChimeIn[]>([]);
+  const isAuthor = mode === "author";
+
+  const refreshChimeIns = useCallback(async () => {
+    if (!isAuthor) return;
+    try {
+      const r = await fetch(`/api/projects/${routeKey}/chime-ins`);
+      if (r.ok) setChimeIns(await r.json());
+    } catch {
+      /* best-effort */
+    }
+  }, [isAuthor, routeKey]);
+
+  useEffect(() => {
+    if (!isAuthor) return;
+    void refreshChimeIns();
+    const id = window.setInterval(() => void refreshChimeIns(), 5000);
+    return () => window.clearInterval(id);
+  }, [isAuthor, refreshChimeIns]);
+
+  const handleApplyChimeIn = useCallback(
+    async (c: ChimeIn) => {
+      await fetch(`/api/projects/${routeKey}/chime-ins/${c.id}/apply`, { method: "POST" });
+      setChimeIns((list) => list.filter((x) => x.id !== c.id));
+      source.send?.(
+        `Computer flagged a product-truth issue: ${c.objection}. Please adjust the frame to match how DevRev actually works.`,
+      );
+    },
+    [routeKey, source],
+  );
+
+  const handleDismissChimeIn = useCallback(
+    async (c: ChimeIn) => {
+      await fetch(`/api/projects/${routeKey}/chime-ins/${c.id}/dismiss`, { method: "POST" });
+      setChimeIns((list) => list.filter((x) => x.id !== c.id));
+    },
+    [routeKey],
+  );
+
   const [devOpen, setDevOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [frameWidth, setFrameWidth] = useState<number>(() => {
@@ -458,6 +502,9 @@ function ProjectDetailShell({
             seedRef={seedChatRef}
             readonly={isSpectator}
             postComment={postComment}
+            chimeIns={chimeIns}
+            onApplyChimeIn={handleApplyChimeIn}
+            onDismissChimeIn={handleDismissChimeIn}
           />
           {chatOpen && (
             <div

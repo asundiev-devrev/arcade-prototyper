@@ -2,7 +2,7 @@ import { type MutableRefObject } from "react";
 import { MessageList } from "./MessageList";
 import { PromptInput } from "./PromptInput";
 import { useChatStreamContext } from "../../hooks/chatStreamContext";
-import type { ChatMessage } from "../../../server/types";
+import type { ChatMessage, ChimeIn } from "../../../server/types";
 import { extractFigmaUrl, decoratePromptWithFigma } from "../../lib/figmaUrl";
 import { peekPendingPrompt } from "../../lib/pendingPrompt";
 import { ErrorBanner } from "../feedback/ErrorBanner";
@@ -29,12 +29,18 @@ export function ChatPane({
   seedRef,
   readonly = false,
   postComment,
+  chimeIns = [],
+  onApplyChimeIn,
+  onDismissChimeIn,
 }: {
   projectSlug: string;
   history: ChatMessage[];
   seedRef?: MutableRefObject<((text: string) => void) | null>;
   readonly?: boolean;
   postComment?: (text: string) => Promise<void>;
+  chimeIns?: ChimeIn[];
+  onApplyChimeIn?: (c: ChimeIn) => void;
+  onDismissChimeIn?: (c: ChimeIn) => void;
 }) {
   const { state, send, retry, cancel } = useChatStreamContext();
 
@@ -78,6 +84,9 @@ export function ChatPane({
         source={state.source}
         turnStartedAt={turnStartedAt}
         turnEndedAt={state.turnEndedAt}
+        chimeIns={chimeIns}
+        onApplyChimeIn={onApplyChimeIn}
+        onDismissChimeIn={onDismissChimeIn}
       />
       {state.error && state.errorKind === "auth" && <AuthExpiredNotice />}
       {state.error && state.errorKind !== "auth" && (

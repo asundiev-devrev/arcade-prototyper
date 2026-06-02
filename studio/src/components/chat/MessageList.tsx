@@ -1,13 +1,14 @@
 import { useEffect, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import { ChatBubble } from "@xorkavi/arcade-gen";
-import type { ChatMessage } from "../../../server/types";
+import type { ChatMessage, ChimeIn } from "../../../server/types";
 import type { ChatTurnItem, TurnPhase } from "../../hooks/useChatStream";
 import { ComputerMessage, markdownComponents } from "./computer/ComputerMessage";
 import { ComputerThinkingRow } from "./computer/ComputerThinkingRow";
 import { DottedLoader } from "./computer/DottedLoader";
 import { NoFrameChangesBanner, splitNoChangesTrailer } from "./NoFrameChangesBanner";
 import { TurnStatusRow } from "./TurnStatusRow";
+import { ChimeInNote } from "./computer/ChimeInNote";
 
 function toolIcon(tool: string): string {
   if (tool === "Read") return "↘";
@@ -184,6 +185,9 @@ export function MessageList({
   source = "claude",
   turnStartedAt = null,
   turnEndedAt = null,
+  chimeIns = [],
+  onApplyChimeIn,
+  onDismissChimeIn,
 }: {
   history: ChatMessage[];
   pendingPrompt?: string;
@@ -193,6 +197,9 @@ export function MessageList({
   source?: "claude" | "computer";
   turnStartedAt?: number | null;
   turnEndedAt?: number | null;
+  chimeIns?: ChimeIn[];
+  onApplyChimeIn?: (c: ChimeIn) => void;
+  onDismissChimeIn?: (c: ChimeIn) => void;
 }) {
   const hasActivity = !!currentItems && currentItems.length > 0;
   const liveTools = (currentItems ?? [])
@@ -274,6 +281,17 @@ export function MessageList({
           </BubbleRow>
         );
       })}
+
+      {chimeIns
+        .filter((c) => c.status === "pending")
+        .map((c) => (
+          <ChimeInNote
+            key={c.id}
+            chime={c}
+            onApply={(x) => onApplyChimeIn?.(x)}
+            onDismiss={(x) => onDismissChimeIn?.(x)}
+          />
+        ))}
 
       {pendingPrompt && <BubbleRow role="user">{pendingPrompt}</BubbleRow>}
 
