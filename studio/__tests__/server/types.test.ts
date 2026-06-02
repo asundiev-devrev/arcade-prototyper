@@ -10,6 +10,7 @@ describe("Project schema", () => {
     theme: "arcade",
     mode: "light",
     frames: [],
+    chimeIns: [],
   };
 
   it("accepts valid project", () => {

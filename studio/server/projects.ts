@@ -100,6 +100,7 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
     theme: input.theme,
     mode: input.mode,
     frames: [],
+    chimeIns: [],
   };
 
   const tpl = await fs.readFile(

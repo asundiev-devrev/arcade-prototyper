@@ -12,6 +12,7 @@ const sampleProject: Project = {
   theme: "arcade",
   mode: "light",
   frames: [],
+  chimeIns: [],
 };
 
 const sampleHistory: ChatMessage[] = [

@@ -245,6 +245,7 @@ function ProjectDetailShell({
           theme: "arcade",
           mode: "light",
           frames: [],
+          chimeIns: [],
         }
       : null;
   const baseProject = source.project ?? optimisticProject;

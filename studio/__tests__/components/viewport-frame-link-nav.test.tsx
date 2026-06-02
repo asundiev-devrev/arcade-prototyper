@@ -62,6 +62,7 @@ const threeFrameProject: Project = {
     { slug: "02-modal", name: "Modal", size: "1440", createdAt: "2026-01-01T00:00:00Z" },
     { slug: "03-settings", name: "Settings", size: "1440", createdAt: "2026-01-01T00:00:00Z" },
   ],
+  chimeIns: [],
 };
 
 function renderViewport() {

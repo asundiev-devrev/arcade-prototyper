@@ -71,6 +71,7 @@ function synthesizeProject(
     theme: "arcade",
     mode: "light",
     frames: synthesizeFrames(framesRecord, metadata.lastSeenAt),
+    chimeIns: [],
   };
 }
 
