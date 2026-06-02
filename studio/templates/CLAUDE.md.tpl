@@ -808,7 +808,6 @@ async function listMyChats(limit = 20) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      dm: { is_default: false },
       sort_by: ["modified_date:desc"],
       type: ["dm"],
       limit,
@@ -832,8 +831,8 @@ async function listChatMessages(chatId: string) {
 Notes:
 - The endpoint is `/api/devrev/internal/chats.list`, not `/api/devrev/chats.list`. Same for timeline entries. The proxy forwards whatever path comes after `/api/devrev/` to `https://api.devrev.ai/…`, so `internal/…` resolves to `https://api.devrev.ai/internal/chats.list`.
 - `sort_by: ["modified_date:desc"]` puts the most recently active threads first — the natural order for a chat list.
-- `dm: { is_default: false }` excludes the default/system DM channel; pass `true` (or omit) if you want to include it.
-- `type: ["dm"]` limits to direct-message threads (Computer chats + DM with teammates). Omit `type` for all chat kinds.
+- **Do NOT pass `dm: { is_default: false }`.** Counter-intuitively, the human↔human DM chats carry `is_default: true` while the Computer **sessions** carry `is_default: false` — so filtering on `is_default: false` silently drops EVERY human chat and the "Chats" group renders empty. Omit the `dm` filter entirely so both kinds come back; the Sessions/Chats split is done client-side on `agent_metadata.is_agent_chat` (see next section), NOT via this filter.
+- `type: ["dm"]` limits to direct-message threads (Computer sessions + DMs with teammates). Omit `type` for all chat kinds.
 - Timeline entries returned by `/internal/timeline-entries.list` carry message bodies, system events, attachments. Filter on `type === "timeline_comment"` to get just the messages when rendering a transcript.
 - If these internal endpoints return 401/403, the PAT may not have access — surface the error in the UI (don't silently fall back to mock data). Do NOT fall back to `conversations.list`; those are customer support conversations, a different object type.
 
