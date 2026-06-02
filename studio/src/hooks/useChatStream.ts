@@ -284,6 +284,14 @@ export function useChatStream(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ slug, prompt, images }),
       });
+      if (res.status === 409) {
+        // A turn is already running for this slug (e.g. the user hit "Try
+        // again" while the first turn is still alive in the registry). The
+        // 409 body carries the live turnId — latch onto that stream instead
+        // of surfacing a dead-end error the user can only re-trigger.
+        reconnect();
+        return;
+      }
       if (!res.ok) {
         let msg = `chat request failed: ${res.status}`;
         try {
