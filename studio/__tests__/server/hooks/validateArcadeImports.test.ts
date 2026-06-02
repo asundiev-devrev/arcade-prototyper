@@ -126,7 +126,51 @@ describe("loadBarrel", () => {
 });
 
 // @ts-expect-error — .mjs import of a pure-JS module with no types
-import { validateImports } from "../../../server/hooks/validateArcadeImports.mjs";
+import { validateImports, extractBarrelExports } from "../../../server/hooks/validateArcadeImports.mjs";
+
+// Regression: the shipped npm package's bundled type declaration
+// (@xorkavi/arcade-gen/dist/index.d.mts) lists exports as ONE from-less
+// `export { … };` block — unlike source barrels that use
+// `export { … } from "./x.js"`. The hook used to only parse the `from`
+// form, so on a beta tester's machine (no ~/arcade-gen source clone) the
+// barrel loaded empty and the hook failed open, letting hallucinated
+// imports like `Inbox` crash the frame at runtime. See auto-memory
+// import-hook-dead-in-dmg.
+describe("extractBarrelExports — bundled .d.mts (from-less)", () => {
+  it("parses a from-less `export { … };` block", () => {
+    const dts = `export { Avatar, Button, type ButtonProps, IconButton, MagnifyingGlass as Search };`;
+    const out = extractBarrelExports(dts);
+    expect(out.has("Avatar")).toBe(true);
+    expect(out.has("Button")).toBe(true);
+    expect(out.has("IconButton")).toBe(true);
+    // `Foo as Bar` records the public name.
+    expect(out.has("Search")).toBe(true);
+    // type-only entries are not value exports.
+    expect(out.has("ButtonProps")).toBe(false);
+    // a name not in the block is absent (the Inbox case).
+    expect(out.has("Inbox")).toBe(false);
+  });
+
+  it("still parses the source re-export form (`export { … } from`)", () => {
+    const src = `export { AppShell } from "./composites/AppShell.js";\nexport { ComputerScene } from "./composites/ComputerScene.js";`;
+    const out = extractBarrelExports(src);
+    expect(out.has("AppShell")).toBe(true);
+    expect(out.has("ComputerScene")).toBe(true);
+  });
+
+  it("does not double-count or misread a re-export as from-less", () => {
+    // A single re-export line must yield exactly its names, not extras.
+    const src = `export { Foo, Bar } from "./x.js";`;
+    const out = extractBarrelExports(src);
+    expect([...out].sort()).toEqual(["Bar", "Foo"]);
+  });
+
+  it("skips `export type { … };` from-less type-only blocks", () => {
+    const dts = `export type { AvatarProps, BadgeVariant };`;
+    const out = extractBarrelExports(dts);
+    expect(out.size).toBe(0);
+  });
+});
 
 describe("validateImports", () => {
   const barrels = {

@@ -74,15 +74,31 @@ export function loadBarrel(absPath) {
 
 export function extractBarrelExports(text) {
   const out = new Set();
-  // Match `export { ... } from "..."` statements, case-sensitive.
-  // The brace group may span multiple lines.
-  const re = /export\s+(type\s+)?\{([^}]+)\}\s+from\s+["'][^"']+["']/g;
+  // Two barrel shapes are supported:
+  //   1. Source barrels (arcade-gen src, prototype-kit index):
+  //        `export { Foo, Bar } from "./Foo.js"`     (re-export, has `from`)
+  //   2. Bundled type declarations (the shipped npm package's
+  //      `dist/index.d.mts`): one big `export { Foo, type Bar };` block
+  //        with NO `from` clause. This is what's present on a beta
+  //        tester's machine — the dev-only source `.ts` barrels are not
+  //        shipped, so the from-less form is what keeps the hook alive in
+  //        the packaged DMG. See auto-memory import-hook-dead-in-dmg.
+  // Both forms reuse the same brace parser, which already drops `type X`
+  // entries and resolves `Foo as Bar` to the public name.
+  //
+  // `export type { ... }` (whole block is types) is skipped in both forms.
+  const reFrom = /export\s+(type\s+)?\{([^}]+)\}\s+from\s+["'][^"']+["']/g;
   let m;
-  while ((m = re.exec(text)) !== null) {
-    const isTypeOnlyBlock = Boolean(m[1]);
-    if (isTypeOnlyBlock) continue;
-    const braceGroup = m[2];
-    for (const name of parseBarrelBraceGroup(braceGroup)) out.add(name);
+  while ((m = reFrom.exec(text)) !== null) {
+    if (m[1]) continue; // `export type { … } from …` — type-only block
+    for (const name of parseBarrelBraceGroup(m[2])) out.add(name);
+  }
+  // From-less `export { … };` / `export type { … };`. Anchor on `}` NOT
+  // followed by `from` so we don't double-count the re-export form above.
+  const reBare = /export\s+(type\s+)?\{([^}]+)\}\s*(?![^;]*\bfrom\b)\s*;/g;
+  while ((m = reBare.exec(text)) !== null) {
+    if (m[1]) continue; // `export type { … };` — type-only block
+    for (const name of parseBarrelBraceGroup(m[2])) out.add(name);
   }
   return out;
 }
@@ -199,18 +215,55 @@ export function formatErrorMessage(violations, barrels, barrelPaths) {
 }
 
 import path from "node:path";
+import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
 
 const HOME = process.env.HOME ?? "";
 const ARCADE_GEN_ROOT = process.env.ARCADE_GEN_ROOT
   ?? (HOME ? path.join(HOME, "arcade-gen") : "/__arcade_gen_unconfigured");
 const ARCADE_PROTOTYPER_ROOT = process.env.ARCADE_PROTOTYPER_ROOT ?? "";
 
+/**
+ * Resolve the `arcade/components` barrel for THIS machine.
+ *
+ * The runtime aliases `arcade` / `arcade/components` to
+ * `prototype-kit/arcade-components.tsx`, which does `export * from
+ * "@xorkavi/arcade-gen"` — so the authoritative export list is arcade-gen's.
+ *
+ * Order matters: the SHIPPED npm package's bundled type declaration
+ * (`@xorkavi/arcade-gen/dist/index.d.mts`) is present on every machine,
+ * including a beta tester's packaged DMG. The dev-only `~/arcade-gen/src`
+ * barrels are NOT shipped (electron-builder strips `.ts` from node_modules,
+ * and testers have no source clone), which is why the hook used to fail
+ * open in production. So prefer the bundled `.d.mts`, fall back to the dev
+ * source only when the package can't be resolved. See auto-memory
+ * import-hook-dead-in-dmg.
+ */
+function arcadeComponentsBarrelFiles() {
+  const files = [];
+  // 1. Bundled type declaration from the resolvable npm package.
+  try {
+    const require = createRequire(import.meta.url);
+    const pkgJson = require.resolve("@xorkavi/arcade-gen/package.json");
+    const dist = path.join(path.dirname(pkgJson), "dist");
+    for (const f of ["index.d.mts", "index.d.cts"]) {
+      const p = path.join(dist, f);
+      if (existsSync(p)) { files.push(p); break; }
+    }
+  } catch {
+    // package not resolvable from here — fall through to dev source
+  }
+  // 2. Dev-source barrels (only exist on a dev checkout with ~/arcade-gen).
+  files.push(
+    path.join(ARCADE_GEN_ROOT, "src/components/index.ts"),
+    path.join(ARCADE_GEN_ROOT, "src/components/icons/index.ts"),
+  );
+  return files;
+}
+
 function barrelPathsForEnv() {
   return {
-    "arcade/components": [
-      path.join(ARCADE_GEN_ROOT, "src/components/index.ts"),
-      path.join(ARCADE_GEN_ROOT, "src/components/icons/index.ts"),
-    ],
+    "arcade/components": arcadeComponentsBarrelFiles(),
     "arcade-prototypes": [
       ARCADE_PROTOTYPER_ROOT
         ? path.join(ARCADE_PROTOTYPER_ROOT, "prototype-kit/index.ts")
