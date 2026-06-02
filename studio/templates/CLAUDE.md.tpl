@@ -837,6 +837,45 @@ Notes:
 - Timeline entries returned by `/internal/timeline-entries.list` carry message bodies, system events, attachments. Filter on `type === "timeline_comment"` to get just the messages when rendering a transcript.
 - If these internal endpoints return 401/403, the PAT may not have access — surface the error in the UI (don't silently fall back to mock data). Do NOT fall back to `conversations.list`; those are customer support conversations, a different object type.
 
+### Sessions vs Chats — the split that makes a Computer screen correct
+
+`chats.list` returns BOTH kinds of DM in one list. The Computer UI shows them as **two separate sidebar groups**, and a flat single list is the #1 mistake here. Split on `agent_metadata`:
+
+- **Sessions** — the DevUser's own threads with Computer. `agent_metadata.is_agent_chat === true` (and `agent_metadata.agent_chat_type === "session"`). Members are the user + `Computer`.
+- **Chats** — human↔human DMs. `agent_metadata` is absent or `is_agent_chat` is falsy.
+
+```tsx
+const isSession = (c: any) => c?.agent_metadata?.is_agent_chat === true;
+const sessions = chats.filter(isSession);
+const humanChats = chats.filter((c) => !isSession(c));
+```
+
+**Render them as two `ComputerSidebar.Group`s — never one flat "Recent chats" list.** This mirrors the canonical scene (`00-computer-reference` / `ComputerScene`): a "Sessions" group above a "Chats" group.
+
+```tsx
+<ComputerSidebar user={…}>
+  <ComputerSidebar.Group title="Sessions">
+    {sessions.map((c) => (
+      <ComputerSidebar.Item key={c.id} active={c.id === activeId} onClick={() => setActiveId(c.id)}>
+        {chatTitle(c)}
+      </ComputerSidebar.Item>
+    ))}
+  </ComputerSidebar.Group>
+  <ComputerSidebar.Group title="Chats">
+    {humanChats.map((c) => (
+      <ComputerSidebar.Item key={c.id} active={c.id === activeId} onClick={() => setActiveId(c.id)}
+        leading={<Avatar name={chatTitle(c)} size="sm" />}>
+        {chatTitle(c)}
+      </ComputerSidebar.Item>
+    ))}
+  </ComputerSidebar.Group>
+</ComputerSidebar>
+```
+
+Title fallbacks differ by kind: **sessions** carry a real `title` (the conversation topic). **Human chats** usually have `title: null` — derive the label from the other member's `display_name` (the participant who is not the signed-in user), not "Untitled chat". Read members from `c.members` / `c.users`.
+
+This is a real-data variant of the canonical scene, so build it on the `ComputerPage` slot graph (not `<ComputerScene />`, which is static-by-default). Keep `ComputerHeader`, `ChatInput`, and the `ChatMessages` transcript exactly as the reference uses them — only the sidebar groups and transcript are data-driven.
+
 ### Fetching customer conversations (support inbox)
 
 Only use when the user explicitly asks about customer support, RevUser threads, or a support inbox. Uses the wrapped `listConversations` helper plus `timeline-entries.list` for messages — same shape as the chat pattern above but calling `/api/devrev/conversations.list`.
