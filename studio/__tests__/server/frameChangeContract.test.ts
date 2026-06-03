@@ -79,7 +79,7 @@ describe("diffSnapshots + hasAnyChange", () => {
     expect(hasAnyChange(diff)).toBe(false);
   });
 
-  it("flags a file whose size changed", async () => {
+  it("flags a file whose content changed", async () => {
     await writeFrame("frames/01/index.tsx", "short");
     const before = await snapshotProjectFiles(tmpRoot);
     await writeFrame("frames/01/index.tsx", "considerably longer body");
@@ -89,12 +89,31 @@ describe("diffSnapshots + hasAnyChange", () => {
     expect(hasAnyChange(diff)).toBe(true);
   });
 
-  it("flags a file whose mtime changed even if size matched", () => {
-    const before = new Map([["frames/a.tsx", { mtimeMs: 100, size: 50 }]]);
-    const after = new Map([["frames/a.tsx", { mtimeMs: 200, size: 50 }]]);
+  it("flags a same-length content change (hash, not size)", () => {
+    // Two files of equal length but different bytes must register as a
+    // change — a size-only check would miss this.
+    const before = new Map([["frames/a.tsx", { hash: "aaa", size: 50 }]]);
+    const after = new Map([["frames/a.tsx", { hash: "bbb", size: 50 }]]);
     const diff = diffSnapshots(before, after);
     expect(diff.changed).toEqual(["frames/a.tsx"]);
     expect(hasAnyChange(diff)).toBe(true);
+  });
+
+  it("treats a no-op rewrite (identical content) as NO change", async () => {
+    // Regression for the silent-ignore failure: the agent rewrites a file
+    // with byte-identical content, bumping mtime but changing nothing. A
+    // content hash must report this as unchanged so the no-frame-changes
+    // warning still fires. An mtime-based check would wrongly see a change
+    // and suppress the warning.
+    await writeFrame("frames/01/index.tsx", "export default () => null;");
+    const before = await snapshotProjectFiles(tmpRoot);
+    // Rewrite with the exact same bytes, a tick later.
+    await new Promise((r) => setTimeout(r, 15));
+    await writeFrame("frames/01/index.tsx", "export default () => null;");
+    const after = await snapshotProjectFiles(tmpRoot);
+    const diff = diffSnapshots(before, after);
+    expect(diff.changed).toEqual([]);
+    expect(hasAnyChange(diff)).toBe(false);
   });
 
   it("flags newly added files", async () => {

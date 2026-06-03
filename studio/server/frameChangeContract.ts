@@ -14,9 +14,21 @@
  * drive the diff with synthetic maps.
  */
 import fs from "node:fs/promises";
+import type { Dirent } from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 
-export type FrameFileStat = { mtimeMs: number; size: number };
+/**
+ * Per-file fingerprint. We key change detection on a CONTENT hash, not
+ * mtime+size: the agent sometimes rewrites a file with byte-identical
+ * content (a no-op Write, or an Edit that "matches" but changes nothing).
+ * That bumps mtime while the content is unchanged, so an mtime-based check
+ * would falsely read it as a real edit and SUPPRESS the "no changes"
+ * warning — exactly the silent-ignore failure the warning exists to catch.
+ * `size` is retained only as a cheap tie-break / debug aid; the diff
+ * compares `hash`.
+ */
+export type FrameFileStat = { hash: string; size: number };
 export type FrameSnapshot = Map<string, FrameFileStat>;
 
 export type FrameSnapshotDiff = {
@@ -61,7 +73,7 @@ export async function snapshotProjectFiles(projectDir: string): Promise<FrameSna
 }
 
 async function walk(rootDir: string, currentDir: string, out: FrameSnapshot): Promise<void> {
-  let entries: Awaited<ReturnType<typeof fs.readdir>>;
+  let entries: Dirent[];
   try {
     entries = await fs.readdir(currentDir, { withFileTypes: true });
   } catch {
@@ -76,20 +88,24 @@ async function walk(rootDir: string, currentDir: string, out: FrameSnapshot): Pr
     if (!entry.isFile()) continue;
     if (!SNAPSHOT_EXTENSIONS.some((ext) => entry.name.endsWith(ext))) continue;
     try {
-      const stat = await fs.stat(full);
+      const buf = await fs.readFile(full);
       const rel = path.relative(rootDir, full);
-      out.set(rel, { mtimeMs: stat.mtimeMs, size: stat.size });
+      out.set(rel, {
+        hash: createHash("sha1").update(buf).digest("hex"),
+        size: buf.length,
+      });
     } catch {
-      // file vanished between readdir and stat; skip.
+      // file vanished between readdir and read; skip.
     }
   }
 }
 
 /**
  * Compare two snapshots and report which files were added, changed, or
- * removed. mtime OR size mismatch counts as a change — mtime alone is not
- * enough on filesystems with second-resolution timestamps where two writes
- * inside the same second look identical.
+ * removed. A file counts as `changed` only when its CONTENT hash differs —
+ * a rewrite with identical bytes (a no-op Write/Edit) is correctly treated
+ * as "no change", so the no-frame-changes warning still fires on a silent
+ * ignore even though the file's mtime moved.
  */
 export function diffSnapshots(before: FrameSnapshot, after: FrameSnapshot): FrameSnapshotDiff {
   const added: string[] = [];
@@ -99,7 +115,7 @@ export function diffSnapshots(before: FrameSnapshot, after: FrameSnapshot): Fram
     const prev = before.get(key);
     if (!prev) {
       added.push(key);
-    } else if (prev.mtimeMs !== val.mtimeMs || prev.size !== val.size) {
+    } else if (prev.hash !== val.hash) {
       changed.push(key);
     }
   }
