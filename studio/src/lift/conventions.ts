@@ -38,7 +38,11 @@ export const ICON_CONVENTION: Convention = {
   tag: "icon_convention",
   rule:
     "arcade icons translate to <Icon iconType={ICON_TYPES.X} size=\"...\"/> " +
-    "imported from '@devrev-web/shared/ui-icons'.",
+    "imported from '@devrev-web-internal/shared-ui-icons/icon' (the import " +
+    "the whole codebase uses — `import { Icon, ICON_TYPES } from " +
+    "'@devrev-web-internal/shared-ui-icons/icon'`; do NOT use " +
+    "'@devrev-web/shared/ui-icons', which is a stale path with a single " +
+    "legacy caller).",
   lookup:
     "ICON_TYPES is the enum in libs/shared/ui-icons/src/icon/types.ts. " +
     "For each arcade icon in the frame, grep that file for the closest " +
