@@ -11,14 +11,13 @@
 // doesn't re-export.
 
 import type { MappingEntry } from "../types";
-
-const PROD_SOURCE = "@devrev-web/design-system/shared/raw-design-system";
+import { rawDs } from "./rawDs";
 
 export const PRIMITIVE_MAPPINGS: MappingEntry[] = [
   // --- Core controls -----------------------------------------------------
   {
     studio: { source: "arcade", name: "Button" },
-    production: { source: PROD_SOURCE, name: "Button" },
+    production: { source: rawDs("Button"), name: "Button" },
     propDeltas: [
       {
         from: "size",
@@ -54,7 +53,7 @@ export const PRIMITIVE_MAPPINGS: MappingEntry[] = [
   },
   {
     studio: { source: "arcade", name: "IconButton" },
-    production: { source: PROD_SOURCE, name: "IconButton" },
+    production: { source: rawDs("IconButton"), name: "IconButton" },
     propDeltas: [
       { from: "size", to: "size", valueMap: { sm: "S", md: "M", lg: "L" } },
       { from: "variant", to: "variant" },
@@ -77,7 +76,7 @@ export const PRIMITIVE_MAPPINGS: MappingEntry[] = [
   // --- Inputs ------------------------------------------------------------
   {
     studio: { source: "arcade", name: "Input" },
-    production: { source: PROD_SOURCE, name: "TextInput" },
+    production: { source: rawDs("TextInput"), name: "TextInput" },
     propDeltas: [
       { from: "value", to: "value" },
       { from: "onChange", to: "onChange" },
@@ -96,7 +95,7 @@ export const PRIMITIVE_MAPPINGS: MappingEntry[] = [
   },
   {
     studio: { source: "arcade", name: "Select" },
-    production: { source: PROD_SOURCE, name: "SingleSelect" },
+    production: { source: rawDs("SingleSelect"), name: "SingleSelect" },
     propDeltas: [
       { from: "value", to: "value" },
       { from: "onChange", to: "onValueChange" },
@@ -108,7 +107,7 @@ export const PRIMITIVE_MAPPINGS: MappingEntry[] = [
   },
   {
     studio: { source: "arcade", name: "Checkbox" },
-    production: { source: PROD_SOURCE, name: "Checkbox" },
+    production: { source: rawDs("Checkbox"), name: "Checkbox" },
     propDeltas: [
       { from: "checked", to: "checked" },
       { from: "onChange", to: "onCheckedChange" },
@@ -125,7 +124,7 @@ export const PRIMITIVE_MAPPINGS: MappingEntry[] = [
     // and production Toggle wrap @radix-ui/react-switch, so prop shapes
     // align cleanly — identity renames plus two drops.
     studio: { source: "arcade", name: "Switch" },
-    production: { source: PROD_SOURCE, name: "Toggle" },
+    production: { source: rawDs("Toggle"), name: "Toggle" },
     propDeltas: [
       { from: "checked", to: "checked" },
       // Studio Switch inherits Radix's `defaultChecked`; production Toggle
@@ -181,7 +180,7 @@ export const PRIMITIVE_MAPPINGS: MappingEntry[] = [
   // --- Surfaces ----------------------------------------------------------
   {
     studio: { source: "arcade", name: "Modal" },
-    production: { source: PROD_SOURCE, name: "Modal" },
+    production: { source: rawDs("Modal"), name: "Modal" },
     propDeltas: [
       { from: "open", to: "open" },
       { from: "onOpenChange", to: "onOpenChange" },
@@ -193,14 +192,14 @@ export const PRIMITIVE_MAPPINGS: MappingEntry[] = [
   },
   {
     studio: { source: "arcade", name: "Popover" },
-    production: { source: PROD_SOURCE, name: "Popover" },
+    production: { source: rawDs("Popover"), name: "Popover" },
     propDeltas: [],
     slotNotes: [],
     translationClass: "mechanical",
   },
   {
     studio: { source: "arcade", name: "Menu" },
-    production: { source: PROD_SOURCE, name: "Menu" },
+    production: { source: rawDs("Menu"), name: "Menu" },
     propDeltas: [],
     slotNotes: [
       "Both expose a Radix dropdown-menu surface (Menu.Root, Menu.Trigger, Menu.Content, Menu.Item, Menu.Separator). API shape matches; mechanical.",
@@ -213,7 +212,7 @@ export const PRIMITIVE_MAPPINGS: MappingEntry[] = [
     // audit caught the inconsistency. The subcomponent shape (Tabs.List,
     // Tabs.Item, etc.) is noted below.
     studio: { source: "arcade", name: "Tabs" },
-    production: { source: PROD_SOURCE, name: "Tabs" },
+    production: { source: rawDs("Tabs"), name: "Tabs" },
     propDeltas: [
       { from: "value", to: "value" },
       {
@@ -244,21 +243,21 @@ export const PRIMITIVE_MAPPINGS: MappingEntry[] = [
   // --- Misc --------------------------------------------------------------
   {
     studio: { source: "arcade", name: "Badge" },
-    production: { source: PROD_SOURCE, name: "Badge" },
+    production: { source: rawDs("Badge"), name: "Badge" },
     propDeltas: [{ from: "variant", to: "variant" }],
     slotNotes: [],
     translationClass: "mechanical",
   },
   {
     studio: { source: "arcade", name: "Tooltip" },
-    production: { source: PROD_SOURCE, name: "Tooltip" },
+    production: { source: rawDs("Tooltip"), name: "Tooltip" },
     propDeltas: [{ from: "content", to: "content" }],
     slotNotes: [],
     translationClass: "mechanical",
   },
   {
     studio: { source: "arcade", name: "Avatar" },
-    production: { source: PROD_SOURCE, name: "Avatar" },
+    production: { source: rawDs("Avatar"), name: "Avatar" },
     propDeltas: [
       {
         from: "size",
@@ -319,7 +318,7 @@ export const PRIMITIVE_MAPPINGS: MappingEntry[] = [
     // the bubble as a div + Tailwind classes matching the surrounding feature's
     // chat treatment (search the target feature for prior art).
     studio: { source: "arcade", name: "ChatBubble" },
-    production: { source: PROD_SOURCE, name: "ChatBubble" },
+    production: { source: rawDs("ChatBubble"), name: "ChatBubble" },
     propDeltas: [
       { from: "variant", to: "variant", note: "Studio variants are 'sender'|'receiver'. Production has no first-class ChatBubble — translate to the host feature's bubble pattern (typically a styled <div> with sender/receiver-specific classes)." },
       { from: "tail", to: "tail" },
@@ -334,7 +333,7 @@ export const PRIMITIVE_MAPPINGS: MappingEntry[] = [
   },
   {
     studio: { source: "arcade", name: "Tag" },
-    production: { source: PROD_SOURCE, name: "Chip" },
+    production: { source: rawDs("Chip"), name: "Chip" },
     propDeltas: [{ from: "intent", to: "variant", note: "Studio's TagIntent maps onto production Chip variants; 1:1 for the common cases." }],
     slotNotes: [
       "Studio Tag has both `intent` and `appearance`; production Chip has only `variant`. The tonal/tinted styling Studio expresses via `appearance` is not recoverable on Chip — either accept the flat look, or surface to the reviewer if the design explicitly requires tinted.",
@@ -359,7 +358,7 @@ export const PRIMITIVE_MAPPINGS: MappingEntry[] = [
     // gap — arcade exports `Breadcrumb` but the mapping table had no entry,
     // so it surfaced as `<unmapped/>` and the agent had no guidance.
     studio: { source: "arcade", name: "Breadcrumb" },
-    production: { source: PROD_SOURCE, name: "Breadcrumbs" },
+    production: { source: rawDs("Breadcrumbs"), name: "Breadcrumbs" },
     propDeltas: [],
     slotNotes: [
       "Studio shape: <Breadcrumb.Root><Breadcrumb.Item><Breadcrumb.Link href=... current>…</Breadcrumb.Link></Breadcrumb.Item><Breadcrumb.Separator/>…",
@@ -378,14 +377,14 @@ export const PRIMITIVE_MAPPINGS: MappingEntry[] = [
   },
   {
     studio: { source: "arcade", name: "Separator" },
-    production: { source: PROD_SOURCE, name: "Separator" },
+    production: { source: rawDs("Separator"), name: "Separator" },
     propDeltas: [],
     slotNotes: [],
     translationClass: "mechanical",
   },
   {
     studio: { source: "arcade", name: "DevRevThemeProvider" },
-    production: { source: PROD_SOURCE, name: "ThemeProvider" },
+    production: { source: rawDs("ThemeProvider"), name: "ThemeProvider" },
     propDeltas: [],
     slotNotes: [
       "Production's ThemeProvider takes the arcade theme config via spread: `<ThemeProvider {...arcadeDesignSystemTheme()}>`. Studio's DevRevThemeProvider takes a `mode` prop directly; translation reassembles the theme call.",

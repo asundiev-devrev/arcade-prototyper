@@ -23,7 +23,7 @@ exports[`renderXml > marks n/a composites with equivalent="none" 1`] = `
     <mapping class="judgment" studio_source="arcade-prototypes" studio_name="ComputerSidebar" equivalent="none">
       <judgment_note>Studio-specific UI (chat sidebar for the Computer app). Treat like ComputerHeader.</judgment_note>
     </mapping>
-    <mapping class="mechanical" studio_source="arcade" studio_name="Button" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Button">
+    <mapping class="mechanical" studio_source="arcade" studio_name="Button" production_source="@devrev-web-internal/design-system-shared-raw-design-system/components/button" production_name="Button">
       <prop_delta from="size" value_map="sm-&gt;S, md-&gt;M, lg-&gt;L"/>
       <prop_delta from="variant"/>
       <slot_note>Children are identical. Leading/trailing icons move from raw children to \`start\` / \`end\` slots in production.</slot_note>
@@ -85,23 +85,24 @@ exports[`renderXml > renders a detail frame 1`] = `
     </anchors>
   </default_mapping_convention>
   <frame_inventory>
-    <mapping class="structural" studio_source="arcade-prototypes" studio_name="AppShell" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Page">
-      <slot_note>AppShell wraps the whole app in a sidebar+content flex layout. In devrev-web, features compose this inline: \`&lt;div className="flex h-screen"&gt;&lt;aside&gt;{sidebar}&lt;/aside&gt;&lt;div className="flex-1"&gt;{children}&lt;/div&gt;&lt;/div&gt;\` alongside &lt;Page&gt;. There is no single-component equivalent. Unroll into inline flex + Page.</slot_note>
+    <mapping class="structural" studio_source="arcade-prototypes" studio_name="AppShell" production_source="@devrev-web-internal/design-system-shared-raw-design-system/components/page" production_name="Page">
+      <slot_note>AppShell wraps the whole app in a sidebar+content flex layout. PREFER a higher-level page template when one fits the frame's shape: a settings-style frame (TitleBar + NavSidebar + BreadcrumbBar + centered body with grouped rows) lifts to \`SettingsPage\` from '@devrev-web/design-system/shared/settings' (≈86 call sites) — that template owns the chrome, so you do NOT unroll the flex layout. Read libs/.../*-settings page prior art (e.g. preferences-page.tsx) for the SettingsPage.Header / Toolbar shape.</slot_note>
+      <slot_note>Only when NO template fits (a bespoke layout) do you unroll inline: \`&lt;div className="flex h-screen"&gt;&lt;aside&gt;{sidebar}&lt;/aside&gt;&lt;div className="flex-1"&gt;{children}&lt;/div&gt;&lt;/div&gt;\` alongside &lt;Page&gt;. Inline-flex-+-Page is the fallback, not the default.</slot_note>
     </mapping>
-    <mapping class="mechanical" studio_source="arcade-prototypes" studio_name="BreadcrumbBar" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Breadcrumbs"/>
-    <mapping class="structural" studio_source="arcade-prototypes" studio_name="PageBody" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Page">
+    <mapping class="mechanical" studio_source="arcade-prototypes" studio_name="BreadcrumbBar" production_source="@devrev-web-internal/design-system-shared-raw-design-system/components/breadcrumbs" production_name="Breadcrumbs"/>
+    <mapping class="structural" studio_source="arcade-prototypes" studio_name="PageBody" production_source="@devrev-web-internal/design-system-shared-raw-design-system/components/page" production_name="Page">
       <slot_note>Compose as \`&lt;Page.Content&gt;\` inside \`&lt;Page&gt;\`. Page.Content is a subcomponent attachment on the \`Page\` export.</slot_note>
     </mapping>
-    <mapping class="structural" studio_source="arcade-prototypes" studio_name="TitleBar" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Page">
+    <mapping class="structural" studio_source="arcade-prototypes" studio_name="TitleBar" production_source="@devrev-web-internal/design-system-shared-raw-design-system/components/page" production_name="Page">
       <slot_note>Compose with \`&lt;Page.Header&gt;\` under \`&lt;Page&gt;\`. Production \`Page.Header\` is a subcomponent attachment, not a standalone export.</slot_note>
       <slot_note>Traffic-lights/window-chrome elements from Studio's TitleBar do not exist in production (they are Studio's own chrome); drop them.</slot_note>
     </mapping>
-    <mapping class="mechanical" studio_source="arcade" studio_name="Button" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Button">
+    <mapping class="mechanical" studio_source="arcade" studio_name="Button" production_source="@devrev-web-internal/design-system-shared-raw-design-system/components/button" production_name="Button">
       <prop_delta from="size" value_map="sm-&gt;S, md-&gt;M, lg-&gt;L"/>
       <prop_delta from="variant"/>
       <slot_note>Children are identical. Leading/trailing icons move from raw children to \`start\` / \`end\` slots in production.</slot_note>
     </mapping>
-    <mapping class="close-but-not-identity" studio_source="arcade" studio_name="Tabs" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Tabs">
+    <mapping class="close-but-not-identity" studio_source="arcade" studio_name="Tabs" production_source="@devrev-web-internal/design-system-shared-raw-design-system/components/tabs" production_name="Tabs">
       <prop_delta from="value"/>
       <prop_delta from="onChange" to="onValueChange">Production onValueChange signature is \`(value?: string) =&gt; void\` — the arg is optional. A bare useState&lt;string&gt; setter will NOT typecheck. Wrap: \`onValueChange={(v) =&gt; setState(v ?? "")}\` (or narrow with a type guard).</prop_delta>
       <slot_note>Studio Tabs.Root / Tabs.Trigger → production Tabs / Tabs.Item. Tabs.List is identical.</slot_note>
@@ -155,7 +156,7 @@ exports[`renderXml > renders a list-view frame 1`] = `
     </anchors>
   </default_mapping_convention>
   <frame_inventory>
-    <mapping class="structural" studio_source="arcade-prototypes" studio_name="VistaFilterPill" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Chip">
+    <mapping class="structural" studio_source="arcade-prototypes" studio_name="VistaFilterPill" production_source="@devrev-web-internal/design-system-shared-raw-design-system/components/chip" production_name="Chip">
       <slot_note>Production uses Chip with a close-button slot; Studio's VistaFilterPill bundles behaviour into one component.</slot_note>
     </mapping>
     <mapping class="structural" studio_source="arcade-prototypes" studio_name="VistaPage" production_source="@devrev-web/shared/part-work-components" production_name="ListViewPage">
@@ -168,12 +169,12 @@ exports[`renderXml > renders a list-view frame 1`] = `
     <mapping class="judgment" studio_source="arcade-prototypes" studio_name="VistaPagination" equivalent="none">
       <judgment_note>2026-05-12 drift audit: no \`Pagination\` export exists in raw-design-system. ListViewPage owns pagination itself; if the frame uses VistaPagination standalone, ask the reviewer whether to use the ListViewPage-owned behavior or inline a bespoke control.</judgment_note>
     </mapping>
-    <mapping class="mechanical" studio_source="arcade" studio_name="Button" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Button">
+    <mapping class="mechanical" studio_source="arcade" studio_name="Button" production_source="@devrev-web-internal/design-system-shared-raw-design-system/components/button" production_name="Button">
       <prop_delta from="size" value_map="sm-&gt;S, md-&gt;M, lg-&gt;L"/>
       <prop_delta from="variant"/>
       <slot_note>Children are identical. Leading/trailing icons move from raw children to \`start\` / \`end\` slots in production.</slot_note>
     </mapping>
-    <mapping class="structural" studio_source="arcade" studio_name="Input" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="TextInput">
+    <mapping class="structural" studio_source="arcade" studio_name="Input" production_source="@devrev-web-internal/design-system-shared-raw-design-system/components/text-input" production_name="TextInput">
       <prop_delta from="value"/>
       <prop_delta from="onChange"/>
       <prop_delta from="placeholder"/>
@@ -253,12 +254,12 @@ exports[`renderXml > renders a settings-form frame 1`] = `
     <mapping class="judgment" studio_source="arcade-prototypes" studio_name="SettingsRow" equivalent="none">
       <judgment_note>No SettingsRow component in production. Compose rows inline inside \`&lt;SettingsSection&gt;\` using label + input markup. See libs/settings/feature/computer-settings/src/pages/preferences/preferences-page.tsx for the house style.</judgment_note>
     </mapping>
-    <mapping class="mechanical" studio_source="arcade" studio_name="Button" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Button">
+    <mapping class="mechanical" studio_source="arcade" studio_name="Button" production_source="@devrev-web-internal/design-system-shared-raw-design-system/components/button" production_name="Button">
       <prop_delta from="size" value_map="sm-&gt;S, md-&gt;M, lg-&gt;L"/>
       <prop_delta from="variant"/>
       <slot_note>Children are identical. Leading/trailing icons move from raw children to \`start\` / \`end\` slots in production.</slot_note>
     </mapping>
-    <mapping class="structural" studio_source="arcade" studio_name="Input" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="TextInput">
+    <mapping class="structural" studio_source="arcade" studio_name="Input" production_source="@devrev-web-internal/design-system-shared-raw-design-system/components/text-input" production_name="TextInput">
       <prop_delta from="value"/>
       <prop_delta from="onChange"/>
       <prop_delta from="placeholder"/>
@@ -314,12 +315,12 @@ exports[`renderXml > renders an ad-hoc frame 1`] = `
     </anchors>
   </default_mapping_convention>
   <frame_inventory>
-    <mapping class="mechanical" studio_source="arcade" studio_name="Button" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Button">
+    <mapping class="mechanical" studio_source="arcade" studio_name="Button" production_source="@devrev-web-internal/design-system-shared-raw-design-system/components/button" production_name="Button">
       <prop_delta from="size" value_map="sm-&gt;S, md-&gt;M, lg-&gt;L"/>
       <prop_delta from="variant"/>
       <slot_note>Children are identical. Leading/trailing icons move from raw children to \`start\` / \`end\` slots in production.</slot_note>
     </mapping>
-    <mapping class="mechanical" studio_source="arcade" studio_name="Modal" production_source="@devrev-web/design-system/shared/raw-design-system" production_name="Modal">
+    <mapping class="mechanical" studio_source="arcade" studio_name="Modal" production_source="@devrev-web-internal/design-system-shared-raw-design-system/components/modal" production_name="Modal">
       <prop_delta from="open"/>
       <prop_delta from="onOpenChange"/>
       <slot_note>Both use compound subcomponents. Rename Modal.Root → Modal.Root, Modal.Content → Modal.Content, etc. API shape matches closely; mechanical.</slot_note>

@@ -26,7 +26,9 @@ describe("Switch → Toggle mapping data", () => {
 
   it("targets production Toggle, not LinkButton / Checkbox / etc.", () => {
     expect(entry?.production.name).toBe("Toggle");
-    expect(entry?.production.source).toBe("@devrev-web/design-system/shared/raw-design-system");
+    expect(entry?.production.source).toBe(
+      "@devrev-web-internal/design-system-shared-raw-design-system/components/toggle",
+    );
   });
 
   it("renames defaultChecked → initialChecked (verified against toggle.types.tsx)", () => {

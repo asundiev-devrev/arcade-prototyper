@@ -67,6 +67,19 @@ export const CLASS_PATCHES: Patch[] = [
     reason:
       "arcade-gen shorthand; devrev-web Tailwind config has no corresponding utility.",
   },
+  // Control-height shorthand. arcade-gen control-md = 28px; devrev-web has no
+  // h-control-* utility, so map to the nearest Tailwind height (h-7 = 28px).
+  // Surfaced by the 2026-06-03 live-lift test, where h-control-md silently
+  // failed to resolve. Only -md is patched: Tailwind compiles a utility into
+  // arcade's dist/styles.css only when a component uses it, and -sm/-lg aren't
+  // present — a frame can't emit a class that doesn't exist, and the drift
+  // checker (sunset_if_absent_from) would flag absent patches as stale.
+  {
+    studio: "h-control-md",
+    production: "h-7",
+    sunset_if_absent_from: "dist/styles.css",
+    reason: "arcade control-md (28px); devrev-web has no h-control-* utility.",
+  },
 ];
 
 /**

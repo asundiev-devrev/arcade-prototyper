@@ -17,9 +17,8 @@
 // The manifest surfaces them verbatim so the engineer decides.
 
 import type { MappingEntry } from "../types";
+import { rawDs } from "./rawDs";
 
-const PROD_RDS = "@devrev-web/design-system/shared/raw-design-system";
-const PROD_PAGES = "@devrev-web/design-system/shared/pages";
 const PROD_SETTINGS = "@devrev-web/design-system/shared/settings";
 // Verified against devrev-web: consumers import `ListViewPage` from the
 // package root, not from an internal file path. Grep shows dozens of real
@@ -30,16 +29,17 @@ export const COMPOSITE_MAPPINGS: MappingEntry[] = [
   // --- Layout chrome -----------------------------------------------------
   {
     studio: { source: "arcade-prototypes", name: "AppShell" },
-    production: { source: PROD_RDS, name: "Page" },
+    production: { source: rawDs("Page"), name: "Page" },
     propDeltas: [],
     slotNotes: [
-      "AppShell wraps the whole app in a sidebar+content flex layout. In devrev-web, features compose this inline: `<div className=\"flex h-screen\"><aside>{sidebar}</aside><div className=\"flex-1\">{children}</div></div>` alongside <Page>. There is no single-component equivalent. Unroll into inline flex + Page.",
+      "AppShell wraps the whole app in a sidebar+content flex layout. PREFER a higher-level page template when one fits the frame's shape: a settings-style frame (TitleBar + NavSidebar + BreadcrumbBar + centered body with grouped rows) lifts to `SettingsPage` from '@devrev-web/design-system/shared/settings' (≈86 call sites) — that template owns the chrome, so you do NOT unroll the flex layout. Read libs/.../*-settings page prior art (e.g. preferences-page.tsx) for the SettingsPage.Header / Toolbar shape.",
+      "Only when NO template fits (a bespoke layout) do you unroll inline: `<div className=\"flex h-screen\"><aside>{sidebar}</aside><div className=\"flex-1\">{children}</div></div>` alongside <Page>. Inline-flex-+-Page is the fallback, not the default.",
     ],
     translationClass: "structural",
   },
   {
     studio: { source: "arcade-prototypes", name: "TitleBar" },
-    production: { source: PROD_RDS, name: "Page" },
+    production: { source: rawDs("Page"), name: "Page" },
     propDeltas: [],
     slotNotes: [
       // Corrected 2026-05-12: drift audit flagged "Page.Header" — that's a
@@ -52,14 +52,14 @@ export const COMPOSITE_MAPPINGS: MappingEntry[] = [
   },
   {
     studio: { source: "arcade-prototypes", name: "BreadcrumbBar" },
-    production: { source: PROD_RDS, name: "Breadcrumbs" },
+    production: { source: rawDs("Breadcrumbs"), name: "Breadcrumbs" },
     propDeltas: [],
     slotNotes: [],
     translationClass: "mechanical",
   },
   {
     studio: { source: "arcade-prototypes", name: "PageBody" },
-    production: { source: PROD_RDS, name: "Page" },
+    production: { source: rawDs("Page"), name: "Page" },
     propDeltas: [],
     slotNotes: [
       "Compose as `<Page.Content>` inside `<Page>`. Page.Content is a subcomponent attachment on the `Page` export.",
@@ -68,12 +68,12 @@ export const COMPOSITE_MAPPINGS: MappingEntry[] = [
   },
   {
     studio: { source: "arcade-prototypes", name: "NavSidebar" },
-    production: { source: PROD_RDS, name: "Nav" },
+    production: { source: rawDs("Nav"), name: "Nav" },
     propDeltas: [],
     slotNotes: [
       "Studio's NavSidebar: <NavSidebar><NavSidebar.Section><NavSidebar.Item/></NavSidebar.Section></NavSidebar>.",
-      "Production Nav: <Nav variant=\"primary\"><Nav.Header/><Nav.Content><Nav.List><Nav.SingleSelectItem><Nav.SingleSelectItem.Icon/><Nav.SingleSelectItem.Label/></Nav.SingleSelectItem></Nav.List></Nav.Content><Nav.Footer/></Nav>.",
-      "Section → Nav.List. Item → Nav.SingleSelectItem with `selected` prop. Studio's brand header and Computer footer have no production equivalent; typically drop them in the translation.",
+      "Production Nav: <Nav variant=\"primary\"><Nav.Header/><Nav.Content><Nav.List><Nav.List.Item><Nav.List.Item.Icon/><Nav.List.Item.Label/></Nav.List.Item></Nav.List></Nav.Content><Nav.Footer/></Nav>. Use Nav.List.Item — it is the canonical item (≈260 call sites); Nav.SingleSelectItem is a rare legacy variant, do not default to it.",
+      "Section → Nav.List. Item → Nav.List.Item with `selected` prop. Studio's brand header and Computer footer have no production equivalent; typically drop them in the translation.",
     ],
     translationClass: "structural",
     priorArt: [
@@ -150,7 +150,7 @@ export const COMPOSITE_MAPPINGS: MappingEntry[] = [
   },
   {
     studio: { source: "arcade-prototypes", name: "VistaFilterPill" },
-    production: { source: PROD_RDS, name: "Chip" },
+    production: { source: rawDs("Chip"), name: "Chip" },
     propDeltas: [],
     slotNotes: [
       "Production uses Chip with a close-button slot; Studio's VistaFilterPill bundles behaviour into one component.",
@@ -268,7 +268,7 @@ export const COMPOSITE_MAPPINGS: MappingEntry[] = [
   },
   {
     studio: { source: "arcade-prototypes", name: "ChatEmptyState" },
-    production: { source: PROD_RDS, name: "EmptyState" },
+    production: { source: rawDs("EmptyState"), name: "EmptyState" },
     propDeltas: [],
     slotNotes: [
       "Production EmptyState is the general empty-state component; the 'chat' framing is Studio-specific copy.",
