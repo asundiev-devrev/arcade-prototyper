@@ -268,9 +268,16 @@ function ProjectDetailShell({
     if (!isAuthor) return;
     try {
       const r = await fetch(`/api/projects/${routeKey}/chime-ins`);
-      if (r.ok) setChimeIns(await r.json());
+      // Only trust a genuine JSON array. During a Vite middleware restart the
+      // route can briefly fall through to the SPA's index.html (a 200 with
+      // text/html); parsing that throws and a non-array would wrongly clear
+      // visible notes. Ignore anything that isn't a JSON array.
+      if (!r.ok) return;
+      if (!r.headers.get("content-type")?.includes("application/json")) return;
+      const data = await r.json();
+      if (Array.isArray(data)) setChimeIns(data);
     } catch {
-      /* best-effort */
+      /* best-effort — leave existing notes untouched */
     }
   }, [isAuthor, routeKey]);
 
