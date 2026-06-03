@@ -8,6 +8,15 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.27.0] — 2026-06-03
+
+### Added
+- **Computer as a context-aware co-pilot.** Computer now knows about your project when you summon it, and quietly watches each frame as it's generated. When a prototype drifts from how DevRev actually works, it chimes in with a short, collapsible note in the chat — with **Apply** (re-prompts the generator to fix it) or **Dismiss**. Summoning `@Computer` directly now also hands it full project context (the screens you've built, recent chat, the current frame) so its answers are grounded in what you're actually working on.
+
+### Fixed
+- **Silent "I changed it" with no real change.** The warning that flags when the agent claims an edit it didn't make compared file timestamps, so a no-op rewrite (same content, new timestamp) slipped past and the warning never showed. It now compares actual file content, so a silent ignore is correctly caught and surfaced.
+- **Production blueprint pointed at a stale icon import.** The LIFT handoff manifest told engineers to import icons from a path with a single legacy caller; it now emits the import path the whole `devrev-web` codebase actually uses, so lifted code resolves correctly.
+
 ## [0.26.1] — 2026-06-02
 
 ### Fixed
