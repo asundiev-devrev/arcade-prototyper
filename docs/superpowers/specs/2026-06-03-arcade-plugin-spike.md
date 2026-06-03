@@ -102,6 +102,35 @@ Electron's Node ABI**, which differs from system Node. This commonly needs an
   `child_process` freely — this is a viable fallback and arguably cleaner: the
   plugin owns a little Node sidecar process, not in-Electron compilation).
 
+#### Stage 1 RESULT (run 2026-06-03): GATE PASSED
+
+Tested against the repo's Electron 33.4.11 (Node 20.18.3, **modules ABI 130** —
+different from system Node, which was the risk).
+
+- **Native deps load under Electron's ABI — the core gate.** Under
+  `ELECTRON_RUN_AS_NODE`, both `@tailwindcss/oxide` (`Scanner` resolves) and
+  `esbuild` (`build` resolves) import cleanly. **No `electron-rebuild` needed** —
+  the prebuilt native binaries (oxide-darwin-arm64, esbuild darwin-arm64) are
+  ABI-compatible as-is. This was the single fact that could have killed Option C;
+  it didn't.
+- **Full compiler runs under Electron's runtime.** `packFromSource` executed under
+  Electron-as-Node produced valid self-contained HTML in **386ms** — byte-for-byte
+  the same result as system Node (1.498MB, doctype + inlined css/js present).
+- **Verdict: the compiler can live inside a plugin.** Whether in-process or in a
+  spawned Node child, the heavy Tailwind-v4 + esbuild toolchain runs under
+  Electron's environment unmodified.
+
+**Caveat / not-yet-proven in this run:** I confirmed the compiler under Electron's
+*Node* layer (`ELECTRON_RUN_AS_NODE`), not yet inside a fully-booted Electron GUI
+**main process** — the throwaway harness hit Electron-specific entry-point quirks
+(ESM-main + tsx loader interaction, `.js`-vs-`.cjs` under the repo's
+`type:module`). These are **launch-config mechanics, not capability limits** — a
+real plugin ships compiled CJS + its own `package.json`, sidestepping all three.
+Rendering the result in a `BrowserWindow` is routine Electron (same Chromium that
+already rendered the published prototype this session) and is Stage 2. Net: the
+*architectural* gate is passed; the GUI-app scaffolding is normal plugin-builder
+boilerplate to settle when a real plugin is built.
+
 ### Stage 2 — Render the prototype in the plugin window
 
 Point the Electron `BrowserWindow` at the HTML from Stage 1 (the **interactive**
