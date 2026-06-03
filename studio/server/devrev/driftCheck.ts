@@ -71,11 +71,6 @@ export async function runDriftCheck(slug: string, deps: RunDriftCheckDeps): Prom
       recentHistory,
     });
 
-    // TEMP DIAGNOSTIC (debug branch): the drift check is silent by design,
-    // so log fire + raw response + decision to tell "Computer said NONE"
-    // apart from a pipeline bug. Remove before merge.
-    console.warn(`[drift-diag] fired slug=${slug} frame=${deps.frameSlug} contextChars=${context.length}`);
-
     let assistantText = "";
     const result = await runComputerTurn({
       prompt: `${DRIFT_CHECK_INSTRUCTION}\n\n---\n${context}`,
@@ -86,12 +81,7 @@ export async function runDriftCheck(slug: string, deps: RunDriftCheckDeps): Prom
       },
     });
 
-    const rawResponse = result.assistantText || assistantText;
-    const objection = parseDriftResponse(rawResponse);
-    console.warn(
-      `[drift-diag] slug=${slug} rawResponse=${JSON.stringify((rawResponse || "(empty)").slice(0, 300))} ` +
-      `decision=${objection ? "CHIME-IN" : "silent(NONE/empty)"}`,
-    );
+    const objection = parseDriftResponse(result.assistantText || assistantText);
     if (!objection) return;
 
     const fresh = await getProject(slug);
