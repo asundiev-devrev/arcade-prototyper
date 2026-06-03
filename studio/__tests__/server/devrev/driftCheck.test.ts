@@ -17,8 +17,10 @@ describe("parseDriftResponse", () => {
     const obj = parseDriftResponse("Tickets don't auto-close when assigned in DevRev.");
     expect(obj).toBe("Tickets don't auto-close when assigned in DevRev.");
   });
-  it("instruction tells the agent to default to silence", () => {
+  it("instruction defines the NONE escape hatch and tells the agent to flag drift", () => {
     expect(DRIFT_CHECK_INSTRUCTION).toMatch(/NONE/);
-    expect(DRIFT_CHECK_INSTRUCTION.toLowerCase()).toContain("only if");
+    // Biases toward catching real contradictions rather than defaulting silent.
+    expect(DRIFT_CHECK_INSTRUCTION.toLowerCase()).toContain("flag");
+    expect(DRIFT_CHECK_INSTRUCTION.toLowerCase()).toContain("contradict");
   });
 });

@@ -12,12 +12,20 @@ import { getProject, updateProject, readHistory } from "../projects";
  * a "looks fine" is never surfaced.
  */
 export const DRIFT_CHECK_INSTRUCTION =
-  "You silently watch this DevRev prototype for product-truth drift. " +
-  "Using only your general knowledge of how DevRev works as a product " +
-  "(objects, workflows, user roles) — NOT any live org data — decide if the " +
-  "current frame contradicts real DevRev behavior. Respond ONLY if you have a " +
-  "specific, concrete objection, in one or two sentences. If the frame is fine, " +
-  "plausible, or you are unsure, respond with exactly NONE and nothing else.";
+  "You are a DevRev product expert reviewing a prototype a designer just " +
+  "generated. Your job is to catch where it contradicts how DevRev actually " +
+  "works as a product — wrong object model, impossible workflow, wrong user " +
+  "role, or an action with consequences DevRev would never allow. Judge from " +
+  "your general DevRev product knowledge, NOT live org data.\n\n" +
+  "Look hard at the designer's request and the frame description below. Examples " +
+  "of drift worth flagging: deleting a ticket also deleting the customer/account; " +
+  "a ticket auto-closing the moment it is assigned; a Rev (customer) user seeing " +
+  "Dev-only internal tools; merging parts in a way DevRev doesn't support; a state " +
+  "transition that isn't reachable in DevRev's workflow.\n\n" +
+  "If you find a real contradiction, reply with ONE or TWO sentences naming it " +
+  "concretely. Lean toward flagging when the designer's intent clearly conflicts " +
+  "with DevRev behavior. Only reply with exactly NONE (and nothing else) when the " +
+  "prototype is genuinely consistent with how DevRev works.";
 
 /** Returns the objection text, or null when the agent declined to chime in. */
 export function parseDriftResponse(text: string): string | null {
@@ -48,12 +56,25 @@ export async function runDriftCheck(slug: string, deps: RunDriftCheckDeps): Prom
     const history = await readHistory(slug);
     const recentHistory = history.slice(-12).map((m) => ({ role: m.role, content: m.content }));
 
+    // The designer's most recent prompt states the intended BEHAVIOR — which
+    // the structural frame summary (components + visible text) can't convey.
+    // Surface it explicitly so Computer can judge intent, not just layout.
+    const lastUserPrompt = [...history].reverse().find((m) => m.role === "user")?.content?.trim();
+    const projectSummary = lastUserPrompt
+      ? `Project: ${project.name} (theme: ${project.theme}).\nDesigner's latest request: "${lastUserPrompt}"`
+      : `Project: ${project.name} (theme: ${project.theme}).`;
+
     const context = buildComputerContext({
-      projectSummary: `Project: ${project.name} (theme: ${project.theme}).`,
+      projectSummary,
       pendingChimeIns: pendingObjections(project.chimeIns ?? []),
       frameSource: deps.frameSource,
       recentHistory,
     });
+
+    // TEMP DIAGNOSTIC (debug branch): the drift check is silent by design,
+    // so log fire + raw response + decision to tell "Computer said NONE"
+    // apart from a pipeline bug. Remove before merge.
+    console.warn(`[drift-diag] fired slug=${slug} frame=${deps.frameSlug} contextChars=${context.length}`);
 
     let assistantText = "";
     const result = await runComputerTurn({
@@ -65,7 +86,12 @@ export async function runDriftCheck(slug: string, deps: RunDriftCheckDeps): Prom
       },
     });
 
-    const objection = parseDriftResponse(result.assistantText || assistantText);
+    const rawResponse = result.assistantText || assistantText;
+    const objection = parseDriftResponse(rawResponse);
+    console.warn(
+      `[drift-diag] slug=${slug} rawResponse=${JSON.stringify((rawResponse || "(empty)").slice(0, 300))} ` +
+      `decision=${objection ? "CHIME-IN" : "silent(NONE/empty)"}`,
+    );
     if (!objection) return;
 
     const fresh = await getProject(slug);
