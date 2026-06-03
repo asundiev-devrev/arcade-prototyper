@@ -9,56 +9,51 @@
  * tinted Tag, and a soft Tag across frames generated against the same
  * Figma source. This composite encodes the production row once.
  *
- * Live DOM reference (app.devrev.ai/…/vistas/…?view_type=table):
- *   Row: h-11, border-b --stroke-neutral-subtle, hover --surface-overlay-hovered (in arcade-gen this is --control-bg-neutral-subtle-hover),
- *     items-center
- *   Column gap: the row has internal gap-0 — cells own their own px-3,
- *     with a leading 24px left indent (pl-6) to align with the group header
+ * Live DOM reference (app.devrev.ai/devrev/views/… , verified 2026-06-03):
+ *   Row: h-12 (48px), border-b --stroke-neutral-subtle, hover
+ *     --control-bg-neutral-subtle-hover, items-center. Cells own px-2 with a
+ *     12px row inset (pl-3 pr-3). Cell text is 12px (text-body-small).
+ *   Header: h-8 (32px), text-system-small + --fg-neutral-subtle, NOT
+ *     uppercase. (The real app de-uppercased headers; the old caption/upper
+ *     treatment was kit drift.)
  *
  * Layout:
  *
- *   ┌── pl-6 ──┬──────────┬─── flex-1 ────┬──────────┬──────────┬──────────┐
- *   │ leading  │  id      │  title        │  stage   │  part    │ trailing │
- *   └──────────┴──────────┴───────────────┴──────────┴──────────┴──────────┘
+ *   ┌─ pl-3 ─┬────────┬─── flex-1 ───┬──────────┬──────────┬──────────┐
+ *   │ select │  id    │  title       │  owner   │  stage   │  date    │
+ *   └────────┴────────┴──────────────┴──────────┴──────────┴──────────┘
  *
- * Column components encode token choices so callers can't drift:
+ * Column components encode token choices so callers can't drift. The real
+ * vista is PLAINER than this composite used to be — the only colour is the
+ * ObjectId badge and a tiny stage icon; everything else is neutral text.
  *   - <VistaRow.Priority value="P0" /> — Tag, intent mapped from P0..P3.
- *   - <VistaRow.Id>ISS-4231</VistaRow.Id> — tinted info Tag with mono font.
+ *     (Priority is per-view; many vistas don't show it.)
+ *   - <VistaRow.Id>ENH-7267</VistaRow.Id> — ObjectId badge: soft type-tinted
+ *     pill (default success/green; pass `intent` for issues=info, etc.).
+ *     ChipText, NOT mono, NOT a blue Tag.
  *   - <VistaRow.Title>…</VistaRow.Title> — truncating body-small-prominent.
- *   - <VistaRow.Stage tone="info">In development</VistaRow.Stage> — tinted
- *     Tag using the tone→intent mapping (see below).
- *   - <VistaRow.Part>Identity / SSO</VistaRow.Part> — text-body-small
- *     medium fg.
+ *   - <VistaRow.Stage>Ideation</VistaRow.Stage> — small status icon + PLAIN
+ *     neutral text. NOT a colored tag. Pass `icon` to override the glyph.
+ *   - <VistaRow.Part>Identity / SSO</VistaRow.Part> — text-body-small medium fg.
  *   - <VistaRow.Owner name="Priya Shah" /> — Avatar + name.
- *   - <VistaRow.Tags tags={["regression", "enterprise"]} /> — row of
- *     neutral tinted Tags.
- *   - <VistaRow.Updated>2h ago</VistaRow.Updated> — text-caption subtle.
- *
- * Stage tone → Tag intent mapping:
- *   triage     → warning   (yellow)
- *   dev        → info      (blue)
- *   review     → intelligence (purple)
- *   queued     → neutral   (gray)
- *   done       → success   (green)
- *   blocked    → alert     (red)
+ *   - <VistaRow.Tags tags={["regression", "enterprise"]} /> — neutral tinted Tags.
+ *   - <VistaRow.Updated>May 27, 2026</VistaRow.Updated> — text-caption subtle.
  *
  * Intentional opinions:
- * - The row is `items-center`, not `items-baseline`. Baseline alignment
- *   looks broken when cells mix Tags (height 24) with plain text (h~18).
+ * - The row is `items-center`, not `items-baseline`.
  * - The row does NOT own its columns' widths. Callers decide: most vista
  *   tables use `w-24` for ID, `flex-1 min-w-0` for Title, `w-40` for
  *   Stage/Part/Owner, `w-28` for Updated. Header cells use the same widths.
- * - The HeaderCell subcomponent exists because the column header has the
- *   same width+padding invariants as the row cell — pairing them here
- *   keeps them from drifting apart.
+ * - The HeaderCell subcomponent shares the row cell's width+padding
+ *   invariants so header and body columns stay aligned.
  *
  * @counterexample Do NOT use `arcade.Table` for a vista list view — it's a generic data table and won't produce the DevRev vista row shape.
- * @counterexample Do NOT hand-roll `<div className="flex items-center h-11 …">` rows. Use `<VistaRow>` and the column primitives so every vista looks identical.
- * @counterexample For the Priority column, use `<VistaRow.Priority value="P0" />` — don't render a colored dot + label yourself. The composite maps P0/P1/P2/P3 to Tag intents for you.
- * @counterexample For the Stage column, use `<VistaRow.Stage tone="dev">…</VistaRow.Stage>` with the tone alias (triage/dev/review/queued/done/blocked). Don't pass a raw Tag intent — the tone mapping encodes DevRev's stage-color convention.
+ * @counterexample Do NOT hand-roll `<div className="flex items-center h-12 …">` rows. Use `<VistaRow>` and the column primitives so every vista looks identical.
+ * @counterexample Do NOT render the Stage column as a colored Tag — the real app shows a small status icon + plain neutral text. Use `<VistaRow.Stage>`.
+ * @counterexample Do NOT render the ID as a blue mono Tag — it's a soft type-tinted ObjectId badge (green for enhancements). Use `<VistaRow.Id>` and pass `intent` for the object type.
  */
 import type { ReactNode } from "react";
-import { Avatar, Tag, type TagIntent } from "@xorkavi/arcade-gen";
+import { Avatar, Tag, ClockWithDashedOutline, type TagIntent } from "@xorkavi/arcade-gen";
 
 /* ─── Root ──────────────────────────────────────────────────────────────── */
 
@@ -72,7 +67,7 @@ function Root({ children, onClick }: RootProps) {
     <div
       role="row"
       onClick={onClick}
-      className="flex items-center h-11 pl-6 pr-4 border-b border-(--stroke-neutral-subtle) hover:bg-(--control-bg-neutral-subtle-hover) cursor-pointer"
+      className="flex items-center h-12 pl-3 pr-3 border-b border-(--stroke-neutral-subtle) hover:bg-(--control-bg-neutral-subtle-hover) cursor-pointer"
     >
       {children}
     </div>
@@ -89,7 +84,7 @@ function Header({ children }: HeaderProps) {
   return (
     <div
       role="row"
-      className="flex items-center h-9 pl-6 pr-4 border-b border-(--stroke-neutral-subtle) bg-(--surface-overlay) sticky top-0 z-10"
+      className="flex items-center h-8 pl-3 pr-3 border-b border-(--stroke-neutral-subtle) bg-(--surface-overlay) sticky top-0 z-10"
     >
       {children}
     </div>
@@ -106,7 +101,7 @@ function HeaderCell({ children, className = "" }: HeaderCellProps) {
     <div
       role="columnheader"
       className={[
-        "px-3 text-caption uppercase tracking-wider text-(--fg-neutral-subtle) shrink-0 truncate",
+        "px-2 text-system-small text-(--fg-neutral-subtle) shrink-0 truncate",
         className,
       ].join(" ")}
     >
@@ -178,7 +173,7 @@ const PRIORITY_INTENT: Record<PriorityValue, TagIntent> = {
 
 function Priority({ value }: { value: PriorityValue }) {
   return (
-    <div className="w-12 px-3 shrink-0">
+    <div className="w-12 px-2 shrink-0">
       <Tag intent={PRIORITY_INTENT[value]} appearance="tinted">
         {value}
       </Tag>
@@ -186,18 +181,36 @@ function Priority({ value }: { value: PriorityValue }) {
   );
 }
 
+/**
+ * Id — the DevRev "ObjectId" badge. A soft type-tinted pill (NOT a mono
+ * Tag): enhancements render green, issues blue, tickets etc. their own
+ * tint. Matches the live app: ChipText (not mono), 11px, radius-4, tight
+ * 0/4px padding, subtle 10%-alpha background. `intent` picks the tint;
+ * default `success` (enhancement-green) since that's the canonical demo.
+ */
 function Id({
   children,
+  intent = "success",
   className = "w-24",
 }: {
   children: ReactNode;
+  intent?: "success" | "info" | "warning" | "intelligence" | "neutral";
   className?: string;
 }) {
+  const TINT: Record<string, string> = {
+    success: "bg-(--bg-success-subtle) text-(--fg-success-prominent)",
+    info: "bg-(--bg-info-subtle) text-(--fg-info-prominent)",
+    warning: "bg-(--bg-warning-subtle) text-(--fg-warning-prominent)",
+    intelligence: "bg-(--bg-intelligence-subtle) text-(--fg-intelligence-prominent)",
+    neutral: "bg-(--bg-neutral-subtle) text-(--fg-neutral-prominent)",
+  };
   return (
-    <div className={`px-3 shrink-0 ${className}`}>
-      <Tag intent="info" appearance="tinted">
-        <span className="font-mono">{children}</span>
-      </Tag>
+    <div className={`px-2 shrink-0 ${className}`}>
+      <span
+        className={`inline-flex items-center rounded-square px-1 text-caption ${TINT[intent]}`}
+      >
+        {children}
+      </span>
     </div>
   );
 }
@@ -210,7 +223,7 @@ function Title({
   subtitle?: ReactNode;
 }) {
   return (
-    <div className="flex-1 min-w-0 px-3 flex items-center gap-2">
+    <div className="flex-1 min-w-0 px-2 flex items-center gap-2">
       <span className="text-body-small text-(--fg-neutral-prominent) truncate">
         {children}
       </span>
@@ -231,29 +244,32 @@ type StageTone =
   | "done"
   | "blocked";
 
-const STAGE_INTENT: Record<StageTone, TagIntent> = {
-  triage: "warning",
-  dev: "info",
-  review: "intelligence",
-  queued: "neutral",
-  done: "success",
-  blocked: "alert",
-};
-
+/**
+ * Stage — small status icon + PLAIN neutral text. The live DevRev vista
+ * does NOT render stage as a colored tag (that was kit drift); it shows a
+ * tiny status glyph followed by the stage name in neutral text. The `tone`
+ * prop is accepted for API compatibility but no longer drives a tag colour;
+ * pass a custom `icon` to override the default clock glyph.
+ */
 function Stage({
-  tone,
   children,
+  icon,
   className = "w-40",
 }: {
-  tone: StageTone;
+  /** Accepted for back-compat; no longer maps to a tag colour. */
+  tone?: StageTone;
   children: ReactNode;
+  icon?: ReactNode;
   className?: string;
 }) {
   return (
-    <div className={`px-3 shrink-0 ${className}`}>
-      <Tag intent={STAGE_INTENT[tone]} appearance="tinted">
-        {children}
-      </Tag>
+    <div
+      className={`px-2 shrink-0 flex items-center gap-1.5 min-w-0 text-body-small text-(--fg-neutral-prominent) ${className}`}
+    >
+      <span className="shrink-0 text-(--fg-neutral-subtle) flex items-center">
+        {icon ?? <ClockWithDashedOutline size={14} />}
+      </span>
+      <span className="truncate">{children}</span>
     </div>
   );
 }
@@ -267,7 +283,7 @@ function Part({
 }) {
   return (
     <div
-      className={`px-3 shrink-0 text-body-small text-(--fg-neutral-medium) truncate ${className}`}
+      className={`px-2 shrink-0 text-body-small text-(--fg-neutral-medium) truncate ${className}`}
     >
       {children}
     </div>
@@ -285,7 +301,7 @@ function Owner({
 }) {
   return (
     <div
-      className={`px-3 shrink-0 flex items-center gap-2 min-w-0 ${className}`}
+      className={`px-2 shrink-0 flex items-center gap-2 min-w-0 ${className}`}
     >
       <Avatar name={name} src={src} size="sm" />
       <span className="text-body-small text-(--fg-neutral-prominent) truncate">
@@ -304,7 +320,7 @@ function Tags({
 }) {
   return (
     <div
-      className={`px-3 shrink-0 flex items-center gap-1 flex-wrap ${className}`}
+      className={`px-2 shrink-0 flex items-center gap-1 flex-wrap ${className}`}
     >
       {tags.map((t) => {
         const label = typeof t === "string" ? t : t.label;
@@ -328,7 +344,7 @@ function Updated({
 }) {
   return (
     <div
-      className={`px-3 shrink-0 text-caption text-(--fg-neutral-subtle) truncate ${className}`}
+      className={`px-2 shrink-0 text-caption text-(--fg-neutral-subtle) truncate ${className}`}
     >
       {children}
     </div>

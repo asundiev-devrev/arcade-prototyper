@@ -23,6 +23,7 @@ const PLAIN_NOUN_ICON_NAMES = new Set<string>([
   "Bell",
   "ChatBubbles",
   "Clock",
+  "ClockWithDashedOutline",
   "Computer",
   "Document",
   "DotInLeftWindow",

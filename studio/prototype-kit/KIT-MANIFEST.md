@@ -1171,56 +1171,51 @@ and a Tag in another; ID cells drifted between `text-system-small`,
 tinted Tag, and a soft Tag across frames generated against the same
 Figma source. This composite encodes the production row once.
 
-Live DOM reference (app.devrev.ai/…/vistas/…?view_type=table):
-  Row: h-11, border-b --stroke-neutral-subtle, hover --surface-overlay-hovered (in arcade-gen this is --control-bg-neutral-subtle-hover),
-    items-center
-  Column gap: the row has internal gap-0 — cells own their own px-3,
-    with a leading 24px left indent (pl-6) to align with the group header
+Live DOM reference (app.devrev.ai/devrev/views/… , verified 2026-06-03):
+  Row: h-12 (48px), border-b --stroke-neutral-subtle, hover
+    --control-bg-neutral-subtle-hover, items-center. Cells own px-2 with a
+    12px row inset (pl-3 pr-3). Cell text is 12px (text-body-small).
+  Header: h-8 (32px), text-system-small + --fg-neutral-subtle, NOT
+    uppercase. (The real app de-uppercased headers; the old caption/upper
+    treatment was kit drift.)
 
 Layout:
 
-  ┌── pl-6 ──┬──────────┬─── flex-1 ────┬──────────┬──────────┬──────────┐
-  │ leading  │  id      │  title        │  stage   │  part    │ trailing │
-  └──────────┴──────────┴───────────────┴──────────┴──────────┴──────────┘
+  ┌─ pl-3 ─┬────────┬─── flex-1 ───┬──────────┬──────────┬──────────┐
+  │ select │  id    │  title       │  owner   │  stage   │  date    │
+  └────────┴────────┴──────────────┴──────────┴──────────┴──────────┘
 
-Column components encode token choices so callers can't drift:
+Column components encode token choices so callers can't drift. The real
+vista is PLAINER than this composite used to be — the only colour is the
+ObjectId badge and a tiny stage icon; everything else is neutral text.
   - <VistaRow.Priority value="P0" /> — Tag, intent mapped from P0..P3.
-  - <VistaRow.Id>ISS-4231</VistaRow.Id> — tinted info Tag with mono font.
+    (Priority is per-view; many vistas don't show it.)
+  - <VistaRow.Id>ENH-7267</VistaRow.Id> — ObjectId badge: soft type-tinted
+    pill (default success/green; pass `intent` for issues=info, etc.).
+    ChipText, NOT mono, NOT a blue Tag.
   - <VistaRow.Title>…</VistaRow.Title> — truncating body-small-prominent.
-  - <VistaRow.Stage tone="info">In development</VistaRow.Stage> — tinted
-    Tag using the tone→intent mapping (see below).
-  - <VistaRow.Part>Identity / SSO</VistaRow.Part> — text-body-small
-    medium fg.
+  - <VistaRow.Stage>Ideation</VistaRow.Stage> — small status icon + PLAIN
+    neutral text. NOT a colored tag. Pass `icon` to override the glyph.
+  - <VistaRow.Part>Identity / SSO</VistaRow.Part> — text-body-small medium fg.
   - <VistaRow.Owner name="Priya Shah" /> — Avatar + name.
-  - <VistaRow.Tags tags={["regression", "enterprise"]} /> — row of
-    neutral tinted Tags.
-  - <VistaRow.Updated>2h ago</VistaRow.Updated> — text-caption subtle.
-
-Stage tone → Tag intent mapping:
-  triage     → warning   (yellow)
-  dev        → info      (blue)
-  review     → intelligence (purple)
-  queued     → neutral   (gray)
-  done       → success   (green)
-  blocked    → alert     (red)
+  - <VistaRow.Tags tags={["regression", "enterprise"]} /> — neutral tinted Tags.
+  - <VistaRow.Updated>May 27, 2026</VistaRow.Updated> — text-caption subtle.
 
 Intentional opinions:
-- The row is `items-center`, not `items-baseline`. Baseline alignment
-  looks broken when cells mix Tags (height 24) with plain text (h~18).
+- The row is `items-center`, not `items-baseline`.
 - The row does NOT own its columns' widths. Callers decide: most vista
   tables use `w-24` for ID, `flex-1 min-w-0` for Title, `w-40` for
   Stage/Part/Owner, `w-28` for Updated. Header cells use the same widths.
-- The HeaderCell subcomponent exists because the column header has the
-  same width+padding invariants as the row cell — pairing them here
-  keeps them from drifting apart.
+- The HeaderCell subcomponent shares the row cell's width+padding
+  invariants so header and body columns stay aligned.
 
 **Compound:** `VistaRow.Header`, `VistaRow.HeaderCell`, `VistaRow.GroupHeader`, `VistaRow.Select`, `VistaRow.Priority`, `VistaRow.Id`, `VistaRow.Title`, `VistaRow.Stage`, `VistaRow.Part`, `VistaRow.Owner`, `VistaRow.Tags`, `VistaRow.Updated`
 
 **When NOT to use this:**
 - Do NOT use `arcade.Table` for a vista list view — it's a generic data table and won't produce the DevRev vista row shape.
-- Do NOT hand-roll `<div className="flex items-center h-11 …">` rows. Use `<VistaRow>` and the column primitives so every vista looks identical.
-- For the Priority column, use `<VistaRow.Priority value="P0" />` — don't render a colored dot + label yourself. The composite maps P0/P1/P2/P3 to Tag intents for you.
-- For the Stage column, use `<VistaRow.Stage tone="dev">…</VistaRow.Stage>` with the tone alias (triage/dev/review/queued/done/blocked). Don't pass a raw Tag intent — the tone mapping encodes DevRev's stage-color convention.
+- Do NOT hand-roll `<div className="flex items-center h-12 …">` rows. Use `<VistaRow>` and the column primitives so every vista looks identical.
+- Do NOT render the Stage column as a colored Tag — the real app shows a small status icon + plain neutral text. Use `<VistaRow.Stage>`.
+- Do NOT render the ID as a blue mono Tag — it's a soft type-tinted ObjectId badge (green for enhancements). Use `<VistaRow.Id>` and pass `intent` for the object type.
 
 ## VistaToolbar (composite)
 _source: `composites/VistaToolbar.tsx`_

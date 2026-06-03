@@ -79,6 +79,7 @@ describe("mapping-table coverage", () => {
       "Bell",
       "ChatBubbles",
       "Clock",
+      "ClockWithDashedOutline",
       "Computer",
       "Document",
       "DotInLeftWindow",
