@@ -99,6 +99,20 @@ export async function runComputerTurn(
 
     if (!res.ok || !res.body) {
       const raw = await res.text();
+      // TEMP DIAGNOSTIC (debug branch): a 406/403 with an empty body is the
+      // signature of a gateway/WAF, not the DevRev app. Dump payload size +
+      // response headers so we can tell a size limit (H1) from content
+      // inspection / WAF XSS rule on raw JSX (H2). Remove before merge.
+      const headerDump: Record<string, string> = {};
+      res.headers.forEach((v, k) => { headerDump[k] = v; });
+      console.warn(
+        `[computer-diag] status=${res.status} statusText=${res.statusText}\n` +
+        `  requestBodyBytes=${Buffer.byteLength(JSON.stringify(body), "utf8")}\n` +
+        `  promptChars=${opts.prompt.length}\n` +
+        `  responseBodyBytes=${Buffer.byteLength(raw, "utf8")}\n` +
+        `  rawBody=${raw.slice(0, 600) || "(empty)"}\n` +
+        `  responseHeaders=${JSON.stringify(headerDump, null, 2)}`,
+      );
       const extracted = extractHttpError(raw);
       const shown = extracted ? `${extracted} | raw=${raw.slice(0, 300)}` : (raw.slice(0, 400) || res.statusText);
       opts.onEvent({

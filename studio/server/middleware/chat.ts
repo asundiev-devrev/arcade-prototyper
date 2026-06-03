@@ -9,6 +9,7 @@ import { readGlobalSettings } from "./settings";
 import { chatHistoryPath, lastErrorLogPath, lastStdoutLogPath, projectDir } from "../paths";
 import { runComputerTurn } from "../devrev/computerAgent";
 import { buildComputerContext } from "../devrev/computerContext";
+import { summarizeFrameSource } from "../frameSummary";
 import { runDriftCheck } from "../devrev/driftCheck";
 import { pendingObjections, markStaleByFrame } from "../chimeIns";
 import type { ChatMessage, ChimeIn } from "../types";
@@ -42,14 +43,20 @@ const COMPUTER_MENTION_GLOBAL = /@Computer\b\s*/gi;
 // #frame trigger is stripped from prompts for backward compatibility. Frame
 // sources are now always included in the Computer context (see runComputerBranch).
 const FRAME_TRIGGER_GLOBAL = /#frame\b\s*/gi;
-const FRAME_SOURCE_CHAR_BUDGET = 60_000;
+// Total char budget for all frame summaries sent to the Computer agent.
+// Summaries are tiny (components + visible text, not raw TSX), so this is a
+// safety cap, not the usual operating size. We summarize rather than ship raw
+// source because DevRev's execute-sync origin 406s on heavy/slow agent runs —
+// an 18KB raw-TSX payload triggered a ~21s run that the origin rejected.
+const FRAME_SUMMARY_CHAR_BUDGET = 12_000;
 
 /**
- * Read all frame `index.tsx` files for a project, concatenated as fenced
- * code blocks. Truncates with a budget so one huge frame can't blow past
- * the model's input limits. Returns an empty string if no frames exist.
+ * Read every frame's `index.tsx` and return a concatenated STRUCTURAL SUMMARY
+ * (imported composites + visible text per frame) — not the raw source. This is
+ * what the Computer agent receives as project context. Returns "" if no frames
+ * exist. See `frameSummary.ts` for why we summarize instead of sending code.
  */
-async function readFrameSources(slug: string): Promise<string> {
+async function readFrameSummaries(slug: string): Promise<string> {
   const framesDir = path.join(projectDir(slug), "frames");
   let entries: string[];
   try {
@@ -67,16 +74,13 @@ async function readFrameSources(slug: string): Promise<string> {
     const file = path.join(framesDir, name, "index.tsx");
     let src: string;
     try { src = await fs.readFile(file, "utf-8"); } catch { continue; }
-    const remaining = FRAME_SOURCE_CHAR_BUDGET - used;
-    if (remaining <= 0) {
-      parts.push(`\n\n[remaining frames omitted — char budget of ${FRAME_SOURCE_CHAR_BUDGET} reached]`);
+    const summary = summarizeFrameSource(name, src);
+    if (used + summary.length > FRAME_SUMMARY_CHAR_BUDGET) {
+      parts.push(`\n\n[remaining frame summaries omitted — budget reached]`);
       break;
     }
-    const body = src.length > remaining
-      ? `${src.slice(0, remaining)}\n\n[frame truncated — original was ${src.length} chars]`
-      : src;
-    parts.push(`\n\n### frame: ${name}\n\n\`\`\`tsx\n${body}\n\`\`\``);
-    used += body.length;
+    parts.push(`\n\n${summary}`);
+    used += summary.length;
   }
   return parts.join("");
 }
@@ -674,7 +678,7 @@ async function runClaudeBranch(ctx: {
         // shows up a few seconds later via the chime-ins poll. The trailing
         // .catch guarantees no unhandled rejection can escape even if the
         // promise chain throws before runDriftCheck's own try/catch runs.
-        void readFrameSources(slug)
+        void readFrameSummaries(slug)
           .then((frameSource) => runDriftCheck(slug, { frameSource, frameSlug: changedFrame }))
           .catch((err) => console.warn(`[studio] drift check rejected for ${slug}:`, err));
       }
@@ -718,10 +722,10 @@ async function runComputerBranch(ctx: {
   }
 
   // Build full project context for the summon: project summary + pending
-  // chime-ins + current frame source + recent chat history. The #frame
-  // trigger is now redundant for the in-view frames (always included) but
-  // we keep reading sources unconditionally so Computer always sees them.
-  const frameSource = await readFrameSources(slug);
+  // chime-ins + a structural summary of every frame + recent chat history.
+  // We send summaries (components + visible text), NOT raw TSX — raw source
+  // pushed agent/620 into a heavy run the execute-sync origin 406s on.
+  const frameSource = await readFrameSummaries(slug);
   const history = await readHistory(slug);
   const recentHistory = history.slice(-12).map((m) => ({ role: m.role, content: m.content }));
   const context = buildComputerContext({
