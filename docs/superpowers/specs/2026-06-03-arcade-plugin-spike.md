@@ -182,3 +182,40 @@ These only matter if the gate passes. Don't pre-solve them.
 
 Stages 0–1 alone (≈ one focused day) answer "does it have legs." Do those, report,
 then decide on 2–3.
+
+## Distribution finding (read of the aai repo, 2026-06-03)
+
+Resolved by reading the rest of `devrev/aai-custom-computer-capabilities`, not a
+spike. Answers "how does a built plugin reach other users."
+
+The repo has **two distribution worlds**, and they don't overlap:
+
+- **Tier 2 — snap-ins** (`2-computer-capabilities-snap-ins/`): DevRev's *real*
+  distribution platform — `devrev snap_in_package create-one` / `snap_in_version
+  create-one`, activate hooks, server-side, org-wide. Supported and shareable —
+  **but it's for server-side agent capabilities, not desktop Electron plugins.**
+- **Tier 3 — desktop plugins** (`3-computer-capabilities-nxt/`, our path): **no
+  formal distribution exists.** The reference plugin's own first-time-setup
+  (execution-graph SKILL.md) IS the mechanism:
+  1. the agent **`cp -R`'s the plugin folder** from a working dir to
+     `~/.devrev/plugins/<name>`,
+  2. runs `npm install` in place,
+  3. launches Electron.
+
+So "distributing" a desktop plugin = **the files must already be on the machine**,
+then the agent copies + installs them locally. There is no marketplace, no
+one-click install, no publish step. The reference plugin sidesteps the question
+entirely by living in its author's own chat workdir — it was never distributed,
+just run locally by the person who built it.
+
+**Implication:** the plugin builder solves *run a plugin locally*, NOT *get a
+plugin onto someone else's machine*. That delivery gap is exactly what Ribhu's
+**skill-publisher** does (publish files → discover in Computer → install). The two
+compose — see the combined architecture in the distribution doc
+(`2026-06-02-distributing-arcade-via-skill-publisher.md`).
+
+**Net for Option C dependencies:**
+- Build + run the plugin → **fully self-serve**, no Applied AI approval (their repo
+  is the open pattern you copy, not a gate).
+- Deliver the plugin to other users → **skill-publisher** (Ribhu), not Applied AI.
+- Applied AI involvement → effectively none required; they authored the pattern.

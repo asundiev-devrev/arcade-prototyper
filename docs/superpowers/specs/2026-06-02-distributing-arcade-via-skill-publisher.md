@@ -169,16 +169,68 @@ mostly removes the *core* team from the critical path.
 1. **Don't conflate the two products.** "Publish Arcade as a skill" is two
    different projects — the easy one (root skill, ship now) and the hard one
    (kit-backed Studio, blocked on hosting).
-2. **Spike the plugin path (C) first** — it's the one that could ship without the
-   core Computer team, and a small buildable test (see the spike spec,
-   `2026-06-03-arcade-plugin-spike.md`) settles whether it has legs. Do this before
-   committing to the hosting conversation.
+2. **Plugin path (C) is the front-runner — gate PASSED (2026-06-03).** The
+   compiler runs under Electron; distribution is solved by composing with
+   skill-publisher (see "Combined architecture"). No core Computer team needed.
+   The remaining work is packaging (esp. the private-kit-token problem), not
+   feasibility. This is now the recommended direction to build toward.
 3. **Take the hosting decision to the Computer runtime owner** for B as the
    fallback/parallel path: skill-publisher is the reason to decide, hosted-sidecar
    makes it a clean win — but it still needs core-team canvas wiring.
 4. **Spike Node-in-Computer-Bash** only if local-bootstrap (A) is seriously on
    the table — it's the single fact that kills or enables A. (Note: the plugin
    path C makes this moot, since the plugin brings its own Node.)
+
+## Combined architecture — skill-publisher delivers, plugin runs (Option C, end-state)
+
+Two spikes + two repo reads converge on one clean design. Each piece does the one
+thing it's good at; neither needs the core Computer team:
+
+```
+  ┌─ skill-publisher (Ribhu) ─────────┐     ┌─ desktop plugin (Applied AI pattern) ─┐
+  │ DELIVERY                          │     │ RUNTIME                                │
+  │ • user prompts "find arcade"      │     │ • self-installs: cp -R → ~/.devrev/    │
+  │ • discovers published article     │ ──▶ │   plugins/arcade + npm install         │
+  │ • article payload = the plugin    │     │ • runs packFromSource (compiler) — ✓   │
+  │   folder + bootstrap instructions │     │   proven under Electron ABI            │
+  │ • access control (me/team/org)    │     │ • renders prototype + comment bar in   │
+  │ • analytics: who installed        │     │   its own window (own Chromium)        │
+  └───────────────────────────────────┘     │ • file-bridge → sends comments back    │
+                                             │   to Computer to regenerate            │
+                                             └────────────────────────────────────────┘
+```
+
+**Why this is the strong end-state:**
+- **Delivery** (the gap the plugin builder punts on) ← skill-publisher's whole job:
+  publish once, anyone with access prompts Computer and gets it installed. Plus
+  access control + install analytics for free.
+- **Runtime** (the gap skill-publisher can't fill — it ships files, not a running
+  compiler) ← the plugin, which carries its own Node/Electron and runs the heavy
+  Tailwind+esbuild toolchain locally (Stage 1 proven).
+- **The loop** (comment → regenerate) ← the documented file bridge
+  (`~/.devrev/panel-bridge/`), a supported channel, not a hack.
+- **Core Computer team dependency: none.** Render is the plugin's own window
+  (bypasses the read-only canvas); delivery is skill-publisher; compile is local.
+
+**What still has to be built (the real work, all self-serve):**
+1. Package the compiler + **private-registry auth** (GitHub Packages token for
+   `@xorkavi/arcade-gen`) + **Studio source slices** (`prototype-kit/`,
+   `src/styles/`) into a portable plugin bundle. *(This is the bulk of it — see
+   spike spec Stage 0 findings.)*
+2. Scaffold the plugin per the builder SKILL.md (main.js, window, file bridge).
+3. Confirm skill-publisher can carry a plugin folder + run a bootstrap on install
+   (open q 8 — ask Ribhu).
+4. Decide how the private-registry token reaches each user's `npm install`
+   (the one genuinely thorny bit — a private kit + per-machine install don't love
+   each other; may need a pre-bundled `node_modules` in the published payload
+   instead of a live `npm install`).
+
+**The remaining hard problem isn't capability — it's the private kit.** Everything
+runs; the friction is that `@xorkavi/arcade-gen` is token-gated, so a per-machine
+`npm install` needs credentials. Likely answer: **pre-bundle** `node_modules` into
+the published plugin payload so the user's machine never authenticates to the
+registry. That keeps the kit's source closed while shipping the built artifact —
+worth validating early, it shapes the whole packaging step.
 
 ## Open questions
 
@@ -194,12 +246,21 @@ mostly removes the *core* team from the critical path.
    security scan. A skill that shells out to `pnpm install` + boots a Node server
    may trip it. Confirm an instruction-only / URL-only skill (Option B) passes
    clean — likely yes, since it carries no executable bootstrap.
-5. **(Option C)** Can one Electron plugin window both run `packFromSource` (the
-   compile) AND render the ~4MB interactive prototype cleanly? → the spike spec
-   `2026-06-03-arcade-plugin-spike.md`.
-6. **(Option C)** How is a *built* plugin distributed to other users — clone+run
-   per machine, or is there a publish/install path? Not documented in the builder
-   SKILL.md. (Ask Applied AI.) skill-publisher may layer on top.
-7. **(Option C)** Will the Applied AI team support a plugin that embeds a heavy
-   third-party build toolchain (Tailwind v4 + esbuild + the arcade kit), vs. the
-   light dashboards their examples show? (Ask Applied AI.)
+5. ~~**(Option C)** Can one Electron plugin both run `packFromSource` AND render
+   the prototype?~~ **RESOLVED — compile half PASSED (2026-06-03).** The compiler
+   (incl. native oxide + esbuild) runs under Electron 33's ABI with no rebuild,
+   386ms, valid HTML. Render half is routine Electron (same Chromium that already
+   rendered the published prototype), to confirm in Stage 2. See spike spec.
+6. ~~**(Option C)** How is a *built* plugin distributed to other users?~~
+   **RESOLVED (read of aai repo, 2026-06-03):** desktop plugins have **no formal
+   distribution** — the reference plugin's setup just `cp -R`s the folder to
+   `~/.devrev/plugins/` + `npm install` locally. Files must already be on the
+   machine. → delivery is **not** an Applied AI feature; it's exactly the gap
+   **skill-publisher** fills. See "Combined architecture" below.
+7. **(Option C, still open)** Will the Applied AI team support a plugin that embeds
+   a heavy build toolchain (Tailwind v4 + esbuild + arcade kit), vs. their light
+   dashboards? Less critical now — the pattern is open and self-serve, so this is
+   "will they help / bless it," not "can we do it." (Optional ask.)
+8. **(Combined)** Does skill-publisher's payload mechanism carry a **plugin folder
+   + bootstrap** (not just a skills-dir drop)? This is the same question as
+   open-q3, now load-bearing for the plugin-delivery architecture. (Ask Ribhu.)
