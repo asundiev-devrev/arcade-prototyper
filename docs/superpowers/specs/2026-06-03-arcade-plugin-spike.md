@@ -55,6 +55,34 @@ environment.
 > This isolates "does the packer stand alone" from "does it stand alone *inside
 > Electron*." If Stage 0 fails, Stage 1 can't pass — fix or report here.
 
+#### Stage 0 RESULT (run 2026-06-03): PASS, with two findings
+
+- **Core pass:** `packFromSource` runs under plain Node (via `tsx`, no Vite) and
+  emits valid self-contained HTML in ~390ms. The compiler does **not** depend on
+  Vite — foundational risk cleared.
+- **Finding 1 — the kit is private.** `@xorkavi/arcade-gen` is **not** on public
+  npm; it's on **GitHub Packages** (`@xorkavi:registry=https://npm.pkg.github.com`,
+  token-gated). A clean `npm install` 404s without an `.npmrc` + a packages token.
+  → Any plugin bundling the compiler needs **private-registry credentials at build
+  time**, and the install can't run on an arbitrary machine without them. Also note
+  a version trap: `^1.0.0` floats up to `1.1.1` which requires **React 19**; the
+  working repo pins `1.0.0` + React 18 — pin exact to reproduce.
+- **Finding 2 — the compiler reads Studio *source*, not just packages.**
+  `buildFrameBundle` reads three paths from the live repo tree, resolved relative
+  to its own file location:
+  - `studio/prototype-kit/` (composites/templates + `arcade-components.tsx` shim)
+  - `studio/src/styles/` (`tailwind.css` entry + `arcade-gen-patches.css`)
+  - `<repo>/node_modules` (for esbuild's resolution + `nodePaths` fallback)
+  → A portable bundle must **carry these source slices**, not just `node_modules`.
+  The real Option-C task is therefore: *package compiler + private-registry auth +
+  Studio source slices into a portable bundle* — a build-engineering job, bigger
+  than "drop the compiler in a plugin," but tractable.
+
+**Implication for Stage 1:** the in-Electron test must reproduce the isolated env
+(GH-packages `.npmrc` + token, exact kit `1.0.0`, React 18) AND point the bundler
+at the carried source slices (or run it against a copy of the repo tree). The
+native-ABI question (oxide/esbuild under Electron) is unchanged and remains the gate.
+
 ### Stage 1 — Compiler inside Electron's runtime (THE decisive stage)
 
 Scaffold a throwaway Electron app (copy the shape from `execution-graph/scripts/`:
