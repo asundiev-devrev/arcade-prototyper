@@ -120,6 +120,7 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
       THEME: input.theme,
       ARCADE: ARCADE_GEN_ROOT,
       PROTOTYPER: PROTOTYPER_ROOT,
+      GLOBAL_MEMORY: globalMemoryDir(),
     }));
     await fs.writeFile(chatHistoryPath(slug), "[]");
     await ensureMemoryStubs(projectMemoryDir(slug), "this project");
@@ -338,6 +339,7 @@ export async function refreshStaleClaudeMd(): Promise<number> {
       THEME: p.theme,
       ARCADE: ARCADE_GEN_ROOT,
       PROTOTYPER: PROTOTYPER_ROOT,
+      GLOBAL_MEMORY: globalMemoryDir(),
     });
     const file = path.join(projectDir(p.slug), "CLAUDE.md");
     let current = "";

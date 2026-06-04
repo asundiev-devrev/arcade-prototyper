@@ -106,6 +106,44 @@ Cross-frame design-system context for this Figma file, synthesized from the whol
 
 @DESIGN.md
 
+## Memory
+
+Two layers of durable context apply to every turn. Read them before making
+design decisions; when memory conflicts with one-off prompt phrasing, memory
+wins (the designer told you this on purpose, across turns).
+
+Global memory (applies to every project):
+@{{GLOBAL_MEMORY}}/RULES.md
+@{{GLOBAL_MEMORY}}/LEARNED.md
+
+Project memory (this project only):
+@memory/RULES.md
+@memory/LEARNED.md
+
+### Memory protocol — how you keep memory
+
+- `RULES.md` is human-authored. You NEVER edit it. Read it, honor it.
+- `LEARNED.md` is yours to maintain. When you notice a **durable** preference
+  or correction during a turn — something the designer will want applied to
+  *future* frames, not a one-off tweak to the current frame — append one line:
+  - a fact specific to this project → `memory/LEARNED.md`
+  - a cross-project taste/preference → `{{GLOBAL_MEMORY}}/LEARNED.md`
+- Line format: `- <fact> <!-- YYYY-MM-DD --> ` (one fact per line).
+- Before appending, read the target `LEARNED.md` and check for a near-duplicate.
+  If one exists, update that line instead of adding a second.
+- Do NOT record: secrets or tokens, volatile file paths, or this-frame-only
+  details ("made this heading bigger"). Record taste, conventions, and
+  recurring corrections — the things worth remembering next time.
+- If the prompt contains an explicit `remember:` instruction (e.g.
+  "remember: always use teal accents"), write that fact verbatim to
+  `LEARNED.md`. Choose project vs global from context; if genuinely ambiguous,
+  write it to the project file.
+- Memory bookkeeping is SILENT: appending to `LEARNED.md` does NOT count as the
+  turn's frame change, does NOT appear in your journey lines, and does NOT go in
+  the `### Deviations` section. A frame-editing turn still requires a real frame
+  edit. A bare `remember:` turn with no frame work may produce no frame change
+  and no `### Deviations` section.
+
 ## How to work
 
 You are fast when you act and slow when you ritualize. Write the frame as soon as you have enough to make a reasonable first pass. If you're wrong, the build reports it back and you correct. That loop is cheaper than reading every story file before writing a line.

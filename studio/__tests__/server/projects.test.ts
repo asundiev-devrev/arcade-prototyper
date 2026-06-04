@@ -306,6 +306,24 @@ describe("project memory seeding", () => {
   });
 });
 
+describe("CLAUDE.md memory imports", () => {
+  it("renders the four memory @import lines with a resolved global path", async () => {
+    await createProject({ name: "Mem Imports", theme: "arcade", mode: "light" });
+    const md = fs.readFileSync(
+      path.join(tmp, "projects", "mem-imports", "CLAUDE.md"),
+      "utf-8",
+    );
+    // Project-relative imports
+    expect(md).toContain("@memory/RULES.md");
+    expect(md).toContain("@memory/LEARNED.md");
+    // Global imports resolved to an absolute path under the tmp studio root
+    expect(md).toContain(`@${path.join(tmp, "memory", "RULES.md")}`);
+    expect(md).toContain(`@${path.join(tmp, "memory", "LEARNED.md")}`);
+    // No unreplaced placeholder
+    expect(md).not.toContain("{{GLOBAL_MEMORY}}");
+  });
+});
+
 describe("refreshStaleClaudeMd backup behavior", () => {
   it("writes .bak with the prior contents before overwriting a stale CLAUDE.md", async () => {
     const p = await createProject({ name: "Backup", theme: "arcade", mode: "light" });
