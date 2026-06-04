@@ -2,9 +2,10 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { projectDir, projectsRoot, projectJsonPath, chatHistoryPath } from "./paths";
+import { projectDir, projectsRoot, projectJsonPath, chatHistoryPath, projectMemoryDir, globalMemoryDir } from "./paths";
 import { projectSchema, type Project, type Frame, type ChatMessage } from "./types";
 import { scaffoldDevRevHelper } from "./devrev/scaffoldHelper";
+import { ensureMemoryStubs } from "./memory";
 
 const STUDIO_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PROTOTYPER_ROOT = path.resolve(STUDIO_DIR, "..");
@@ -121,6 +122,7 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
       PROTOTYPER: PROTOTYPER_ROOT,
     }));
     await fs.writeFile(chatHistoryPath(slug), "[]");
+    await ensureMemoryStubs(projectMemoryDir(slug), "this project");
     await scaffoldDevRevHelper(slug);
     await scaffoldComputerReferenceFrame(dir);
   } catch (err) {
@@ -329,6 +331,8 @@ export async function refreshStaleClaudeMd(): Promise<number> {
   const ps = await listProjects();
   let refreshed = 0;
   for (const p of ps) {
+    // Backfill memory/ for projects created before the memory feature. Idempotent.
+    await ensureMemoryStubs(projectMemoryDir(p.slug), "this project");
     const rendered = renderTemplate(tpl, {
       PROJECT_NAME: p.name,
       THEME: p.theme,

@@ -285,6 +285,27 @@ describe("reconcileFrames", () => {
   });
 });
 
+describe("project memory seeding", () => {
+  it("createProject seeds memory/RULES.md + memory/LEARNED.md", async () => {
+    await createProject({ name: "Mem Proj", theme: "arcade", mode: "light" });
+    const memDir = path.join(tmp, "projects", "mem-proj", "memory");
+    expect(fs.existsSync(path.join(memDir, "RULES.md"))).toBe(true);
+    expect(fs.existsSync(path.join(memDir, "LEARNED.md"))).toBe(true);
+  });
+
+  it("refreshStaleClaudeMd backfills memory/ for a project lacking it", async () => {
+    await createProject({ name: "Old Proj", theme: "arcade", mode: "light" });
+    // Simulate a pre-feature project: delete its memory dir.
+    const memDir = path.join(tmp, "projects", "old-proj", "memory");
+    fs.rmSync(memDir, { recursive: true, force: true });
+    expect(fs.existsSync(memDir)).toBe(false);
+
+    await refreshStaleClaudeMd();
+    expect(fs.existsSync(path.join(memDir, "RULES.md"))).toBe(true);
+    expect(fs.existsSync(path.join(memDir, "LEARNED.md"))).toBe(true);
+  });
+});
+
 describe("refreshStaleClaudeMd backup behavior", () => {
   it("writes .bak with the prior contents before overwriting a stale CLAUDE.md", async () => {
     const p = await createProject({ name: "Backup", theme: "arcade", mode: "light" });
