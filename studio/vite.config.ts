@@ -41,6 +41,8 @@ import { kitManifestPlugin } from "./server/plugins/kitManifestPlugin";
 import { liftEmitPlugin } from "./server/plugins/liftEmitPlugin";
 import { attachBuildErrorReporter } from "./server/buildErrorReporter";
 import { refreshStaleClaudeMd } from "./server/projects";
+import { ensureMemoryStubs } from "./server/memory";
+import { globalMemoryDir } from "./server/paths";
 
 function apiPlugin(): import("vite").Plugin {
   return {
@@ -127,6 +129,8 @@ function apiPlugin(): import("vite").Plugin {
       })();
       void logVersionOnBoot();
       void cleanStaleStagingSessions();
+      void ensureMemoryStubs(globalMemoryDir(), "global")
+        .catch((err) => console.warn("[studio] global memory seed failed:", err));
       refreshStaleClaudeMd()
         .then((n) => { if (n > 0) console.log(`[studio] refreshed CLAUDE.md for ${n} project(s)`); })
         .catch((err) => console.warn("[studio] CLAUDE.md refresh failed:", err));
