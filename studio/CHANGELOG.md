@@ -8,6 +8,14 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.27.1] — 2026-06-04
+
+### Added
+- **Memory — Studio now remembers your preferences.** Two levels, both applied to every prototype you generate. **Global memory** carries your cross-project taste ("keep empty-state copy short", "I work mobile-first"); **project memory** holds facts specific to one project ("in our list views the Owner column comes second"). Each level has a hand-written rules file you control and a learned file the generator fills in on its own: when you correct it or state a lasting preference, it quietly remembers — and applies it next time without being reminded. You can also say `remember: …` in the chat to save something on the spot. Files live alongside your projects and are plain text, so you can read or prune them anytime.
+
+### Fixed
+- **A prompt that did nothing, every time.** If a project's saved chat session went missing (pruned, never synced, or the app moved machines), every prompt failed instantly and silently — you'd send a message and nothing happened. Studio now notices the dead session, quietly starts a fresh one, and carries on, so the turn actually runs.
+
 ## [0.27.0] — 2026-06-03
 
 ### Added
