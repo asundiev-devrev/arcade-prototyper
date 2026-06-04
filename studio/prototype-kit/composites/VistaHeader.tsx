@@ -47,13 +47,17 @@
  * @counterexample Do NOT wrap `actions` children in your own `<div className="flex gap-*">`. The composite applies the correct inter-icon spacing; your wrapper will either collapse it or double it.
  */
 import { cloneElement, isValidElement, type ReactElement, type ReactNode } from "react";
-import { Button, IconButton } from "@xorkavi/arcade-gen";
+import { Button, IconButton, Pencil } from "@xorkavi/arcade-gen";
 
 type VistaHeaderProps = {
   title: ReactNode;
   count?: ReactNode;
   actions?: ReactNode;
   primaryAction?: ReactNode;
+  /** Inline edit (pencil) affordance after the title — the real vista shows
+   *  it for an editable view name. Default true; pass false to hide. */
+  editable?: boolean;
+  onEdit?: () => void;
 };
 
 function Root({
@@ -61,13 +65,22 @@ function Root({
   count,
   actions,
   primaryAction,
+  editable = true,
+  onEdit,
 }: VistaHeaderProps) {
   return (
     <header className="flex items-center justify-between px-9 py-5 h-[72px] shrink-0">
-      <div className="flex items-baseline gap-1.5">
-        <h1 className="text-title-3 text-(--fg-neutral-prominent)">{title}</h1>
+      <div className="flex items-center gap-2">
+        {/* Real vista title is ~19px REGULAR weight, not the heavy title-3
+            default — font-normal restores ChipText 400 to match production. */}
+        <h1 className="text-title-3 font-normal text-(--fg-neutral-prominent)">{title}</h1>
         {count != null ? (
           <span className="text-body text-(--fg-neutral-subtle)">{count}</span>
+        ) : null}
+        {editable ? (
+          <IconButton variant="tertiary" size="sm" aria-label="Rename view" onClick={onEdit}>
+            <Pencil size={14} />
+          </IconButton>
         ) : null}
       </div>
       <div className="flex items-center gap-2">

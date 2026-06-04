@@ -1109,6 +1109,10 @@ type VistaHeaderProps = {
   count?: ReactNode;
   actions?: ReactNode;
   primaryAction?: ReactNode;
+  /** Inline edit (pencil) affordance after the title — the real vista shows
+   *  it for an editable view name. Default true; pass false to hide. */
+  editable?: boolean;
+  onEdit?: () => void;
 }
 ```
 

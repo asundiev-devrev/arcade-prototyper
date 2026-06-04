@@ -53,7 +53,7 @@
  * @counterexample Do NOT render the ID as a blue mono Tag — it's a soft type-tinted ObjectId badge (green for enhancements). Use `<VistaRow.Id>` and pass `intent` for the object type.
  */
 import type { ReactNode } from "react";
-import { Avatar, Tag, ClockWithDashedOutline, type TagIntent } from "@xorkavi/arcade-gen";
+import { Avatar, Tag, ClockWithDashedOutline, ChevronUpAndDownSmall, type TagIntent } from "@xorkavi/arcade-gen";
 
 /* ─── Root ──────────────────────────────────────────────────────────────── */
 
@@ -92,20 +92,26 @@ function Header({ children }: HeaderProps) {
 }
 
 type HeaderCellProps = {
-  children: ReactNode;
+  children?: ReactNode;
+  /** Show the sort affordance (↕) after the label — production marks
+   *  sortable columns (Stage, Created date, …) this way. */
+  sortable?: boolean;
   className?: string;
 };
 
-function HeaderCell({ children, className = "" }: HeaderCellProps) {
+function HeaderCell({ children, sortable, className = "" }: HeaderCellProps) {
   return (
     <div
       role="columnheader"
       className={[
-        "px-2 text-system-small text-(--fg-neutral-subtle) shrink-0 truncate",
+        "px-2 text-system-small text-(--fg-neutral-subtle) shrink-0 flex items-center gap-1",
         className,
       ].join(" ")}
     >
-      {children}
+      <span className="truncate">{children}</span>
+      {sortable ? (
+        <ChevronUpAndDownSmall size={14} className="shrink-0" />
+      ) : null}
     </div>
   );
 }
@@ -156,7 +162,7 @@ function Select({
         checked={checked}
         defaultChecked={defaultChecked}
         onChange={onChange ? (e) => onChange(e.currentTarget.checked) : undefined}
-        className="h-4 w-4 cursor-pointer accent-(--bg-info-prominent)"
+        className="h-4 w-4 cursor-pointer appearance-none rounded-square border border-(--stroke-neutral-subtle) bg-(--surface-overlay) checked:bg-(--bg-info-prominent) checked:border-(--bg-info-prominent)"
       />
     </div>
   );
@@ -266,7 +272,7 @@ function Stage({
     <div
       className={`px-2 shrink-0 flex items-center gap-1.5 min-w-0 text-body-small text-(--fg-neutral-prominent) ${className}`}
     >
-      <span className="shrink-0 text-(--fg-neutral-subtle) flex items-center">
+      <span className="shrink-0 flex items-center">
         {icon ?? <ClockWithDashedOutline size={14} />}
       </span>
       <span className="truncate">{children}</span>
@@ -344,7 +350,7 @@ function Updated({
 }) {
   return (
     <div
-      className={`px-2 shrink-0 text-caption text-(--fg-neutral-subtle) truncate ${className}`}
+      className={`px-2 shrink-0 text-body-small text-(--fg-neutral-prominent) truncate ${className}`}
     >
       {children}
     </div>
