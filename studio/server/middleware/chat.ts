@@ -696,7 +696,11 @@ async function runClaudeBranch(ctx: {
     }
   }
 
-  if (capturedSessionId && !project.sessionId) {
+  // Persist the session id when it's new OR when it changed — the latter
+  // happens when runClaudeTurnWithRetry recovers from a stale `--resume` by
+  // starting a fresh session. Without the `!==` check the dead id would stay
+  // in project.json and every subsequent turn would fail the same way.
+  if (capturedSessionId && capturedSessionId !== project.sessionId) {
     await updateProject(slug, { sessionId: capturedSessionId });
   }
 

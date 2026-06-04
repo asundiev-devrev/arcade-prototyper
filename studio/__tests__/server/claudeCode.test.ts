@@ -192,6 +192,80 @@ describe("runClaudeTurnWithRetry", () => {
     }
   });
 
+  it("recovers from a stale --resume session by retrying fresh", { timeout: 10_000 }, async () => {
+    // The fixture fails like the real CLI on a dangling --resume id (exit 1,
+    // "No conversation found..." on stderr) and succeeds when called fresh.
+    const spy = path.join(__dirname, "../fixtures/fake-claude-session-recovery.sh");
+    fs.chmodSync(spy, 0o755);
+    const events: any[] = [];
+    await runClaudeTurnWithRetry(
+      {
+        cwd: os.tmpdir(),
+        prompt: "hi",
+        bin: spy,
+        sessionId: "ghost-session-id",
+        onEvent: (e) => events.push(e),
+      },
+      { maxAttempts: 2 },
+    );
+    // The failing "No conversation found" end must be suppressed, not forwarded.
+    const ends = events.filter((e) => e.kind === "end");
+    expect(ends).toHaveLength(1);
+    expect(ends[0].ok).toBe(true);
+    // A fresh session id was captured on the recovery attempt.
+    expect(events.some((e) => e.kind === "session" && e.sessionId === "fresh-sess-002")).toBe(true);
+    // Recovery is announced to the user.
+    expect(events.some((e) => e.kind === "narration" && /fresh|resume/i.test(e.text))).toBe(true);
+  });
+
+  it("recovers from a malformed --resume id (different CLI phrasing)", { timeout: 10_000 }, async () => {
+    // Second known phrasing: a malformed id makes the CLI reject --resume with
+    // "requires a valid session ID" instead of "No conversation found". Same
+    // recovery path. Fixture mimics: fail on --resume, succeed fresh.
+    const spy = path.join(__dirname, "../fixtures/fake-claude-badresume.sh");
+    fs.writeFileSync(
+      spy,
+      `#!/usr/bin/env bash\nresume=""\nprev=""\nfor a in "$@"; do\n  if [ "$prev" = "--resume" ]; then resume="$a"; fi\n  prev="$a"\ndone\nif [ -n "$resume" ]; then\n  printf 'Error: --resume requires a valid session ID or session title when used with --print.\\n' >&2\n  exit 1\nfi\nprintf '{"type":"system","subtype":"init","session_id":"fresh-sess-003"}\\n'\nprintf '{"type":"result","subtype":"success"}\\n'\n`,
+      { mode: 0o755 },
+    );
+    const events: any[] = [];
+    try {
+      await runClaudeTurnWithRetry(
+        { cwd: os.tmpdir(), prompt: "hi", bin: spy, sessionId: "bad id", onEvent: (e) => events.push(e) },
+        { maxAttempts: 2 },
+      );
+      const ends = events.filter((e) => e.kind === "end");
+      expect(ends).toHaveLength(1);
+      expect(ends[0].ok).toBe(true);
+      expect(events.some((e) => e.kind === "session" && e.sessionId === "fresh-sess-003")).toBe(true);
+    } finally {
+      fs.rmSync(spy, { force: true });
+    }
+  });
+
+  it("does not loop forever if a fresh session also reports no conversation", { timeout: 10_000 }, async () => {
+    // Pathological: every invocation reports the stale-session error, even
+    // without --resume. Recovery must fire at most once, then surface the error.
+    const spy = path.join(__dirname, "../fixtures/fake-claude-always-noconv.sh");
+    fs.writeFileSync(
+      spy,
+      `#!/usr/bin/env bash\nprintf 'No conversation found with session ID: whatever\\n' >&2\nexit 1\n`,
+      { mode: 0o755 },
+    );
+    const events: any[] = [];
+    try {
+      await runClaudeTurnWithRetry(
+        { cwd: os.tmpdir(), prompt: "hi", bin: spy, sessionId: "ghost", onEvent: (e) => events.push(e) },
+        { maxAttempts: 2 },
+      );
+      const ends = events.filter((e) => e.kind === "end");
+      expect(ends.length).toBeGreaterThanOrEqual(1);
+      expect(ends[ends.length - 1].ok).toBe(false);
+    } finally {
+      fs.rmSync(spy, { force: true });
+    }
+  });
+
   it("does not emit the per-turn timeout end when deferred", async () => {
     // When deferTimeoutEnd is true (the mode the retry wrapper uses),
     // the per-turn runner must NOT emit an `end` event on timeout — the
