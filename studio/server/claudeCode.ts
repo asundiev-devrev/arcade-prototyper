@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseStreamLineAll, type StudioEvent } from "../src/lib/streamJson";
+import { globalMemoryDir } from "./paths";
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 // Prototyper root: contains studio/prototype-kit — where composites + templates live.
@@ -96,7 +97,7 @@ export async function runClaudeTurn(opts: RunTurnOptions): Promise<void> {
   //   - Project CLAUDE.md is read via `--add-dir <projectCwd>` below.
   // If we later need a specific plugin during generation we can opt it in
   // with `--plugin-dir` without giving up bare mode.
-  const addDirs = opts.addDirs ?? [PROTOTYPER_ROOT, ARCADE_GEN_ROOT];
+  const addDirs = opts.addDirs ?? [PROTOTYPER_ROOT, ARCADE_GEN_ROOT, globalMemoryDir()];
   // Model override. Resolution order:
   //   1. `opts.model` — per-turn override (chat middleware reads user's
   //      selection from settings.json).
@@ -316,30 +317,65 @@ export async function runClaudeTurnWithRetry(
   const stallMs = cfg.stallMs ?? 120_000;
   const userOnCrash = opts.onCrash;
   let capturedSessionId = opts.sessionId;
+  // One-shot guard: a stale `--resume <id>` (the session file was pruned,
+  // the machine moved, or CLAUDE.md refresh cleared it mid-flight) makes
+  // claude exit non-zero with "No conversation found with session ID: …".
+  // That kills the turn before the agent runs — the user sees nothing. We
+  // recover ONCE by dropping the dead id and re-spawning fresh. This is
+  // OUTSIDE the stall/timeout attempt budget so it can't compound, and it's
+  // one-shot so a fresh session that *also* reports the error (pathological)
+  // surfaces normally instead of looping.
+  let recoveredStaleSession = false;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     let didStall = false;
     let didTimeout = false;
+    let staleSession = false;
     await runClaudeTurn({
       ...opts,
       sessionId: capturedSessionId,
       stallMs,
       deferTimeoutEnd: true,
+      // Suppress the failing terminal `end` when we're going to recover from a
+      // stale session — the recovery attempt owns the real terminal event.
       onEvent: (ev) => {
         if (ev.kind === "session") capturedSessionId = ev.sessionId;
+        if (
+          ev.kind === "end" &&
+          !ev.ok &&
+          !recoveredStaleSession &&
+          capturedSessionId &&
+          isNoConversationError(ev.error)
+        ) {
+          staleSession = true;
+          return; // swallow; recovery attempt below emits the real end
+        }
         opts.onEvent(ev);
       },
       onCrash: (info) => {
         if (info.stalled) didStall = true;
         if (info.timedOut) didTimeout = true;
         // Only forward crash logs on the final attempt, or when the failure
-        // is not retryable (non-zero exit, not a stall, not a timeout).
+        // is not retryable (non-zero exit, not a stall, not a timeout). A
+        // recoverable stale-session crash is suppressed the same way.
         const retryable = info.stalled || info.timedOut;
-        if (!retryable || attempt === maxAttempts) {
-          userOnCrash?.(info);
-        }
+        if ((retryable || staleSession) && attempt !== maxAttempts) return;
+        if (staleSession && !recoveredStaleSession) return;
+        userOnCrash?.(info);
       },
     });
+    if (staleSession && !recoveredStaleSession) {
+      // Drop the dead session id and retry fresh, without consuming a
+      // stall/timeout attempt.
+      recoveredStaleSession = true;
+      capturedSessionId = undefined;
+      opts.onEvent({
+        kind: "narration",
+        text: "Couldn't resume the previous session — starting a fresh one and picking this up…",
+      });
+      attempt -= 1; // this iteration didn't count toward the budget
+      continue;
+    }
     if (!didStall && !didTimeout) return;
     if (attempt < maxAttempts) {
       opts.onEvent({
@@ -357,6 +393,25 @@ export async function runClaudeTurnWithRetry(
       opts.onEvent({ kind: "end", ok: false, error });
     }
   }
+}
+
+/**
+ * True when an error string means the stored `--resume <id>` is unusable, so
+ * the turn died before the agent ran. Two known phrasings, both surfaced to
+ * us as an `end` error (claude exits non-zero):
+ *   - "No conversation found with session ID: …" — a valid-format id whose
+ *     session file was pruned / never synced / the machine moved.
+ *   - "--resume requires a valid session ID or session title …" — a
+ *     malformed id (e.g. corrupted project.json).
+ * Either way the recovery is identical: drop the dead id, start fresh.
+ * Matched loosely because the CLI's exact phrasing drifts across versions.
+ */
+export function isNoConversationError(error: string | undefined): boolean {
+  if (!error) return false;
+  return (
+    /no conversation found/i.test(error) ||
+    /--resume requires a valid session/i.test(error)
+  );
 }
 
 function decoratePrompt(prompt: string, images?: string[]): string {
