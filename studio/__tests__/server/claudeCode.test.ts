@@ -140,6 +140,23 @@ describe("runClaudeTurn", () => {
       fs.rmSync(logFile, { force: true });
     }
   });
+
+  it("passes --add-dir for the global memory dir", async () => {
+    const spy = path.join(__dirname, "../fixtures/fake-claude-mem-spy.sh");
+    const logFile = path.join(os.tmpdir(), `claude-mem-${Date.now()}.log`);
+    fs.writeFileSync(spy, `#!/usr/bin/env bash\necho "$@" >> ${logFile}\nprintf '{"type":"result","subtype":"success"}\\n'\n`, { mode: 0o755 });
+    fs.writeFileSync(logFile, "");
+    process.env.ARCADE_STUDIO_ROOT = "/tmp/studio-mem-test";
+    try {
+      await runClaudeTurn({ cwd: os.tmpdir(), prompt: "hi", bin: spy, onEvent: () => {} });
+      const args = fs.readFileSync(logFile, "utf-8");
+      expect(args).toContain("--add-dir /tmp/studio-mem-test/memory");
+    } finally {
+      delete process.env.ARCADE_STUDIO_ROOT;
+      fs.rmSync(spy, { force: true });
+      fs.rmSync(logFile, { force: true });
+    }
+  });
 });
 
 describe("runClaudeTurnWithRetry", () => {

@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseStreamLineAll, type StudioEvent } from "../src/lib/streamJson";
+import { globalMemoryDir } from "./paths";
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 // Prototyper root: contains studio/prototype-kit — where composites + templates live.
@@ -96,7 +97,7 @@ export async function runClaudeTurn(opts: RunTurnOptions): Promise<void> {
   //   - Project CLAUDE.md is read via `--add-dir <projectCwd>` below.
   // If we later need a specific plugin during generation we can opt it in
   // with `--plugin-dir` without giving up bare mode.
-  const addDirs = opts.addDirs ?? [PROTOTYPER_ROOT, ARCADE_GEN_ROOT];
+  const addDirs = opts.addDirs ?? [PROTOTYPER_ROOT, ARCADE_GEN_ROOT, globalMemoryDir()];
   // Model override. Resolution order:
   //   1. `opts.model` — per-turn override (chat middleware reads user's
   //      selection from settings.json).
