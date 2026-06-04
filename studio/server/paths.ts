@@ -84,6 +84,25 @@ export function designMdPath(projectSlug: string): string {
 }
 
 /**
+ * Global memory directory — applies to every project. Holds RULES.md
+ * (human-authored standing instructions) + LEARNED.md (agent append-only
+ * cross-project facts). Sibling of projects/; granted to the generator
+ * subprocess via --add-dir so the agent can read AND append.
+ */
+export function globalMemoryDir(): string {
+  return path.join(studioRoot(), "memory");
+}
+
+/**
+ * Per-project memory directory. Same RULES.md + LEARNED.md shape as global,
+ * scoped to one project. Lives inside the project cwd so it's already
+ * readable/writable via the existing --add-dir opts.cwd.
+ */
+export function projectMemoryDir(projectSlug: string): string {
+  return path.join(projectDir(projectSlug), "memory");
+}
+
+/**
  * Per-project shared-state file written by the host's Share panel. Contains
  * the projectShareId and the current `shared_with` list. Recipients never
  * see this file — it lives in the host's project dir alongside `project.json`

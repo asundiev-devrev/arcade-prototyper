@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import path from "node:path";
 import os from "node:os";
-import { studioRoot, projectsRoot, projectDir, frameDir, designMdPath, multiplayerRoot, sessionsJsonPath } from "../../server/paths";
+import { studioRoot, projectsRoot, projectDir, frameDir, designMdPath, multiplayerRoot, sessionsJsonPath, globalMemoryDir, projectMemoryDir } from "../../server/paths";
 
 describe("paths", () => {
   it("studioRoot defaults to Application Support on darwin", () => {
@@ -51,5 +51,23 @@ describe("multiplayer paths", () => {
     process.env.ARCADE_STUDIO_ROOT = "/tmp/studio-test";
     expect(sessionsJsonPath()).toBe("/tmp/studio-test/multiplayer/sessions.json");
     delete process.env.ARCADE_STUDIO_ROOT;
+  });
+});
+
+describe("memory paths", () => {
+  it("globalMemoryDir sits inside studioRoot", () => {
+    process.env.ARCADE_STUDIO_ROOT = "/tmp/studio-test";
+    expect(globalMemoryDir()).toBe("/tmp/studio-test/memory");
+    delete process.env.ARCADE_STUDIO_ROOT;
+  });
+
+  it("projectMemoryDir nests under projectDir", () => {
+    expect(projectMemoryDir("my-project")).toBe(
+      path.join(projectsRoot(), "my-project", "memory"),
+    );
+  });
+
+  it("projectMemoryDir rejects invalid slugs", () => {
+    expect(() => projectMemoryDir("../etc")).toThrow(/Invalid slug/);
   });
 });
