@@ -16,14 +16,14 @@
  *
  * Typography is owned by this composite so callers can't drift:
  *   - Title renders at `text-title-3` with `--fg-neutral-prominent`.
- *   - Count renders at `text-body` with `--fg-neutral-subtle`.
+ *   - Count renders at `text-body-small` with `--fg-neutral-medium`.
  * Pass plain text / numbers as children — do NOT wrap in your own
  * `<span className="text-…">`, it will be overridden.
  *
  * Slots:
  * - `title` — the vista title. A string or inline node; wrapped in the
  *   composite's title-3 h1 automatically.
- * - `count` (optional) — item count; rendered with text-body + fg-neutral-subtle.
+ * - `count` (optional) — item count; rendered with text-body-small + fg-neutral-medium.
  *   **Pass the string the reference shows, verbatim** — `"165.1K"`, `"1.2M"`,
  *   `"16,538"`. Do NOT strip separators (`"16538"`), expand abbreviations
  *   (`"165100"`), or reformat. The count slot is display-only.
@@ -71,16 +71,18 @@ function Root({
   return (
     <header className="flex items-center justify-between px-9 py-5 h-[72px] shrink-0">
       <div className="flex items-center gap-2">
-        {/* Real vista title is ~19px REGULAR weight, not the heavy title-3
-            default — font-normal restores ChipText 400 to match production. */}
-        <h1 className="text-title-3 font-normal text-(--fg-neutral-prominent)">{title}</h1>
-        {count != null ? (
-          <span className="text-body text-(--fg-neutral-subtle)">{count}</span>
-        ) : null}
+        {/* Verified against the live vista: the title is 19px ChipText regular
+            (text-body-large), NOT the 22px Chip-DISPLAY of text-title-3. Using
+            the display face + larger size read as too heading-y vs production. */}
+        <h1 className="text-body-large text-(--fg-neutral-prominent)">{title}</h1>
+        {/* Production order: title → edit pencil → count. */}
         {editable ? (
           <IconButton variant="tertiary" size="sm" aria-label="Rename view" onClick={onEdit}>
             <Pencil size={14} />
           </IconButton>
+        ) : null}
+        {count != null ? (
+          <span className="text-body-small text-(--fg-neutral-medium)">{count}</span>
         ) : null}
       </div>
       <div className="flex items-center gap-2">

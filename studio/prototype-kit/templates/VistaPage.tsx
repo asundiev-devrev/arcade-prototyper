@@ -53,37 +53,94 @@ type VistaPageProps = {
 
   title: ReactNode;
   count?: ReactNode;
+  editable?: boolean;
+
+  /** Tab strip (left of the tab row), e.g. <VistaPage.Tabs>. Sits on the SAME
+   *  row as the toolbar — production puts tabs left, toolbar right. */
+  tabs?: ReactNode;
+  /** Toolbar icon-button cluster (search / sort / filter / more). Renders on
+   *  the RIGHT of the tab row. Pass <VistaHeader.Action … /> children. */
   actions?: ReactNode;
+  /** Primary CTA (e.g. + Issue), right-most on the tab row. */
   primaryAction?: ReactNode;
 
-  toolbarIcons?: ReactNode;
   filters?: ReactNode;
 
   children: ReactNode;
 };
 
-export function VistaPage({
+function Root({
   sidebar,
   title,
   count,
+  editable,
+  tabs,
   actions,
   primaryAction,
-  toolbarIcons,
   filters,
   children,
 }: VistaPageProps) {
   return (
     <AppShell sidebar={sidebar} sidebarWidth="256">
-      <VistaHeader
-        title={title}
-        count={count}
-        actions={actions}
-        primaryAction={primaryAction}
-      />
-      <VistaToolbar toolbarIcons={toolbarIcons} filters={filters} />
-      <div className="flex flex-grow min-h-0 border-t border-(--stroke-neutral-subtle)">
+      {/* Row 1: title + edit + count only. */}
+      <VistaHeader title={title} count={count} editable={editable} />
+
+      {/* Row 2: tabs (left) + toolbar/actions + primary CTA (right), on one
+          row — matches the live vista, where the toolbar lives with the tabs,
+          NOT in the title row. Bottom border under the whole row. */}
+      <div className="flex items-center justify-between px-9 shrink-0 border-b border-(--stroke-neutral-subtle)">
+        <div className="min-w-0">{tabs}</div>
+        <div className="flex items-center gap-2 shrink-0 py-2">
+          {actions != null ? (
+            <div className="flex items-center gap-0.5">{actions}</div>
+          ) : null}
+          {primaryAction}
+        </div>
+      </div>
+
+      {/* Row 3: filters. */}
+      {filters != null ? <VistaToolbar filters={filters} /> : null}
+
+      <div className="flex flex-grow min-h-0">
         {children}
       </div>
     </AppShell>
   );
 }
+
+/** Tab strip for the tab row. Children are <VistaPage.Tab>. */
+function Tabs({ children }: { children: ReactNode }) {
+  return <div className="flex items-center gap-5">{children}</div>;
+}
+
+/** A single tab. `active` underlines it and uses prominent text; inactive is
+ *  subtle. Matches the live vista's text-body-small tab treatment. */
+function Tab({
+  children,
+  active,
+  onClick,
+}: {
+  children: ReactNode;
+  active?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "relative py-3 text-body-small",
+        active
+          ? "font-medium text-(--fg-neutral-prominent)"
+          : "text-(--fg-neutral-subtle)",
+      ].join(" ")}
+    >
+      {children}
+      {active ? (
+        <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-(--fg-neutral-prominent)" />
+      ) : null}
+    </button>
+  );
+}
+
+export const VistaPage = Object.assign(Root, { Tabs, Tab });

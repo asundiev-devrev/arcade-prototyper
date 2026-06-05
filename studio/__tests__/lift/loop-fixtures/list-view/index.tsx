@@ -18,7 +18,7 @@ export default function TicketsList() {
           New ticket
         </Button>
       }
-      toolbarIcons={
+      actions={
         <IconButton variant="tertiary" size="sm" aria-label="Search">
           <MagnifyingGlass size={16} />
         </IconButton>

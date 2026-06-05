@@ -182,6 +182,7 @@ Slots:
 - `children` — body content; typically a <VistaGroupRail/> followed by
   a flex-1 table container.
 
+**Compound:** `VistaPage.Tabs`, `VistaPage.Tab`
 
 ```ts
 type VistaPageProps = {
@@ -189,10 +190,17 @@ type VistaPageProps = {
 
   title: ReactNode;
   count?: ReactNode;
+  editable?: boolean;
+
+  /** Tab strip (left of the tab row), e.g. <VistaPage.Tabs>. Sits on the SAME
+   *  row as the toolbar — production puts tabs left, toolbar right. */
+  tabs?: ReactNode;
+  /** Toolbar icon-button cluster (search / sort / filter / more). Renders on
+   *  the RIGHT of the tab row. Pass <VistaHeader.Action … /> children. */
   actions?: ReactNode;
+  /** Primary CTA (e.g. + Issue), right-most on the tab row. */
   primaryAction?: ReactNode;
 
-  toolbarIcons?: ReactNode;
   filters?: ReactNode;
 
   children: ReactNode;
@@ -1075,14 +1083,14 @@ The title and count sit on a shared baseline (matches the live
 
 Typography is owned by this composite so callers can't drift:
   - Title renders at `text-title-3` with `--fg-neutral-prominent`.
-  - Count renders at `text-body` with `--fg-neutral-subtle`.
+  - Count renders at `text-body-small` with `--fg-neutral-medium`.
 Pass plain text / numbers as children — do NOT wrap in your own
 `<span className="text-…">`, it will be overridden.
 
 Slots:
 - `title` — the vista title. A string or inline node; wrapped in the
   composite's title-3 h1 automatically.
-- `count` (optional) — item count; rendered with text-body + fg-neutral-subtle.
+- `count` (optional) — item count; rendered with text-body-small + fg-neutral-medium.
   **Pass the string the reference shows, verbatim** — `"165.1K"`, `"1.2M"`,
   `"16,538"`. Do NOT strip separators (`"16538"`), expand abbreviations
   (`"165100"`), or reformat. The count slot is display-only.
