@@ -24,27 +24,27 @@ function readStyleLike(s: StyleSnapshot): StyleLike {
   const g = (p: string) => s.getPropertyValue(p);
   return {
     display: g("display"),
-    flexDirection: g("flexDirection"),
-    columnGap: g("columnGap"),
-    rowGap: g("rowGap"),
-    paddingTop: g("paddingTop"),
-    paddingRight: g("paddingRight"),
-    paddingBottom: g("paddingBottom"),
-    paddingLeft: g("paddingLeft"),
-    alignItems: g("alignItems"),
-    marginLeft: g("marginLeft"),
+    flexDirection: g("flex-direction"),
+    columnGap: g("column-gap"),
+    rowGap: g("row-gap"),
+    paddingTop: g("padding-top"),
+    paddingRight: g("padding-right"),
+    paddingBottom: g("padding-bottom"),
+    paddingLeft: g("padding-left"),
+    alignItems: g("align-items"),
+    marginLeft: g("margin-left"),
   };
 }
 
 function elementStyle(s: StyleSnapshot, idx: TokenIndex): ElementStyle {
   const out: ElementStyle = {};
-  const bg = s.getPropertyValue("backgroundColor");
+  const bg = s.getPropertyValue("background-color");
   if (bg && !TRANSPARENT.has(bg.trim())) out.fill = resolveToken(idx, bg);
-  const radius = parseFloat(s.getPropertyValue("borderTopLeftRadius"));
+  const radius = parseFloat(s.getPropertyValue("border-top-left-radius"));
   if (Number.isFinite(radius) && radius > 0) out.cornerRadius = radius;
-  const strokeW = parseFloat(s.getPropertyValue("borderTopWidth"));
+  const strokeW = parseFloat(s.getPropertyValue("border-top-width"));
   if (Number.isFinite(strokeW) && strokeW > 0) {
-    out.stroke = { color: resolveToken(idx, s.getPropertyValue("borderTopColor")), width: strokeW };
+    out.stroke = { color: resolveToken(idx, s.getPropertyValue("border-top-color")), width: strokeW };
   }
   return out;
 }
@@ -63,10 +63,10 @@ function textNode(node: Element, s: StyleSnapshot, idx: TokenIndex, box: Box): S
     style: {
       characters: (node.textContent ?? "").trim(),
       color: resolveToken(idx, s.getPropertyValue("color")),
-      fontFamily: s.getPropertyValue("fontFamily"),
-      fontSize: parseFloat(s.getPropertyValue("fontSize")) || undefined,
-      fontWeight: parseFloat(s.getPropertyValue("fontWeight")) || undefined,
-      lineHeight: parseFloat(s.getPropertyValue("lineHeight")) || undefined,
+      fontFamily: s.getPropertyValue("font-family"),
+      fontSize: parseFloat(s.getPropertyValue("font-size")) || undefined,
+      fontWeight: parseFloat(s.getPropertyValue("font-weight")) || undefined,
+      lineHeight: parseFloat(s.getPropertyValue("line-height")) || undefined,
     },
     children: [],
   };
@@ -83,14 +83,17 @@ function walk(node: Element, ctx: Ctx): SljNode {
 
   const stamp = node.getAttribute("data-arcade-component");
   if (stamp) {
-    const source = (node.getAttribute("data-arcade-source") as
-      | "arcade/components"
-      | "arcade-prototypes") ?? "arcade/components";
+    const rawSource = node.getAttribute("data-arcade-source");
+    const source: "arcade/components" | "arcade-prototypes" =
+      rawSource === "arcade-prototypes" ? "arcade-prototypes" : "arcade/components";
     let props: Record<string, unknown> = {};
     const raw = node.getAttribute("data-arcade-props");
     if (raw) {
       try {
-        props = JSON.parse(raw) as Record<string, unknown>;
+        const parsed = JSON.parse(raw) as unknown;
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          props = parsed as Record<string, unknown>;
+        }
       } catch {
         props = {};
       }
