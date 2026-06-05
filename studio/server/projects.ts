@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { projectDir, projectsRoot, projectJsonPath, chatHistoryPath, projectMemoryDir, globalMemoryDir } from "./paths";
+import { projectDir, projectsRoot, projectJsonPath, chatHistoryPath, projectMemoryDir, globalMemoryDir, sharedDir } from "./paths";
 import { projectSchema, type Project, type Frame, type ChatMessage } from "./types";
 import { scaffoldDevRevHelper } from "./devrev/scaffoldHelper";
 import { ensureMemoryStubs } from "./memory";
@@ -125,6 +125,7 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
     await fs.writeFile(chatHistoryPath(slug), "[]");
     await ensureMemoryStubs(projectMemoryDir(slug), "this project");
     await scaffoldDevRevHelper(slug);
+    await scaffoldDevRevApiReference(slug);
     await scaffoldComputerReferenceFrame(dir);
   } catch (err) {
     await fs.rm(dir, { recursive: true, force: true });
@@ -175,6 +176,25 @@ async function scaffoldComputerReferenceFrame(dir: string): Promise<void> {
   const frameDir = path.join(dir, "frames", COMPUTER_REFERENCE_SLUG);
   await fs.mkdir(frameDir, { recursive: true });
   await fs.writeFile(path.join(frameDir, "index.tsx"), COMPUTER_REFERENCE_SOURCE);
+}
+
+/**
+ * Copy the DevRev API integration guide into the project's `shared/` so the
+ * agent can `Read shared/DEVREV-API.md` on demand. This content used to live
+ * inline in CLAUDE.md (~250 lines / ~7K tokens) and was loaded on EVERY turn
+ * even though it's only relevant when the designer asks for live DevRev data.
+ * Splitting it out keeps the always-loaded system prompt lean. The file is
+ * static (no template vars), so a plain copy suffices. Idempotent.
+ */
+async function scaffoldDevRevApiReference(slug: string): Promise<void> {
+  const src = path.resolve(STUDIO_DIR, "templates", "DEVREV-API.md");
+  const dest = path.join(sharedDir(slug), "DEVREV-API.md");
+  try {
+    await fs.mkdir(sharedDir(slug), { recursive: true });
+    await fs.copyFile(src, dest);
+  } catch (err) {
+    console.warn(`[projects] DEVREV-API.md scaffold skipped for ${slug}:`, err);
+  }
 }
 
 /**
@@ -334,6 +354,9 @@ export async function refreshStaleClaudeMd(): Promise<number> {
   for (const p of ps) {
     // Backfill memory/ for projects created before the memory feature. Idempotent.
     await ensureMemoryStubs(projectMemoryDir(p.slug), "this project");
+    // Backfill the DevRev API reference for projects created before it was
+    // split out of CLAUDE.md. Idempotent (plain copy, last write wins).
+    await scaffoldDevRevApiReference(p.slug);
     const rendered = renderTemplate(tpl, {
       PROJECT_NAME: p.name,
       THEME: p.theme,

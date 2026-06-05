@@ -21,25 +21,50 @@ function toolIcon(tool: string): string {
   return "•";
 }
 
-/** Render elapsed ms/s compactly. Re-renders itself on an interval while
- *  the call is still in-flight so the "N seconds" counter stays fresh. */
-function Elapsed({ startedAt, endedAt }: { startedAt: number; endedAt?: number }) {
+/** Format a millisecond span compactly: `200ms`, `1.3s`, `1m 5s`. */
+function formatMs(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  const s = ms / 1000;
+  if (s < 60) return `${s.toFixed(s < 10 ? 1 : 0)}s`;
+  const m = Math.floor(s / 60);
+  const rem = Math.round(s - m * 60);
+  return `${m}m ${rem}s`;
+}
+
+/** Render the call's position in the turn as an offset from turn start
+ *  (`+12s`, `+1m 5s`) — a velocity timeline: reading the column top-to-bottom
+ *  shows how far into the turn each step happened, and the gaps between rows
+ *  show how long each step took. Falls back to per-call DURATION when the
+ *  turn start time isn't known (e.g. replayed history without a header).
+ *
+ *  Re-renders on an interval while in-flight so the running row stays fresh. */
+function Elapsed({
+  startedAt,
+  endedAt,
+  turnStartedAt,
+}: {
+  startedAt: number;
+  endedAt?: number;
+  turnStartedAt?: number | null;
+}) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (endedAt) return;
     const id = window.setInterval(() => setNow(Date.now()), 500);
     return () => window.clearInterval(id);
   }, [endedAt]);
-  const ms = (endedAt ?? now) - startedAt;
-  if (ms < 1000) return <>{`${ms}ms`}</>;
-  const s = ms / 1000;
-  if (s < 60) return <>{`${s.toFixed(s < 10 ? 1 : 0)}s`}</>;
-  const m = Math.floor(s / 60);
-  const rem = Math.round(s - m * 60);
-  return <>{`${m}m ${rem}s`}</>;
+
+  // Offset mode: when this call STARTED, relative to the turn start. This is
+  // the velocity view the column is meant to convey.
+  if (turnStartedAt != null) {
+    const offset = Math.max(0, startedAt - turnStartedAt);
+    return <>{`+${formatMs(offset)}`}</>;
+  }
+  // Fallback: per-call duration (used when no turn-start anchor is available).
+  return <>{formatMs((endedAt ?? now) - startedAt)}</>;
 }
 
-function ActivityRow({ item }: { item: ChatTurnItem }) {
+function ActivityRow({ item, turnStartedAt }: { item: ChatTurnItem; turnStartedAt?: number | null }) {
   // Mid-turn narration and journey lines share tool-row visual treatment so
   // the activity stream reads as a single voice. The persisted assistant
   // bubble (rendered from history after the turn ends) keeps its own style.
@@ -109,7 +134,7 @@ function ActivityRow({ item }: { item: ChatTurnItem }) {
           fontVariantNumeric: "tabular-nums",
         }}
       >
-        <Elapsed startedAt={item.startedAt} endedAt={item.endedAt} />
+        <Elapsed startedAt={item.startedAt} endedAt={item.endedAt} turnStartedAt={turnStartedAt} />
       </span>
       {item.ok === undefined ? (
         <span aria-hidden style={{ opacity: 0.5, flexShrink: 0 }}>
@@ -301,7 +326,7 @@ export function MessageList({
           {liveProse.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 2, marginLeft: -16, marginRight: -16 }}>
               {liveProse.map((item, i) => (
-                <ActivityRow key={`p-${i}`} item={item} />
+                <ActivityRow key={`p-${i}`} item={item} turnStartedAt={turnStartedAt} />
               ))}
             </div>
           )}
@@ -312,7 +337,7 @@ export function MessageList({
           {hasActivity && !suppressActivity && (
             <div style={{ display: "flex", flexDirection: "column", gap: 2, marginLeft: -16, marginRight: -16 }}>
               {currentItems!.map((item, i) => (
-                <ActivityRow key={i} item={item} />
+                <ActivityRow key={i} item={item} turnStartedAt={turnStartedAt} />
               ))}
             </div>
           )}

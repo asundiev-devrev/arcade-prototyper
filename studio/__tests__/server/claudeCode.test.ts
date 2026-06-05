@@ -39,19 +39,120 @@ describe("runClaudeTurn", () => {
     expect(events[events.length - 1]).toMatchObject({ kind: "end", ok: false });
   });
 
-  it("passes --resume when sessionId is provided", async () => {
+  it("passes --resume when sessionId is a valid UUID", async () => {
     const spy = path.join(__dirname, "../fixtures/fake-claude-spy.sh");
     const logFile = path.join(os.tmpdir(), `claude-args-${Date.now()}.log`);
     fs.writeFileSync(spy, `#!/usr/bin/env bash\necho "$@" >> ${logFile}\nprintf '{"type":"result","subtype":"success"}\\n'\n`, { mode: 0o755 });
     fs.writeFileSync(logFile, "");
+    const validId = "ba74cafc-e4a7-4ae2-bc4a-1cb81c37b484";
     try {
-      await runClaudeTurn({ cwd: os.tmpdir(), prompt: "hi", bin: spy, sessionId: "abc", onEvent: () => {} });
+      await runClaudeTurn({ cwd: os.tmpdir(), prompt: "hi", bin: spy, sessionId: validId, onEvent: () => {} });
       const args = fs.readFileSync(logFile, "utf-8");
-      expect(args).toMatch(/--resume abc/);
+      expect(args).toMatch(new RegExp(`--resume ${validId}`));
       expect(args).toMatch(/--verbose/);
       expect(args).toMatch(/--dangerously-skip-permissions/);
       expect(args).toMatch(/--settings/);
       expect(args).toMatch(/blockImageReshape\.mjs/);
+    } finally {
+      fs.rmSync(spy, { force: true });
+      fs.rmSync(logFile, { force: true });
+    }
+  });
+
+  it("defaults --model to sonnet (does not inherit the user's global Opus pin)", async () => {
+    const spy = path.join(__dirname, "../fixtures/fake-claude-model-spy.sh");
+    const logFile = path.join(os.tmpdir(), `claude-model-${Date.now()}.log`);
+    fs.writeFileSync(spy, `#!/usr/bin/env bash\necho "$@" >> ${logFile}\nprintf '{"type":"result","subtype":"success"}\\n'\n`, { mode: 0o755 });
+    fs.writeFileSync(logFile, "");
+    const prevEnv = process.env.ARCADE_STUDIO_MODEL;
+    delete process.env.ARCADE_STUDIO_MODEL;
+    try {
+      // No opts.model and no env → must fall back to the sonnet default, NOT
+      // omit --model (which would let the subprocess inherit a global Opus pin).
+      await runClaudeTurn({ cwd: os.tmpdir(), prompt: "hi", bin: spy, onEvent: () => {} });
+      const args = fs.readFileSync(logFile, "utf-8");
+      expect(args).toMatch(/--model sonnet/);
+    } finally {
+      if (prevEnv !== undefined) process.env.ARCADE_STUDIO_MODEL = prevEnv;
+      fs.rmSync(spy, { force: true });
+      fs.rmSync(logFile, { force: true });
+    }
+  });
+
+  it("honors an explicit model pick (Settings dropdown) over the default", async () => {
+    const spy = path.join(__dirname, "../fixtures/fake-claude-model2-spy.sh");
+    const logFile = path.join(os.tmpdir(), `claude-model2-${Date.now()}.log`);
+    fs.writeFileSync(spy, `#!/usr/bin/env bash\necho "$@" >> ${logFile}\nprintf '{"type":"result","subtype":"success"}\\n'\n`, { mode: 0o755 });
+    fs.writeFileSync(logFile, "");
+    try {
+      await runClaudeTurn({ cwd: os.tmpdir(), prompt: "hi", bin: spy, model: "opus", onEvent: () => {} });
+      const args = fs.readFileSync(logFile, "utf-8");
+      expect(args).toMatch(/--model opus/);
+      expect(args).not.toMatch(/--model sonnet/);
+    } finally {
+      fs.rmSync(spy, { force: true });
+      fs.rmSync(logFile, { force: true });
+    }
+  });
+
+  it("injects the kit manifest via --append-system-prompt (cached region), not a CLAUDE.md import", async () => {
+    // The manifest must ride in the system-prompt region so it's prompt-cached
+    // across round-trips instead of re-created every call. We assert the flag
+    // is present and carries real manifest content (a known composite name).
+    const spy = path.join(__dirname, "../fixtures/fake-claude-manifest-spy.sh");
+    const logFile = path.join(os.tmpdir(), `claude-manifest-${Date.now()}.log`);
+    fs.writeFileSync(spy, `#!/usr/bin/env bash\necho "$@" >> ${logFile}\nprintf '{"type":"result","subtype":"success"}\\n'\n`, { mode: 0o755 });
+    fs.writeFileSync(logFile, "");
+    try {
+      await runClaudeTurn({ cwd: os.tmpdir(), prompt: "hi", bin: spy, onEvent: () => {} });
+      const args = fs.readFileSync(logFile, "utf-8");
+      expect(args).toMatch(/--append-system-prompt/);
+      // The real manifest names ComputerScene/ComputerPage among its entries.
+      expect(args).toMatch(/ComputerScene|ComputerPage|AppShell/);
+    } finally {
+      fs.rmSync(spy, { force: true });
+      fs.rmSync(logFile, { force: true });
+    }
+  });
+
+  it("isolates plugins WITHOUT --bare, so the Write tool stays enabled", async () => {
+    // Regression guard: claude CLI 2.1.x `--bare` strips the Write tool,
+    // forcing the agent into slow Bash heredocs. We must use the surgical
+    // isolation flags instead and never reintroduce --bare.
+    const spy = path.join(__dirname, "../fixtures/fake-claude-flags-spy.sh");
+    const logFile = path.join(os.tmpdir(), `claude-flags-${Date.now()}.log`);
+    fs.writeFileSync(spy, `#!/usr/bin/env bash\necho "$@" >> ${logFile}\nprintf '{"type":"result","subtype":"success"}\\n'\n`, { mode: 0o755 });
+    fs.writeFileSync(logFile, "");
+    try {
+      await runClaudeTurn({ cwd: os.tmpdir(), prompt: "hi", bin: spy, onEvent: () => {} });
+      const args = fs.readFileSync(logFile, "utf-8");
+      // The two isolation flags that replaced --bare without stripping Write
+      // or CLAUDE.md loading.
+      expect(args).toMatch(/--strict-mcp-config/);
+      expect(args).toMatch(/--exclude-dynamic-system-prompt-sections/);
+      // --setting-sources would disable CLAUDE.md loading — must NOT be passed.
+      expect(args).not.toMatch(/--setting-sources/);
+      // Write must be in the allowlist; --bare must be gone.
+      expect(args).toMatch(/--allowed-tools[ =].*Write/);
+      expect(args).not.toMatch(/--bare\b/);
+      // AskUserQuestion must be disallowed — headless turns can't answer it.
+      expect(args).toMatch(/--disallowed-tools[ =].*AskUserQuestion/);
+    } finally {
+      fs.rmSync(spy, { force: true });
+      fs.rmSync(logFile, { force: true });
+    }
+  });
+
+  it("drops --resume when sessionId is malformed (avoids a dead spawn)", async () => {
+    const spy = path.join(__dirname, "../fixtures/fake-claude-spy.sh");
+    const logFile = path.join(os.tmpdir(), `claude-args-bad-${Date.now()}.log`);
+    fs.writeFileSync(spy, `#!/usr/bin/env bash\necho "$@" >> ${logFile}\nprintf '{"type":"result","subtype":"success"}\\n'\n`, { mode: 0o755 });
+    fs.writeFileSync(logFile, "");
+    try {
+      // The real-world corruption that motivated the guard.
+      await runClaudeTurn({ cwd: os.tmpdir(), prompt: "hi", bin: spy, sessionId: "ghost-ef-0000-0000-0000-000000000000", onEvent: () => {} });
+      const args = fs.readFileSync(logFile, "utf-8");
+      expect(args).not.toMatch(/--resume/);
     } finally {
       fs.rmSync(spy, { force: true });
       fs.rmSync(logFile, { force: true });
@@ -203,7 +304,9 @@ describe("runClaudeTurnWithRetry", () => {
         cwd: os.tmpdir(),
         prompt: "hi",
         bin: spy,
-        sessionId: "ghost-session-id",
+        // A well-formed UUID whose session file was pruned — the real recovery
+        // case. (A malformed id is dropped before spawn, never reaching here.)
+        sessionId: "00000000-0000-4000-8000-000000000abc",
         onEvent: (e) => events.push(e),
       },
       { maxAttempts: 2 },
@@ -231,7 +334,7 @@ describe("runClaudeTurnWithRetry", () => {
     const events: any[] = [];
     try {
       await runClaudeTurnWithRetry(
-        { cwd: os.tmpdir(), prompt: "hi", bin: spy, sessionId: "bad id", onEvent: (e) => events.push(e) },
+        { cwd: os.tmpdir(), prompt: "hi", bin: spy, sessionId: "11111111-2222-4333-8444-555555555555", onEvent: (e) => events.push(e) },
         { maxAttempts: 2 },
       );
       const ends = events.filter((e) => e.kind === "end");

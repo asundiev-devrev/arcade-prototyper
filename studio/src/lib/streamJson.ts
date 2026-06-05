@@ -47,6 +47,22 @@ export type StudioEvent =
       filePath?: string;
       composites?: string[];
     }
+  | {
+      kind: "turn_metrics";
+      /** Wall-clock the CLI reports for the whole turn. */
+      durationMs?: number;
+      /** Time to first token — the silent-wait the user feels at turn start. */
+      ttftMs?: number;
+      /** Model round-trips the CLI made this turn (its `num_turns`). */
+      numTurns?: number;
+      /** Resolved model id (catches users silently on a slow model). */
+      model?: string;
+      inputTokens?: number;
+      outputTokens?: number;
+      cacheCreationTokens?: number;
+      cacheReadTokens?: number;
+      costUsd?: number;
+    }
   | { kind: "end"; ok: true }
   | { kind: "end"; ok: false; error: string; cancelled?: boolean };
 
@@ -280,6 +296,34 @@ function extractStringField(
   return allowOpen ? result : undefined;
 }
 
+/** Pull the per-turn telemetry out of a CLI `result` line into a
+ *  `turn_metrics` event. Defensive: every field is optional, since the CLI's
+ *  result shape can drift across versions and partial/error results may omit
+ *  usage. The model id is the first key of `modelUsage` (the CLI keys usage by
+ *  resolved model id, e.g. "us.anthropic.claude-sonnet-4-6"). */
+function extractTurnMetrics(ev: any): StudioEvent {
+  const u = ev?.usage ?? {};
+  let model: string | undefined;
+  if (ev?.modelUsage && typeof ev.modelUsage === "object") {
+    const keys = Object.keys(ev.modelUsage);
+    if (keys.length) model = keys[0];
+  }
+  const num = (v: unknown): number | undefined =>
+    typeof v === "number" && Number.isFinite(v) ? v : undefined;
+  return {
+    kind: "turn_metrics",
+    durationMs: num(ev?.duration_ms),
+    ttftMs: num(ev?.ttft_ms),
+    numTurns: num(ev?.num_turns),
+    model,
+    inputTokens: num(u?.input_tokens),
+    outputTokens: num(u?.output_tokens),
+    cacheCreationTokens: num(u?.cache_creation_input_tokens),
+    cacheReadTokens: num(u?.cache_read_input_tokens),
+    costUsd: num(ev?.total_cost_usd),
+  };
+}
+
 export function parseStreamLine(line: string): StudioEvent | null {
   const events = parseStreamLineAll(line);
   return events.length > 0 ? events[0] : null;
@@ -396,14 +440,20 @@ export function parseStreamLineAll(line: string): StudioEvent[] {
     // Before we honored `is_error`, the parser reported this as a
     // successful turn with no content, the UI stopped "Thinking…" and
     // showed nothing — the user had no idea their creds had expired.
+    // Surface the CLI's rich per-turn telemetry (ttft, duration, round-trips,
+    // token usage, cost, model) as a `turn_metrics` event BEFORE the terminal
+    // `end`. The server persists it; without this the data the CLI already
+    // computes is thrown away and every latency decision stays a guess.
+    const metrics = extractTurnMetrics(ev);
+
     if (ev.is_error) {
       const msg = typeof ev.result === "string" && ev.result.trim()
         ? ev.result
         : (ev.error ? String(ev.error) : "Agent returned an error.");
-      return [{ kind: "end", ok: false, error: msg }];
+      return [metrics, { kind: "end", ok: false, error: msg }];
     }
-    if (ev.subtype === "success") return [{ kind: "end", ok: true }];
-    return [{ kind: "end", ok: false, error: String(ev.error ?? "Agent error") }];
+    if (ev.subtype === "success") return [metrics, { kind: "end", ok: true }];
+    return [metrics, { kind: "end", ok: false, error: String(ev.error ?? "Agent error") }];
   }
 
   return [];

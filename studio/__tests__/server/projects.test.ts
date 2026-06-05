@@ -52,6 +52,9 @@ describe("projects CRUD", () => {
     expect(fs.existsSync(path.join(root, "frames"))).toBe(true);
     expect(fs.existsSync(path.join(root, "shared"))).toBe(true);
     expect(fs.existsSync(path.join(root, "chat-history.json"))).toBe(true);
+    // The DevRev API guide is scaffolded into shared/ so CLAUDE.md can point
+    // at it on demand instead of carrying ~250 lines inline every turn.
+    expect(fs.existsSync(path.join(root, "shared", "DEVREV-API.md"))).toBe(true);
   });
 
   it("lists projects sorted by updatedAt desc", async () => {

@@ -84,6 +84,16 @@ export function designMdPath(projectSlug: string): string {
 }
 
 /**
+ * Per-turn generation metrics log (JSONL, one row per turn). Lives at the
+ * studio root — a sibling of projects/, not inside it — so the project watcher
+ * ignores it and it survives project deletes. Written by the chat middleware,
+ * read by the metrics aggregator behind GET /api/metrics.
+ */
+export function metricsLogPath(): string {
+  return path.join(studioRoot(), "generation-metrics.jsonl");
+}
+
+/**
  * Global memory directory — applies to every project. Holds RULES.md
  * (human-authored standing instructions) + LEARNED.md (agent append-only
  * cross-project facts). Sibling of projects/; granted to the generator

@@ -104,6 +104,48 @@ describe("MessageList: journey items", () => {
     expect(row?.style.color).toBe("var(--fg-neutral-medium)");
   });
 
+  it("shows each tool call's OFFSET from turn start (velocity timeline), not per-call duration", () => {
+    const turnStart = 1_000_000;
+    const { container } = render(
+      <MessageList
+        history={[]}
+        turnStartedAt={turnStart}
+        currentItems={[
+          // started 12s into the turn, finished 1s later
+          { kind: "tool", tool: "Read", pretty: "Reading index.tsx", startedAt: turnStart + 12_000, endedAt: turnStart + 13_000 },
+          // started 90s into the turn
+          { kind: "tool", tool: "Write", pretty: "Writing index.tsx", startedAt: turnStart + 90_000, endedAt: turnStart + 90_300 },
+        ]}
+        busy
+        phase="running"
+        source="claude"
+      />,
+    );
+    const text = container.textContent ?? "";
+    // Offset display: +12s and +1m 30s (NOT the 1s / 300ms per-call durations).
+    expect(text).toContain("+12s");
+    expect(text).toContain("+1m 30s");
+    expect(text).not.toContain("300ms");
+  });
+
+  it("falls back to per-call duration when turnStartedAt is absent (replayed history)", () => {
+    const { container } = render(
+      <MessageList
+        history={[]}
+        currentItems={[
+          { kind: "tool", tool: "Read", pretty: "Reading", startedAt: 1_000_000, endedAt: 1_000_200 },
+        ]}
+        busy
+        phase="running"
+        source="claude"
+      />,
+    );
+    // No turn anchor → show the 200ms duration, no leading "+".
+    const text = container.textContent ?? "";
+    expect(text).toContain("200ms");
+    expect(text).not.toContain("+200ms");
+  });
+
   it("does not render computer-source narration as a ComputerMessage while busy", () => {
     // Mid-turn narration must flow through the activity stream, not collapse
     // into a <ComputerMessage> bubble. The persisted bubble takes over after

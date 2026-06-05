@@ -12,6 +12,7 @@ import { figmaMiddleware } from "./server/middleware/figma";
 import { uploadsMiddleware } from "./server/middleware/uploads";
 import { stagingUploadsMiddleware, cleanStaleStagingSessions } from "./server/middleware/stagingUploads";
 import { preflightMiddleware } from "./server/middleware/preflight";
+import { metricsMiddleware } from "./server/middleware/metrics";
 import { fontsMiddleware } from "./server/middleware/fonts";
 import { devrevMiddleware } from "./server/middleware/devrev";
 import { multiplayerMiddleware } from "./server/middleware/multiplayer";
@@ -67,6 +68,7 @@ function apiPlugin(): import("vite").Plugin {
       server.middlewares.use(thumbnailsMiddleware());
       server.middlewares.use(liftMiddleware());
       server.middlewares.use(preflightMiddleware());
+      server.middlewares.use(metricsMiddleware());
       server.middlewares.use(fontsMiddleware());
       server.middlewares.use(runtimeErrorMiddleware());
       attachBuildErrorReporter(server);

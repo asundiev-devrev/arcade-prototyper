@@ -72,6 +72,9 @@ vi.mock("@xorkavi/arcade-gen", async () => {
   return {
     IconButton: passthrough("button"),
     Tooltip: ({ children }: any) => React.createElement("div", null, children),
+    // Viewport calls useToast() at render; the mock must provide it or the
+    // whole ProjectDetail subtree throws "No useToast export".
+    useToast: () => ({ toast: () => {} }),
   };
 });
 

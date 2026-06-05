@@ -134,6 +134,83 @@ describe("figmaIngest (phase split)", () => {
   });
 });
 
+describe("figmaIngest (parallel phase-1 fetch)", () => {
+  it("runs getVariables and exportPng concurrently, not serially", async () => {
+    const order: string[] = [];
+    let varsResolve!: () => void;
+    const getVariables = vi.fn().mockImplementation(() => {
+      order.push("vars:start");
+      return new Promise((r) => { varsResolve = () => { order.push("vars:end"); r(null); }; });
+    });
+    const exportPng = vi.fn().mockImplementation(() => {
+      order.push("png:start");
+      return Promise.resolve({ path: "/tmp/shot.png", widthPx: 1, heightPx: 1 });
+    });
+    const deps = makeDeps({ getVariables, exportPng });
+    const ingest = createFigmaIngest(deps, { composites: [] });
+    const p = ingest.ingestPhase1("file", "1:2", "https://figma.com/design/file?node-id=1-2");
+    // Both must have STARTED before vars resolves — proves they overlap.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(order).toContain("vars:start");
+    expect(order).toContain("png:start");
+    varsResolve();
+    await p;
+  });
+});
+
+describe("figmaIngest (disk persistence)", () => {
+  it("hydrates from disk in a fresh instance (survives a restart)", async () => {
+    const fs = await import("node:fs");
+    const os = await import("node:os");
+    const path = await import("node:path");
+    const diskDir = fs.mkdtempSync(path.join(os.tmpdir(), "arcade-ingest-disk-"));
+    const url = "https://figma.com/design/file?node-id=1-2";
+
+    // First instance: real PNG file on disk so the existence guard passes.
+    const pngPath = path.join(diskDir, "shot.png");
+    fs.writeFileSync(pngPath, "x");
+    const deps1 = makeDeps({ exportPng: vi.fn().mockResolvedValue({ path: pngPath, widthPx: 1, heightPx: 1 }) });
+    const ingest1 = createFigmaIngest(deps1, { composites: [], diskDir });
+    await ingest1.ingest("file", "1:2", url);
+    // Let the fire-and-forget disk write settle.
+    await new Promise((r) => setTimeout(r, 20));
+
+    // Fresh instance with an EMPTY in-memory cache but the same diskDir.
+    const deps2 = makeDeps();
+    const ingest2 = createFigmaIngest(deps2, { composites: [], diskDir });
+    const hit = ingest2.getCached("file", "1:2");
+    expect(hit).toBeDefined();
+    expect(hit?.png?.path).toBe(pngPath);
+    // The fresh instance must NOT have called figmanage — it read from disk.
+    expect(deps2.getNode).not.toHaveBeenCalled();
+
+    fs.rmSync(diskDir, { recursive: true, force: true });
+  });
+
+  it("ignores a disk entry whose PNG file is gone", async () => {
+    const fs = await import("node:fs");
+    const os = await import("node:os");
+    const path = await import("node:path");
+    const diskDir = fs.mkdtempSync(path.join(os.tmpdir(), "arcade-ingest-disk-"));
+    const url = "https://figma.com/design/file?node-id=1-2";
+    const pngPath = path.join(diskDir, "gone.png");
+    fs.writeFileSync(pngPath, "x");
+    const deps1 = makeDeps({ exportPng: vi.fn().mockResolvedValue({ path: pngPath, widthPx: 1, heightPx: 1 }) });
+    const ingest1 = createFigmaIngest(deps1, { composites: [], diskDir });
+    await ingest1.ingest("file", "1:2", url);
+    await new Promise((r) => setTimeout(r, 20));
+    fs.rmSync(pngPath, { force: true }); // PNG export deleted out from under us
+
+    const deps2 = makeDeps();
+    const ingest2 = createFigmaIngest(deps2, { composites: [], diskDir });
+    const hit = ingest2.getCached("file", "1:2");
+    expect(hit).toBeDefined();
+    expect(hit?.png).toBeNull(); // dead path dropped, not handed to the agent
+
+    fs.rmSync(diskDir, { recursive: true, force: true });
+  });
+});
+
 describe("figmaIngest (real figmanage shape)", () => {
   it("unwraps { nodes: { <id>: { document } } } and produces a usable tree", async () => {
     const fs = await import("node:fs");

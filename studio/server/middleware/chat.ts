@@ -30,6 +30,7 @@ import {
   NO_CHANGES_TRAILER,
 } from "../frameChangeContract";
 import { recordChatEventForReplay, type ProjectRef } from "./chatRelayMirror";
+import { recordTurnMetric } from "../metrics";
 import { resolveDevuFromPat } from "../relay/auth";
 import { getDevRevPat } from "../secrets/keychain";
 import type { RelayEvent } from "../relay/types";
@@ -406,6 +407,11 @@ async function enrichPromptWithFigmaContext(
   const ingest = await getFigmaIngest();
   let result = ingest.getCached(parsed.fileId, parsed.nodeId);
   if (!result) {
+    // This fetch blocks turn start (3–15s on a cold Figma file). Tell the
+    // user immediately so the chat pane shows progress instead of a frozen
+    // "Working…" while figmanage + token resolve + PNG export run. Cheapest
+    // possible perceived-latency win on the worst dead-air path.
+    onNarration?.("Loading Figma design context…");
     // Wait for phase 1 (tree + tokens + PNG) only — typically 3–8s. Phase 2
     // (classifier) runs in the background and upgrades the cache in place
     // once done; the next turn on this URL will pick up composites for free.
@@ -554,6 +560,12 @@ async function runClaudeBranch(ctx: {
   const narrationTexts: string[] = [];
   const toolLabels: string[] = [];
   let pendingEnd: { ok: boolean; error?: string } | null = null;
+  // Telemetry captured across the turn — persisted as one metrics row at the
+  // end. The CLI's `turn_metrics` event carries ttft/duration/tokens/cost; the
+  // onCrash callback tells us whether a stall fired.
+  let lastMetrics: Extract<StudioEvent, { kind: "turn_metrics" }> | null = null;
+  let didStall = false;
+  let retries = 0;
 
   // Snapshot frame + shared files BEFORE the turn so we can detect whether
   // any file actually changed by the time the agent reports success. The
@@ -581,6 +593,13 @@ async function runClaudeBranch(ctx: {
         if (ev.kind === "session") capturedSessionId = ev.sessionId;
         if (ev.kind === "narration") narrationTexts.push(ev.text);
         if (ev.kind === "tool_call") toolLabels.push(ev.pretty);
+        if (ev.kind === "turn_metrics") {
+          // Keep the latest (a retried turn emits one per attempt; the last
+          // reflects the attempt that actually finished). Not forwarded to the
+          // stream — it's telemetry, not a UI event.
+          lastMetrics = ev;
+          return;
+        }
         if (ev.kind === "end") {
           // Claude CLI's terminal `end` drives the registry's end via the
           // return value below — don't forward it into the event stream, or
@@ -591,6 +610,8 @@ async function runClaudeBranch(ctx: {
         emit(ev);
       },
       onCrash: async (info) => {
+        if (info.stalled) didStall = true;
+        if (info.stalled || info.timedOut) retries += 1;
         const body = [
           `timestamp: ${new Date().toISOString()}`,
           `slug: ${slug}`,
@@ -627,6 +648,48 @@ async function runClaudeBranch(ctx: {
   }
 
   const endResult = pendingEnd ?? { ok: false, error: "Claude turn exited without reporting a result." };
+  // Telemetry: classify the turn (build/edit/none) + measure the frame it
+  // touched. Computed from the file snapshot regardless of narration so even a
+  // silent build is counted. Cheap (snapshot is ~1-2ms; one frame read).
+  let turnType: "build" | "edit" | "none" = "none";
+  let frameLines: number | undefined;
+  if (endResult.ok) {
+    try {
+      const afterForMetrics = await snapshotProjectFiles(projectDir(slug));
+      const d = diffSnapshots(beforeSnapshot, afterForMetrics);
+      const addedFrame = d.added.find((p) => /^frames\//.test(p));
+      const changedFrame = d.changed.find((p) => /^frames\//.test(p));
+      if (addedFrame) turnType = "build";
+      else if (changedFrame) turnType = "edit";
+      const touched = addedFrame ?? changedFrame;
+      if (touched) {
+        try {
+          const src = await fs.readFile(path.join(projectDir(slug), touched), "utf-8");
+          frameLines = src.split("\n").length;
+        } catch { /* frame vanished — leave frameLines undefined */ }
+      }
+    } catch { /* metrics classification is best-effort */ }
+  }
+  void recordTurnMetric({
+    at: new Date().toISOString(),
+    slug,
+    source: "claude",
+    ok: endResult.ok,
+    turnType,
+    frameLines,
+    stalled: didStall || undefined,
+    retries: retries || undefined,
+    promptChars: ctx.prompt.length,
+    durationMs: lastMetrics?.durationMs,
+    ttftMs: lastMetrics?.ttftMs,
+    numTurns: lastMetrics?.numTurns,
+    model: lastMetrics?.model,
+    inputTokens: lastMetrics?.inputTokens,
+    outputTokens: lastMetrics?.outputTokens,
+    cacheCreationTokens: lastMetrics?.cacheCreationTokens,
+    cacheReadTokens: lastMetrics?.cacheReadTokens,
+    costUsd: lastMetrics?.costUsd,
+  });
   if (endResult.ok) {
     // Enforce the deviations-section contract defined in templates/CLAUDE.md.tpl.
     // If the agent produced narration at all and that narration doesn't contain
@@ -810,6 +873,9 @@ export function mapStudioEventToRelayEvent(ev: StudioEvent, turnId: string): Rel
       return { type: "agent_event", turnId, event: ev };
     case "end":
       // Translated to turn_ended by the wrapper; don't double-emit.
+      return null;
+    case "turn_metrics":
+      // Host-side telemetry only — not mirrored to spectators.
       return null;
     default: {
       const _exhaustive: never = ev;

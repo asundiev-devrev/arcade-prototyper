@@ -6,6 +6,7 @@ import { resolveTokens } from "./figma/resolveTokens";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs/promises";
+import fsSync from "node:fs";
 import {
   exportNodePng,
   getNode as figmanageGetNode,
@@ -29,6 +30,12 @@ export interface IngestConfig {
   composites: string[];
   cacheCapacity?: number;
   cacheTtlMs?: number;
+  /** When set, IngestResults are persisted as JSON here so the cache survives
+   *  a Studio restart / a fresh project session. Omit (e.g. in unit tests) to
+   *  keep the cache purely in-memory. */
+  diskDir?: string;
+  /** TTL for the on-disk layer. Defaults to 1h. */
+  diskTtlMs?: number;
 }
 
 export interface FigmaIngest {
@@ -63,6 +70,13 @@ interface CacheEntry { value: IngestResult; expiresAt: number }
 export function createFigmaIngest(deps: IngestDeps, cfg: IngestConfig): FigmaIngest {
   const capacity = cfg.cacheCapacity ?? 32;
   const ttlMs = cfg.cacheTtlMs ?? 10 * 60 * 1000;
+  // Disk cache TTL is longer than the in-memory one: the point of the disk
+  // layer is to survive a Studio restart / a fresh project session, where the
+  // in-memory LRU is empty but the same Figma frame is being reopened. The
+  // PNG export is already on disk; persisting the JSON result beside it means
+  // reopening a project doesn't re-pay the 3–8s figmanage round-trip.
+  const diskTtlMs = cfg.diskTtlMs ?? 60 * 60 * 1000;
+  const diskDir = cfg.diskDir;
   const cache = new Map<string, CacheEntry>();
   const phase1Pending = new Map<string, Promise<IngestOutcome>>();
   const phase2Pending = new Map<string, Promise<void>>();
@@ -70,9 +84,25 @@ export function createFigmaIngest(deps: IngestDeps, cfg: IngestConfig): FigmaIng
 
   function cacheKey(fileKey: string, nodeId: string) { return `${fileKey}:${nodeId}`; }
 
+  function diskPathFor(key: string): string | null {
+    if (!diskDir) return null;
+    // key is `${fileKey}:${nodeId}` — sanitize for a filename.
+    const safe = key.replace(/[^A-Za-z0-9_-]/g, "_");
+    return path.join(diskDir, `${safe}.ingest.json`);
+  }
+
   function cacheGet(key: string): IngestResult | undefined {
     const e = cache.get(key);
-    if (!e) return undefined;
+    if (!e) {
+      // In-memory miss: try the disk layer (survives restarts / new sessions).
+      const hydrated = diskGet(key);
+      if (hydrated) {
+        // Promote into the in-memory LRU at the in-memory TTL.
+        cache.set(key, { value: hydrated, expiresAt: now() + ttlMs });
+        return hydrated;
+      }
+      return undefined;
+    }
     if (e.expiresAt < now()) { cache.delete(key); return undefined; }
     // Refresh LRU order.
     cache.delete(key); cache.set(key, e);
@@ -86,6 +116,41 @@ export function createFigmaIngest(deps: IngestDeps, cfg: IngestConfig): FigmaIng
       if (oldest === undefined) break;
       cache.delete(oldest);
     }
+    diskSet(key, value);
+  }
+
+  /** Read a persisted IngestResult from disk, honoring diskTtlMs. Synchronous
+   *  is intentional: cacheGet is called on the hot path and the file is tiny;
+   *  a sync read keeps the cache API non-async. Any error → treated as a miss. */
+  function diskGet(key: string): IngestResult | undefined {
+    const p = diskPathFor(key);
+    if (!p) return undefined;
+    try {
+      const raw = fsSync.readFileSync(p, "utf-8");
+      const parsed = JSON.parse(raw) as { savedAt: number; value: IngestResult };
+      if (!parsed?.savedAt || now() - parsed.savedAt > diskTtlMs) return undefined;
+      // Guard against a stale PNG path: if the export file is gone, drop the
+      // png reference rather than handing the agent a dead path.
+      if (parsed.value.png && !fsSync.existsSync(parsed.value.png.path)) {
+        parsed.value.png = null;
+      }
+      return parsed.value;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Persist an IngestResult to disk. Best-effort, fire-and-forget; a write
+   *  failure never blocks or breaks the turn. */
+  function diskSet(key: string, value: IngestResult): void {
+    const p = diskPathFor(key);
+    if (!p) return;
+    const payload = JSON.stringify({ savedAt: now(), value });
+    void fs.mkdir(path.dirname(p), { recursive: true })
+      .then(() => fs.writeFile(p, payload))
+      .catch((err) => {
+        console.warn(`[figmaIngest] disk cache write failed for ${key}: ${err?.message ?? err}`);
+      });
   }
 
   /**
@@ -118,11 +183,19 @@ export function createFigmaIngest(deps: IngestDeps, cfg: IngestConfig): FigmaIng
     const { tree: compacted, warnings: compactWarnings } = compactTree(rawDoc);
     warnings.push(...compactWarnings);
 
-    const varsPayload = await deps.getVariables(fileKey).catch(() => null);
+    // getVariables (token JSON) and exportPng (rendered screenshot) are two
+    // independent figmanage round-trips. Run them concurrently — the PNG
+    // export does NOT depend on the variables payload, and serializing them
+    // was doubling the network wait on the cold path (the single biggest
+    // contributor to fresh-Figma turn-start latency). resolveTokens still
+    // waits on getVariables, but the PNG fetch overlaps it.
+    const [varsPayload, png] = await Promise.all([
+      deps.getVariables(fileKey).catch(() => null),
+      deps.exportPng(fileKey, nodeId).catch(() => null),
+    ]);
     const { tree: tokenedTree, tokens, warnings: tokenWarnings } = resolveTokens(compacted, rawDoc, varsPayload);
     warnings.push(...tokenWarnings);
 
-    const png = await deps.exportPng(fileKey, nodeId).catch(() => null);
     if (!png) warnings.push("png export failed");
 
     const result: IngestResult = {
@@ -285,7 +358,15 @@ export async function getFigmaIngest(): Promise<FigmaIngest> {
       },
       classify: (tree, names) => classifyComposites(tree, names),
     },
-    { composites, cacheCapacity: 32, cacheTtlMs: 10 * 60_000 },
+    {
+      composites,
+      cacheCapacity: 32,
+      cacheTtlMs: 10 * 60_000,
+      // Persist beside the PNG exports so reopening a Figma frame in a new
+      // session is a cache hit instead of a 3–8s re-fetch.
+      diskDir: figmaIngestRoot(),
+      diskTtlMs: 60 * 60_000,
+    },
   );
   return singleton;
 }

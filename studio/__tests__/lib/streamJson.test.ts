@@ -33,14 +33,17 @@ describe("parseStreamLine", () => {
     expect(e).toMatchObject({ kind: "tool_call", tool: "Figma", pretty: expect.stringContaining("Figma") });
   });
 
-  it("signals end on result event", () => {
-    const e = parseStreamLine(JSON.stringify({ type: "result", subtype: "success" }));
-    expect(e).toEqual<StudioEvent>({ kind: "end", ok: true });
+  it("signals end on result event (after a turn_metrics event)", () => {
+    // The result line now emits `turn_metrics` THEN `end`. The end signal is
+    // the last event; assert it's present.
+    const evs = parseStreamLineAll(JSON.stringify({ type: "result", subtype: "success" }));
+    expect(evs[evs.length - 1]).toEqual<StudioEvent>({ kind: "end", ok: true });
+    expect(evs.some((e) => e.kind === "turn_metrics")).toBe(true);
   });
 
   it("returns error on result failure", () => {
-    const e = parseStreamLine(JSON.stringify({ type: "result", subtype: "error_during_execution", error: "boom" }));
-    expect(e).toEqual<StudioEvent>({ kind: "end", ok: false, error: "boom" });
+    const evs = parseStreamLineAll(JSON.stringify({ type: "result", subtype: "error_during_execution", error: "boom" }));
+    expect(evs[evs.length - 1]).toEqual<StudioEvent>({ kind: "end", ok: false, error: "boom" });
   });
 
   it("surfaces is_error=true even when subtype says success", () => {
@@ -50,16 +53,46 @@ describe("parseStreamLine", () => {
     // turn as a clean success, drop the "AWS SSO expired" message, and the
     // UI would sit on "Thinking…" with no error — cost us a beta tester
     // debug session.
-    const e = parseStreamLine(JSON.stringify({
+    const evs = parseStreamLineAll(JSON.stringify({
       type: "result",
       subtype: "success",
       is_error: true,
       result: "API Error: Token is expired. To refresh this SSO session run 'aws sso login' with the corresponding profile.",
     }));
-    expect(e).toEqual<StudioEvent>({
+    expect(evs[evs.length - 1]).toEqual<StudioEvent>({
       kind: "end",
       ok: false,
       error: "API Error: Token is expired. To refresh this SSO session run 'aws sso login' with the corresponding profile.",
+    });
+  });
+
+  it("extracts per-turn telemetry from the result line", () => {
+    const evs = parseStreamLineAll(JSON.stringify({
+      type: "result",
+      subtype: "success",
+      duration_ms: 9708,
+      ttft_ms: 9136,
+      num_turns: 3,
+      total_cost_usd: 0.1284,
+      usage: {
+        input_tokens: 2,
+        output_tokens: 6,
+        cache_creation_input_tokens: 34230,
+        cache_read_input_tokens: 12000,
+      },
+      modelUsage: { "us.anthropic.claude-sonnet-4-6": { inputTokens: 2 } },
+    }));
+    const m = evs.find((e) => e.kind === "turn_metrics");
+    expect(m).toMatchObject({
+      kind: "turn_metrics",
+      durationMs: 9708,
+      ttftMs: 9136,
+      numTurns: 3,
+      model: "us.anthropic.claude-sonnet-4-6",
+      cacheCreationTokens: 34230,
+      cacheReadTokens: 12000,
+      outputTokens: 6,
+      costUsd: 0.1284,
     });
   });
 
