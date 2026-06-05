@@ -55,13 +55,21 @@ function isTextOnly(node: Element): boolean {
 }
 
 function textNode(node: Element, s: StyleSnapshot, idx: TokenIndex, box: Box): SljNode {
+  return makeTextNode((node.textContent ?? "").trim(), s, idx, box);
+}
+
+/** Build a "text" element node from raw characters + the (parent) style/box.
+ *  Used both for an element whose only content is text and for bare text nodes
+ *  that sit alongside element siblings (they have no own style/box, so we read
+ *  the parent's). */
+function makeTextNode(characters: string, s: StyleSnapshot, idx: TokenIndex, box: Box): SljNode {
   return {
     kind: "element",
     tag: "text",
     box,
     layout: null,
     style: {
-      characters: (node.textContent ?? "").trim(),
+      characters,
       color: resolveToken(idx, s.getPropertyValue("color")),
       fontFamily: s.getPropertyValue("font-family"),
       fontSize: parseFloat(s.getPropertyValue("font-size")) || undefined,
@@ -72,14 +80,37 @@ function textNode(node: Element, s: StyleSnapshot, idx: TokenIndex, box: Box): S
   };
 }
 
+/** Collect a node's children by walking childNodes (not just element children),
+ *  so bare text that sits alongside element siblings is not dropped (e.g. a
+ *  ChatBubble with a tail/timestamp element renders extra element siblings next
+ *  to its message text). Element children recurse via walk; non-empty text nodes
+ *  become text nodes carrying the PARENT style/box (Slice 0 doesn't need
+ *  per-text-run geometry, so we reuse the parent box). */
+function collectChildren(node: Element, s: StyleSnapshot, box: Box, ctx: Ctx): SljNode[] {
+  const out: SljNode[] = [];
+  for (const child of Array.from(node.childNodes)) {
+    if (child.nodeType === 1 /* ELEMENT_NODE */) {
+      out.push(walk(child as Element, ctx));
+    } else if (child.nodeType === 3 /* TEXT_NODE */) {
+      const text = (child.textContent ?? "").trim();
+      // box = parent box: Slice 0 has no per-text-run geometry.
+      if (text.length > 0) out.push(makeTextNode(text, s, ctx.tokenIndex, box));
+    }
+  }
+  return out;
+}
+
 function walk(node: Element, ctx: Ctx): SljNode {
   const s = ctx.reader.style(node);
   const box = ctx.reader.box(node);
 
   const childEls = Array.from(node.children);
-  const children = childEls.map((c) => walk(c, ctx));
   const childBoxes = childEls.map((c) => ctx.reader.box(c));
   const layout: Layout | null = inferLayout(readStyleLike(s), childBoxes);
+  // One routine for both branches: walks childNodes so bare text alongside
+  // element children is captured. For a childless text-only node this yields
+  // exactly one text node, so there is no double-emit.
+  const children = collectChildren(node, s, box, ctx);
 
   const stamp = node.getAttribute("data-arcade-component");
   if (stamp) {
@@ -98,16 +129,12 @@ function walk(node: Element, ctx: Ctx): SljNode {
         props = {};
       }
     }
-    // A stamped component with only text content still carries that text as a child.
-    const componentChildren =
-      childEls.length === 0 && isTextOnly(node)
-        ? [textNode(node, s, ctx.tokenIndex, box)]
-        : children;
-    return { kind: "component", component: stamp, source, props, box, layout, children: componentChildren };
+    return { kind: "component", component: stamp, source, props, box, layout, children };
   }
 
-  // Text leaf
-  if (isTextOnly(node)) return textNode(node, s, ctx.tokenIndex, box);
+  // Text leaf: a childless text-only node already produced its single text node
+  // via collectChildren, so return that node directly (no wrapper element).
+  if (isTextOnly(node) && children.length === 1) return children[0];
 
   return {
     kind: "element",

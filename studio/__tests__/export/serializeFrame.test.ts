@@ -91,4 +91,33 @@ describe("serializeFrame", () => {
     if (!isElementNode(root)) throw new Error("expected element");
     expect(root.style.fill).toBeUndefined();
   });
+
+  it("keeps bare text when a stamped node also has element children (tail/timestamp case)", () => {
+    // Mirrors a real ChatBubble with tail: root div has a bare text node AND an SVG-ish element sibling.
+    const bubble = document.createElement("div");
+    bubble.setAttribute("data-arcade-component", "ChatBubble");
+    bubble.setAttribute("data-arcade-source", "arcade/components");
+    bubble.setAttribute("data-arcade-props", '{"variant":"sender","tail":true}');
+    bubble.appendChild(document.createTextNode("Help me create a presentation"));
+    const tail = document.createElement("span"); // stands in for the tail SVG element child
+    tail.textContent = ""; // empty: a decoration with no text
+    bubble.appendChild(tail);
+
+    const root = serializeFrame(bubble, { reader: makeReader(new Map()), tokenIndex: new Map() });
+    if (!isComponentNode(root)) throw new Error("expected component");
+    // The message text must survive somewhere in the children.
+    const texts: string[] = [];
+    const collect = (n: any) => { if (n.kind === "element" && n.tag === "text" && n.style?.characters) texts.push(n.style.characters); (n.children ?? []).forEach(collect); };
+    collect(root);
+    expect(texts).toContain("Help me create a presentation");
+  });
+
+  it("does not double-emit text for a plain text-only element", () => {
+    const div = el(`<div>just text</div>`);
+    const root = serializeFrame(div, { reader: makeReader(new Map()), tokenIndex: new Map() });
+    const texts: string[] = [];
+    const collect = (n: any) => { if (n.kind === "element" && n.tag === "text" && n.style?.characters) texts.push(n.style.characters); (n.children ?? []).forEach(collect); };
+    collect(root);
+    expect(texts).toEqual(["just text"]);
+  });
 });
