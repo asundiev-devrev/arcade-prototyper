@@ -50,4 +50,12 @@ describe("inferLayout", () => {
   it("returns null when a negative margin is present", () => {
     expect(inferLayout({ ...flexCol, marginLeft: "-6px" }, [])).toBeNull();
   });
+
+  it("returns null when children overlap along the horizontal main axis", () => {
+    const boxes: Box[] = [
+      { x: 0, y: 0, width: 100, height: 20 },
+      { x: 90, y: 0, width: 100, height: 20 }, // overlaps the first horizontally
+    ];
+    expect(inferLayout({ ...flexCol, flexDirection: "row" }, boxes)).toBeNull();
+  });
 });

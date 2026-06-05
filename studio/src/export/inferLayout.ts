@@ -15,6 +15,7 @@ export interface StyleLike {
   marginLeft: string;
 }
 
+// Non-finite input coalesces to 0 (safe for padding/gap; getComputedStyle always yields px strings so marginLeft is numeric in practice).
 const px = (v: string): number => {
   const n = parseFloat(v);
   return Number.isFinite(n) ? n : 0;
@@ -50,8 +51,10 @@ function hasMainAxisOverlap(boxes: Box[], mode: "horizontal" | "vertical"): bool
 export function inferLayout(style: StyleLike, childBoxes: Box[]): Layout | null {
   if (style.display !== "flex" && style.display !== "inline-flex") return null;
   // Negative margins have no auto-layout equivalent → fall back to absolute.
+  // Deliberately marginLeft-only for Slice 0 (other sides handled in a later slice).
   if (px(style.marginLeft) < 0) return null;
 
+  // row-reverse/column-reverse are treated as forward for now; reverse handling is a later slice.
   const mode: Layout["mode"] = style.flexDirection.startsWith("row") ? "horizontal" : "vertical";
   if (hasMainAxisOverlap(childBoxes, mode)) return null;
 
