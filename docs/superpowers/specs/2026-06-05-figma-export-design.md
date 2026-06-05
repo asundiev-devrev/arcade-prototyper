@@ -360,6 +360,38 @@ containers (Part B).
 - Handles images-as-fills (`figma.createImage`) and font loading
   (`loadFontAsync`) — the items deferred from #1.
 
+## Slice 0 outcome + carried-forward findings (2026-06-05)
+
+Slice 0 shipped and was **proven live**: a real `ChatBubble` instance of the
+published "Arcade UI Kit v0.3" library landed in Figma carrying the exported
+SLJ's text, in an auto-layout frame. Branch `feat/figma-export-slice-0`. The
+run + a 3-lens final review surfaced findings now owned by later sub-projects:
+
+- **Token collision needs property-context disambiguation (#2).** Live, the
+  bubble text `color` resolved to `--bg-neutral-prominent` (a background token
+  whose value collides with the intended `--fg-` token). `resolveToken` returns
+  the first candidate; #2 must pick by property (text→`--fg-*`, fill→`--bg-*`).
+- **`importComponentByKeyAsync` is slow over the Bridge (#3).** Cross-file
+  import exceeded the 30s tool cap; Slice 0 worked around it by firing the
+  import async and polling. #3's consumer must treat import as async/queued.
+- **Mapping seed recorded** at `studio/src/lift/figma-component-keys.md` —
+  `ChatBubble.variant` → "Bubble" set `Type=Receiver/Sender`, plus the set's
+  extra variant props (`hasTail`, `State`, …) #2 must map.
+- **Token canonicalization gaps (#1 full serializer):** `canonicalizeColor`
+  handles hex3/4/6/8 + comma `rgb()/rgba()`. NOT handled: percentage rgb,
+  `hsl()`, named colors, `currentColor`, and modern space/slash syntax
+  (`rgb(r g b / a)`). Slice 0's hex-token reality avoids these; #1 must cover
+  them as the serializer widens to all components.
+- **Component nodes carry no `style` (#2/#3).** SLJ `style` lives on element
+  nodes only; a component's own fill isn't captured. Fine for Slice 0 (the real
+  instance brings its variant styling) — confirm nothing's needed in #3.
+- **Export endpoint slug regex is looser than canonical (fast-follow).**
+  `export.ts` matches `[a-z0-9-]+`; a leading-hyphen / >63-char slug passes the
+  route but throws in `frameDir` outside try/catch → request hangs. Mirrors a
+  pre-existing `lift.ts` gap. Fix: match the canonical SLUG shape like
+  `uploads.ts`, or wrap `frameDir` in try/catch → 400. Untested: the 413
+  over-size path.
+
 ## Risks / watch-items
 
 - **Stamping mechanism** — JSX transform (not shim wrappers); compound +
