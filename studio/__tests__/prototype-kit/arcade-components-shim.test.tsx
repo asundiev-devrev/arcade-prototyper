@@ -1,9 +1,16 @@
 // @vitest-environment jsdom
 import * as React from "react";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, cleanup } from "@testing-library/react";
 
 // Mock @xorkavi/arcade-gen to avoid gridstack ESM resolution issues.
 // We provide minimal forwardRef Button/IconButton mocks that pass props through.
+// The ChatBubble mock faithfully mirrors the real arcade-gen component: it
+// destructures its own props (variant/tail/timestamp/className/children) and
+// spreads the *rest* — including unknown data-* attributes — onto its root
+// <div>. This is exactly how the published component behaves (verified against
+// arcade-gen dist), so the stamping wrapper is exercised against a
+// representative root that forwards data-* to the rendered DOM.
 vi.mock("@xorkavi/arcade-gen", () => {
   const React = require("react");
   return {
@@ -13,12 +20,22 @@ vi.mock("@xorkavi/arcade-gen", () => {
     IconButton: React.forwardRef<HTMLButtonElement, any>((props, ref) => {
       return React.createElement("button", { ...props, ref });
     }),
+    ChatBubble: React.forwardRef<HTMLDivElement, any>((props, ref) => {
+      const { variant, tail, timestamp, className, children, ...rest } = props;
+      return React.createElement(
+        "div",
+        { ...rest, ref, className },
+        children,
+        timestamp ? React.createElement("time", null, timestamp) : null,
+      );
+    }),
   };
 });
 
 import {
   Button,
   IconButton,
+  ChatBubble,
 } from "../../prototype-kit/arcade-components";
 
 /**
@@ -185,5 +202,29 @@ describe("arcade-components shim — type narrowing", () => {
     const b2 = <IconButton size="sm" aria-label="x">×</IconButton>;
     expect(b1).toBeTruthy();
     expect(b2).toBeTruthy();
+  });
+});
+
+describe("ChatBubble stamping (Slice 0)", () => {
+  afterEach(() => cleanup());
+
+  it("stamps data-arcade-* onto the rendered root div", () => {
+    const { container } = render(<ChatBubble variant="receiver">Hello</ChatBubble>);
+    const stamped = container.querySelector('[data-arcade-component="ChatBubble"]') as HTMLElement;
+    expect(stamped).toBeTruthy();
+    expect(stamped.getAttribute("data-arcade-source")).toBe("arcade/components");
+    expect(JSON.parse(stamped.getAttribute("data-arcade-props") ?? "{}")).toEqual({
+      variant: "receiver",
+    });
+    expect(stamped.textContent).toContain("Hello");
+  });
+
+  it("omits undefined props from the serialized payload", () => {
+    const { container } = render(<ChatBubble variant="sender" tail>Hi</ChatBubble>);
+    const stamped = container.querySelector('[data-arcade-component="ChatBubble"]') as HTMLElement;
+    expect(JSON.parse(stamped.getAttribute("data-arcade-props") ?? "{}")).toEqual({
+      variant: "sender",
+      tail: true,
+    });
   });
 });

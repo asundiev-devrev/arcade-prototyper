@@ -30,8 +30,10 @@ import * as React from "react";
 import {
   Button as RawButton,
   IconButton as RawIconButton,
+  ChatBubble as RawChatBubble,
   type ButtonProps as RawButtonProps,
   type IconButtonProps as RawIconButtonProps,
+  type ChatBubbleProps as RawChatBubbleProps,
 } from "@xorkavi/arcade-gen";
 
 export * from "@xorkavi/arcade-gen";
@@ -79,5 +81,31 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
     const pixelSize = ICON_PIXEL_SIZE_BY_SIZE[size];
     const children = sizeIconChild(coerced.children, pixelSize);
     return <RawIconButton ref={ref} {...coerced} children={children} />;
+  },
+);
+
+// Slice-0 stamping: tag ChatBubble's root div with component identity + props so
+// the Figma-export serializer can recognise it in the rendered DOM. Sub-project
+// #1 replaces per-component wrappers with a JSX transform across the whole kit.
+// Only JSON-serializable props are stamped (ChatBubble's are all scalars).
+const CHAT_BUBBLE_STAMP_PROPS = ["variant", "tail", "timestamp"] as const;
+
+export const ChatBubble = React.forwardRef<HTMLDivElement, RawChatBubbleProps>(
+  function ChatBubble(props, ref) {
+    const stamped: Record<string, unknown> = {};
+    const propsRecord = props as unknown as Record<string, unknown>;
+    for (const key of CHAT_BUBBLE_STAMP_PROPS) {
+      const v = propsRecord[key];
+      if (v !== undefined) stamped[key] = v;
+    }
+    return (
+      <RawChatBubble
+        ref={ref}
+        data-arcade-component="ChatBubble"
+        data-arcade-source="arcade/components"
+        data-arcade-props={JSON.stringify(stamped)}
+        {...props}
+      />
+    );
   },
 );
