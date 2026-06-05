@@ -8,6 +8,14 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.29.0] — 2026-06-05
+
+### Added
+- **Attach any file to a prompt, not just images.** You can now drop a PRD, PDF, doc, spec, `.md`, or anything else into the chat or the home prompt — paste it, drag it in, or pick it. The generator reads the file when it builds your prototype, so "make this screen match the attached PRD" just works. The attachment chip shows the real filename and file type (PDF, DOCX, …). Upload size limit raised to 25MB so a real PRD fits.
+
+### Changed
+- **Computer chat prototypes render markdown.** When a generated Computer / Agent Studio chat screen pulls real conversation data, the message text now renders as formatted rich text — bold, inline code, quotes, numbered lists — instead of showing the raw `**asterisks**` and backticks. Matches how real Computer looks.
+
 ## [0.28.0] — 2026-06-05
 
 ### Changed

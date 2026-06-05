@@ -267,6 +267,21 @@ export const COMPOSITE_MAPPINGS: MappingEntry[] = [
     judgmentNote: "Same as ChatInput — bespoke per host feature.",
   },
   {
+    studio: { source: "arcade-prototypes", name: "Markdown" },
+    production: { source: "react-markdown", name: "ReactMarkdown" },
+    propDeltas: [
+      {
+        from: "children",
+        to: "children",
+        note: "Both take the raw markdown string as children. Studio's wrapper renders null on empty/nullish input; ReactMarkdown renders nothing for an empty string anyway.",
+      },
+    ],
+    slotNotes: [
+      "Studio's Markdown is a thin react-markdown wrapper with color-inheriting element styles. In production, render markdown the way the host feature already does — devrev-web uses react-markdown directly (see the chat-timeline assistant message). Reuse the feature's existing markdown renderer + component overrides rather than this prototype wrapper's styling.",
+    ],
+    translationClass: "mechanical",
+  },
+  {
     studio: { source: "arcade-prototypes", name: "ChatEmptyState" },
     production: { source: rawDs("EmptyState"), name: "EmptyState" },
     propDeltas: [],
