@@ -14,6 +14,7 @@ import { ChatInput } from "../../../prototype-kit/composites/ChatInput";
 import { fontSizeForLines } from "../../lib/nextFontSize";
 import { extractFigmaUrl } from "../../lib/figmaUrl";
 import { api } from "../../lib/api";
+import { attachmentKind } from "../../lib/attachmentKind";
 import {
   MentionPopover,
   filterMentions,
@@ -54,6 +55,7 @@ export function HeroPromptInput({ onSubmit, disabled }: HeroPromptInputProps) {
   const [fontSize, setFontSize] = useState(START_FONT);
   const [images, setImages] = useState<string[]>([]);
   const [imagePaths, setImagePaths] = useState<string[]>([]);
+  const [fileNames, setFileNames] = useState<string[]>([]);
   const [figmaUrl, setFigmaUrl] = useState<string | null>(null);
   const [mention, setMention] = useState<{
     query: string;
@@ -166,14 +168,14 @@ export function HeroPromptInput({ onSubmit, disabled }: HeroPromptInputProps) {
   };
 
   const addFiles = useCallback(async (files: File[] | FileList) => {
-    const arr = Array.from(files).filter((f) => f.type.startsWith("image/"));
-    for (const f of arr) {
+    for (const f of Array.from(files)) {
       try {
-        const { path, url } = await api.stageUpload(f);
+        const { path, url } = await api.stageUpload(f, f.name);
         setImages((xs) => [...xs, url]);
         setImagePaths((xs) => [...xs, path]);
+        setFileNames((xs) => [...xs, f.name]);
       } catch {
-        // swallow — the hero stays usable without image attach
+        // swallow — the hero stays usable without the attachment
       }
     }
   }, []);
@@ -181,7 +183,7 @@ export function HeroPromptInput({ onSubmit, disabled }: HeroPromptInputProps) {
   const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
     const items = Array.from(e.clipboardData?.items ?? []);
     const files = items
-      .filter((i) => i.kind === "file" && i.type.startsWith("image/"))
+      .filter((i) => i.kind === "file")
       .map((i) => i.getAsFile())
       .filter((f): f is File => !!f);
     if (files.length) {
@@ -198,7 +200,7 @@ export function HeroPromptInput({ onSubmit, disabled }: HeroPromptInputProps) {
 
   const onDrop = (e: DragEvent<HTMLDivElement>) => {
     const files = Array.from(e.dataTransfer?.files ?? []);
-    if (files.some((f) => f.type.startsWith("image/"))) {
+    if (files.length) {
       e.preventDefault();
       void addFiles(files);
     }
@@ -214,6 +216,7 @@ export function HeroPromptInput({ onSubmit, disabled }: HeroPromptInputProps) {
       setText("");
       setImages([]);
       setImagePaths([]);
+      setFileNames([]);
       setFigmaUrl(null);
       setFontSize(START_FONT);
     } finally {
@@ -241,7 +244,6 @@ export function HeroPromptInput({ onSubmit, disabled }: HeroPromptInputProps) {
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
         multiple
         hidden
         onChange={(e) => {
@@ -318,7 +320,11 @@ export function HeroPromptInput({ onSubmit, disabled }: HeroPromptInputProps) {
             <ChatInput.ContextAttachment title="Computer" subtitle="DevRev agent" />
           )}
           {images.map((_url, i) => (
-            <ChatInput.FileAttachment key={i} kind="IMG" name={`image-${i}`} />
+            <ChatInput.FileAttachment
+              key={i}
+              kind={attachmentKind(fileNames[i])}
+              name={fileNames[i] ?? `file-${i + 1}`}
+            />
           ))}
           {figmaUrl && (
             <ChatInput.ContextAttachment

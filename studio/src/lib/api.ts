@@ -18,10 +18,15 @@ export const api = {
     fetch(`/api/projects/${slug}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) }).then(j<Project>),
   deleteProject: (slug: string) =>
     fetch(`/api/projects/${slug}`, { method: "DELETE" }).then(j<void>),
-  stageUpload: (blob: Blob) =>
+  stageUpload: (blob: Blob, fileName?: string) =>
     fetch("/api/uploads/_staging", {
       method: "POST",
-      headers: { "Content-Type": blob.type },
+      headers: {
+        "Content-Type": blob.type || "application/octet-stream",
+        // Original filename so the staged file keeps its real extension
+        // (.pdf, .docx, .md, …); encoded so non-ASCII names survive the header.
+        ...(fileName ? { "X-Upload-Filename": encodeURIComponent(fileName) } : {}),
+      },
       credentials: "include",
       body: blob,
     }).then(j<{ path: string; url: string }>),

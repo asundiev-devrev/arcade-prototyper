@@ -3,8 +3,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { projectDir } from "../paths";
 import { getProject } from "../projects";
+import { resolveUploadExtension, decodeUploadFilename } from "../uploadFilename";
 
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 export function uploadsMiddleware() {
   return async (req: IncomingMessage, res: ServerResponse, next?: () => void) => {
@@ -16,18 +17,15 @@ export function uploadsMiddleware() {
     const slug = m[1];
 
     const ct = req.headers["content-type"] ?? "";
-    const baseType = ct.split(";")[0].trim().toLowerCase();
-    // svg+xml is the canonical SVG mime type. We map it to a `svg` file
-    // extension so the saved file's name matches what the agent and the
-    // browser expect — saving an svg as `.svg+xml` would fail the
-    // import-validation step downstream.
-    const extMatch = /^image\/(png|jpeg|webp|gif|svg\+xml)$/.exec(baseType);
-    if (!extMatch) {
-      res.writeHead(400, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: { message: "Unsupported image type" } }));
-      return;
-    }
-    const ext = extMatch[1] === "svg+xml" ? "svg" : extMatch[1];
+    // Any file type is accepted (PRDs, PDFs, docs, images, …). The on-disk
+    // extension comes from the original filename when the client sends one
+    // (X-Upload-Filename), falling back to the MIME subtype. The filename
+    // itself is never used to build the write path — only the sanitized
+    // extension — so a hostile filename can't traverse out of _uploads.
+    const ext = resolveUploadExtension(
+      decodeUploadFilename(req.headers["x-upload-filename"]),
+      ct,
+    );
 
     const project = await getProject(slug);
     if (!project) {
@@ -65,7 +63,7 @@ export function uploadsMiddleware() {
       req.on("error", () => {});
       req.resume();
       res.writeHead(413, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: { message: "Image too large (max 10MB)" } }));
+      res.end(JSON.stringify({ error: { message: "File too large (max 25MB)" } }));
       return;
     }
 

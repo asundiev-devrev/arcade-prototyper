@@ -72,16 +72,59 @@ describe("/api/uploads/:slug", () => {
     expect(fs.existsSync(json.path)).toBe(true);
   });
 
-  it("rejects unsupported content types with 400", async () => {
-    const p = await createProject({ name: "Plain", theme: "arcade", mode: "light" });
+  it("accepts a non-image file (e.g. a PDF) and keeps the original extension", async () => {
+    const p = await createProject({ name: "Docs", theme: "arcade", mode: "light" });
+    const body = Buffer.from("%PDF-1.7\n…fake pdf…");
     const res = await fetch(`http://localhost:${port}/api/uploads/${p.slug}`, {
       method: "POST",
-      headers: { "Content-Type": "text/plain" },
-      body: "hello",
+      headers: {
+        "Content-Type": "application/pdf",
+        "X-Upload-Filename": encodeURIComponent("Product Requirements.pdf"),
+      },
+      body,
     });
-    expect(res.status).toBe(400);
-    const json = await res.json() as { error: { message: string } };
-    expect(json.error.message).toBe("Unsupported image type");
+    expect(res.status).toBe(200);
+    const json = await res.json() as { path: string; url: string };
+    // Extension comes from the original filename, not the MIME type.
+    expect(json.path).toMatch(/\.pdf$/);
+    expect(fs.existsSync(json.path)).toBe(true);
+    const written = await fsp.readFile(json.path);
+    expect(Buffer.compare(written, body)).toBe(0);
+  });
+
+  it("derives the extension from the filename even with a generic octet-stream type", async () => {
+    const p = await createProject({ name: "Word", theme: "arcade", mode: "light" });
+    const res = await fetch(`http://localhost:${port}/api/uploads/${p.slug}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "X-Upload-Filename": encodeURIComponent("spec.docx"),
+      },
+      body: Buffer.from("PK fake docx"),
+    });
+    expect(res.status).toBe(200);
+    const json = await res.json() as { path: string };
+    expect(json.path).toMatch(/\.docx$/);
+  });
+
+  it("does not let a path-traversal filename escape the _uploads dir", async () => {
+    const p = await createProject({ name: "Evil", theme: "arcade", mode: "light" });
+    const res = await fetch(`http://localhost:${port}/api/uploads/${p.slug}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "X-Upload-Filename": encodeURIComponent("../../../../etc/passwd"),
+      },
+      body: Buffer.from("nope"),
+    });
+    expect(res.status).toBe(200);
+    const json = await res.json() as { path: string };
+    // The write path is built from a random base name; only a sanitized
+    // extension is taken from the filename — so the file must still land
+    // inside the project's _uploads dir.
+    const uploadsDir = path.join(projectDir(p.slug), "_uploads");
+    expect(json.path.startsWith(uploadsDir + path.sep)).toBe(true);
+    expect(json.path).not.toContain("..");
   });
 
   it("returns 404 for a nonexistent project slug", async () => {
@@ -107,11 +150,9 @@ describe("/api/uploads/:slug", () => {
     expect(json.error.message).toBe("next called");
   });
 
-  it("rejects uploads larger than 10MB with 413", async () => {
+  it("rejects uploads larger than 25MB with 413", async () => {
     const p = await createProject({ name: "Big", theme: "arcade", mode: "light" });
-    const body = Buffer.alloc(11 * 1024 * 1024, 0);
-    // prepend PNG magic bytes so content passes type gating
-    body[0] = 0x89; body[1] = 0x50; body[2] = 0x4e; body[3] = 0x47;
+    const body = Buffer.alloc(26 * 1024 * 1024, 0);
     const res = await fetch(`http://localhost:${port}/api/uploads/${p.slug}`, {
       method: "POST",
       headers: { "Content-Type": "image/png" },

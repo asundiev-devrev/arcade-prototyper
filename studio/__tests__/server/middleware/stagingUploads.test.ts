@@ -78,20 +78,23 @@ describe("POST /api/uploads/_staging", () => {
     expect(fs.existsSync(res.body.path)).toBe(true);
   });
 
-  it("rejects unsupported mime types", async () => {
-    const res = await post("/api/uploads/_staging", Buffer.from("nope"), {
-      "content-type": "text/plain",
+  it("accepts a non-image file and keeps the original extension from X-Upload-Filename", async () => {
+    const res = await post("/api/uploads/_staging", Buffer.from("%PDF-1.7"), {
+      "content-type": "application/pdf",
+      "x-upload-filename": encodeURIComponent("Product Requirements.pdf"),
     });
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(200);
+    expect(res.body.path).toMatch(/\.pdf$/);
+    expect(fs.existsSync(res.body.path)).toBe(true);
   });
 
-  it("rejects headers that only contain an image/ token as a parameter", async () => {
-    // Pre-fix the unanchored regex would accept this because the substring
-    // `image/png` appears anywhere in the header value.
-    const res = await post("/api/uploads/_staging", Buffer.from("hello"), {
-      "content-type": "text/plain; fake=image/png",
+  it("accepts a plain-text body (no longer rejected as a non-image)", async () => {
+    const res = await post("/api/uploads/_staging", Buffer.from("just notes"), {
+      "content-type": "text/plain",
+      "x-upload-filename": encodeURIComponent("notes.txt"),
     });
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(200);
+    expect(res.body.path).toMatch(/\.txt$/);
   });
 
   it("accepts a valid image type with charset parameter", async () => {

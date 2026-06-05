@@ -551,5 +551,8 @@ export function isNoConversationError(error: string | undefined): boolean {
 function decoratePrompt(prompt: string, images?: string[]): string {
   if (!images?.length) return prompt;
   const refs = images.map((p) => `@${p}`).join("\n");
-  return `${prompt}\n\nReference images:\n${refs}`;
+  // "Attached files" rather than "Reference images" — attachments can be any
+  // file type now (PRDs, PDFs, docs, images). `@<path>` lets the agent read
+  // each one with its normal file tools regardless of format.
+  return `${prompt}\n\nAttached files:\n${refs}`;
 }

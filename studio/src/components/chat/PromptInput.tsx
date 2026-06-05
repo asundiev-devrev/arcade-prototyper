@@ -10,6 +10,7 @@ import {
 import { useToast } from "@xorkavi/arcade-gen";
 import { ChatInput } from "../../../prototype-kit/composites/ChatInput";
 import { extractFigmaUrl } from "../../lib/figmaUrl";
+import { attachmentKind } from "../../lib/attachmentKind";
 import {
   MentionPopover,
   filterMentions,
@@ -75,6 +76,7 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commen
   const [text, setText] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [imagePaths, setImagePaths] = useState<string[]>([]);
+  const [fileNames, setFileNames] = useState<string[]>([]);
   const [detectedFigmaUrl, setDetectedFigmaUrl] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [commentBusy, setCommentBusy] = useState(false);
@@ -164,26 +166,17 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commen
     }, 5000);
   }
 
-  // Some browsers (notably Safari and some macOS Chromium builds) hand back
-  // filesystem-dragged files with an empty `f.type`. Fall back to the file
-  // extension so SVGs and other image files are not silently dropped on the
-  // floor. Server-side validation still has the final word on the MIME type.
-  function inferImageMime(f: File): string | null {
-    if (f.type.startsWith("image/")) return f.type;
-    const ext = f.name.toLowerCase().split(".").pop() ?? "";
-    if (ext === "svg") return "image/svg+xml";
-    if (ext === "png") return "image/png";
-    if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
-    if (ext === "gif") return "image/gif";
-    if (ext === "webp") return "image/webp";
-    return null;
-  }
-
-  async function uploadImageWithMime(blob: Blob, mime: string): Promise<{ path: string; url: string }> {
+  async function uploadFile(file: File): Promise<{ path: string; url: string }> {
     const res = await fetch(`/api/uploads/${projectSlug}`, {
       method: "POST",
-      headers: { "Content-Type": mime },
-      body: blob,
+      headers: {
+        // Best-effort MIME; the server falls back to the filename's extension.
+        "Content-Type": file.type || "application/octet-stream",
+        // Original filename so the saved file keeps its real extension
+        // (.pdf, .docx, .md, …). Encoded so non-ASCII names survive the header.
+        "X-Upload-Filename": encodeURIComponent(file.name),
+      },
+      body: file,
     });
     if (!res.ok) {
       let msg = `upload failed: ${res.status}`;
@@ -200,15 +193,13 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commen
 
   async function addFiles(files: File[] | FileList) {
     if (isComment) return;
-    const arr = Array.from(files)
-      .map((f) => ({ file: f, mime: inferImageMime(f) }))
-      .filter((x): x is { file: File; mime: string } => x.mime !== null);
-    for (const { file, mime } of arr) {
+    for (const file of Array.from(files)) {
       try {
-        const { path, url } = await uploadImageWithMime(file, mime);
+        const { path, url } = await uploadFile(file);
         if (!mountedRef.current) return;
         setImages((xs) => [...xs, url]);
         setImagePaths((xs) => [...xs, path]);
+        setFileNames((xs) => [...xs, file.name]);
         if (mountedRef.current) setUploadError(null);
       } catch (err) {
         console.warn("[PromptInput] upload failed:", err);
@@ -223,7 +214,7 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commen
   const onPaste = (e: ClipboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const items = Array.from(e.clipboardData?.items ?? []);
     const files = items
-      .filter((i) => i.kind === "file" && i.type.startsWith("image/"))
+      .filter((i) => i.kind === "file")
       .map((i) => i.getAsFile())
       .filter((f): f is File => !!f);
     if (files.length) {
@@ -243,7 +234,7 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commen
 
   const onDrop = (e: DragEvent<HTMLDivElement>) => {
     const files = Array.from(e.dataTransfer?.files ?? []);
-    if (files.some((f) => f.type.startsWith("image/"))) {
+    if (files.length) {
       e.preventDefault();
       void addFiles(files);
     }
@@ -255,7 +246,7 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commen
     e.target.value = "";
   };
 
-  const handlePickImage = () => {
+  const handlePickFile = () => {
     fileInputRef.current?.click();
   };
 
@@ -368,6 +359,7 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commen
       setText("");
       setImages([]);
       setImagePaths([]);
+      setFileNames([]);
       setDetectedFigmaUrl(null);
       setMention(null);
       clearTarget();
@@ -390,6 +382,7 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commen
     setText("");
     setImages([]);
     setImagePaths([]);
+    setFileNames([]);
     setDetectedFigmaUrl(null);
     setMention(null);
     clearTarget();
@@ -444,13 +437,8 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commen
         <input
           ref={fileInputRef}
           type="file"
-          // Some macOS browsers' "image/*" filter hides .svg in the picker
-          // because Finder reports SVG with a non-image UTI. Listing the
-          // explicit MIME types AND the .svg extension forces every browser
-          // to show SVGs alongside raster images. Keep the wildcard as the
-          // last entry so any future image format the platform recognizes
-          // still passes through.
-          accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,.svg,image/*"
+          // Any file type — images, PRDs, PDFs, docs, etc. No `accept` filter
+          // so the picker shows everything; the agent reads whatever lands.
           multiple
           hidden
           onChange={onFilePicked}
@@ -573,7 +561,11 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commen
                 />
               )}
               {images.map((url, i) => (
-                <ChatInput.FileAttachment key={i} kind="IMG" name={`image-${i}`} />
+                <ChatInput.FileAttachment
+                  key={i}
+                  kind={attachmentKind(fileNames[i])}
+                  name={fileNames[i] ?? `file-${i + 1}`}
+                />
               ))}
               {detectedFigmaUrl && (
                 <ChatInput.ContextAttachment
@@ -586,7 +578,7 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commen
         }
         trailing={
           <>
-            {!isComment && <ChatInput.AddAttachmentButton onClick={handlePickImage} />}
+            {!isComment && <ChatInput.AddAttachmentButton onClick={handlePickFile} />}
             {effectiveBusy && onStop && !isComment ? (
               <ChatInput.StopButton onClick={onStop} />
             ) : (

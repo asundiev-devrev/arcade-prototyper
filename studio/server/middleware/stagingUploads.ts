@@ -3,8 +3,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 import { stagingRoot, stagingSessionDir } from "../paths";
+import { resolveUploadExtension, decodeUploadFilename } from "../uploadFilename";
 
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 const COOKIE_NAME = "studio_staging_session";
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60; // 7 days
 
@@ -26,17 +27,13 @@ export function stagingUploadsMiddleware() {
     if (req.url !== "/api/uploads/_staging" || req.method !== "POST") return next?.();
 
     const ct = req.headers["content-type"] ?? "";
-    // Strip any parameters (e.g. `; charset=utf-8`) and normalize before the
-    // strict equality check. An unanchored regex would let non-image bodies
-    // slip through by sending e.g. `Content-Type: text/plain; fake=image/png`.
-    const baseType = ct.split(";")[0].trim().toLowerCase();
-    const extMatch = /^image\/(png|jpeg|webp|gif|svg\+xml)$/.exec(baseType);
-    if (!extMatch) {
-      res.writeHead(400, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: { message: "Unsupported image type" } }));
-      return;
-    }
-    const ext = extMatch[1] === "svg+xml" ? "svg" : extMatch[1];
+    // Any file type is accepted. On-disk extension comes from the original
+    // filename (X-Upload-Filename) when present, else the MIME subtype. The
+    // filename never builds the write path — only the sanitized extension.
+    const ext = resolveUploadExtension(
+      decodeUploadFilename(req.headers["x-upload-filename"]),
+      ct,
+    );
 
     const existing = parseCookie(req.headers.cookie, COOKIE_NAME);
     const sessionId = existing ?? newSessionId();
@@ -60,7 +57,7 @@ export function stagingUploadsMiddleware() {
       req.on("error", () => {});
       req.resume();
       res.writeHead(413, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: { message: "Image too large (max 10MB)" } }));
+      res.end(JSON.stringify({ error: { message: "File too large (max 25MB)" } }));
       return;
     }
 
