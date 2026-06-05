@@ -31,3 +31,32 @@ describe("tokenIndex", () => {
     expect(resolveToken(idx, "rgb(23,23,23)")).toBe("--fg-neutral-prominent");
   });
 });
+
+describe("tokenIndex color canonicalization", () => {
+  it("matches a hex8 token value against a browser-normalized rgba lookup", () => {
+    // token authored as #8985871a; element computed bg as rgba(137, 133, 135, 0.1)
+    const idx = buildTokenIndex(["--bg-neutral-soft"], () => "#8985871a");
+    expect(resolveToken(idx, "rgba(137, 133, 135, 0.1)")).toBe("--bg-neutral-soft");
+  });
+
+  it("matches a hex6 token value against an rgb lookup", () => {
+    const idx = buildTokenIndex(["--fg-neutral-prominent"], () => "#171717");
+    expect(resolveToken(idx, "rgb(23, 23, 23)")).toBe("--fg-neutral-prominent");
+  });
+
+  it("matches a 3-digit hex token against rgb lookup", () => {
+    const idx = buildTokenIndex(["--white"], () => "#fff");
+    expect(resolveToken(idx, "rgb(255, 255, 255)")).toBe("--white");
+  });
+
+  it("still returns the raw value for an unknown color", () => {
+    const idx = buildTokenIndex(["--x"], () => "#000000");
+    expect(resolveToken(idx, "rgb(1, 2, 3)")).toBe("rgb(1, 2, 3)");
+  });
+
+  it("passes non-color values through unchanged (no false token match)", () => {
+    const idx = buildTokenIndex(["--corner-radius"], () => "8px");
+    expect(resolveToken(idx, "8px")).toBe("--corner-radius");
+    expect(resolveToken(idx, "12px")).toBe("12px");
+  });
+});
