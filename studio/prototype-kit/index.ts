@@ -15,6 +15,8 @@ export { CanvasPanel } from "./composites/CanvasPanel.js";
 export { ChatInput } from "./composites/ChatInput.js";
 export { ChatEmptyState } from "./composites/ChatEmptyState.js";
 export { ChatMessages } from "./composites/ChatMessages.js";
+export { Markdown } from "./composites/Markdown.js";
+export type { MarkdownProps } from "./composites/Markdown.js";
 export { ComputerScene } from "./composites/ComputerScene.js";
 export type { ComputerSceneProps } from "./composites/ComputerScene.js";
 export { SettingsCard } from "./composites/SettingsCard.js";

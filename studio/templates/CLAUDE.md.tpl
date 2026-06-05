@@ -331,6 +331,7 @@ When your frame is not a settings page or vista, drop down one layer and compose
 - **`SettingsCard`** inserts separators between children automatically. Do NOT add explicit `<Separator />` between rows.
 - **`PageHeader` is deprecated** — use TitleBar + BreadcrumbBar instead. Do not import `PageHeader`.
 - **`ChatBubble`** is imported from `arcade/components`, not from the kit. Use it as a direct child of `ChatMessages`.
+- **Real chat bodies are markdown — wrap them in `<Markdown>`.** When a chat message comes from real data (a DevRev timeline entry, an API response, anything not hand-written copy), its text is markdown (`**bold**`, `` `code` ``, `> quotes`, numbered lists). Pass it through the kit's `<Markdown>` (from `arcade-prototypes`) so it renders the way Computer does, not as literal asterisks: `<ChatBubble variant="receiver"><Markdown>{msg.body}</Markdown></ChatBubble>` (same inside `<ChatMessages.Agent>`). Hand-written one-liners can stay plain text.
 
 ## Arcade components (leaves)
 
@@ -384,7 +385,8 @@ Enough API for ~95% of uses. Reach for the story file only for unusual behavior 
 | `Toast` / `Toaster` | Mount `<Toaster />` once; trigger via `useToast()` | |
 | `Separator` | `orientation: "horizontal" \| "vertical"` | Use `<SettingsCard>` for auto-separators — don't manually sprinkle. |
 | `Breadcrumb` | `<Breadcrumb.Root>` + `<Breadcrumb.Item>` + `<Breadcrumb.Link>` + `<Breadcrumb.Separator>` | Compound. |
-| `ChatBubble` | `variant: "user" \| "assistant" \| "sender" \| "receiver"`, `tail?`, `children` | Imported from `arcade/components`. Use inside `<ChatMessages>`. |
+| `ChatBubble` | `variant: "user" \| "assistant" \| "sender" \| "receiver"`, `tail?`, `children` | Imported from `arcade/components`. Use inside `<ChatMessages>`. Wrap real (markdown) bodies in `<Markdown>`. |
+| `Markdown` | `children` (a markdown string) | From `arcade-prototypes`. Renders real chat/timeline bodies as rich text; color-inherits so it works in any bubble. |
 | `Banner` | `intent`, `layout: "row" \| "column"`, `onDismiss`, `children` | |
 | `Tabs` | `<Tabs.Root value onValueChange>` + `<Tabs.List>` + `<Tabs.Trigger value>` + `<Tabs.Content value>` | Compound. |
 | `Table` | `<Table.Root>` + `<Table.Header>` + `<Table.Row>` + `<Table.Cell>` | For vista-style tables use `<VistaRow>` from the kit instead. |

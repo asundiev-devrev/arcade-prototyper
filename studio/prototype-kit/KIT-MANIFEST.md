@@ -6,7 +6,7 @@
 > template source; if a prop signature here is enough, skip the extra
 > `Read`. Open the `.tsx` only when you need the full rendered markup.
 
-_24 entries — 21 composites, 3 templates._
+_25 entries — 22 composites, 3 templates._
 
 ## Templates
 
@@ -458,6 +458,12 @@ The transcript contains two kinds of blocks:
   - `ChatMessages.Agent` — agent's turn: a pause/running icon, an optional
     expandable "Thoughts" block, and body text below.
 
+Real message bodies (DevRev timeline entries, API responses) are markdown.
+Wrap them in `<Markdown>` so `**bold**` / `` `code` `` / `> quotes` render
+as rich text instead of literal characters:
+  <ChatBubble variant="receiver"><Markdown>{msg.body}</Markdown></ChatBubble>
+Hand-written copy can stay plain text.
+
 The thoughts block (collapsed + expanded) follows Figma `_Thoughts`
 component set 6064:65430 — a rounded pill + small detached circle
 drawn as a thought-cloud. Geometry taken verbatim from the Figma SVG
@@ -733,6 +739,48 @@ interface FrameLinkProps {
 - Do NOT use `<FrameLink>` instead of a regular `<Button>`
   for in-frame interactions (opening a dropdown, toggling a switch, showing
   a tooltip). Those are intra-frame; they don't need navigation.
+
+## Markdown (composite)
+_source: `composites/Markdown.tsx`_
+
+Markdown — renders a markdown string as formatted rich text, for chat
+message bodies and any other place a prototype shows real (markdown)
+content rather than hand-written copy.
+
+Why this exists:
+- Computer / Agent Studio chat bodies (and most real DevRev timeline
+  text) are markdown: `**bold**`, `` `code` ``, `> quotes`, numbered
+  lists. Dropping that string straight into a `<ChatBubble>` renders the
+  literal asterisks and backticks — it does not look like real Computer.
+  Wrap the body in `<Markdown>` so it renders the way Computer does.
+
+Color-inheriting by design: every element uses `color: inherit` (no
+hard-coded foreground token), so the same `<Markdown>` looks right inside
+a dark sender bubble (light text) AND a light receiver / agent bubble
+(dark text). Inline code and blockquotes use `currentColor` at low
+opacity for the same reason — they adapt to whichever bubble holds them.
+
+Raw HTML in the source is NOT rendered (no `rehype-raw`) — markdown text
+from a live API is treated as untrusted, so only markdown syntax is
+interpreted.
+
+Usage:
+
+  <ChatBubble variant="sender">
+    <Markdown>{message.body}</Markdown>
+  </ChatBubble>
+
+  <ChatMessages.Agent thoughts={<ChatMessages.Thoughts label="Thought for 4s" />}>
+    <Markdown>{message.body}</Markdown>
+  </ChatMessages.Agent>
+
+
+```ts
+type MarkdownProps = {
+  /** The markdown source string to render. */
+  children?: string | null;
+}
+```
 
 ## NavSidebar (composite)
 _source: `composites/NavSidebar.tsx`_

@@ -22,6 +22,9 @@
     "build": "tsx scripts/build-package.mts",
     "prepublishOnly": "pnpm run build"
   },
+  "dependencies": {
+    "react-markdown": "^10.1.0"
+  },
   "peerDependencies": {
     "@xorkavi/arcade-gen": "^1.0.0",
     "react": ">=19.0.0",

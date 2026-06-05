@@ -9,6 +9,12 @@
  *   - `ChatMessages.Agent` — agent's turn: a pause/running icon, an optional
  *     expandable "Thoughts" block, and body text below.
  *
+ * Real message bodies (DevRev timeline entries, API responses) are markdown.
+ * Wrap them in `<Markdown>` so `**bold**` / `` `code` `` / `> quotes` render
+ * as rich text instead of literal characters:
+ *   <ChatBubble variant="receiver"><Markdown>{msg.body}</Markdown></ChatBubble>
+ * Hand-written copy can stay plain text.
+ *
  * The thoughts block (collapsed + expanded) follows Figma `_Thoughts`
  * component set 6064:65430 — a rounded pill + small detached circle
  * drawn as a thought-cloud. Geometry taken verbatim from the Figma SVG
