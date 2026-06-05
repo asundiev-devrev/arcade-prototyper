@@ -8,6 +8,21 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.28.0] — 2026-06-05
+
+### Changed
+- **Generation is faster.** A bundled tool the generator relies on quietly changed under us and started blocking the agent from writing files directly — so on every "build me a frame" it fell back to a slow, clumsy workaround and burned minutes. That's fixed: the agent writes frames directly again, and the design-system reference it consults on every turn is now held in fast memory instead of being re-read from scratch each step. Simple prototypes that were taking minutes now land in well under a minute.
+- **Smarter default model.** The generator now runs on a fast, high-quality model by default. Previously it could silently inherit a slower, pricier model from your machine's global settings without you choosing it. You can still switch models anytime in Settings → Generation model when you want the heavyweight option for a tricky screen.
+- **Figma screens start faster.** When you reference a Figma URL, Studio now shows "Loading Figma design context…" right away instead of a frozen pane, and fetches the design data in parallel. Reopening a project you've used before reuses the cached design instead of re-downloading it.
+
+### Added
+- **The app now measures its own speed.** Every generation turn records how long it took, time-to-first-response, how many steps it took, which model ran, and cost — so improvements are driven by real numbers, not guesses. (Behind the scenes; surfaced at `/api/metrics` for the team.)
+
+### Fixed
+- **No more 4-minute spins on a small ask.** When you asked for something the component kit doesn't directly cover (e.g. "add a search icon to the top bar"), the generator used to hunt fruitlessly and stall for minutes. It now builds the closest sensible thing immediately and flags it as a deviation, in one pass.
+- **Stuck-looking turns now speak up.** If the model goes quiet mid-turn, you get a "still working…" note instead of silent dead air, and a clearer message if it has to retry.
+- **A dead prompt that crashed instantly.** A corrupted saved-session id used to make a turn fail before it started, showing you nothing. Studio now spots the bad id and starts fresh.
+
 ## [0.27.1] — 2026-06-04
 
 ### Added
