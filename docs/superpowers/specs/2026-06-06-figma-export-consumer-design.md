@@ -98,16 +98,26 @@ export type FigmaPlan = { rootId: string; ops: FigmaOp[] };
 
 ### Token → op flow (ties #2 together)
 
-For each color on a node, with its role (`fill` from a frame bg, `text` from a
-text node's color, `stroke` from a border):
-1. `resolveTokenForRole(tokenIndex.lookup, resolvedValue, role)` → a token name
-   (or the raw value).
-2. If a token name: `tokenNameToVariableKey(name)` → a Figma variable key →
-   emit **`bindVariable`**.
-3. Else (raw value, or no key): emit **`setFill`** with the raw color.
+**Code reality (decided during planning):** the #1 serializer already resolves
+each color to a SINGLE value in the SLJ — `style.fill` / `style.color` /
+`style.stroke.color` hold either a token name (e.g. `--bg-neutral-soft`) or a
+raw color string. The SLJ does NOT carry the candidate set or the role. So #3's
+planner consumes the resolved string directly:
+
+1. If the value looks like a token name (`startsWith("--")`):
+   `tokenNameToVariableKey(name)` → a Figma variable key → emit **`bindVariable`**.
+2. Else (raw color, or name with no key): emit **`setFill`** with the value.
 
 This is the "editable, theme-aware" payoff — bound Figma variables, not frozen
-colors — wherever #2 can resolve them.
+colors — wherever the SLJ carries a token name #2 can resolve to a key.
+
+**Known limitation (deferred, not a #3 blocker):** because the serializer picked
+that single token name WITHOUT role context (Slice-0 `resolveToken`, first
+candidate), a value can already be the wrong-role token (the Slice 0 fg-vs-bg
+collision). `disambiguate.ts` (`resolveTokenForRole`) is therefore UNUSED on this
+path. The correct fix is a small #1 follow-up: have the serializer store
+`{ candidates[], raw }` + role per color so #3 can run `resolveTokenForRole` with
+real role context. Tracked as a follow-up; #3 ships with direct-name binding.
 
 ## Executor
 
