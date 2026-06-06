@@ -1,0 +1,4507 @@
+{
+  "capturedFrom": "Arcade UI Kit v0.3",
+  "fileKey": "a2uKnm88LxRXEWAL1kOqeQ",
+  "variableCount": 750,
+  "variables": [
+    {
+      "name": "Dragonfruit/900",
+      "key": "29fda3de5dde33671b6d1f82925d6e151fd65708",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Dragonfruit/800",
+      "key": "f03f25f32266211b3c1cabd4dc1633015540c0b3",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Dragonfruit/700",
+      "key": "3189379537fdaf34fdf65c8d5e658258720f334a",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Dragonfruit/600",
+      "key": "bb50ea0ff2bc576f3d30f490b4c8e3cf50cfa886",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Dragonfruit/500",
+      "key": "cb69fce4f13163baa993cf2e126a48653c6a017b",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Dragonfruit/400",
+      "key": "506bfcab262ed13a520aee3c7654c2c69dc04cda",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Dragonfruit/300",
+      "key": "4d563936a3c407d0b23ed359c231f740a9b5a1a3",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Dragonfruit/200",
+      "key": "c56550bed89731d4346e0bd1b0298a3ad2b864bc",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Dragonfruit/100",
+      "key": "e0f5cb5e8794c3c3e235a55410d6b4e847f96010",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Persimmon/900",
+      "key": "5547cf35066d8d562e17b874c6f930f4987f4b72",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Persimmon/800",
+      "key": "5391de9ece49f19440a07ec9890105a64e5227c6",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Persimmon/700",
+      "key": "8d40251ddf3b0860456f19bba6846094264efe0b",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Persimmon/600",
+      "key": "876104e087ba6a784acdd42a672619d6acfd065e",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Persimmon/500",
+      "key": "b8f4f62467a11fd7eebf0db1fd12ab1a7c298855",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Persimmon/400",
+      "key": "230d5c67c777b5f26ae238b3c649781ab02f008f",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Persimmon/300",
+      "key": "4809ab6f3bde89ea09d7704cb100c5f6c211f785",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Persimmon/200",
+      "key": "e7607427b1bef52c2f868a4bcad1f67a6750f4ea",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Persimmon/100",
+      "key": "7b157acd05cfce40f6731011fd0aec2129ff7cc5",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Banginapalli/900",
+      "key": "c3c364ec2bd5f193263ad7b097fdd71cb39971f6",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Banginapalli/800",
+      "key": "bc799ab03a9dac161286f2fbcc56d764a7846a88",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Banginapalli/700",
+      "key": "fc50d64cf859ba490353959e4ae2d893463ba1ef",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Banginapalli/600",
+      "key": "fa4ed75c735fb9808b34db3a1b8cf97b361a3303",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Banginapalli/500",
+      "key": "f8c6d62c0d31c9377d20c831cc0bbd9936baa9b3",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Banginapalli/400",
+      "key": "fc8ac0da3d1b0906efb49454ad23c5aab574b6c0",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Banginapalli/300",
+      "key": "2b88433eb980cf8094057c637eccaa432bde882c",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Banginapalli/200",
+      "key": "c73ed87889091e13caa247537493918ac3370501",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Banginapalli/100",
+      "key": "f30e3251adccde22b124dfec3e1165b94feef59c",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Hardy/900",
+      "key": "fc17b9ed0383cf1f20ff4b6acbadaa42aff4fc1a",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Hardy/800",
+      "key": "4531466ec34c289352251daf29f033bc07cd888e",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Hardy/700",
+      "key": "c79d7eb7d4f33f61bf93b6f28386eacaf2bb0ec7",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Hardy/600",
+      "key": "b4e85d133b927b7c85bf1003e8c20c81a1737254",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Hardy/500",
+      "key": "c3aec5e1a07a014afabb2aa46061c2f9d89c2a70",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Hardy/400",
+      "key": "08b603ef4bfc6edf962bf7dc2820c9a997b028d5",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Hardy/300",
+      "key": "35edaf0a2e4244b3ecda752e3e74dad20fe294de",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Hardy/200",
+      "key": "0ede27e02c827e05b9afe47da0409625f703abf9",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Hardy/100",
+      "key": "90fcc25f13a9cc2fcce8b417926e0bd881f018fe",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Cucamelon/900",
+      "key": "0201641ce2e19bab5ce541f5e6ebfc47b70eea8c",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Cucamelon/800",
+      "key": "bdc0297c7feb9e6490c6d31497d885dfc3f4c426",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Cucamelon/700",
+      "key": "b6842e9dbb1c26f77a9285eccdc41a7a564779da",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Cucamelon/600",
+      "key": "ddc44e0ee1f592fbc35c27e6e93461ef29e1ff64",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Cucamelon/500",
+      "key": "adb913682c82ed4db600846b66e9654f8ca44012",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Cucamelon/400",
+      "key": "1c2f29b7f5adc2fa8e0c6e1902ccf620b24ab49c",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Cucamelon/300",
+      "key": "8c74aa60998e2abdfbc4157588e5c660b016f463",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Cucamelon/200",
+      "key": "d3cd3f87c4a7ee0b518d83524882b2393d70c1ad",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Cucamelon/100",
+      "key": "c1cf1829ef88b9be8744183a8d327c42ce7be728",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Maoshigua/900",
+      "key": "0b62e28c0fb02d2f86e2cf7786054ccee01edc89",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Maoshigua/800",
+      "key": "bf2ae12d453a5eb3fc55a8742ef61174c40987ec",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Maoshigua/700",
+      "key": "a77a305763c9747aab48932bb2319a92baf5d54d",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Maoshigua/600",
+      "key": "7738dd81acd1098c15ca4ee44b96294d0e1d1806",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Maoshigua/500",
+      "key": "7ef71f1cc985040fcbace5fbea27a66600d9a5a6",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Maoshigua/400",
+      "key": "91d0ab723403c911609a08c6176c638f603432b6",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Maoshigua/300",
+      "key": "d219dde705cf49712c2f641703c7acab6ad61780",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Maoshigua/200",
+      "key": "da48f4e65d3d9dcf750200d44d8bafaa3a82f4d3",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Maoshigua/100",
+      "key": "e6f7e31b9e91f31958d54c16ccdf78ebf8e2f2e6",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Jabuticaba/900",
+      "key": "1a6fa1a13c5e34b05f4021057ce9831766e16434",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Jabuticaba/800",
+      "key": "c23ee3055b321ffbf7603d4884b03e4853eccd90",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Jabuticaba/700",
+      "key": "5347e9f1c1e9c39523054302f73399dca905ac07",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Jabuticaba/600",
+      "key": "d7bcce5b1b5c4a3a9ee45ee58b8bdd3b871f6476",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Jabuticaba/500",
+      "key": "a56456afa9642627cfefc238a5a6459f8de60c3d",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Jabuticaba/400",
+      "key": "5c3569da1534d40559e25847af88970d0c7f71da",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Jabuticaba/300",
+      "key": "8983cbd4ee17aa83c0f250f45e6261496c22f486",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Jabuticaba/200",
+      "key": "c07a863d523139eac8ea200f0305c43789a5e034",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Jabuticaba/100",
+      "key": "1c247f7a3d894b4b5fe6e7fd4cbe901fa2285abe",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Lychee/900",
+      "key": "52a783b2cec88770fe5a28fc71b38c80b3f24ef7",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Lychee/800",
+      "key": "791b7618f17ed2a5914b33a6feb91fb34454060d",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Lychee/700",
+      "key": "48cf9ae7bbaaff123bbb2041cbaa71db51a822eb",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Lychee/600",
+      "key": "affc642febd1f9601179e0727aab98c5b3c5aa28",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Lychee/500",
+      "key": "c0d0bca46e5003b37f924f97bf4fe9bc277ac265",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Lychee/400",
+      "key": "ca699322b0a556b2edb7caa26dfb8df3a12642af",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Lychee/300",
+      "key": "921939237821c76b1671965f57f0b4b8ee94481f",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Lychee/200",
+      "key": "02d788d291f26d5080587a9942701ce71a33ff5f",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Lychee/100",
+      "key": "537ac450cb1605cb0eba2bec6d4ccb04b176c15a",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Husk/100",
+      "key": "7445f7e3601fecbbf9681c5b169b4f8158b6ee87",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Husk/200",
+      "key": "85d2a7fcda41980f18ed0c238a77e73df190963f",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Husk/300",
+      "key": "f3da14fda98e94d4fa4765e019a05edde3ea199e",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Husk/400",
+      "key": "2c87cbf4feab6de966ca47bd29d7ebe875f9355e",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Husk/500",
+      "key": "d886d5b39f87d1c4b7285c9c33869e55484debaf",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Husk/600",
+      "key": "6f0ab95bf0eeaebbcb0da3d67f82d6cef6d3f6de",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Husk/700",
+      "key": "05513fbde77c229c7291a6127e97fc19e282ae4b",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Husk/800",
+      "key": "cd1d297dcf6648ce25846ce65b2b41c2c536635a",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Husk/900",
+      "key": "452cf9011f2a212e784123b1857f77b5087792ff",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Husk/1000",
+      "key": "28890e87d02be96d1238347bd644ff4f50da7270",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Husk/1100",
+      "key": "fa14cf2a684ac5bc4b6f5da0ceafdd236604853e",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Husk/1200",
+      "key": "fc8338adb5a2c36aa626f66af63653e32408de8e",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Husk/1300",
+      "key": "9da7d46e187692ee3f7fff4c665e7e00062233bc",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Husk/1500",
+      "key": "16f14f4f9451eb3c8558370c93eace877c73b634",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Weights/Regular",
+      "key": "1df98b9e52766afd6a3faeb632fdde7d7a7d47eb",
+      "type": "FLOAT",
+      "collection": "Mode"
+    },
+    {
+      "name": "Weights/Bold",
+      "key": "c5be5da5c1f8a90378f0544035a42532b94e3227",
+      "type": "FLOAT",
+      "collection": "Mode"
+    },
+    {
+      "name": "Weights/Medium",
+      "key": "bda4d73ffeab2fa51cbe1db0c34f8f1eb33f4512",
+      "type": "FLOAT",
+      "collection": "Mode"
+    },
+    {
+      "name": "Typography/TitleLarge/FontSize",
+      "key": "7d6a64f0fb0a4319457ff98b1e6101b4713d9b9c",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/TitleLarge/LineHeight",
+      "key": "6f2832236198021f9348317df8dce4a365a436de",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/TitleLarge/FontWeight",
+      "key": "73cd76d497b2b1023e7c09b71d85f5279fb55b9b",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/TitleLarge/Family",
+      "key": "501a2086dad9d94d4eb3bd8555bb1eca5a08aff3",
+      "type": "STRING",
+      "collection": "Device"
+    },
+    {
+      "name": "Display",
+      "key": "374de204e4907fa37cca44f95dfd1fff64c824a4",
+      "type": "STRING",
+      "collection": "Font"
+    },
+    {
+      "name": "Text",
+      "key": "7bd2c444b82d91fe00e4e218562c34e13f18fa33",
+      "type": "STRING",
+      "collection": "Font"
+    },
+    {
+      "name": "Mono",
+      "key": "12b6ad79b98ef0250262d170888593c11c2db78e",
+      "type": "STRING",
+      "collection": "Font"
+    },
+    {
+      "name": "Typography/TitleLarge/LineHeightMultiple",
+      "key": "f6aec4f5052ca3019794b0ec32e0cd9d212fb12d",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Title1/FontSize",
+      "key": "b447271d7608e9258ff49e84d81ae6826c6f4ad0",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Title1/LineHeight",
+      "key": "cd5984f606ff5fbb50a02a5857333292875383c7",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Title1/LineHeightMultiple",
+      "key": "d8012540a1d1309b1749ad61d5c9d01b76ab0e29",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Title1/FontWeight",
+      "key": "d431b4abd6cac88be7d60aa41f08871f41c39c3a",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Title1/Family",
+      "key": "1d234a20432e26c8e3ee928d53a81d807ef0582a",
+      "type": "STRING",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Title2/FontSize",
+      "key": "a81b155248325c2a8f740b15f4d024680ff402fc",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Title2/LineHeight",
+      "key": "838e46956129c923631b5803cef57419b1e77945",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Title2/LineHeightMultiple",
+      "key": "ac856872445e5e317814c2794c519e9ce2017c9b",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Title2/FontWeight",
+      "key": "556fb0b435eb6899e8a7ed08787ee5ab8c1aa501",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Title2/Family",
+      "key": "465231b370172c6224a51e077f70046f7f8c20e1",
+      "type": "STRING",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Title3/FontSize",
+      "key": "3c4d0b930350b6e5bfeeea6ded27a9ad16865dbf",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Title3/LineHeight",
+      "key": "28aed483892968d85e0a7e546a3911995b120cf3",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Title3/LineHeightMultiple",
+      "key": "6169e5d40dc102260e605a377ef09d62576c4ad0",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Title3/FontWeight",
+      "key": "b94e7c89f1212affe615a2a352b278023189b24b",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Title3/Family",
+      "key": "297748114623418e8ab0ca31ab2d24c30ab4aced",
+      "type": "STRING",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Title3/LetterSpacing",
+      "key": "a780d8bbc9fe40f44cae885b225c8e72e5ef57d3",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Title2/LetterSpacing",
+      "key": "56339ee1a1e176149b0c8896198098ff5311f577",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Title1/LetterSpacing",
+      "key": "23155a09eb99b3b863e1c0c185e5ec43941ba5cd",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/TitleLarge/LetterSpacing",
+      "key": "1605051e760ffeef3659496aba7d24735d0db693",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Large/FontSize",
+      "key": "e58489caa96c73a27d2af61cad75992b8f876c9a",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Large/LineHeight",
+      "key": "d4201ade37a2a71fb8fcace65394b20b192703fb",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Large/LineHeightMultiple",
+      "key": "40d02fa7dd03bfc90816ff3a00f568eff52f4f6f",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Large/LetterSpacing",
+      "key": "cd6b65901a6d2b8df85824aa980303c0db58f4c7",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Large/FontWeight",
+      "key": "7b517e08e87b93772fc101c7c67c1d72a39f5ff8",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Large/Family",
+      "key": "9a86a28cf0338a131925c72b871dfa41644ef290",
+      "type": "STRING",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body/FontSize",
+      "key": "c01fcb8bae18f05d530ab341d1ebbef36a6cf203",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body/LineHeight",
+      "key": "f97efdf4dbf12949ff520c0285d9ba439f357695",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body/LineHeightMultiple",
+      "key": "ae3a4b2e530f4d5e56d6c1b988b5ae472c3c417c",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body/LetterSpacing",
+      "key": "1564c20c8c86f5d2d1c26febcd37865cd23b3a7d",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body/FontWeight",
+      "key": "fab19f8e2a4016e6af7e2bf5d3dde996f0cd1064",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body/Family",
+      "key": "673f66d57210a7acb76881fab01fe020f126def1",
+      "type": "STRING",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Small/FontSize",
+      "key": "6662a0f5e96b5a342397c03a6bcca31c4b30c8f6",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Small/LineHeight",
+      "key": "5ab3769061f4eac3811e06c5b83e7d7aa356f196",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Small/LineHeightMultiple",
+      "key": "8046e99a987e755817053a28e0aeb44db015aad4",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Small/LetterSpacing",
+      "key": "e5369067b702305fe668ca6cfd5a78348c55f744",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Small/FontWeight",
+      "key": "c8da24f7f721d8efcce8ca5b42243fdc949003d2",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Small/Family",
+      "key": "6f00b55ad74117cc26df5e2174aa3b9bab5c0334",
+      "type": "STRING",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Callout/FontSize",
+      "key": "45cb4c2785de3059edef970f0ea0aeae54a89dd4",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Callout/LineHeight",
+      "key": "43aea7c494bdaeeff98771814d0aa04c2bb1245f",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Callout/LineHeightMultiple",
+      "key": "f29bac1b46d674751d8580656381a7e19200d6d9",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Callout/LetterSpacing",
+      "key": "8f82b06a44a9317a0e627074baafab9ba5d21401",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Callout/FontWeight",
+      "key": "cd5e91c58297ca07514138d8f0136a4d59d6b0e0",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Callout/Family",
+      "key": "3c0f84386886c3e99ab8a0c939bb4a3c7e132ba1",
+      "type": "STRING",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Caption/FontSize",
+      "key": "029af9c6b18e2f8f4cbfb9a9bf1683278ef19300",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Caption/LineHeight",
+      "key": "7c1b8051d2958628128246991f8bfa423f159909",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Caption/LineHeightMultiple",
+      "key": "cead987167a351f56f0a946b2e086d33b8df9e7d",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Caption/LetterSpacing",
+      "key": "83a5f77332f390ab7649f5b5f26b8b32672455ce",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Caption/FontWeight",
+      "key": "2579aca11e3bb62c839c92ca1518638628cf7013",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Caption/Family",
+      "key": "764f606dcb171b43cf17ed4370ea78b34c79e7ae",
+      "type": "STRING",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Large Bold/FontSize",
+      "key": "7638d263624587ca9c83a93e252ef8c50fb7a6e4",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Large Bold/LineHeight",
+      "key": "c0d904451e4d602058e9e524b8bf3942fccfb93a",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Large Bold/LineHeightMultiple",
+      "key": "1d355bd60a4dc687e8a4d5677923140cc6576d70",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Large Bold/LetterSpacing",
+      "key": "f398d3b40c411812645f839da0c33f8cf89c9dbd",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Large Bold/FontWeight",
+      "key": "368ee1001878d3845c83673761cc761d03ff5f44",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Large Bold/Family",
+      "key": "42aeea4efd914c087c337ced5a322fe4ed7a2f6b",
+      "type": "STRING",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Bold/FontSize",
+      "key": "3c970ee590f79b2ef3ac3f5f43590db3363bedc0",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Bold/LineHeight",
+      "key": "701f3f56cea25a1f08b6cc5800d72b9a62f580ae",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Bold/LineHeightMultiple",
+      "key": "fac13d13d45bdd2ad8fbc4a861cb3223f27d96e0",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Bold/LetterSpacing",
+      "key": "47d1b8ce353e7657e4e54932e03afeab89323316",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Bold/FontWeight",
+      "key": "b88ab1de13647dc9454e64bb9703132e3dc7dce0",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Bold/Family",
+      "key": "3688634b91ad281fcf2868c9fe0b90f6f4860964",
+      "type": "STRING",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Small Bold/FontSize",
+      "key": "0615c3e93103ee2f18bf9ba3c81b7464b45ff79c",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Small Bold/LineHeight",
+      "key": "45d580d6679da5f996363a89d4d3a8d6abd7b450",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Small Bold/LineHeightMultiple",
+      "key": "696caea598fec60f0232eb6244c658ae38f319ce",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Small Bold/LetterSpacing",
+      "key": "12d77ed6ba0deb5a70fa0c33fd6df4260659c570",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Small Bold/FontWeight",
+      "key": "e767a3dc0b862e4e2bc1a94691997e4359050dbd",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Body Small Bold/Family",
+      "key": "e6ddda68096184dd9d32ff8b150f86116eb78caa",
+      "type": "STRING",
+      "collection": "Device"
+    },
+    {
+      "name": "FG/Neutral/Prominent",
+      "key": "35a2c2a2c7ee47ad73f7918c0f9643a06be79ce1",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "FG/Neutral/onProminent",
+      "key": "87ed19ed943cc24fad28877f052d4251737b9fd5",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Neutral/Prominent",
+      "key": "eedb88552a8bc4d106ff70b82088145ef512e818",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Neutral/Soft",
+      "key": "8a5dcc10bc41e904819385884ac76e543fde1cbe",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Surface/Backdrop",
+      "key": "99a8bffe600a57a72d715b598c71fe00e29ba718",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Typography/System/FontSize",
+      "key": "12259471aae3082d907b04a0142c63bc6118b4a4",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/System/LineHeight",
+      "key": "0dd58eab612bfe573e4174b0f1336f581486a757",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/System/LineHeightMultiple",
+      "key": "adfd855c4256ab7805dc9b9a36c522e3bfb70226",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/System/LetterSpacing",
+      "key": "2c5eae1f2ebe1f2d96e2402b00d92f19fa859e1e",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/System/FontWeight",
+      "key": "150116f259444fd3bea7a7d525a755edaa204503",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/System/Family",
+      "key": "5d02f5edd7ad831555c10f3052481fe6b9324c16",
+      "type": "STRING",
+      "collection": "Device"
+    },
+    {
+      "name": "_Experiment/Components/Icon/Default",
+      "key": "2cd2f6e59635a6e7499ad16959aee695db88d20d",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "_Experiment/Components/Icon/Large",
+      "key": "1899df0c1b643f2251cb4f5683396a3924a6487a",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "_Experiment/Components/Icon/X-Large",
+      "key": "3aa7109cb088eda43681ba519ae0d5eb50fa0ced",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "_Experiment/Corners/Square",
+      "key": "0daa995a9cb9823cd5cf9e86ee0813fb68fed352",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "_Experiment/Components/Control/Gap/Medium",
+      "key": "ac16b2a17ffe79b791bd2130f34c7bd0c058d64b",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "_Experiment/Corners/Circle",
+      "key": "5aa28da624cc65806fa57a06b3b9c13784c1fb5a",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "FG/Neutral/Medium",
+      "key": "0ffcdd51d4e523f4d42b1f15c3a24a743c9cd7bc",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "_Experiment/Components/Bubble/Padding X",
+      "key": "96517800a9fa824f63a561d34386afc76b2eea0e",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "_Experiment/Components/Bubble/Padding Y",
+      "key": "254b126d48907d4bf5dd3ec482b94fb73cd8ffa1",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "_Experiment/Corners/Bubble",
+      "key": "0b2b9e9e233c0cb82dc9afe066e1b7d1a1a45365",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "_Experiment/Components/Icon/Small",
+      "key": "62fe3920b7d157108f4304a80a09360d624e560a",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/Default/Size",
+      "key": "631629072a786083ecf72dd3f020e83aebb9a3c9",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/Default/FontSize",
+      "key": "f38020586323d44500ea1a583d5f98406c8db037",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Surface/Overlay",
+      "key": "1a3788350ea55a0076a6c64631bfefc76240d401",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Stroke/Neutral/Subtle",
+      "key": "ae92de2af2a331b6ddda991694a97e9af847726b",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Expressive/Yellow/Prominent",
+      "key": "c7154f0dcd9a92e81ac5eb3ffccc614be12d0382",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "FG/Neutral/Black",
+      "key": "f1b27211ff657bbb0305cadcf56c5182064110ca",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "_Experiment/Components/Control/Gap/Large",
+      "key": "e0a83a11d6f3bfb759c5ee8c1a52b8fc374a68d3",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "_Experiment/Components/Control/Large Font Padding Y",
+      "key": "34eba0ef5a185bf0858aa125e84a89a72b8a20fb",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "_Experiment/Corners/Circle x2",
+      "key": "f651e6153281bb5f455e1cfe5ce92ff9d8b67f27",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "_Experiment/Corners/Square x2",
+      "key": "ed6b91faeb04537a5e9983452dfa24d47190514e",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/System Large/FontSize",
+      "key": "e279af75998162dd324dd4cc2cb9164f8e3d3a91",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/System Large/LineHeight",
+      "key": "ce2e207bbab3311a18fbfcad3d5684edcea4dc06",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/System Large/LineHeightMultiple",
+      "key": "d89f73601519184c6c8414004beadc2b90fa249d",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/System Large/LetterSpacing",
+      "key": "7ac959c9d9c5caace1debf62f0bca396b861e6d1",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/System Large/FontWeight",
+      "key": "c244793968c399d78a67454f5630a47fb88e77d2",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/System Large/Family",
+      "key": "1152a2c3db1aa99961d2977303291def83989534",
+      "type": "STRING",
+      "collection": "Device"
+    },
+    {
+      "name": "_Experiment/Measure/Body",
+      "key": "ba7b7a82dca036ac4ddcc730da89258229d3696b",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "_Experiment/Gutter/Default",
+      "key": "c27ee3868298749a7ec975cf6d79b1b9ad415d31",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "_Experiment/Gutter/Small",
+      "key": "c45c8220cc07e1e08e9693fc29da2972a1b0c53c",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Surface/Shallow",
+      "key": "35ed4af75da5048c752db96f1f864f6865f7bbcf",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "_Experiment/Components/Control/Size/Default",
+      "key": "13c001606f704e6c5d56cfbe0cbad3340265a88d",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "_Experiment/Components/Control/Size/Large",
+      "key": "b4f0342dfd9e4bc443b7e63a4c812ab8320e4203",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "_Experiment/Components/Icon/Medium",
+      "key": "688977c66fd8fd6c689c37c36515d18d1f3570b9",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Stroke/Neutral/Medium",
+      "key": "762a9b2b03030d511dbdc8266f4655206e256277",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Opacity/Disabled",
+      "key": "10ab96731e111259a319482078e9fac0d8449f7e",
+      "type": "FLOAT",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Neutral/Subtle",
+      "key": "c031fd49d1ae4ac6a8bd2d0bd47420d8f313af67",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "FG/Neutral/White",
+      "key": "aaf5483cc899df67dfb2b7dc2b3c3eb3ed5ed85e",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Component/Avatar/Medium/Size",
+      "key": "73423f1cb7c79c6b45aa808d03d6ce5d13e91e7f",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/Medium/FontSize",
+      "key": "7cd504e6a72b9c2e5c28796131564cefb14a8ba5",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/Large/Size",
+      "key": "5aea2e290cf5397ca486a4176e0ff2e529864c73",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/Large/FontSize",
+      "key": "7e14d29f0ec907d26347d6c9b67598d843840bbe",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/X-Large/Size",
+      "key": "48470680fd23129ceff6cd9c22ce97cde0b7e083",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/X-Large/FontSize",
+      "key": "33d80aedeccd6b7e5479db6d384fc25a1bd7aa55",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/2X-Large/Size",
+      "key": "210ddfddde67d013206eb7915518c1603fba3c2a",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/2X-Large/FontSize",
+      "key": "cca6495b3be26626f6e97927418b6954b8a90d81",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/3X-Large/Size",
+      "key": "a89fb204ec4a2463172bf8aeefaa183542e9d923",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/3X-Large/FontSize",
+      "key": "264afecabcb8cb3159e009529c267abf2353f71e",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/Small/Size",
+      "key": "9ff4d362680180ea31fbe72952a436aab510da54",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/Small/FontSize",
+      "key": "fd3e73b56aa9bc31e61d755a3defbcd9444d901a",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/Small/Stroke",
+      "key": "acfbbf811f1eb41be13269c942e2f786ab08c1f9",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/Default/Stroke",
+      "key": "7f0d7950315724d21b28196e0151cde0952d7a4a",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/Medium/Stroke",
+      "key": "7b819294af9e8ef7b7c72141bd97ca9d74361844",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/Large/Stroke",
+      "key": "89b4601648e15dd3271ac3ac1357168fe937586e",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/X-Large/Stroke",
+      "key": "e220cc5239102acbe4b75c54b059dd50764a5e9e",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/2X-Large/Stroke",
+      "key": "103c4a4959871b3d88e3deae6d9608b840934aaf",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/3X-Large/Stroke",
+      "key": "3369481fe03c35911874b2ed9947c23943a21477",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "BG/Neutral/Medium",
+      "key": "6c2f36fce86c7e7a23dafac063ec54d111727f9a",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Stroke/Neutral/Prominent",
+      "key": "15817269a87ba5a1c58b93320fd2095605ef2125",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Alert/Subtle",
+      "key": "2e9e5f52553c471826cc2c8f50b52217cb8673d3",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "FG/Alert/Prominent",
+      "key": "b9756cda761bfaf723c29a9faeda02fdbe1948f4",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Typography/System Medium/FontSize",
+      "key": "8fb3d8e80483267652cbf8f86804c7f6246c23ca",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/System Medium/LineHeight",
+      "key": "55057703920ccd4fa5d88e4758bcab6cc31fa548",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/System Medium/LineHeightMultiple",
+      "key": "0b92df22f4c487ce2ae373d73fe55bad239da796",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/System Medium/LetterSpacing",
+      "key": "54197230fb79bf587922f26b9ed876ed57232af8",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/System Medium/FontWeight",
+      "key": "f5c9928ca27c1aa8b23a2fb012643ea787de9a16",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/System Medium/Family",
+      "key": "c9daab4cee6a8552c5760364573fc70bb1ef3a6f",
+      "type": "STRING",
+      "collection": "Device"
+    },
+    {
+      "name": "_Experiment/Components/Icon/Mid 2",
+      "key": "e58439f1d1982a60e87b1c0ede8efb0f3ceb314a",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/Small/FontSize Mono",
+      "key": "332516e73c0f98ccfd7600cdadf6b5de4fe7f9d0",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/Default/FontSize Mono",
+      "key": "06fbc4d79712ea757cc7b738d60c53589f6b17b9",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/Medium/FontSize Mono",
+      "key": "8f6888485795fad629e26a08ba7b8ce62abc73ff",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/Large/FontSize Mono",
+      "key": "fb241a8ae983f4ede127cd7c1ec56cc1f335e023",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/X-Large/FontSize Mono",
+      "key": "ac6b7b7acedb088e3ec4ff9e3cee0ac30a84bd66",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/2X-Large/FontSize Mono",
+      "key": "a23f2d1cd840a0d7b07dda760042186df92b325c",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/3X-Large/FontSize Mono",
+      "key": "47d56a780f0033172d31a68e45fc6aea167e88fd",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Husk/1400",
+      "key": "763caa6930f0c96526d5e223a8e96a02f150ec50",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "_Experiment/Components/Control/Gap/Small",
+      "key": "7a650b0cacff8fc31513cb4254de77f00b32f2a2",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "_Experiment/Components/Control/Size/Small",
+      "key": "ca829717d061f8297aef6560002292680ac7b698",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "_Experiment/Components/Control/Gap/Split Medium",
+      "key": "ed5cb328e3d8147e5681f82d8b3e1e3c8a679846",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "FG/Neutral/Subtle",
+      "key": "565accb944f1f32e8ca6f7fe3def26183845bcae",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "FG/Alert/onProminent",
+      "key": "f21de5b6e75b132ffda898ea76b8ffcae91b3814",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Expressive/Yellow/Subtle",
+      "key": "4d25dc3220ea3814d7b9211b5a20d112b2e96b41",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Alert/Prominent",
+      "key": "118bd67968e921a64cd93d9f245cca522ff9f4ec",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Warning/Subtle",
+      "key": "738c3edc641923928baae9ebaebf13cfacfa38ca",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Warning/Medium",
+      "key": "45699bb2aa0f6e1d9b4edbae310de4ed07190dbb",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Warning/Prominent",
+      "key": "28fa6a9b19522b9bee9946299136ecd303a41fd5",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Typography/System Small/FontSize",
+      "key": "7fe1e074f9262b2333597b1296340f9ea3e9297e",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/System Small/LineHeight",
+      "key": "6b52746f3aceff7dc4d3bfbcd8b6400c0e28383f",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/System Small/LineHeightMultiple",
+      "key": "302844833f8c92805f7ab48b493b74ff7e82bbb2",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/System Small/LetterSpacing",
+      "key": "44b3ada7af1f2b6dbf4b1c48bc3f57d5c620dd2d",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/System Small/FontWeight",
+      "key": "d3ca0c6bcf454b63c3004c85b5e837cf434b7f73",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/System Small/Family",
+      "key": "053527e988a83c083290b561d226a98ddc3bba2c",
+      "type": "STRING",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/System Small Medium/FontSize",
+      "key": "5d8c5c8ca9d4163f2a240d6f4be15856151bfdd0",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/System Small Medium/LineHeight",
+      "key": "cc9dd98f363587304245f247d5fdb2fb418635b7",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/System Small Medium/LineHeightMultiple",
+      "key": "f771008080fc0597fe469ba7f1ced38af1564bf9",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/System Small Medium/LetterSpacing",
+      "key": "d307c80476fd02c9e61953ca9480daea64198b3d",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/System Small Medium/FontWeight",
+      "key": "991e9da27e4966bc54075d33ed0989b470940144",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/System Small Medium/Family",
+      "key": "332e74e57d8cdd02dd87d75a0f9966ca797c9a1a",
+      "type": "STRING",
+      "collection": "Device"
+    },
+    {
+      "name": "BG/Intelligence/Subtle",
+      "key": "2b8fa2ce86425e689bf14982b9dbdb51b0b770e8",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Intelligence/Medium",
+      "key": "d9b5cef731e3e16a3defb162c0b0d63d7c5553df",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Intelligence/Prominent",
+      "key": "f85742d1ffce0686295e4f14a4b88dc26dba114d",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "FG/Success/Prominent",
+      "key": "a583c329ff3ca894bacfe638f9d40fe34aaecd55",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "FG/Success/onProminent",
+      "key": "7c2fd6953788caf5b8bbabe2287081344ab5ede6",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "FG/Warning/Prominent",
+      "key": "fdc30d41ce576efdaeaad2fa9d5aedfb75053603",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "FG/Warning/onProminent",
+      "key": "b777e66ea181d716f91bdc1450f0b35fd371e862",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "FG/Info/Prominent",
+      "key": "14154723cc58baaf036403d805d7bccc03007d45",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "FG/Info/onProminent",
+      "key": "977b393e87f66f99dc80db6e0283ba55c404787d",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Info/Subtle",
+      "key": "4488e4316bd31241cff676b95cd715c2630aea01",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Info/Medium",
+      "key": "494ff375257d3873babe0f61dd072c550e664078",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Info/Prominent",
+      "key": "fa2359d5109632eb54499a74164343c741207bed",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Input/BG/Idle",
+      "key": "c1a927dc163381bf4d4f9d2f7e062e143e3b6a19",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Input/FG/Placeholder",
+      "key": "cce7834cef179d7cceaff8d7a751ad071115eea1",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Input/Border/Idle",
+      "key": "dee7a94a8ac0c35bcb2251cd8e69bf31cd16a44e",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Issue/FG",
+      "key": "0f244402c0492359aae5b042ea958565c9a947ba",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Issue/BG",
+      "key": "4c1a21a4da5c4ddb20d4a23dd956ad7f25f6b3c8",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Ticket/FG",
+      "key": "5167323204802d00f1fac9af15a1053f616a96c5",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Ticket/BG",
+      "key": "f20ded8457904b88c3235ae60ae42ba36d7a1cc3",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Typography/Numerical/FontSize",
+      "key": "e32454695d5530392aedd1c32f656b4a4f7a0fb7",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Numerical/LineHeight",
+      "key": "6957c3c0720a71407f1cb7fa3a1ec3b1a74e8b0a",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Object/Customer/BG",
+      "key": "cdbaee928e2a580cf1e4b3c4d88c03a50d60ec6f",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Typography/Numerical/LineHeightMultiple",
+      "key": "26f737fd28d3c88aa81dc16c19310b4249d2a4d8",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Numerical/LetterSpacing",
+      "key": "0cca97c8cf843bbb187d2c3d97eb8684fb39518d",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Button/Primary/BG/Idle",
+      "key": "a5282c50bf22448dc51e6afa547e5316b40b15cd",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Typography/Numerical/FontWeight",
+      "key": "fa3d6f2f25bf9c46e304b3c10370845e0e758443",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Button/Primary/FG/Idle",
+      "key": "740d9c8723c28d7b53fabf6f912504d63ccc9f24",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Typography/Numerical/Family",
+      "key": "50e43a99e496e8f61f68e2e00c1b69d27a8c2484",
+      "type": "STRING",
+      "collection": "Device"
+    },
+    {
+      "name": "Button/Primary/BG/Active",
+      "key": "9e8c2604965c489a1d4b91687a1e74eebe6a098a",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Primary/BG/Hover",
+      "key": "fec6945ff65087207ee07ef08946f83d884af302",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Primary/BG/Disabled",
+      "key": "250dd2c317e1cea20d6b62b05bdeee3ce8268f32",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Primary/FG/Hover",
+      "key": "b2756fe674b2bcbcce19c13432a9437af3ba3375",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Primary/FG/Active",
+      "key": "b569e66cbc399f2a58601cba40785166ec8290a9",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Primary/FG/Disabled",
+      "key": "f380dcb1fbf3a3ac162451d3ea51e1d5a18b2327",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Primary/Stroke/Idle",
+      "key": "d19041ad2a95a56ca5bbe5f355c387a721d75f20",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Primary/Stroke/Hover",
+      "key": "b33fd3f7e4095515119091ffb67a78dc6f80bf88",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Primary/Stroke/Active",
+      "key": "931f7ecd894704e1388b7bce8299d6e8e61d8dd8",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Primary/Stroke/Disabled",
+      "key": "d1a592efdf17f7448acdd1a33807339df13f308c",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Secondary/BG/Idle",
+      "key": "88d5ac62935fe93f3dfe2cc8420493ff23bfe64d",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Secondary/BG/Hover",
+      "key": "ad0ba8e847c79333104bbcb1bc62b71d497d23dc",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Secondary/BG/Active",
+      "key": "d8f6d2b74319e0a6468659a7e95dfade973d5cd1",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Secondary/BG/Disabled",
+      "key": "d47176ae00162bb1f4ae1c86c009c2d9f578aa63",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Secondary/FG/Idle",
+      "key": "fbdbb49db37ae85efda30ceb146eb7a1f22884a0",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Secondary/FG/Hover",
+      "key": "6e56ca8f7ece9b9028efc5ebe7dc14c96fd12cda",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Secondary/FG/Active",
+      "key": "2afc2eb781669905e5d06dd6a6c92859ca277dea",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Secondary/FG/Disabled",
+      "key": "092d0f21a53b10e7d76419af0222c4aaeedc31f9",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Secondary/Stroke/Active",
+      "key": "71dc709a04bc636a37247ec17e3ae47763a850b3",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Tertiary/BG/Idle",
+      "key": "05f3dad2c7dbef48c9a73464e2e4f07a5074025d",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Tertiary/BG/Hover",
+      "key": "61daa88269c6a51f4ed972235b673e5021004d15",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Tertiary/BG/Active",
+      "key": "621663ad09f1a7ea665a0c9274e61eb1fe12688c",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Tertiary/BG/Disabled",
+      "key": "5cc82849c1d41954de75bb0d98ffa71a4146dd45",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Tertiary/FG/Idle",
+      "key": "cc355b2ce1346451d26c517b16f138d710bc136e",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Tertiary/FG/Hover",
+      "key": "e0a9eb30d8c396886af082248711966224d7a0f8",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Tertiary/FG/Active",
+      "key": "cd94bf7583700513ce00250493c15e8a4796758c",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Tertiary/FG/Disabled",
+      "key": "19db78cc442f1110544092cee80994b50ac65327",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Tertiary/Stroke/Active",
+      "key": "60e49f0729cf6a95eaabcb255c20fab0b57c4af5",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Destructive/BG/Idle",
+      "key": "79a84cc640087d1e0c1fb3b785150748ffaa1b5e",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Destructive/BG/Hover",
+      "key": "6c895fc0ef4bc616a734bcff062770fbdf656aa6",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Destructive/BG/Active",
+      "key": "0e84245e9b29fe06110a2c43ff30467af2a25904",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Destructive/BG/Disabled",
+      "key": "6576f5e2b97d2a787d819aff53658bdee81a69cd",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Destructive/FG/Idle",
+      "key": "8032582d1806c420ac67418b36f39b9026e7770e",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Destructive/FG/Hover",
+      "key": "6754466bec1888ea7e51a3db18885b7ae521c48d",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Destructive/FG/Active",
+      "key": "90396d660a6f0d22575ef6ecc272f6c354f46074",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Destructive/FG/Disabled",
+      "key": "6c53e379fe7000ac117e671531ff7745e9a13db7",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Destructive/Stroke/Active",
+      "key": "3d98cb8e034e00291a1fe7a35ac1d9f3a3a68de4",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Expressive/BG/Idle",
+      "key": "12d57a016c60a677612d7cff1af15ceb00c137cd",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Expressive/BG/Hover",
+      "key": "e3844b646d7a261585fa5defe009964b799c0931",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Expressive/BG/Active",
+      "key": "6ce53b18efea73d03b52d425e5c4d644989d7ab7",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Expressive/BG/Disabled",
+      "key": "82b7ba5209f8a761836dc337d486f91a49b856d3",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Expressive/FG/Idle",
+      "key": "0c3b4ac8ab0d348094c13f1e28ffad60d01195f8",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Expressive/FG/Hover",
+      "key": "ea8b3d03f966bdd02c687a63fc7a48d563555128",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Expressive/FG/Active",
+      "key": "7eda5a40e47c83669b183cd1b1f8b9bb1f7e07a4",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Button/Expressive/FG/Disabled",
+      "key": "201c025b35b04a0280f794baadc3c9625f2fa396",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Avatar/Count/BG",
+      "key": "f9f69e7be7a8e63d5c4d19544755e4258609cccb",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Bubble/User/BG",
+      "key": "dc8438aa3f1340556dcfb857c3e69dfb0a67849a",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Bubble/Customer/BG",
+      "key": "e3bdf811bab1430a8de08e8b337fc3d06f75f741",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Bubble/Self/BG",
+      "key": "58f9f554506ba37b077df292df8a9e67b9620587",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Bubble/User/FG",
+      "key": "042a642fbecbeb12acaeeaf32254b0a99c07eb06",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Bubble/Customer/FG",
+      "key": "002ebd9523be58b08310f2b34da4fecacfd4a9a8",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Bubble/Customer/Stroke",
+      "key": "b1731cf626d47c7a63e37ba32a41a3be89d442e0",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Bubble/Self/FG",
+      "key": "c17d7b045d8105dffd38a262376f61ffa360efd6",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Topic-Card/BG/Idle",
+      "key": "4eeca82dfa225aff50de5b6388e4ed2b61635149",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Topic-Card/BG/Loading",
+      "key": "0a6a19e057e9dc59a8352467c98cad421006a326",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Topic-Card/FG/Expressive",
+      "key": "8ca3e089c3b68a5ce63acb8eac66803617ef9743",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Topic-Card/FG/Loading",
+      "key": "874139d3b91c871767fae8a8dd30d6d5246b952b",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Skeleton/Shimmer/BG",
+      "key": "4e21873f75b995756b8b1b7da923da355d261b55",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Reaction/Others/BG",
+      "key": "932e23c325bc6d6eb240b9b3b1079e67a2e96051",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Reaction/Self/BG",
+      "key": "304a1305781a29efe61e32b7b4f14681d9839938",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Tab-Bar/Switcher/BG/Active",
+      "key": "6b0e990077742b32fa7febdd9c29a37e38527e18",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Tab-Bar/Home/BG/Active",
+      "key": "75ec2284d7ef448cc0f899584b39b1cd67c19e57",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Tab-Bar/Switcher/FG/Active",
+      "key": "261d10263feee9252d41ee3c75bb0fa77a4a96f2",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Tab-Bar/Switcher/FG/Idle",
+      "key": "05e410676f9a41f3be4bacbf0e5011c50c218c4a",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Tab-Bar/Home/FG/Idle",
+      "key": "6ecf18ae6cf3c18daf60c1524a45c20fc634177d",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Input/Chat/BG/Idle",
+      "key": "5c8fe0faf3c81d38c8ef92a334e00f43e45ec8f0",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Effect/Spotlight/Ellipse/BG",
+      "key": "90972d0be9436384651d55cfb5dc1391d708f69c",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Counter/Emphasis/FG",
+      "key": "9fe4a4fddf6f34135f2e26c80ea4858ae59c02ad",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Counter/Neutral/BG",
+      "key": "c868e181415f1ae978eb3bc4e0338a78be340b92",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Counter/Emphasis/BG",
+      "key": "8b9345fc5947bf221f7fced6a6194c3723d1d724",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Counter/Neutral/Stroke",
+      "key": "878e6a1ca55413680548786dd645aaf67b1730ff",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Counter/Neutral/FG",
+      "key": "596ca55a3ce346151b099fb4c38405a14b0fd9c9",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Code/Inline/BG",
+      "key": "b18c4006c5c5a024ce097bf44971ae8cb640be00",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Code/Inline/FG",
+      "key": "03175600327d7e08fa60def8b1a72808a655c321",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Banner/Inline/Intelligence/BG/Subtle",
+      "key": "32a22d491dd407415e887331a30c151498407f35",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Input/BG/Hover",
+      "key": "a0aad286514a386d944d58c29c0ddfb73b91a58a",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Input/BG/Active",
+      "key": "cab9a56867c77ebc27c011cc0d7fd6ceb1d7b21c",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Input/BG/Disabled",
+      "key": "e054183f4cfab7c7862907fa284b2f2d76595f35",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Input/FG/Label",
+      "key": "b8c4f01273303549e87c870c9d53c9c269f52971",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Input/FG/Error",
+      "key": "d9fee94be59d08d27d6313783deb5238ea1ea566",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Input/FG/Disabled",
+      "key": "a7fd7355ef5f54c178e2c00870313172aac16c1c",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Input/FG/Value",
+      "key": "3a3e19a5116f24a42e1873f840c1e24925c51f75",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Input/Border/Hover",
+      "key": "ec4d552889a19908a8d07d37c4b1042f8f590721",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Input/Border/Active",
+      "key": "b61899e16c9943120e17328390997d6d769f136a",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Input/Border/Focus",
+      "key": "985a3dc599c8cc634d73d1a47afd364c7dd069ae",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Input/Border/Error",
+      "key": "b04799554adedbe49d41ce36943d5c59c0124fe4",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Input/Border/Disabled",
+      "key": "32b5e0da246a1f4d2bc44cd7ef717ea46da8f757",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Neutral/Inverted",
+      "key": "5418f506a83b569b6ac76cf991404f4ce8aec7ea",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Avatar/Count/Stroke",
+      "key": "fe969a8671f5cebb59f8ffc1192c8224f443786d",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Avatar/Count/FG",
+      "key": "73dd6ae1a679a651e861ead45d05c478b005d464",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Control/BG/Alert/Idle",
+      "key": "fd8da228cebc8c7bdfb1dfd067ad3bd20bb12f2c",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/BG/Alert/Hover",
+      "key": "8ab4132bb388416564dab2d065926d71c526c26c",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/BG/Alert/Active",
+      "key": "6cd56a3a18dea960078126a86478d1bb9279113e",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/BG/Alert/Disabled",
+      "key": "b76d16ecd6b624dab09f47c56c5155dd08a29c6c",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/BG/Primary/Idle",
+      "key": "a887f33f4f521e375b865e2a4022f3bf9e59de67",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/BG/Primary/Hover",
+      "key": "a4878adad1a3f3aa14d49217eeeaee7862181ef5",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/BG/Primary/Active",
+      "key": "cae7b48f06090420c560c61c5920056ec58decff",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/BG/Primary/Disabled",
+      "key": "84e0f26224df9cefcbfc7a0477b716b0b2dd282b",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/BG/Secondary/Idle",
+      "key": "aa0aa60cd4059fb87f762c6348bdc380c189cff7",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/BG/Secondary/Hover",
+      "key": "0fcab7bfc0b6feefe26187fa5df04d66fb9e59d0",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/BG/Secondary/Active",
+      "key": "274d9cef1545a7af61402fe36cc4cef8d227e090",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/BG/Secondary/Disabled",
+      "key": "bf2e09c4adc35c557202f8a3240177316a9200ba",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/BG/Tertiary/Idle",
+      "key": "f6bfa2c0bed73a9a9d3f5a7a6e6acdc8c26eb82f",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/BG/Tertiary/Hover",
+      "key": "c5fff84b8dce13f77148c2025139eb1e31cf84c2",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/BG/Tertiary/Active",
+      "key": "88fc468b37a6b3742b06cfdf7149bf200694af13",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/BG/Tertiary/Disabled",
+      "key": "e9b7fc2bdf63b2529cd37f63db46ee850f86fc0e",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/BG/Expressive/Yellow/Idle",
+      "key": "8647a34f1a12caa061fa4e71c0545e9d3be4aebe",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/BG/Expressive/Yellow/Hover",
+      "key": "7b5c2114a1926efd26f8f070bf375110721e4267",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/BG/Expressive/Yellow/Active",
+      "key": "99ad302b37dea988ce72d6dcc0208b2c9b113b07",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/BG/Expressive/Yellow/Disabled",
+      "key": "d5f24bd03cf906204f735058646593d728ef52ac",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Primary/Idle",
+      "key": "fbd1027106ad068a1ebc34a6be3ec94e494c2bbf",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Primary/Hover",
+      "key": "45742a770231475bca334212f163b3275fe212d0",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Primary/Active",
+      "key": "38c87ef15eb232e02d2bed855f77d9a091b76aff",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Primary/Disabled",
+      "key": "591d36e3b4d35ed1427b29a269b1951f87c21bd5",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Secondary/Idle",
+      "key": "e0e64f7e596f067cfbd50a9f48b0b6674bfd08a7",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Secondary/Hover",
+      "key": "805465299c594c704b4c082572540d28c3f66b68",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Secondary/Active",
+      "key": "d24d93e6425527353a50882c1612b7ca11185718",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Secondary/Disabled",
+      "key": "453bb3248b43ec20f83777740517e61184b78c2c",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Alert/Idle",
+      "key": "6206c569251e9553b8fe4e975d496e2f9e3b9099",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Alert/Hover",
+      "key": "c1045d50104264542695b06468ee4dfa3256be27",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Alert/Active",
+      "key": "c14e2216cd8e8421f5ad3962527b1f2b2a7140ff",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Alert/Disabled",
+      "key": "f8e2000dea539b19dece366fcab9ce9166844caf",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Tertiary/Idle",
+      "key": "5e5521330317fe36742a72f1d0d626f117b88be2",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Tertiary/Hover",
+      "key": "eb8edf6a8ac5c773640593821bb534f1186d99c4",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Tertiary/Active",
+      "key": "bb9e1f45db4ea4a6acaaf27e468157f868dfae58",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Tertiary/Disabled",
+      "key": "e19e8418d928e4994919b907c125930c97dd1a99",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Expressive/Yellow/Idle",
+      "key": "a918f148e46d8dbc840bce586ddbbada55a90599",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Expressive/Yellow/Hover",
+      "key": "29b12a2c7dc55438635691c37e40b6c7e7937ef2",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Expressive/Yellow/Active",
+      "key": "f17324db47ea156e876aab33e849ac0016488971",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Expressive/Yellow/Disabled",
+      "key": "1b52a67da9efbe14a9702205a54ef3da097af063",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "FG/Expressive/Orange/Prominent",
+      "key": "1748957731285f76d2f8c52fddc93ba725f00ff5",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Banner/Inline/Intelligence/BG/Prominent",
+      "key": "df71ed9a481be9a782f858224ace0dcdb054c2f9",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Banner/Inline/Intelligence/FG/Prominent",
+      "key": "20b4eca11b8f74bf7b24e6b3686f596c35473f64",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Banner/Inline/Intelligence/FG/Subtle",
+      "key": "2f808b975b30fc1f421aa35141b0b1e1de4ede90",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "FG/Intelligence/Prominent",
+      "key": "917b5bb6691f4c028f7f30ee799677c38eda9390",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "FG/Intelligence/onProminent",
+      "key": "b1b9e367311a6b4ca0eac822ca3d0254f7dbb3e8",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Expressive/Blue/Prominent",
+      "key": "663320db3b0d41024e243f53cd7ff8e58ca60ac3",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Expressive/Blue/Medium",
+      "key": "f10c510753b49676a5f9b8ed0938f3f9bfc34e77",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Expressive/Blue/Subtle",
+      "key": "a7b7265c5f5f1a5bc3afbb443c60e0822802d19d",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/Border/Primary/Idle",
+      "key": "a229c83360012c828be81ddc00453ab524b8c637",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/Border/Primary/Hover",
+      "key": "b15850bf75b3a470f163946171be2b7c3d2ddd07",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/Border/Primary/Active",
+      "key": "fab3f1052a677115063c183b0caab88384ff9c9a",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/Border/Primary/Disabled",
+      "key": "cd8ddd77a2deaa7a31bfc25170e9dab669158fd0",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/Border/Secondary/Active",
+      "key": "3413fc908ab5372672acca91b9c3c41c827a7db9",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/Border/Alert/Active",
+      "key": "b69e1a788752ffef9a7b68bb14a3ba085ff341f1",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/Border/Tertiary/Active",
+      "key": "8a40ca2067ca9ecfdae0f4429e599505ebec0539",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Stroke/Alert",
+      "key": "e2841661a4f593a800e86bf1f453fb74220533c8",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Success/Subtle",
+      "key": "e1032fd10b624ef7163ca8c3a80ae92b04f4d03d",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Success/Medium",
+      "key": "3a471335ccdf3c992b7259d29e00110f0257f12a",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Success/Prominent",
+      "key": "d4b6535d13945446b374583e7391478a6d58e263",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Stroke/Neutral/Soft",
+      "key": "60cc6b8109a03a2a5cd7441bf40cb482ced7a154",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Category/1",
+      "key": "1c6eea0e135d00c05fdd344fbd74eb912df3ea6a",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Category/2",
+      "key": "386f39ed91dc2d5b6624a276bbac15eeb1773048",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Category/3",
+      "key": "d4ed5a77c8f83740cbd44f43543077fe235aed8e",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Category/4",
+      "key": "c670b971c64f2bbac2d8d12d7cf57bb08415ad0a",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Category/5",
+      "key": "e82c835dd8ee511e9a4329d2fb07db6b101e65f1",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Category/6",
+      "key": "9fdbae80e972fea9936c13bb6c1ee53331fc719f",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Category/7",
+      "key": "fb4bb41aed1ae83c7ef9c279e976a9a113677a78",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Category/8",
+      "key": "4bd9a8dc839959f2d63abb23307cd6b3c128f161",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Link/Idle",
+      "key": "88e95947b7f4453d11f46a742e8e7ed4ca3e9af7",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Link/Hover",
+      "key": "470f085cc272921f3fe3fa523462dfea8220efe9",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Link/Visited",
+      "key": "65ea6f0abd38b9fb4796e743639dd521c1a0c925",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Typography/Code/FontSize",
+      "key": "ba40f98e9e5762b3f5b7737cda5cf7905404eed3",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Code/LineHeight",
+      "key": "be6eccb1e6419539ab3cc0e04bad3b33f0f25961",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Code/LineHeightMultiple",
+      "key": "1e210fbaa1486bbf7541cf60273e2dcba51fde10",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Code/LetterSpacing",
+      "key": "ab5d0854ce29c918698c1a1e3f9ce914d0b053b3",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Code/FontWeight",
+      "key": "0576538113dd29fa0a04816a91b80315266ca110",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Code/Family",
+      "key": "ae02b37a43bbc22e63e2dd29fc7ff31e18cb643c",
+      "type": "STRING",
+      "collection": "Device"
+    },
+    {
+      "name": "Avatar/Customer/BG",
+      "key": "b0af397568e3d2cff7b92d03d4ad86b0e3ecd12e",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Object/Customer/FG",
+      "key": "d21de46abeee55c12b2a3f94df1fef208ce4cfa1",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Avatar/Customer/FG",
+      "key": "5c4185b640e7d7f6bc305effce3f6042320d7b65",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Object/API/BG",
+      "key": "ce4236b1c3aa3c68bf32e02ee50c553d07a6f787",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/API/FG",
+      "key": "f954c2d368b5ce64bed3c64b2011703a13ffda6b",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Capability/BG",
+      "key": "c77df6cfb3da6aaf5627f4a0fe5e21bc1aacf59d",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Capability/FG",
+      "key": "63a62bc86bc52a49f72d7d30d495bdeef6333085",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Feedback/BG/Neutral/Prominent",
+      "key": "683e830c3d0cc53d42f144b29f4cd27b972afb0b",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Navigation/BG/Active",
+      "key": "6a67c3ee17d60133afb96ff03def466fcdc6aa56",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Tab/BG/Hover",
+      "key": "07ee17379c09fb769fdecdbf18f8c0a036147cc5",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Tab/BG/Active",
+      "key": "6ecbb16a37d38159fbf3aeeea6fa07a53f3e0c95",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Object/Conversation/BG",
+      "key": "a7ba4766b27d12279c6ec08f6f2731bd1949d3da",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Conversation/FG",
+      "key": "6e927fd041974d532d66b1af907315f358a3821b",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Database/BG",
+      "key": "9127c365234c21224622c8ae19015195ca4dbe63",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Database/FG",
+      "key": "fc657b4835851eb9915e85ef69614030e678ec4f",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Developer/BG",
+      "key": "4c1b51c5aa8c08b381105f0af2d2e8c5a41f8073",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Developer/FG",
+      "key": "08b4f1c45d9f17c3d7757ed6367bd18b4f30522f",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Engagement/BG",
+      "key": "2ec6146d61c1de9054f887c3efe53a4b80fe15f8",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Engagement/FG",
+      "key": "3540208fc86bfc915a2f7f718142329cbc443268",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Enhancement/BG",
+      "key": "0f3d530bc0247806f99b315baf291c4cfed533f1",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Enhancement/FG",
+      "key": "599f95103c7140b055aced7d75178fce8a02b30e",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Feature/BG",
+      "key": "c476216d8db049d005a6f33e9ea0350f1c299c95",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Feature/FG",
+      "key": "cf17a6f654f85b219836b30d46618c50f8991472",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Incident/BG",
+      "key": "e644ce4c13407a4305297cda13f3b6809f2da0fd",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Incident/FG",
+      "key": "619673124ecbcefc51a5d0c02c22fdca633373a7",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Linkable/BG",
+      "key": "8bd634c4c1578ad927616f4eef2e80e5891da3ce",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Linkable/FG",
+      "key": "6d028affc5056469d20a7e79b9df5da4889fd482",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Mention/BG",
+      "key": "46f8a781c88a83fedae1469fb9440c4bb02736cf",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Mention/FG",
+      "key": "1642adb36bf951ce999b0e2fb01625f9eef9bdfb",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Opportunity/BG",
+      "key": "803b966a956ee5afa2b03977668c9cd4ce278c99",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Opportunity/FG",
+      "key": "9a9cb6aa7eef680288a8a6ff6911c9af703c9314",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Product/BG",
+      "key": "1aa20bb23eeab4ee92f716c008cba7090d1a1a4d",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Product/FG",
+      "key": "6ce258452914f41008d906d1fb9d8eba35da1d10",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Runnable/BG",
+      "key": "5c7e6d9740651ba5b8d5ac20e91009aa140c33ad",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Runnable/FG",
+      "key": "1025b6ea690719e5471be19b8a6728bd2c233311",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Sprint-Board/BG",
+      "key": "435a6d7f313473ab56291ff88cc5242d8dee965a",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Sprint-Board/FG",
+      "key": "93d3471eced86bde11ebbbe54b8ba457e39fdbb9",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Sub-Feature/BG",
+      "key": "4d79ff13d368a4ceb84aa231d39dfcc0cd3ed70b",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Sub-Feature/FG",
+      "key": "c0483998899072622ec6061d171398da5ec2c1c0",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Survey/BG",
+      "key": "524c4b1239d3d49f1332bc2ad5dc2b7c5a165df3",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Survey/FG",
+      "key": "cf0feda85d7619c1c0352231cc280720ae88f97d",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Expressive/Green/Prominent",
+      "key": "cda67ab970f130b24cc653665098d4d5320cbaf1",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Expressive/Orange/Prominent",
+      "key": "43598abce471c573fa036995cc69b8a3a936808e",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Expressive/Pink/Prominent",
+      "key": "53ace7d2d27068a03136bf948cee93799b67f6fd",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Expressive/Purple/Subtle",
+      "key": "c7a10e2dd86f1671d88cd59e1c31338263cb491d",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Expressive/Red/Prominent",
+      "key": "22da82735c175fa23fe99fa3e221f2b9c6314800",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Expressive/Teal/Prominent",
+      "key": "0aefb63e275f62f2b07f492d783242d1960b4099",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "FG/Expressive/Blue/Prominent",
+      "key": "6fe026526829d98e20af475b64094955a52f7eeb",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "FG/Expressive/Green/Prominent",
+      "key": "3cedd059c5aa22a69dcd5e85781fa00e7a152cc0",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "FG/Expressive/Red/Prominent",
+      "key": "8e760fa068b1690973473a3c551447845a4429e4",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "FG/Expressive/Teal/Prominent",
+      "key": "86165a7a668dced713c502b536c6fe4b84c18463",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "FG/Expressive/Yellow/Prominent",
+      "key": "810a32ff877ca97772651837002a23f39516cdf0",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Feedback/BG/Alert/Prominent",
+      "key": "e4922870c50ebc95bc7425163151434f5801fa80",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Feedback/BG/Intelligence/Prominent",
+      "key": "e83b7060a15741efddebee1b85001ecf29d5bbbf",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Feedback/BG/Success/Prominent",
+      "key": "c6754a79307fa59e4d9dee1996502e0462e026dd",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Feedback/BG/Warning/Prominent",
+      "key": "c9dce05fc9bb77de9132f29f77c2a161e1d8271e",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Feedback/FG/Alert",
+      "key": "a29fe41d5d76089cf43b0f24dc71fee443275302",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Feedback/FG/Info",
+      "key": "a84d88a99e4a82d77065e11a60c08f5f6bde479d",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Feedback/FG/Intelligence",
+      "key": "4a323974a14f6fd68a2436a84869bc38d565d120",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Feedback/FG/Neutral",
+      "key": "215cec62fc46b8f7b4a1c79ff43e2bb995dfabf1",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Feedback/FG/Neutral/Prominent",
+      "key": "57a67448a89b6b0001414787ab1f95951c9e6ea6",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Feedback/FG/Success",
+      "key": "5b39f96a31eaa67e4113159c90b45bee3555ec4a",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Feedback/FG/Warning",
+      "key": "f75d7ab1b1b15fdb7e77bf1802f608cbb0572d70",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Navigation/BG/Hover",
+      "key": "56940820da05e17624d459327af4366f013d15f9",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Navigation/FG/Active",
+      "key": "f4c8d15f08885071e46af00c6859f8f3ad86ee6b",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Navigation/FG/Idle",
+      "key": "2c28fb6db1405cac1a496e445c655d0730081866",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/BG/Intelligence/Idle",
+      "key": "797bbbc04c56bcb91dc9622347575f3e0777510f",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/BG/Intelligence/Hover",
+      "key": "9e697e565e8e06b6d78130af993f54441fe5f486",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/BG/Intelligence/Active",
+      "key": "79f9631c85929efa9d4ec25f11b4cba944940e93",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Intelligence/Idle",
+      "key": "11a4e784598a074d3aac8c3616210a571a766bee",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Tag/Teal/BG",
+      "key": "4ff45e2632adba5b05bc56af34fdde15dd9c0f98",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Tag/Blue/BG",
+      "key": "17193eae7004410c54ec16054ac22a0b64f87c3a",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Tag/Blue/FG",
+      "key": "e7fe7438257af60e97b84e72e78347590aa68268",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Tag/Green/BG",
+      "key": "d07061ce96bc4b768cfc6c3d54f5f97ca6a4672c",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Tag/Green/FG",
+      "key": "3b869e60c73730943684d61b0e5a0c74e1b511dc",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Tag/Neutral/BG",
+      "key": "8afd0f1a9a40e0961804f75fd35e738588ef8ca4",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Tag/Neutral/FG",
+      "key": "78b71cee34965631cfc4583a6c01c6476a95551e",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Tag/Orange/BG",
+      "key": "b5791ed275d6e1194dc64c51d601fa0d3fb6bbfb",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Tag/Orange/FG",
+      "key": "4bca2d6e537f18c7528366438fcf0a5a70554472",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Tag/Pink/BG",
+      "key": "a4513599724de7953794137bbf8052220df0349b",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Tag/Pink/FG",
+      "key": "6dbb2001dc8dd3c808885b6a83deb95e3f0a2af8",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Tag/Purple/BG",
+      "key": "116b4d5c94622545943fc30c55ee5d95c79fc22e",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Tag/Purple/FG",
+      "key": "c4f8ebfaa63e038b9c2ead82c4d8660e968b323c",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Tag/Red/BG",
+      "key": "5092c9cda828e7bae517fe98be62a52bb82eb687",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Tag/Red/FG",
+      "key": "e770d3dc5652e3a236e168ce8cc88c495b682d21",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Tag/Teal/FG",
+      "key": "88cae732d9a58f524d471c1d7d5872153ab9231e",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Tag/Yellow/BG",
+      "key": "922cb7f24ce3347aee6ed757e4c1fcbbf6f3c03c",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Tag/Yellow/FG",
+      "key": "b518f254df5d8791c94b030662daed827eadb76b",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Tab/FG/Active",
+      "key": "b11da16ea55ff524914c7cdfae4a0201ec6763ec",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Menu/BG",
+      "key": "5123799a72460515117ba889b24e48d92498a98c",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "SKU/Popular/BG",
+      "key": "0cab5adf939e9824fe5a635ba4c40a25337686e9",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Thinking/Collapsed/BG/Idle",
+      "key": "89a29bdd5171c065504fb701830067e60f884a34",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Control/BG/Intelligence/Disabled",
+      "key": "8ab6b2e5169ce1e6f2d29a20576bb5d21ad37f24",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Intelligence/Hover",
+      "key": "12a70f9046642557fe5416a590c0c7b043aa7121",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Intelligence/Disabled",
+      "key": "8abcf27bf8449322d0f2c6198211066b45a53726",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Intelligence/Active",
+      "key": "41ca8c5be81f8a21ebbe60b958dd379a31112525",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/Border/Intelligence/Active",
+      "key": "5f8da4f4e32bcbbaf7a0148e0cf49c5f5d15d977",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Expressive/Green/Subtle",
+      "key": "d0271e33d8a01eac2db46b674fdcab8e6de021b4",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Expressive/Red/Subtle",
+      "key": "7671c0e233f02070b1716aa476b2abe736d75663",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Expressive/Teal/Subtle",
+      "key": "973e05d2564b2c09da37c9f6f8c803409030b1b7",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Expressive/Pink/Subtle",
+      "key": "887df0ba04fd0a7ad510ed4deddf48d47b004215",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Expressive/Purple/Prominent",
+      "key": "4654e0542b44c1b44a51afad8d5b19508f661f36",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Expressive/Orange/Subtle",
+      "key": "20cbe85c565ff904804576b94054cba313f54e37",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "FG/Expressive/Pink/Prominent",
+      "key": "5e7a8b96bbc3b13f9f26319836c699e36c4032ae",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "FG/Expressive/Purple/Prominent",
+      "key": "8d51f7cddf92ce9d77c121436ba8e73246739ae3",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Menu/Item/BG/Idle",
+      "key": "fda471f370dccc6f691585979755df655f6b3bf6",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Menu/Item/FG/Idle",
+      "key": "0eab3f53a53dc8f882767ae0468e542bdad1ee50",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Menu/Item/FG/Active",
+      "key": "2ea47269d775cc00e289b112015ddee39c2deb70",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Menu/Item/BG/Active",
+      "key": "446005ee29c45f329adc9fd811c450c9df9450c1",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Menu/Label/FG",
+      "key": "f76c986a02a7fd5310ba28eb79db43281c4a977b",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Stroke/Success",
+      "key": "3c902d553557c7f387e201214123fcea325a5863",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Stroke/Info",
+      "key": "96efeb878e6694385d166195f7a7c4477e59be93",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Stroke/Warning",
+      "key": "b1d852530cd2a51e181a71a0f6e98f757d0ca7ee",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Stroke/Intelligence",
+      "key": "66070f31dc79d7c7093c77d8e76f2738317ea647",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Border/Alert",
+      "key": "7020001f67401fe53d21b6bdfb53b466c8f604f6",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Border/Success",
+      "key": "17de57459bea0490e8d5cf8c4c7cd22df7888f6f",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Border/Info",
+      "key": "c10df5b2ff9af1a01463a1d47de971356108551f",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Border/Warning",
+      "key": "ff7bb9bfe8adf1731f1cd3cbd6283eb1d68966f9",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Border/Intelligence",
+      "key": "74be27ed9d6c7cb44967e9d3f7817e8b70d1aae6",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Border/Neutral/Prominent",
+      "key": "7d7c6721b0da8803cd927fbee2daa5bd9de2aae5",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Border/Neutral/Medium",
+      "key": "ce465493036f89f454f540b6156142b96885f3a1",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Border/Neutral/Subtle",
+      "key": "fbbb96b8a6c5b0a934e3d56a6bc7a0136a400c0b",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Border/Neutral/Soft",
+      "key": "3827e2e6ec5ee50917c2fc3de322566a713b89fb",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Outline/Alert",
+      "key": "a96c2d3249d84323cddc8255c31afd14c28c52c8",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Outline/Success",
+      "key": "7bd215c85f66a341769565a356b156eafdad7160",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Outline/Info",
+      "key": "c623f09ac38e5635a8d17d2c517cfb84102365c0",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Outline/Warning",
+      "key": "bb4e5a3cce89b7d60be3d5302d51dc2401d9b7bf",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Outline/Intelligence",
+      "key": "6092e1731982b37327e159f93bf1375bdbfd0d52",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Outline/Neutral/Prominent",
+      "key": "d5db89396bb9465aaa4eb812523d253ea6e09ca4",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Outline/Neutral/Medium",
+      "key": "0f01f1aea70a6f8ff8ca437e27eace6ee91c8153",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Outline/Neutral/Subtle",
+      "key": "a755165e8ea5d1728272ac73b795692111133212",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Outline/Neutral/Soft",
+      "key": "2f0bf6fb2bbff5f5b35cb878b5b601d2e44afdbd",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Component/Avatar/4X-Large/Size",
+      "key": "67111fc4046ee201d9a2a29ad2f8d9042ad15bd9",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/4X-Large/FontSize",
+      "key": "b6bd114071f043a05c67a512d327c5527aab9d12",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/4X-Large/FontSize Mono",
+      "key": "0457aedd60fff81ef76f3c36de17ee689437b79c",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Component/Avatar/4X-Large/Stroke",
+      "key": "e4c5f7028a0ad665dcddc171f6bbe9960b4be0bd",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Lychee/Neutral",
+      "key": "e66f7a1a7b9beadb9e94963d80d81340530bd3a1",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Maoshigua/Neutral",
+      "key": "e9fd2bb07efef025dc7550c7292307ec1c70eb6d",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Jabuticaba/Neutral",
+      "key": "92ee56a70d112026518c922460b0d6c12533cac8",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Cucamelon/Neutral",
+      "key": "304f0f14db28c27d5992c08a76cea5fe15328af1",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Hardy/Neutral",
+      "key": "dac902fa604c88493c574909449b0a81815095db",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Banginapalli/Neutral",
+      "key": "828fbd76843d908e5c19076a67749ae496256745",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Persimmon/Neutral",
+      "key": "1de2b794a7863d3e934750ee646edc06a462df3f",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Dragonfruit/Neutral",
+      "key": "9a0ba8d29e934f8be57f711e7b0f7989c48efc76",
+      "type": "COLOR",
+      "collection": "Core Colors"
+    },
+    {
+      "name": "Object/Account/BG",
+      "key": "da230a958914bb76923cbe1adb411cd0366ca17c",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Account/FG",
+      "key": "d3d957f577f7473492e58d2d5b084cf98252fab1",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Article/BG",
+      "key": "10e8e2a248656fec7abb3d5374a6efa292cec811",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/Article/FG",
+      "key": "822277a49411336f3e6326fb7cc62c5f713aab38",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Stroke/Neutral/Inverted",
+      "key": "3e525bebe04b2bde8ea8a1a29ec58074dd366483",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Typography/Display3/FontSize",
+      "key": "dc4e5d7d6f1e556860f416a7ed2d5cb90f7a4c9c",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Display3/LineHeight",
+      "key": "097f12d24626148beed734598365e98a7598ed6e",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Display3/LineHeightMultiple",
+      "key": "6ee84690657b16c1a40fb4ca60de4626bb999ab6",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Display3/LetterSpacing",
+      "key": "230aa82d22556d71e810406a8f0a900766b16d72",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Display3/FontWeight",
+      "key": "bb215d29a836c6632be50a53c9749ae39321baa8",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Display3/Family",
+      "key": "1f1da73fb166858a0131e04b68678373f9fea58b",
+      "type": "STRING",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Display2/FontSize",
+      "key": "a35121c066b59867ff760d84cfdd5dddb028a64a",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Display2/LineHeight",
+      "key": "7c29337e9b1566ab5118747e9c7c5981158b68d8",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Display2/LineHeightMultiple",
+      "key": "b2c6c6065188ca971901e7fc8d25dceddedd37a0",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Display2/LetterSpacing",
+      "key": "70926d9dc0b5596ea38d95b3ff0e4706445770ce",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Display2/FontWeight",
+      "key": "ff826e60525399a0f9a8ecfb28b5be34b8bb931d",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Display2/Family",
+      "key": "1fc005ffd2ce40453d140dfb9f88054a07434d34",
+      "type": "STRING",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Display1/FontSize",
+      "key": "8efbd9a5d52ef2f3221fe246ea4abb12cc00ebc4",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Display1/LineHeight",
+      "key": "331f6110ec8fcc8890fd029942b164b107045dde",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Display1/LineHeightMultiple",
+      "key": "fa56fdf36637ea6687116dbea4094098be2d9f60",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Display1/LetterSpacing",
+      "key": "a986da9137c1edf9d3642c1f9991fc5ad258aaf9",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Display1/FontWeight",
+      "key": "8e9d9bbe0d1bfd68dfeffa46c073a9962ed32d00",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/Display1/Family",
+      "key": "30fa4e367de6022e61add34d0ab3d1cab6de5dd3",
+      "type": "STRING",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/DisplayLarge/FontSize",
+      "key": "9b66489f271f18862132f6eef2fcee340d2c0472",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/DisplayLarge/LineHeight",
+      "key": "e43455a02ab3aa2c50a6ae134947811a78ee4f07",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/DisplayLarge/LineHeightMultiple",
+      "key": "4be7dbc1ea0fd8ed08c284a5853ade0ac9654c64",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/DisplayLarge/LetterSpacing",
+      "key": "9ca67611f3382974ebf5957e4fcc23d94a685dc7",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/DisplayLarge/FontWeight",
+      "key": "503160b3e77f6a481bf22687e8099ee442de6aff",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Typography/DisplayLarge/Family",
+      "key": "95a121a47689d6c77d0abb7293e4855564aea922",
+      "type": "STRING",
+      "collection": "Device"
+    },
+    {
+      "name": "Chip/Tinted/Warning/BG",
+      "key": "7c4eb815c48b7194adffdfb5a8bf9fd4d9aefaa4",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Chip/Tinted/Warning/FG",
+      "key": "4b0d633e6907bb95e5a777f1b17858d3ec4bb6fc",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Chip/Tinted/Alert/BG",
+      "key": "ffec12cc4b722da4beeea868d771fc0264a7037d",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Chip/Tinted/Alert/FG",
+      "key": "c1966a69790ca12a83fa5deddb8eca67b362723a",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Chip/Tinted/Success/BG",
+      "key": "a8c79b46b73f4e66c217bea8fef6f67b4a8f99e8",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Chip/Tinted/Success/FG",
+      "key": "a645f350283618ae66b48a3349d860c0645e873b",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Chip/Tinted/Info/BG",
+      "key": "1352655e33e344e5c05192baf0a1c5bc734ae906",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Chip/Tinted/Info/FG",
+      "key": "b593f08431737c5ca553a06e1c8bc84f5b712f7a",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Chip/Tinted/Neutral/BG",
+      "key": "98fe7053c1011adbe2e4781a91c247de6407e60d",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Chip/Tinted/Neutral/FG",
+      "key": "674c4e3a7892ac7138e8e32174e7ff2ec8c7dc3f",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Chip/Tinted/Intelligence/BG",
+      "key": "280035f5856f0237e08c22d869d966056e8c9cf9",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Chip/Tinted/Intelligence/FG",
+      "key": "78cef2bd84f275c7a405453452d5cf945e293c87",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Chip/Filled/Neutral/BG",
+      "key": "16932e404572e0800235c427ff29403cc91f54e8",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Chip/Filled/Neutral/FG",
+      "key": "df10fdbc9de4ce5a20bcd3839b02111c1e283268",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Chip/Filled/Alert/BG",
+      "key": "296ee95f88a0746d7cc262a75146698b78823d23",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Chip/Filled/Alert/FG",
+      "key": "3cd73a25fbe2143629219a59149827fc4dd7955a",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Chip/Filled/Success/BG",
+      "key": "35462378c8963911d0dcf6266b7fdcb8be4e7746",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Chip/Filled/Success/FG",
+      "key": "345601ba2838126369231f1a5351a1a99f4cd060",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Chip/Filled/Warning/BG",
+      "key": "fc593bcba23a4afc27d4a034e28ebeab6273c7f3",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Chip/Filled/Warning/FG",
+      "key": "128354d40d9c9166b088070d9f40d66fa356977f",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Chip/Filled/Info/BG",
+      "key": "138a37230ce2d446812b7382b4b51ac164cb2412",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Chip/Filled/Info/FG",
+      "key": "a0c470cb68bac0654b8393e8ae3b89faf59b4c80",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Chip/Filled/Intelligence/BG",
+      "key": "87c5674ce3462a0c6704f1abaf0e0635f9f865c0",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "Chip/Filled/Intelligence/FG",
+      "key": "231ef0e4347a8d1b637374590d71b5b8ee161dba",
+      "type": "COLOR",
+      "collection": "Component"
+    },
+    {
+      "name": "BG/Expressive/Red/Medium",
+      "key": "37d349db73fdfc0a474c1fc72243a6677b47a9a6",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Info/Idle",
+      "key": "1597a023aad24a33845508e6ec944127af6b4744",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Control/FG/Info/Hover",
+      "key": "dded879adc29688900da242260267ffb3a5eb40d",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Feedback/BG/Alert/Medium",
+      "key": "6e00f1557098f98ca5e20adb489fd9d0051759ef",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Feedback/BG/Alert/Subtle",
+      "key": "0c180485bca1746fb3d1ca508db4f873f2446223",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/API-Cluster/BG",
+      "key": "0ccb9bc6acf846fed65b1a14fa9e76bb92aac6ab",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Object/API-Cluster/FG",
+      "key": "6d78633bb2b36a380c58a9ad9e3728d01592d5a9",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Semantic/Success",
+      "key": "672c2a743b0b075c6c43829de7e5fd618eee5ac0",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Semantic/Success-lighter",
+      "key": "b3d4853d16264c238be7a665bca1436366b20259",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Semantic/Warning",
+      "key": "c2b3e796042163196dcbbbbd69bb4737129a24fb",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Semantic/Warning-lighter",
+      "key": "4f10628a4c0a076c507b1688af9ab83251ea8f37",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Semantic/Alert",
+      "key": "ce4a7087a59e2ca2521df6bfe505192c1beb6d78",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Semantic/Alert-lighter",
+      "key": "6a81635b10955c73f334bcb92d160f53185621eb",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Semantic/Info",
+      "key": "fa6dbcf8051d118c9121c56249f36d7eb6682bb5",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Semantic/Info-lighter",
+      "key": "e1680ea4676d7f1ca09a9bf4f6795d1461d1d228",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Category/1-lighter",
+      "key": "ddbd346232a929b881487fd8687400ba3fcf505d",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Category/2-lighter",
+      "key": "8711ae57a2d89fdfac6e86c0a3f8e6ecf31642f8",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Category/3-lighter",
+      "key": "ca7ce7a7c180dc852b2c4d8d0eef60591bc4319e",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Category/4-lighter",
+      "key": "90b806413d5eadf18ca3e1394dd7db9a8d0ccae1",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Category/5-lighter",
+      "key": "df9defca78f99e2cbf5d801b947cdc7f49defac0",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Category/6-lighter",
+      "key": "08342608f13cddcaa8b1ee978dbba09ca7ead709",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Category/7-lighter",
+      "key": "8e679a9a521ba76f6c83fae773bd1a662be4331b",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Category/8-lighter",
+      "key": "3ca42812725dd67206b8e225198e4dfaff1154d1",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Sequential/Success/1",
+      "key": "d7205de8daaa2e99069c68016adad00cd844c56e",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Sequential/Success/2",
+      "key": "4edc76bf385602e7c00d16343e6b5ebc0005c72e",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Sequential/Success/3",
+      "key": "ee56a530356cc0866be27274b94e92ed0071f47a",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Sequential/Success/4",
+      "key": "2746de4955288a3e3f19128e11b8fb250c8845ca",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Sequential/Success/5",
+      "key": "db2016dd7b416f8782d31941d399fd6a062925bb",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Sequential/Warning/1",
+      "key": "092e3e339783f6b66cc95164187525282d9ed6a0",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Sequential/Warning/2",
+      "key": "4175bde4f7bddebb54df760a31a281e8308a2c29",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Sequential/Warning/3",
+      "key": "55af2f021999b67beb1e41c90bd99b64be077546",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Sequential/Warning/4",
+      "key": "70383bec70c7daf9821fd957535b6398fc50135c",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Sequential/Warning/5",
+      "key": "6bfe0f0f70314bda194d2e7043cd2f20bed21641",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Sequential/Alert/1",
+      "key": "c505498e9b3ba97ab1176ef57af300c3fd74728d",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Sequential/Alert/2",
+      "key": "671afb35e5cb4e5855cf223ff5090cf33dfc6920",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Sequential/Alert/3",
+      "key": "48780904a6391d37a69a22cb4590deccc6fc8c6b",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Sequential/Alert/4",
+      "key": "8eac277a850abd95ea674c26a3149869f6c6d011",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Sequential/Alert/5",
+      "key": "ea5fefcbb5c370f5d0cb6baefe375585bd5e5ca4",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Sequential/Info/1",
+      "key": "2c484588121f2dbb5bb99118104b6b0ad832455c",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Sequential/Info/2",
+      "key": "27217633b2c45ebde27656369201b8154e44c2b0",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Sequential/Info/3",
+      "key": "144aefaede035f66828341868d71b8a309741a4a",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Sequential/Info/4",
+      "key": "3ea4ad1e5ae1c09c49a1e6685d6ae920de90f176",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Sequential/Info/5",
+      "key": "67d0c218fae89778b6e17a2a6a5c736bbf2aee45",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Diverging/1",
+      "key": "e0a3d08d824715533a4e48d97f585bad76db3005",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Diverging/2",
+      "key": "3feb78088585b386a2591a86277a4f40355ea7ff",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Diverging/3",
+      "key": "3bfc904c71dfdded4f9acef68c512b7027ecfac6",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Diverging/4",
+      "key": "923c4707b8ee46a8682e6e51050f099e101a419c",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Diverging/5",
+      "key": "321c9d3c653ad81eca14f546c8bd9b886e0fdcc5",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Diverging/6",
+      "key": "1849061e0eefcc9723eab3bea0376d6e5f586a8f",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Diverging/7",
+      "key": "28f8f46003d499c2e7d2cfa1016d27a2344707b3",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Axis/Line",
+      "key": "9c7d956440e84c4e4cbae2693e7aa0d6353ff195",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Axis/Grid",
+      "key": "4e0bd5c38dc3aa6b64612d12554c045aa295c946",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Axis/Crosshair",
+      "key": "f164cc40386e59927969a4b36539b4d6989b77f8",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Surface/Chart",
+      "key": "8983c02ac29037c8f32a5322e389767e1c905cbe",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Data/Shape/Chart-Radius",
+      "key": "0aa8abfc03f8659e82b11aac08dcd700ae72fab5",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Data/Shape/Chart-Radius-Bar",
+      "key": "a83550df7353e4c26482649fc4bce1ba6d83b6f2",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Data/Shape/Chart-Radius-Tooltip",
+      "key": "ed6f5640afb39613c2819226074609956228b56c",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "Data/Shape/Chart-Padding",
+      "key": "31c6b960e28592947a7f878b6d4d7a400b4d554f",
+      "type": "FLOAT",
+      "collection": "Device"
+    },
+    {
+      "name": "BG/Alert/Medium",
+      "key": "db6f46dc0eac0fae6821934f88ae25ee2f61feb1",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Expressive/Orange/Medium",
+      "key": "c8b98aa3d3582bf563218bf0b542cf1c2ce25f94",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Expressive/Yellow/Medium",
+      "key": "47d75a6c4fd333531f5a68365b424807e577107a",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Expressive/Green/Medium",
+      "key": "b259e9a37eac37ac4796599dd70e3875c76c96ec",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Expressive/Teal/Medium",
+      "key": "a0c7bcbc28d5f0422b97286e6c9e6ab0cabb6fef",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Expressive/Purple/Medium",
+      "key": "210cdf405bdf6bbe85d1a13539b3d2476bd0651c",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "BG/Expressive/Pink/Medium",
+      "key": "e41c1643a92b63ce310f7f25e2efd2ab97f28fa1",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Feedback/BG/Intelligence/Medium",
+      "key": "45ba042fd7acb5b40e48f8f839bd67cd0a8b6976",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Feedback/BG/Intelligence/Subtle",
+      "key": "4406f2a821df29c51bec38cbcb79a7fea97786e8",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Feedback/BG/Success/Medium",
+      "key": "cd698d41836941a31ae4242f690244cd1915edca",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Feedback/BG/Success/Subtle",
+      "key": "8b70af0d6e6aad9e6e5dc9345384f508da4b085b",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Feedback/BG/Warning/Medium",
+      "key": "fb09c1e34a7db261c6aca7f949bce04c859c2266",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Feedback/BG/Warning/Subtle",
+      "key": "08fff579db6e5e7caaafd0b889220c860a207dc9",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Feedback/BG/Info/Prominent",
+      "key": "7cbfd65931ce0037c4de83aa8c8de879a8e16da1",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Feedback/BG/Info/Medium",
+      "key": "d68d0a9fd6aace41c973fe52052b235dd671089e",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Feedback/BG/Info/Subtle",
+      "key": "14285a542658005237b55b19b49743a2e55d4d52",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "FG/Expressive/Red/onProminent",
+      "key": "214986835d0bbe9b9aeb2f2c0e0b328cffd264fe",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "FG/Expressive/Orange/onProminent",
+      "key": "d7a46a3376e63e9aabaa21bd4c10cf83210f0f47",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "FG/Expressive/Yellow/onProminent",
+      "key": "1c14494f80d4ac1c32f0d90a1a9e36b9fa01b2ad",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "FG/Expressive/Green/onProminent",
+      "key": "39bd78e4ea305a59a003a42032dc66d4d696f1c8",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "FG/Expressive/Teal/onProminent",
+      "key": "6aa94f30b50a620603d9018866342bb6a522f867",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "FG/Expressive/Blue/onProminent",
+      "key": "888306d24994d8e6b83a39635b758cba8d225aea",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "FG/Expressive/Purple/onProminent",
+      "key": "4602d0edb1239bd756ce393ce28e890da31f35de",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "FG/Expressive/Pink/onProminent",
+      "key": "3d7645368a7c8369983490a117d7c09338b1694f",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Feedback/BG/Neutral/Medium",
+      "key": "395d49a96865efd144c5ee33de59bebb69e6a6db",
+      "type": "COLOR",
+      "collection": "Mode"
+    },
+    {
+      "name": "Feedback/BG/Neutral/Subtle",
+      "key": "1676ee7122f7562a919495fc045531ad36dc3fa0",
+      "type": "COLOR",
+      "collection": "Mode"
+    }
+  ]
+}
