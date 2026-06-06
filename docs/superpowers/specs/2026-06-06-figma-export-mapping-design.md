@@ -24,11 +24,32 @@ Three layers, established during brainstorming:
 3. **Arcade 0.3 Figma library** (file key `a2uKnm88LxRXEWAL1kOqeQ`) — a Figma
    library *striving to match arcade-gen*, ultimately aiming to carry all
    raw-ds components in the latest language. It is a **superset** of arcade-gen
-   and **in progress**, so it contains deprecated (`[🔴DEPRECATED]`) and WIP
-   (`[WIP]`) duplicates of the same conceptual component (live example: a
-   "bubble" search returns `[DLS]Bubble`, `[WIP]Bubble`, `Bubble`, `Bubble
-   Item`). Probe confirmed: **997 components, 750 variables across 5 collections
-   (incl. a Light/Dark `Mode` collection).**
+   and **in progress**, so it contains multiple generations of the same
+   conceptual component. Probe confirmed: **997 components, 750 variables across
+   5 collections (incl. a Light/Dark `Mode` collection).**
+
+### Name-prefix convention (the canonical-pick rule)
+
+Confirmed with the design owner — component-set names encode their generation:
+
+| Prefix | Meaning | Map to it? |
+|---|---|---|
+| *(unprefixed)* | **Canonical** — current Arcade 0.3 target | **Preferred** |
+| `[0.2]` | Arcade 0.2 — prior shipped generation; still present because **not every component is migrated to 0.3 yet** | **Fallback** when no unprefixed set exists |
+| `[DLS]` | Oldest DLS 22/23, still used in SoR, **actively being deprecated** | No |
+| `[WIP]` | Work in progress | No |
+| `[🔴DEPRECATED]` | Explicitly deprecated | No |
+
+**Curation rule (priority order):** per arcade-gen primitive, pick the
+**unprefixed** (0.3) set if one exists; else fall back to the **`[0.2]`** set
+(valid — that component just isn't migrated to 0.3 yet); never `[DLS]` / `[WIP]`
+/ `[🔴DEPRECATED]`. Record which generation was chosen in the entry's `note`,
+and set `status: "mapped"` for both 0.3 and 0.2 picks (a 0.2 pick is a real,
+usable mapping, not a gap). (Live example: for "bubble" the candidates are
+`[DLS]Bubble`, `[WIP]Bubble`, `Bubble`, `Bubble Item` — canonical is **`Bubble`**,
+unprefixed, which the Slice 0 seed already used: key `edd2821d…`. Recency/page
+labels are NOT reliable signals — `[DLS]` sets are often the *most recently
+edited* precisely because they're being migrated off.)
 
 The mapping #2 builds is **arcade-gen component → canonical Arcade-0.3 Figma
 component**. Because 0.3 is a superset, coverage is not blocked by 0.3 missing
@@ -70,17 +91,22 @@ type TextNodeHint =
 type FigmaComponentMapping = {
   arcadeGen: string;                 // kit/SLJ component name ("Button", "ChatBubble")
   status: "mapped" | "ambiguous";
+  generation: "0.3" | "0.2" | null;  // which library generation the chosen set is; null when ambiguous
   figma: {
     componentSetKey: string;         // PUBLISHED set key (not node id)
     setName: string;                 // "Bubble" — human anchor for re-curation
   } | null;                          // null when status === "ambiguous"
   variants: VariantAxis[];           // only the axes our props drive; rest = component defaults
   textNode?: TextNodeHint;           // which inner node carries label/content
-  note: string;                      // why this key over the dupes; arcade-gen↔0.3 drift
+  note: string;                      // why this set; which generation + what was rejected
 };
 
 export function findComponentMapping(arcadeGenName: string): FigmaComponentMapping | null;
 ```
+
+The `generation` field exists so a future re-curation sweep can find every
+`"0.2"` fallback pick and upgrade it once its 0.3 (unprefixed) version ships. A
+`"0.2"` pick is a real `"mapped"` entry, not a gap.
 
 Principles:
 - **Key is the published component-set key**, never a node id —
@@ -168,10 +194,11 @@ create instances + bind variables via the Bridge.
 
 ## Testing
 
-- `componentMap.test.ts` — every entry well-formed (status/figma consistency:
-  `mapped` ⇒ non-null `figma`; `ambiguous` ⇒ null); `findComponentMapping`
-  returns the ChatBubble seed; unknown name → null; variant valueMaps non-empty
-  for mapped entries that declare a `prop`.
+- `componentMap.test.ts` — every entry well-formed (status/figma/generation
+  consistency: `mapped` ⇒ non-null `figma` + `generation` ∈ {"0.3","0.2"};
+  `ambiguous` ⇒ both null); `findComponentMapping` returns the ChatBubble seed
+  (generation "0.3"); unknown name → null; variant valueMaps non-empty for
+  mapped entries that declare a `prop`.
 - `tokenMap.test.ts` — the naming rule matches a sample of real names from the
   committed snapshot (`--fg-neutral-prominent` → the right key); an override
   resolves; a non-existent token → null; normalized compare handles slash/dash/case.
