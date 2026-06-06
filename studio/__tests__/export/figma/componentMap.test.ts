@@ -18,6 +18,20 @@ describe("componentMap", () => {
     expect(findComponentMapping("NotAThing")).toBeNull();
   });
 
+  it("covers all 18 curated primitives", () => {
+    expect(COMPONENT_ENTRIES).toHaveLength(18);
+  });
+
+  it("marks the two known no-analogue primitives ambiguous (null figma + generation)", () => {
+    for (const name of ["Separator", "DevRevThemeProvider"]) {
+      const m = findComponentMapping(name);
+      expect(m, name).not.toBeNull();
+      expect(m!.status, name).toBe("ambiguous");
+      expect(m!.figma, name).toBeNull();
+      expect(m!.generation, name).toBeNull();
+    }
+  });
+
   it("every entry is well-formed (status/figma/generation consistency)", () => {
     for (const e of COMPONENT_ENTRIES) {
       if (e.status === "mapped") {

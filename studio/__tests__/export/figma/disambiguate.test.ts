@@ -29,4 +29,41 @@ describe("resolveTokenForRole", () => {
   it("returns the raw value when there are no candidates", () => {
     expect(resolveTokenForRole(() => [], "rgb(9,9,9)", "fill")).toBe("rgb(9,9,9)");
   });
+
+  // The dominant arcade-gen namespace is component-scoped (--component-*-fg,
+  // --button-*-bg, --feedback-fg-*), NOT leading --fg-/--bg-. Role matching must
+  // see the fg/bg/stroke SEGMENT anywhere, or these fall through to first-candidate
+  // and re-introduce the Slice 0 text-resolved-to-BG bug.
+  const componentLookup = (v: string): string[] =>
+    v === "#211e20"
+      ? ["--component-button-expressive-fg-idle", "--bg-neutral-prominent"]
+      : v === "#f5f5f5"
+        ? ["--component-bubble-self-bg", "--component-bubble-self-fg"]
+        : v === "#ccc"
+          ? ["--component-counter-neutral-stroke", "--bg-neutral-soft"]
+          : [];
+
+  it("picks a component -fg token for a text role (component namespace)", () => {
+    expect(resolveTokenForRole(componentLookup, "#211e20", "text")).toBe(
+      "--component-button-expressive-fg-idle",
+    );
+  });
+
+  it("picks the component -bg token (not -fg) for a fill role", () => {
+    expect(resolveTokenForRole(componentLookup, "#f5f5f5", "fill")).toBe(
+      "--component-bubble-self-bg",
+    );
+  });
+
+  it("picks the component -fg token for a text role when both share a value", () => {
+    expect(resolveTokenForRole(componentLookup, "#f5f5f5", "text")).toBe(
+      "--component-bubble-self-fg",
+    );
+  });
+
+  it("picks a component -stroke token for a stroke role", () => {
+    expect(resolveTokenForRole(componentLookup, "#ccc", "stroke")).toBe(
+      "--component-counter-neutral-stroke",
+    );
+  });
 });

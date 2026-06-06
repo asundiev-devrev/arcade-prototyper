@@ -1,10 +1,22 @@
 // studio/src/export/figma/disambiguate.ts
 import type { ColorRole } from "./types";
 
-const ROLE_PREFIXES: Record<ColorRole, string[]> = {
-  text: ["--fg-", "--surface-fg", "--input-fg", "--control-fg"],
-  fill: ["--bg-", "--surface-", "--control-bg", "--input-bg"],
-  stroke: ["--stroke-", "--border-", "--outline-"],
+// Match a CSS token to a role by the fg/bg/stroke SEGMENT anywhere in the name,
+// not a leading prefix. The arcade-gen vocabulary is dominated by
+// component-scoped tokens (--component-bubble-self-fg, --button-primary-bg-idle,
+// --feedback-fg-alert, --object-issue-fg, --control-fg-primary-idle, …), so a
+// leading-prefix match on just --fg-/--bg- would miss the majority namespace and
+// fall back to the first candidate — re-introducing the Slice 0 "text resolved to
+// a --bg- token" bug. Segment matching catches both the top-level semantic
+// families (--fg-*, --bg-*, --stroke-*) and the component families (*-fg-*,
+// *-bg-*, *-stroke-* / *-border-*).
+const ROLE_SEGMENTS: Record<ColorRole, RegExp> = {
+  // foreground: a -fg- / -fg$ segment, or a -text- segment (e.g. --code-inline-fg)
+  text: /(^|-)(fg|text)(-|$)/,
+  // background / surface fills
+  fill: /(^|-)(bg|surface)(-|$)/,
+  // strokes / borders / outlines / dividers
+  stroke: /(^|-)(stroke|border|outline)(-|$)/,
 };
 
 /** A candidate is "semantic" if it looks like a CSS custom property (starts with --).
@@ -21,12 +33,15 @@ export function resolveTokenForRole(
   const candidates = lookup(resolvedValue);
   if (candidates.length === 0) return resolvedValue;
 
-  const prefixes = ROLE_PREFIXES[role];
-  const roleMatched = candidates.filter((c) => prefixes.some((p) => c.startsWith(p)));
+  // 1. Keep candidates whose name carries this role's segment.
+  const seg = ROLE_SEGMENTS[role];
+  const roleMatched = candidates.filter((c) => seg.test(c.toLowerCase()));
   const pool = roleMatched.length > 0 ? roleMatched : candidates;
 
+  // 2. Prefer semantic CSS tokens over raw core colors within the pool.
   const semantic = pool.filter(isSemantic);
   const ranked = semantic.length > 0 ? semantic : pool;
 
+  // 3. First survivor.
   return ranked[0];
 }

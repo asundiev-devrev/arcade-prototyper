@@ -107,11 +107,11 @@ export const COMPONENT_ENTRIES: FigmaComponentMapping[] = [
     generation: "0.3",
     figma: { componentSetKey: "3067f69c7f76e7c43815148ce843654e36081bed", setName: "Chip" },
     variants: [
-      { prop: "intent", figmaProp: "Type", valueMap: { neutral: "Neutral", success: "Success", warning: "Warning", info: "Neutral", intelligence: "Intelligent" } },
+      { prop: "intent", figmaProp: "Type", valueMap: { neutral: "Neutral", alert: "Alert", success: "Success", warning: "Warning", info: "Info", intelligence: "Intelligence" } },
       { prop: "appearance", figmaProp: "Appearance", valueMap: { tinted: "Tinted", filled: "Filled" } },
     ],
     textNode: { strategy: "lowest-depth" },
-    note: "RENAMED CONCEPT: arcade-gen 'Tag' == 0.3 'Chip'. Rejected [DLS]Chip, [DEPRECATED]Chip, Expressive Chip, Chip Button. Axes Type/Appearance.",
+    note: "RENAMED CONCEPT: arcade-gen 'Tag' == 0.3 'Chip'. Rejected [DLS]Chip, [DEPRECATED]Chip, Expressive Chip, Chip Button. Type axis (verified live): Neutral/Alert/Success/Warning/Info/Intelligence (note: the set also has a stray 'Intelligent' dupe of 'Intelligence' — we use the canonical 'Intelligence'). Appearance: Tinted/Filled.",
   },
   {
     arcadeGen: "Switch",
