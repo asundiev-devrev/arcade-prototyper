@@ -73,3 +73,69 @@ describe("planFigmaOps — variant edge cases", () => {
     expect(inst.variant).toEqual({ Mode: "" });
   });
 });
+
+describe("planFigmaOps — component nodes", () => {
+  it("emits createInstance with the mapped key + variant valueMap applied", () => {
+    const plan = planFigmaOps(doc({
+      kind: "component", component: "ChatBubble", source: "arcade/components",
+      props: { variant: "receiver" }, box, layout: null,
+      children: [{ kind: "element", tag: "text", box, layout: null, style: { characters: "Hi" }, children: [] }],
+    }), MAPS);
+    const inst = plan.ops.find((o) => o.op === "createInstance");
+    expect(inst).toMatchObject({ op: "createInstance", componentKey: "k-bubble", variant: { Type: "Receiver" } });
+    expect(plan.ops).toContainEqual(expect.objectContaining({ op: "setText", characters: "Hi" }));
+  });
+
+  it("does NOT set a variant when the prop value is not in the valueMap", () => {
+    const plan = planFigmaOps(doc({
+      kind: "component", component: "ChatBubble", source: "arcade/components",
+      props: { variant: "nonsense" }, box, layout: null, children: [],
+    }), MAPS);
+    const inst = plan.ops.find((o) => o.op === "createInstance") as { variant?: object };
+    expect(inst.variant).toBeUndefined();
+  });
+
+  it("degrades an unmapped component to a fallback frame and recurses children", () => {
+    const plan = planFigmaOps(doc({
+      kind: "component", component: "Unmapped", source: "arcade/components",
+      props: {}, box, layout: { mode: "vertical", gap: 0, padding: [0,0,0,0], align: "start" },
+      children: [{ kind: "component", component: "ChatBubble", source: "arcade/components", props: { variant: "receiver" }, box, layout: null, children: [] }],
+    }), MAPS);
+    expect(plan.ops[0]).toMatchObject({ op: "createFrame", parent: null });
+    const inst = plan.ops.find((o) => o.op === "createInstance");
+    expect(inst).toMatchObject({ componentKey: "k-bubble" });
+    expect((inst as { parent: string }).parent).toBe((plan.ops[0] as { id: string }).id);
+  });
+});
+
+describe("planFigmaOps — ordering invariants", () => {
+  const nested = doc({
+    kind: "element", tag: "div", box, layout: { mode: "vertical", gap: 0, padding: [0,0,0,0], align: "start" }, style: {},
+    children: [
+      { kind: "element", tag: "div", box, layout: null, style: {}, children: [
+        { kind: "component", component: "ChatBubble", source: "arcade/components", props: { variant: "receiver" }, box, layout: null, children: [] },
+      ]},
+    ],
+  });
+
+  it("assigns unique synthetic ids", () => {
+    const plan = planFigmaOps(nested, MAPS);
+    const ids = plan.ops.filter((o) => o.op === "createFrame" || o.op === "createInstance").map((o) => (o as { id: string }).id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("creates every parent before any op that targets it or its children (topological)", () => {
+    const plan = planFigmaOps(nested, MAPS);
+    const created = new Set<string>();
+    for (const o of plan.ops) {
+      if (o.op === "createFrame" || o.op === "createInstance") {
+        if (o.parent !== null && o.parent !== "") {
+          expect(created.has(o.parent), `parent ${o.parent} created before child ${o.id}`).toBe(true);
+        }
+        created.add(o.id);
+      } else {
+        expect(created.has(o.target), `target ${o.target} created before mutation`).toBe(true);
+      }
+    }
+  });
+});
