@@ -52,3 +52,24 @@ describe("planFigmaOps — element nodes", () => {
     expect(plan.ops).toContainEqual(expect.objectContaining({ op: "bindVariable", field: "fill", variableKey: "var-bg-neutral-soft" }));
   });
 });
+
+describe("planFigmaOps — variant edge cases", () => {
+  it("applies a valueMap entry even when it maps to an empty string", () => {
+    const maps = {
+      findComponentMapping: (name: string) =>
+        name === "Thing"
+          ? { arcadeGen: "Thing", status: "mapped" as const, generation: "0.3" as const,
+              figma: { componentSetKey: "k-thing", setName: "Thing" },
+              variants: [{ prop: "mode", figmaProp: "Mode", valueMap: { default: "" } }],
+              note: "" }
+          : null,
+      tokenNameToVariableKey: () => null,
+    };
+    const plan = planFigmaOps(doc({
+      kind: "component", component: "Thing", source: "arcade/components",
+      props: { mode: "default" }, box, layout: null, children: [],
+    }), maps);
+    const inst = plan.ops.find((o) => o.op === "createInstance") as { variant?: Record<string,string> };
+    expect(inst.variant).toEqual({ Mode: "" });
+  });
+});

@@ -55,7 +55,7 @@ export function planFigmaOps(slj: SljDocument, maps: PlannerMaps): FigmaPlan {
       const variant: Record<string, string> = {};
       for (const axis of mapping.variants) {
         const raw = node.props[axis.prop];
-        if (typeof raw === "string" && axis.valueMap[raw]) variant[axis.figmaProp] = axis.valueMap[raw];
+        if (typeof raw === "string" && axis.valueMap[raw] !== undefined) variant[axis.figmaProp] = axis.valueMap[raw];
       }
       const instOp: FigmaOp = { op: "createInstance", id, parent: parent ?? "", componentKey: mapping.figma.componentSetKey };
       if (Object.keys(variant).length > 0) (instOp as { variant?: Record<string, string> }).variant = variant;
