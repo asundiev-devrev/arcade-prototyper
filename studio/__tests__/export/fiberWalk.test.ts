@@ -50,3 +50,43 @@ describe("walkFiber — host + text + skip", () => {
     if (isElementNode(node)) expect(node.style.characters).toBe("Hello");
   });
 });
+
+describe("walkFiber — mapped primitives", () => {
+  it("emits a component node + prunes internals, keeping text", () => {
+    const innerText = host("span"); (innerText as any).__text = "Hi there";
+    const innerStruct = host("div", [innerText]);
+    const bubble = comp("ChatBubble", [innerStruct], { variant: "receiver", onClick: () => {} });
+    (bubble as any).__text = "Hi there";
+    const node = walkFiber(bubble, ctx);
+    if (node.kind !== "component") throw new Error("expected component");
+    expect(node.component).toBe("ChatBubble");
+    expect(node.props).toEqual({ variant: "receiver" });
+    expect(node.children).toHaveLength(1);
+    expect(node.children[0].kind).toBe("element");
+    if (node.children[0].kind === "element") {
+      expect(node.children[0].tag).toBe("text");
+      expect(node.children[0].style.characters).toBe("Hi there");
+    }
+  });
+
+  it("a composite is NOT pruned — it becomes a frame and recurses to its primitive children", () => {
+    const bubble = comp("ChatBubble", [], { variant: "sender" });
+    const sidebar = comp("ComputerSidebar", [host("div", [bubble])]);
+    const node = walkFiber(sidebar, ctx);
+    const found: string[] = [];
+    const collect = (n: any) => { if (n.kind === "component") found.push(n.component); (n.children||[]).forEach(collect); };
+    collect(node);
+    expect(found).toContain("ChatBubble");
+  });
+});
+
+describe("walkFiber — icons", () => {
+  it("emits an icon as a component node carrying its name + size prop", () => {
+    const iconCtx: WalkCtx = { ...ctx, isComponent: (n) => (n === "ChevronLeftSmall" ? "icon" : n === "ChatBubble" ? "primitive" : null) };
+    const icon = comp("ChevronLeftSmall", [], { size: 16 });
+    const node = walkFiber(icon, iconCtx);
+    if (node.kind !== "component") throw new Error("expected component");
+    expect(node.component).toBe("ChevronLeftSmall");
+    expect(node.props).toEqual({ size: 16 });
+  });
+});
