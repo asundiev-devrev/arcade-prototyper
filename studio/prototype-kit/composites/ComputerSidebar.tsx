@@ -406,4 +406,11 @@ function Banner({ children, subtitle, active, onClick }: BannerProps) {
 
 /* ─── Compound export ───────────────────────────────────────────────────── */
 
+// Qualify the sub-part names so the fiber-walk export reports them as
+// "ComputerSidebar.Item" / "ComputerSidebar.User" (not bare "Item"/"User",
+// which collide across composites and miss their Figma mappings). See
+// studio/src/export/figma/componentEntries.ts.
+Item.displayName = "ComputerSidebar.Item";
+(User as { displayName?: string }).displayName = "ComputerSidebar.User";
+
 export const ComputerSidebar = Object.assign(Root, { Group, Item, User, Banner });

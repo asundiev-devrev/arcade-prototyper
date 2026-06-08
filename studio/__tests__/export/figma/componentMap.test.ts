@@ -22,15 +22,18 @@ describe("componentMap", () => {
     expect(COMPONENT_ENTRIES).toHaveLength(20);
   });
 
-  it("maps the ComputerSidebar.Item sub-part to Computer Item", () => {
+  it("marks ComputerSidebar.Item ambiguous (0.3 'Computer Item' is the wordmark chip, not a labeled row)", () => {
+    // Probed live 2026-06-08: 0.3 'Computer Item' has no TEXT node / label prop —
+    // it's the animated Computer logo. The real labeled row lives in C-May-Release
+    // as unpublished design work. Ambiguous until that row is published to 0.3.
     const m = findComponentMapping("ComputerSidebar.Item");
     expect(m).not.toBeNull();
-    expect(m!.status).toBe("mapped");
-    expect(m!.figma?.setName).toBe("Computer Item");
+    expect(m!.status).toBe("ambiguous");
+    expect(m!.figma).toBeNull();
   });
 
   it("marks the known no-analogue components ambiguous (null figma + generation)", () => {
-    for (const name of ["Separator", "DevRevThemeProvider", "ComputerSidebar.User"]) {
+    for (const name of ["Separator", "DevRevThemeProvider", "ComputerSidebar.User", "ComputerSidebar.Item"]) {
       const m = findComponentMapping(name);
       expect(m, name).not.toBeNull();
       expect(m!.status, name).toBe("ambiguous");

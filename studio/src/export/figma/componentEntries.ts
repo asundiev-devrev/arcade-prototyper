@@ -195,12 +195,11 @@ export const COMPONENT_ENTRIES: FigmaComponentMapping[] = [
   // can also alias bare "Item" -> this entry when the parent composite is known.
   {
     arcadeGen: "ComputerSidebar.Item",
-    status: "mapped",
-    generation: "0.3",
-    figma: { componentSetKey: "d5ad9a6ba7dc57408feb37155343e2e96029b455", setName: "Computer Item" },
+    status: "ambiguous",
+    generation: null,
+    figma: null,
     variants: [],
-    textNode: { strategy: "lowest-depth" },
-    note: "Sidebar session/chat row. 0.3 'Computer Item' (unprefixed, by xork). Axes State(:idle/:hover/:active)/Expanded/hasUpdate left to defaults; we set its label via prune-with-text. Fiber reports it as bare 'Item' — needs a displayName convention on the kit sub-part, OR T8 wiring aliases bare 'Item' under a ComputerSidebar ancestor.",
+    note: "Sidebar session/chat row. PROBED LIVE (2026-06-08): 0.3 'Computer Item' (set d5ad9a6b…, node 9013:34450) is NOT a labeled row — every variant is the animated Computer wordmark/loading chip (children Computer/Logo + Computer/Logomark/Animated + Dot), zero TEXT nodes, only VARIANT props (State/Expanded/hasUpdate). Stamping a session title silently no-ops → rows render the logo, not the name. The real labeled Computer nav row lives in 'C - May Release' (file y4lVwCWNhZWw6st78yr0XH, node 11047:12023) as design work, NOT a published component — so no cross-file key to instance. Owner is promoting that row into 0.3; when published, swap this entry back to status 'mapped' with the new component-set key + a Text component-property hint and re-verify. Until then: ambiguous → degrades to a frame carrying the real title text (readable + correct). The kit sub-part still sets displayName 'ComputerSidebar.Item' so the fiber reports it qualified (it would collide with CanvasPanel.Item otherwise).",
   },
   {
     arcadeGen: "ComputerSidebar.User",

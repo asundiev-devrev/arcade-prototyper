@@ -22,8 +22,8 @@ function fakeBridge() {
 
 const ops: FigmaOp[] = [
   { op: "createFrame", id: "n0", parent: null, layout: null, box: { x: 0, y: 0, width: 1, height: 1 } },
-  { op: "createInstance", id: "n1", parent: "n0", componentKey: "k-bubble", variant: { Type: "Receiver" } },
-  { op: "createInstance", id: "n2", parent: "n0", componentKey: "k-bubble" },
+  { op: "createInstance", id: "n1", parent: "n0", componentKey: "k-bubble", variant: { Type: "Receiver" }, box: { x: 0, y: 0, width: 1, height: 1 } },
+  { op: "createInstance", id: "n2", parent: "n0", componentKey: "k-bubble", box: { x: 0, y: 0, width: 1, height: 1 } },
   { op: "setText", target: "n1", textNodeHint: { strategy: "lowest-depth" }, characters: "Hi" },
   { op: "bindVariable", target: "n1", field: "fill", variableKey: "var-x" },
 ];
@@ -78,7 +78,7 @@ describe("executeFigmaOps — partial failure resilience", () => {
     };
     const result = await executeFigmaOps([
       { op: "createFrame", id: "n0", parent: null, layout: null, box: { x: 0, y: 0, width: 1, height: 1 } },
-      { op: "createInstance", id: "n1", parent: "n0", componentKey: "k" },
+      { op: "createInstance", id: "n1", parent: "n0", componentKey: "k", box: { x: 0, y: 0, width: 1, height: 1 } },
     ], bridge, "n0");
     // the child instance must NOT have been created (parent n0 failed → missing → skip)
     expect(captured).toHaveLength(0);

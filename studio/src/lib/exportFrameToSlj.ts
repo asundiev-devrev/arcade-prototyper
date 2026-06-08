@@ -28,15 +28,29 @@ export async function exportFrameToSlj(args: ExportArgs): Promise<SljDocument> {
   const win = args.iframe.contentWindow as (Window & typeof globalThis) | null;
   if (!doc || !win) throw new Error("Frame iframe document is unreachable (cross-origin or not loaded)");
 
-  const mountEl = doc.getElementById("root")?.firstElementChild ?? doc.body.firstElementChild;
-  if (!mountEl) throw new Error("Frame iframe has no mounted content to export");
-
-  // Reach the React fiber from the mount DOM node, climb to the topmost fiber.
-  const fiberKey = Object.keys(mountEl).find((k) => k.startsWith("__reactFiber$"));
-  if (!fiberKey) throw new Error("Frame iframe mount has no React fiber (export needs the React tree)");
-  let rootFiber = (mountEl as unknown as Record<string, MinimalFiber>)[fiberKey];
-  while ((rootFiber as MinimalFiber & { return?: MinimalFiber | null }).return) {
-    rootFiber = (rootFiber as MinimalFiber & { return: MinimalFiber }).return;
+  // Reach the React fiber from the ReactDOM root container, NOT by climbing
+  // `.return` off a mounted child. Under StrictMode the `.return` climb can
+  // land on a stale alternate tree whose async-loaded subtrees (e.g. the chat
+  // transcript) were never committed, silently dropping whole regions. The
+  // container's `__reactContainer$<id>` key points at the live committed
+  // HostRoot fiber — the correct, complete tree.
+  const rootEl = doc.getElementById("root") ?? doc.body;
+  if (!rootEl) throw new Error("Frame iframe has no #root container to export");
+  const containerKey = Object.keys(rootEl).find((k) => k.startsWith("__reactContainer$"));
+  let rootFiber: MinimalFiber;
+  if (containerKey) {
+    rootFiber = (rootEl as unknown as Record<string, MinimalFiber>)[containerKey];
+  } else {
+    // Fallback: older React or a detached mount — reach via a child's fiber
+    // and climb. Less reliable under StrictMode but better than failing.
+    const mountEl = rootEl.firstElementChild ?? doc.body.firstElementChild;
+    if (!mountEl) throw new Error("Frame iframe has no mounted content to export");
+    const fiberKey = Object.keys(mountEl).find((k) => k.startsWith("__reactFiber$"));
+    if (!fiberKey) throw new Error("Frame iframe mount has no React fiber (export needs the React tree)");
+    rootFiber = (mountEl as unknown as Record<string, MinimalFiber>)[fiberKey];
+    while ((rootFiber as MinimalFiber & { return?: MinimalFiber | null }).return) {
+      rootFiber = (rootFiber as MinimalFiber & { return: MinimalFiber }).return;
+    }
   }
 
   // Token index from the iframe's :root computed style (DevRevThemeProvider injected them).

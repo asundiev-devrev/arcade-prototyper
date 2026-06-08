@@ -224,6 +224,11 @@ function CountBadge({ children }: { children: ReactNode }) {
 
 /* ─── Compound export ───────────────────────────────────────────────────── */
 
+// Qualify sub-part names so the fiber-walk export reports "CanvasPanel.Item"
+// (not bare "Item", which collides with ComputerSidebar.Item in the same
+// frame). See studio/src/export/figma/componentEntries.ts.
+Item.displayName = "CanvasPanel.Item";
+
 export const CanvasPanel = Object.assign(Root, {
   Step,
   Group,

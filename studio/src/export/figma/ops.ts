@@ -7,7 +7,7 @@ import type { TextNodeHint } from "./types";
  *  maps each synthetic id to the real Figma node id it creates. */
 export type FigmaOp =
   | { op: "createFrame"; id: string; parent: string | null; layout: Layout | null; box: Box }
-  | { op: "createInstance"; id: string; parent: string; componentKey: string; variant?: Record<string, string> }
+  | { op: "createInstance"; id: string; parent: string; componentKey: string; variant?: Record<string, string>; box: Box }
   | { op: "setText"; target: string; textNodeHint: TextNodeHint; characters: string }
   | { op: "bindVariable"; target: string; field: "fill" | "stroke"; variableKey: string }
   | { op: "setFill"; target: string; field: "fill" | "stroke"; color: string };
