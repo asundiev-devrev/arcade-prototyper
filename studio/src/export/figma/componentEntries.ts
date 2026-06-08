@@ -195,11 +195,12 @@ export const COMPONENT_ENTRIES: FigmaComponentMapping[] = [
   // can also alias bare "Item" -> this entry when the parent composite is known.
   {
     arcadeGen: "ComputerSidebar.Item",
-    status: "ambiguous",
-    generation: null,
-    figma: null,
+    status: "mapped",
+    generation: "0.3",
+    figma: { componentSetKey: "ab11c00fafe90d430bc8dc9532da2d358012c7c9", setName: "Chat Item" },
     variants: [],
-    note: "Sidebar session/chat row. PROBED LIVE (2026-06-08): 0.3 'Computer Item' (set d5ad9a6b…, node 9013:34450) is NOT a labeled row — every variant is the animated Computer wordmark/loading chip (children Computer/Logo + Computer/Logomark/Animated + Dot), zero TEXT nodes, only VARIANT props (State/Expanded/hasUpdate). Stamping a session title silently no-ops → rows render the logo, not the name. The real labeled Computer nav row lives in 'C - May Release' (file y4lVwCWNhZWw6st78yr0XH, node 11047:12023) as design work, NOT a published component — so no cross-file key to instance. Owner is promoting that row into 0.3; when published, swap this entry back to status 'mapped' with the new component-set key + a Text component-property hint and re-verify. Until then: ambiguous → degrades to a frame carrying the real title text (readable + correct). The kit sub-part still sets displayName 'ComputerSidebar.Item' so the fiber reports it qualified (it would collide with CanvasPanel.Item otherwise).",
+    textNode: { strategy: "by-name", name: "Item name#8536:0" },
+    note: "Sidebar session/chat row → 0.3 'Chat Item' (set ab11c00f…, node 9013:34176, on the Navigation page). Probed live 2026-06-08: real labeled row — Leading (User Avatar), Content TEXT 'User', Trailing Dot. Label is the TEXT component property 'Item name#8536:0' (default 'User'); set via setProperties or by writing the 'User' TEXT node. Axes State(:idle/:hover/:active)/Expanded/hasUnread left to defaults. NOTE: an earlier curation pointed at 0.3 'Computer Item' (d5ad9a6b…) — that's the animated Computer WORDMARK chip with no label; do NOT use it for rows. Kit sub-part sets displayName 'ComputerSidebar.Item' so the fiber reports it qualified (collides with CanvasPanel.Item otherwise).",
   },
   {
     arcadeGen: "ComputerSidebar.User",

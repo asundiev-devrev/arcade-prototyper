@@ -22,18 +22,20 @@ describe("componentMap", () => {
     expect(COMPONENT_ENTRIES).toHaveLength(20);
   });
 
-  it("marks ComputerSidebar.Item ambiguous (0.3 'Computer Item' is the wordmark chip, not a labeled row)", () => {
-    // Probed live 2026-06-08: 0.3 'Computer Item' has no TEXT node / label prop —
-    // it's the animated Computer logo. The real labeled row lives in C-May-Release
-    // as unpublished design work. Ambiguous until that row is published to 0.3.
+  it("maps ComputerSidebar.Item to the labeled 'Chat Item' row (not the wordmark 'Computer Item')", () => {
+    // Probed live 2026-06-08: 0.3 'Chat Item' (ab11c00f…) is the real labeled
+    // session row — Avatar + 'Item name' TEXT prop + Dot. The similarly-named
+    // 'Computer Item' (d5ad9a6b…) is the animated wordmark chip with no label.
     const m = findComponentMapping("ComputerSidebar.Item");
     expect(m).not.toBeNull();
-    expect(m!.status).toBe("ambiguous");
-    expect(m!.figma).toBeNull();
+    expect(m!.status).toBe("mapped");
+    expect(m!.figma?.setName).toBe("Chat Item");
+    expect(m!.figma?.componentSetKey).toBe("ab11c00fafe90d430bc8dc9532da2d358012c7c9");
+    expect(m!.textNode).toEqual({ strategy: "by-name", name: "Item name#8536:0" });
   });
 
   it("marks the known no-analogue components ambiguous (null figma + generation)", () => {
-    for (const name of ["Separator", "DevRevThemeProvider", "ComputerSidebar.User", "ComputerSidebar.Item"]) {
+    for (const name of ["Separator", "DevRevThemeProvider", "ComputerSidebar.User"]) {
       const m = findComponentMapping(name);
       expect(m, name).not.toBeNull();
       expect(m!.status, name).toBe("ambiguous");
