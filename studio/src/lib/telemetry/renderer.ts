@@ -30,7 +30,7 @@ export async function initRendererTelemetry(args: InitArgs): Promise<void> {
     if (args.config.enabled && args.config.posthogKey) {
       const mod = await import("posthog-js");
       posthog = mod.default ?? mod;
-      posthog.init(args.config.posthogKey, { api_host: args.config.posthogHost, autocapture: false, capture_pageview: false });
+      posthog.init(args.config.posthogKey, { api_host: args.config.posthogHost, autocapture: false, capture_pageview: false, disable_session_recording: true });
     }
     if (args.config.enabled) {
       adapter = {
