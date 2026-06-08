@@ -93,11 +93,41 @@ is worth it; the gap is identification + icons + pruning, not "it's all noise".
 (`Computer Item`, `Computer Avatar`, the header/logo fragments) + the new icon
 map. The planner gains an `icon` node path (or treats icons as components).
 
+## Fiber-walk spike — PROVEN (2026-06-08)
+
+Ran the make-or-break spike on the live Computer-with-panel frame. Result:
+**decisive success, far richer than the DOM serializer.**
+
+- Fiber reachable via the DOM node's `__reactFiber$…` key; walk works.
+- **815 fiber nodes, 310 component fibers, 69 distinct component names** (vs the
+  DOM audit's 15 components + ~600 anonymous divs).
+- **Names survive the dev bundler** (esbuild, minify off): `ChatBubble`×30,
+  `IconButton`×8, `Avatar`×5, `Button`×3, `ComputerHeader`, `ComputerPage`,
+  `Markdown`×30, and icons BY NAME — `PlusSmall`, `ChevronLeftSmall`,
+  `DotInLeftWindow`, `Document`, `Clock`, `AgentStudio`.
+- **`.map`-over-data rows resolve free**: `Item`×34 (the sidebar session/chat
+  rows = `ComputerSidebar.Item`) and `ChatBubble`×30 — exactly what static AST
+  could not do.
+- **Real props present**: `IconButton{variant,size}`, icon `{size}`,
+  `DotInLeftWindow{size}`, etc.
+
+**Verdict: fiber walk is validated as the serializer front-end.** Risk
+downgraded from "highest, spike first" to "proven on dev build". Three smaller
+findings to handle in the plan (below).
+
 ## Open questions for the plan (resolve before/at build)
 
-- **Fiber access in production builds.** React 19 fiber is reachable via the DOM
-  node's `__reactFiber$…` key or a custom path; confirm it's readable in the
-  iframe and survives `keepNames`. **Highest risk — spike first.**
+- **Forwardref / Radix wrapper names.** ~6 fibers came back as `(obj
+  component)` and some as bare `Root`/`Group`/`MenuProvider`/
+  `DropdownMenuProvider` (Radix internals). The walk needs: (a) better name
+  extraction for forwardRef/memo (`type.render.name`), (b) a skip-list for Radix
+  provider/internal wrappers (treat as transparent containers, descend through).
+- **Compound sub-part names are bare.** `Item`×34 resolves but as `"Item"`, not
+  `"ComputerSidebar.Item"` — confirm no name collision across composites, and
+  decide how the mapping keys them (likely need a displayName convention on kit
+  compound sub-parts, e.g. `ComputerSidebar.Item.displayName = "ComputerSidebar.Item"`).
+- **`keepNames` for production bundles.** Dev (minify off) preserves names; the
+  Cloudflare/minified path needs `keepNames: true`. Confirm + measure size.
 - **Prune boundary for composites.** A composite (ComputerSidebar) is NOT a
   mapped primitive, so we descend into it (good — that's how we reach its
   Computer Item rows). Confirm the walk distinguishes "mapped primitive → prune"
