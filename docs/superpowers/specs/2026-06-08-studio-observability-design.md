@@ -43,7 +43,7 @@ Studio is a **real Electron app** now (not the old Vite-only browser tab). Three
 
 ## SDK choices
 
-- **Sentry:** `@sentry/electron` — single package covering main + renderer + Node child. Replaces the earlier `@sentry/node` + `@sentry/react` split (that split predates knowing Studio is real Electron). `@sentry/electron/main` in main process, `@sentry/electron/renderer` in renderer. The Vite child is a Node process spawned by Electron; it uses `@sentry/electron`'s Node layer (or `@sentry/node` if the child can't see Electron APIs — resolve during implementation).
+- **Sentry:** three packages, one shared DSN — `@sentry/electron` (main), `@sentry/node` (Vite child: runs under `ELECTRON_RUN_AS_NODE`, no Electron APIs), `@sentry/browser` (renderer: no preload + `contextIsolation:true` rules out the `@sentry/electron/renderer` IPC bridge). See Resolved item 1.
 - **PostHog:** `posthog-node` in the Vite child (all value events originate server-side), `posthog-js` in the renderer (UI-only clicks).
 
 ## Identity
@@ -117,8 +117,8 @@ Pairs with `frame_generated` to compute "% of generated frames that actually ren
 studio/src/lib/telemetry/
   index.ts          # public API: track(), captureError(), identify(), shutdown()
   config.ts         # reads build-time env, returns { sentryDsn, posthogKey, posthogHost, enabled, debug }
-  renderer.ts       # @sentry/electron/renderer + posthog-js init
-  server.ts         # posthog-node + Sentry node-layer init (Vite child)
+  renderer.ts       # @sentry/browser + posthog-js init
+  server.ts         # posthog-node + @sentry/node init (Vite child)
   events.ts         # typed event names + payload types (discriminated union)
   identity.ts       # distinct_id resolver (DevRev email > anonymous UUID)
   redact.ts         # path/secret scrubbers shared by Sentry beforeSend + payload builders
@@ -172,10 +172,10 @@ Build ALL init points + ALL events now, but route through `debugSink.ts` (prints
 - Assert `track()` not called when `config.enabled=false`.
 - Run full suite (`pnpm run studio:test`) before commit.
 
-## Open items for implementation plan
+## Resolved implementation details (were open items)
 
-1. Confirm whether the Vite child can import `@sentry/electron` Node layer or must use `@sentry/node` (it runs under `ELECTRON_RUN_AS_NODE`).
-2. How the main process receives build-time env (no Vite `define` there) — likely an `electron-builder` extraMetadata or a generated `version.json`/`telemetry.json` in Resources.
-3. Exact ShareModal file path + share-deploy server callsite in `cloudflare.ts`.
-4. `error_kind` classification mapping for generation failures (reuse existing `is_error` / exit-code branches in `chat.ts`).
+1. **Sentry = three packages, one DSN.** `@sentry/electron` in main; `@sentry/node` in the Vite child (it runs under `ELECTRON_RUN_AS_NODE`, Electron APIs unavailable); `@sentry/browser` in the renderer (no preload + `contextIsolation:true` rules out `@sentry/electron/renderer`'s IPC bridge).
+2. **Build-time env → one config file in Resources.** No Vite `define` reaches the main process (it's `tsc`-built to `electron/dist`). The pack step reads `.env.production` and writes `<Resources>/telemetry.config.json` (`{ sentryDsn, posthogKey, posthogHost }`). Main + Vite child read it with `fs` via `process.resourcesPath`; the renderer (no node access) fetches values from `GET /api/telemetry/identity`. PostHog project key + Sentry DSN are client-shippable keys, so baking into the bundle is standard.
+3. **Share callsites located.** UI: `studio/src/components/shell/ShareModal.tsx`. Server deploy: `studio/server/middleware/cloudflare.ts` — `deployViaWorker` ~L100, success `send(... {url, deployId})` L129, failure `deploy_failed` L133.
+4. **`error_kind` derives from existing signals** at the `recordTurnMetric` callsite + `onCrash`: `info.timedOut`→`timeout`; `info.exitCode !== 0`→`cli_crash`; `pendingEnd.error` matches bedrock/auth→`bedrock_auth`; stream parse failure→`parser_error`; else `other`. `didStall`/`retries` already tracked.
 ```
