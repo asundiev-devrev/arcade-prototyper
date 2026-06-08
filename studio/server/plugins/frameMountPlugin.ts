@@ -374,6 +374,7 @@ async function compileFrameBootstrap(opts: {
   const result = await transformWithEsbuild(source, virtualId.replace(/^\0/, ""), {
     loader: "tsx",
     jsx: "automatic",
+    keepNames: true,
   });
   return { code: result.code, map: result.map };
 }
