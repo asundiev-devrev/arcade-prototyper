@@ -31,7 +31,7 @@ import { connectMirror } from "./server/sharedProjects/relayClient";
 import { settingsMiddleware, readGlobalSettings, writeTelemetryDistinctId } from "./server/middleware/settings";
 import { resolveConfig, readFileConfig } from "./src/lib/telemetry/config";
 import { resolveDistinctId } from "./src/lib/telemetry/identity";
-import { initServerTelemetry } from "./src/lib/telemetry/server";
+import { initServerTelemetry, shutdownServerTelemetry } from "./src/lib/telemetry/server";
 import { randomUUID } from "node:crypto";
 import { thumbnailsMiddleware } from "./server/middleware/thumbnails";
 import { liftMiddleware } from "./server/middleware/lift";
@@ -163,6 +163,10 @@ function apiPlugin(): import("vite").Plugin {
 
           await initServerTelemetry({ config, distinctId, sessionId, version, os });
           setIdentitySnapshot({ distinctId, sessionId, version, os, config });
+          const flush = () => { void shutdownServerTelemetry(); };
+          process.once("SIGTERM", flush);
+          process.once("SIGINT", flush);
+          process.once("beforeExit", flush);
           if (config.debug || config.enabled) console.log(`[telemetry] server ready (enabled=${config.enabled} debug=${config.debug})`);
         } catch (err) {
           console.warn("[telemetry] server boot block failed:", err instanceof Error ? err.message : err);

@@ -26,7 +26,7 @@ export async function initServerTelemetry(args: InitArgs): Promise<void> {
     }
     if (args.config.enabled && args.config.posthogKey) {
       const { PostHog } = await import("posthog-node");
-      posthog = new PostHog(args.config.posthogKey, { host: args.config.posthogHost });
+      posthog = new PostHog(args.config.posthogKey, { host: args.config.posthogHost, flushAt: 1 });
     }
     if (args.config.enabled) {
       adapter = {

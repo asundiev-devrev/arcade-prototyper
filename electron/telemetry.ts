@@ -1,6 +1,7 @@
 import { app } from "electron";
 import fs from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 
 interface FileConfig { sentryDsn?: string; posthogKey?: string; posthogHost?: string }
 
@@ -11,21 +12,35 @@ function readConfig(): FileConfig {
 
 let posthog: any = null;
 let sessionStart = 0;
+let sessionId = "";
 let distinctId = "anonymous";
 let enabled = false;
 let debug = false;
 const DEFAULT_HOST = "https://us.i.posthog.com";
+
+function mainBeforeSend(event: any): any {
+  try {
+    if (Array.isArray(event?.breadcrumbs)) {
+      for (const b of event.breadcrumbs) {
+        if (typeof b?.data?.url === "string") b.data.url = b.data.url.replace(/\/api\/projects\/[^/]+/g, "/api/projects/<slug>");
+      }
+    }
+    if (event?.extra && typeof event.extra === "object" && "prompt" in event.extra) event.extra.prompt = "[redacted]";
+  } catch {}
+  return event;
+}
 
 export async function initMainTelemetry(): Promise<void> {
   const cfg = readConfig();
   debug = Boolean(process.env.ARCADE_TELEMETRY_DEBUG);
   enabled = app.isPackaged && Boolean(cfg.sentryDsn && cfg.posthogKey);
   sessionStart = Date.now();
+  sessionId = randomUUID();
 
   if (enabled && cfg.sentryDsn) {
     try {
       const Sentry = await import("@sentry/electron/main");
-      Sentry.init({ dsn: cfg.sentryDsn, release: `arcade-studio@${app.getVersion()}` });
+      Sentry.init({ dsn: cfg.sentryDsn, release: `arcade-studio@${app.getVersion()}`, beforeSend: mainBeforeSend });
     } catch (err) { console.error("[telemetry] main sentry init failed:", err); }
   }
   if (enabled && cfg.posthogKey) {
@@ -37,7 +52,7 @@ export async function initMainTelemetry(): Promise<void> {
 }
 
 function emit(event: string, props: Record<string, unknown>): void {
-  const full = { ...props, distinct_id: distinctId, process: "main", version: app.getVersion() };
+  const full = { ...props, distinct_id: distinctId, process: "main", version: app.getVersion(), session_id: sessionId, os: `${process.platform}-${process.arch}` };
   if (enabled && posthog) { try { posthog.capture({ distinctId, event, properties: full }); } catch {} }
   else if (debug) console.log(`[telemetry:main] ${event}`, full);
 }

@@ -182,6 +182,7 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
   // resolve via `aws sts get-caller-identity`. Otherwise we fail fast
   // instead of spawning claude into a silent hang.
   if (!isComputerTurn && !(await hasBedrockAuth())) {
+    track({ name: "generation_failed", props: { project_slug_hash: hashSlug(slug), error_kind: "bedrock_auth" } });
     const turn = startTurn(slug, {
       prompt,
       run: ({ end }) => {

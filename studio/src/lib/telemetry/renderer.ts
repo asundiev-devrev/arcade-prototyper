@@ -11,6 +11,29 @@ interface InitArgs {
   os: string;
 }
 
+/** Browser-safe Sentry scrub: strip raw project slugs from breadcrumb URLs +
+ *  prompt-bearing extras. Mirrors redact.sentryBeforeSend but without the
+ *  node:crypto import that would break the browser bundle. */
+function rendererBeforeSend(event: any): any {
+  try {
+    if (Array.isArray(event?.breadcrumbs)) {
+      for (const b of event.breadcrumbs) {
+        if (typeof b?.data?.url === "string") {
+          b.data.url = b.data.url.replace(/\/api\/projects\/[^/]+/g, "/api/projects/<slug>");
+        }
+      }
+    }
+    if (event?.extra && typeof event.extra === "object" && "prompt" in event.extra) {
+      event.extra.prompt = "[redacted]";
+    }
+    const headers = event?.request?.headers;
+    if (headers && typeof headers === "object") {
+      for (const k of Object.keys(headers)) if (/^authorization$/i.test(k)) headers[k] = "[redacted]";
+    }
+  } catch {}
+  return event;
+}
+
 /**
  * Renderer-side telemetry init. Mirrors server.ts but routes through the
  * browser SDKs (posthog-js / @sentry/browser). Call sites import the shared
@@ -24,13 +47,14 @@ export async function initRendererTelemetry(args: InitArgs): Promise<void> {
   try {
     if (args.config.enabled && args.config.sentryDsn) {
       sentry = await import("@sentry/browser");
-      sentry.init({ dsn: args.config.sentryDsn, release: `arcade-studio@${args.version}` });
+      sentry.init({ dsn: args.config.sentryDsn, release: `arcade-studio@${args.version}`, beforeSend: rendererBeforeSend });
       sentry.setTag("process", "renderer");
     }
     if (args.config.enabled && args.config.posthogKey) {
       const mod = await import("posthog-js");
       posthog = mod.default ?? mod;
       posthog.init(args.config.posthogKey, { api_host: args.config.posthogHost, autocapture: false, capture_pageview: false, disable_session_recording: true });
+      posthog.identify(args.distinctId);
     }
     if (args.config.enabled) {
       adapter = {
