@@ -31,6 +31,11 @@ export async function startVite(appRoot: string): Promise<string> {
       // not the user's default browser. studio/vite.config.ts honors
       // this env var.
       ARCADE_STUDIO_OPEN_BROWSER: "0",
+      // Telemetry context for the Vite child (Task 9 boot block reads
+      // these). ARCADE_TELEMETRY_DEBUG is already forwarded via ...process.env.
+      ARCADE_RESOURCES_PATH: process.resourcesPath ?? "",
+      ARCADE_IS_PACKAGED: process.env.ARCADE_IS_PACKAGED ?? "",
+      ARCADE_APP_VERSION: process.env.ARCADE_APP_VERSION ?? "",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
