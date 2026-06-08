@@ -49,6 +49,12 @@ export async function readGlobalSettings(): Promise<GlobalSettings> {
   return readSettings();
 }
 
+/** Persist the resolved telemetry distinct_id under settings.telemetry.distinctId. */
+export async function writeTelemetryDistinctId(id: string): Promise<void> {
+  const current = await readSettings();
+  await writeSettings(mergeSettings(current as Record<string, unknown>, { telemetry: { distinctId: id } }) as GlobalSettings);
+}
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
