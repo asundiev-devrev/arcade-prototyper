@@ -31,6 +31,8 @@ import {
 } from "../frameChangeContract";
 import { recordChatEventForReplay, type ProjectRef } from "./chatRelayMirror";
 import { recordTurnMetric } from "../metrics";
+import { track } from "../../src/lib/telemetry/server";
+import { hashSlug } from "../../src/lib/telemetry/redact";
 import { resolveDevuFromPat } from "../relay/auth";
 import { getDevRevPat } from "../secrets/keychain";
 import type { RelayEvent } from "../relay/types";
@@ -161,6 +163,15 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
     }));
     return;
   }
+
+  track({
+    name: "prompt_submitted",
+    props: {
+      prompt_length: prompt.length,
+      project_slug_hash: hashSlug(slug),
+      frame_count_before: project.frames?.length ?? 0,
+    },
+  });
 
   const isComputerTurn = COMPUTER_MENTION.test(prompt);
 
