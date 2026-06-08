@@ -9,6 +9,16 @@ import {
 } from "../cloudflare/deploy";
 import { projectJsonPath } from "../paths";
 import type { Project } from "../types";
+import { track } from "../../src/lib/telemetry/server";
+import type { ShareErrorKind } from "../../src/lib/telemetry/events";
+
+export function classifyShareError(info: { code?: string; status: number }): ShareErrorKind {
+  if (info.code === "invalid_key" || info.code === "missing_key" || info.status === 401) return "auth";
+  if (info.code === "bundle_error") return "bundle_error";
+  if (info.status >= 500) return "worker_5xx";
+  if (info.status === 0) return "network";
+  return "other";
+}
 
 async function readJson(req: IncomingMessage): Promise<any> {
   let buf = "";
@@ -39,6 +49,7 @@ export function cloudflareMiddleware() {
     const shareMatch = url.match(/^\/api\/projects\/([a-z0-9-]+)\/share$/);
     if (shareMatch && req.method === "POST") {
       const [, slug] = shareMatch;
+      const shareStart = Date.now();
 
       try {
         const body = await readJson(req);
@@ -109,6 +120,7 @@ export function cloudflareMiddleware() {
           // status Studio's UI expects. Anything else (503, 5xx from the
           // Pages API) falls through to the generic 500 below.
           if (err.code === "invalid_key" || err.code === "missing_key") {
+            track({ name: "share_failed", props: { duration_ms: Date.now() - shareStart, error_kind: "auth" } });
             return send(res, 401, {
               error: { code: err.code, message: err.message },
             });
@@ -126,9 +138,11 @@ export function cloudflareMiddleware() {
 
         await fs.writeFile(projectPath, JSON.stringify(projectJson, null, 2));
 
+        track({ name: "share_succeeded", props: { duration_ms: Date.now() - shareStart, frame_count: projectJson.frames?.length ?? 0 } });
         return send(res, 200, { url: deployment.url, deployId: deployment.deployId });
       } catch (err: any) {
         console.error("[cloudflare] Share failed:", err);
+        track({ name: "share_failed", props: { duration_ms: Date.now() - shareStart, error_kind: classifyShareError({ code: err?.code, status: 500 }) } });
         return send(res, 500, {
           error: { code: "deploy_failed", message: err.message },
         });
