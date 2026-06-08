@@ -185,4 +185,29 @@ export const COMPONENT_ENTRIES: FigmaComponentMapping[] = [
     variants: [],
     note: "Provider, no UI component analogue in 0.3. Always degrades to fallback (renders its children's frame). Expected ambiguous.",
   },
+
+  // --- Composite sub-parts surfaced by the fiber walk (the widen work) ---
+  // The fiber tree exposes a frame's composite SUB-PARTS by name; these map to
+  // real 0.3 primitives so the sidebar/chrome become real instances, not boxes.
+  // Keyed on the QUALIFIED kit name (e.g. "ComputerSidebar.Item") — the kit
+  // sub-parts must set a matching displayName so the fiber reports it qualified
+  // (the bare name "Item" collides across composites). The export wiring (T8)
+  // can also alias bare "Item" -> this entry when the parent composite is known.
+  {
+    arcadeGen: "ComputerSidebar.Item",
+    status: "mapped",
+    generation: "0.3",
+    figma: { componentSetKey: "d5ad9a6ba7dc57408feb37155343e2e96029b455", setName: "Computer Item" },
+    variants: [],
+    textNode: { strategy: "lowest-depth" },
+    note: "Sidebar session/chat row. 0.3 'Computer Item' (unprefixed, by xork). Axes State(:idle/:hover/:active)/Expanded/hasUpdate left to defaults; we set its label via prune-with-text. Fiber reports it as bare 'Item' — needs a displayName convention on the kit sub-part, OR T8 wiring aliases bare 'Item' under a ComputerSidebar ancestor.",
+  },
+  {
+    arcadeGen: "ComputerSidebar.User",
+    status: "ambiguous",
+    generation: null,
+    figma: null,
+    variants: [],
+    note: "Sidebar user-footer composite (avatar + name + subtitle). No single 0.3 component; assembled from Computer Avatar + text. Degrades to a frame that recurses (its inner Avatar maps separately). Re-curate if a 0.3 'User Footer' appears.",
+  },
 ];

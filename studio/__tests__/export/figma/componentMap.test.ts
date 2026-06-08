@@ -18,12 +18,19 @@ describe("componentMap", () => {
     expect(findComponentMapping("NotAThing")).toBeNull();
   });
 
-  it("covers all 18 curated primitives", () => {
-    expect(COMPONENT_ENTRIES).toHaveLength(18);
+  it("covers the curated primitives + composite sub-parts", () => {
+    expect(COMPONENT_ENTRIES).toHaveLength(20);
   });
 
-  it("marks the two known no-analogue primitives ambiguous (null figma + generation)", () => {
-    for (const name of ["Separator", "DevRevThemeProvider"]) {
+  it("maps the ComputerSidebar.Item sub-part to Computer Item", () => {
+    const m = findComponentMapping("ComputerSidebar.Item");
+    expect(m).not.toBeNull();
+    expect(m!.status).toBe("mapped");
+    expect(m!.figma?.setName).toBe("Computer Item");
+  });
+
+  it("marks the known no-analogue components ambiguous (null figma + generation)", () => {
+    for (const name of ["Separator", "DevRevThemeProvider", "ComputerSidebar.User"]) {
       const m = findComponentMapping(name);
       expect(m, name).not.toBeNull();
       expect(m!.status, name).toBe("ambiguous");
