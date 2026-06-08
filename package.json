@@ -17,6 +17,9 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-code": "^2.1.142",
+    "@sentry/browser": "^10.56.0",
+    "@sentry/electron": "^7.13.0",
+    "@sentry/node": "^10.56.0",
     "@tailwindcss/node": "^4.2.4",
     "@tailwindcss/oxide": "^4.2.4",
     "@tailwindcss/vite": "^4.3.0",
@@ -26,6 +29,8 @@
     "electron-updater": "^6.8.3",
     "esbuild": "^0.25.0",
     "figmanage": "^1.4.2",
+    "posthog-js": "^1.382.0",
+    "posthog-node": "^5.36.4",
     "react": "^19.0.0",
     "react-day-picker": "^9.14.0",
     "react-dom": "^19.0.0",
