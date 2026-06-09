@@ -34,9 +34,9 @@ export const ICON_ENTRIES: IconMapping[] = [
   },
   {
     arcadeGen: "ChevronRightSmall",
-    figma: { componentSetKey: "ffc961f08b033c48c82e01a5c6507a736c7524f2", setName: "Icons/Chevron.down" },
+    figma: { componentSetKey: "35c3c725864838f2bd690bc7c8f7abaa88c4dc33", setName: "Icons/Chevron.right" },
     sizeProp: "Size",
-    note: "PLACEHOLDER family key — chevron set; re-confirm Chevron.right key in a follow-up (search returned left/down/diagonals; right exists in the 11-result set). Marked for re-verify.",
+    note: "Confirmed live 2026-06-09 (node 5389:5302) — was a placeholder Chevron.down key; corrected to the real Chevron.right.",
   },
   {
     arcadeGen: "Document",
@@ -75,8 +75,9 @@ export const ICON_ENTRIES: IconMapping[] = [
   },
   {
     arcadeGen: "Clock",
-    figma: null,
-    note: "Ambiguous: 'clock' search returned no Icons/* match (may be Icons/Calendar or a differently-named set). Re-verify; fallback frame for now.",
+    figma: { componentSetKey: "2aa8ffa0acd31c83e3eb1dbd02f4e8ffaa3bc96e", setName: "Icons/Clock" },
+    sizeProp: "Size",
+    note: "Confirmed live 2026-06-09 (node 5389:6075) — real Icons/Clock found on the Icons page (history affordance).",
   },
   {
     arcadeGen: "ThreeDotsHorizontal",
