@@ -19,6 +19,12 @@ vi.mock("@xorkavi/arcade-gen", async () => {
   };
 });
 
+const trackSpy = vi.fn();
+vi.mock("../../src/lib/telemetry/renderer", () => ({
+  track: (...args: any[]) => trackSpy(...args),
+  captureError: () => {},
+}));
+
 import { ShareModal } from "../../src/components/shell/ShareModal";
 
 const FRAMES = [{ slug: "hero", name: "Hero", size: 1440 }] as any;
@@ -138,5 +144,32 @@ describe("ShareModal SSL probe", () => {
     await waitFor(() =>
       expect(screen.getByText(/URL isn't responding yet/i)).toBeTruthy(),
     );
+  });
+});
+
+describe("ShareModal — Copy Figma Export", () => {
+  it("copies an export prompt to the clipboard and fires the figma_export_copied event", async () => {
+    const writeText = vi.fn(async () => {});
+    vi.stubGlobal("navigator", { clipboard: { writeText } } as any);
+
+    render(
+      <ShareModal open={true} onClose={() => {}} projectSlug="test-proj" frames={FRAMES} />,
+    );
+
+    fireEvent.click(screen.getByDisplayValue("hero"));
+    fireEvent.click(screen.getByText("Copy Figma Export"));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    const payload = writeText.mock.calls[0][0] as string;
+    // the prompt references the selected frame + the hybrid-export steps
+    expect(payload).toContain("hero");
+    expect(payload).toMatch(/Export this Arcade Studio frame to Figma/i);
+    expect(payload).toMatch(/swap/i);
+
+    // the button flips to its copied affirmation
+    await waitFor(() => expect(screen.getByText("Copied!")).toBeTruthy());
+
+    // the telemetry event fired with the frame count
+    expect(trackSpy).toHaveBeenCalledWith({ name: "figma_export_copied", props: { frame_count: 1 } });
   });
 });

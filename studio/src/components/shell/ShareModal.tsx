@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Modal, Button } from "@xorkavi/arcade-gen";
 import type { Frame } from "../../../server/types";
 import { wrapManifestWithPrompt } from "../../lift/wrapPrompt";
+import { wrapFigmaExportPrompt } from "../../export/figma/wrapFigmaExportPrompt";
 import { track } from "../../lib/telemetry/renderer";
 
 interface ShareModalProps {
@@ -52,6 +53,7 @@ export function ShareModal({
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [manifestCopied, setManifestCopied] = useState(false);
+  const [figmaCopied, setFigmaCopied] = useState(false);
   const probeAbort = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -77,6 +79,23 @@ export function ShareModal({
       await navigator.clipboard.writeText(payload);
       setManifestCopied(true);
       setTimeout(() => setManifestCopied(false), 2000);
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }
+
+  async function handleCopyFigmaExport() {
+    if (!selectedFrame) return;
+    try {
+      // Hand the user a ready prompt to run the hybrid Figma export in a
+      // Claude session with the figma-console Bridge — the swap writes real
+      // component instances into Figma, which needs the desktop plugin Bridge
+      // the app itself can't reach. Mirrors "Copy Lift Manifest".
+      const payload = wrapFigmaExportPrompt({ frameSlug: selectedFrame, projectSlug });
+      await navigator.clipboard.writeText(payload);
+      track({ name: "figma_export_copied", props: { frame_count: frames.length } });
+      setFigmaCopied(true);
+      setTimeout(() => setFigmaCopied(false), 2000);
     } catch (err: any) {
       setError(err.message);
     }
@@ -173,6 +192,7 @@ export function ShareModal({
     setError(null);
     setCopied(false);
     setManifestCopied(false);
+    setFigmaCopied(false);
     setPhase("idle");
     onClose();
   }
@@ -340,6 +360,13 @@ export function ShareModal({
                 disabled={!selectedFrame || loading || frames.length === 0}
               >
                 {manifestCopied ? "Copied!" : "Copy Lift Manifest"}
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={handleCopyFigmaExport}
+                disabled={!selectedFrame || loading || frames.length === 0}
+              >
+                {figmaCopied ? "Copied!" : "Copy Figma Export"}
               </Button>
               <Button
                 variant="primary"

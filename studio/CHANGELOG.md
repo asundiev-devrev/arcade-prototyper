@@ -8,7 +8,10 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-## [0.30.0] — 2026-06-08
+## [0.31.0] — 2026-06-09
+
+### Added
+- **Export a frame to Figma as real DevRev components.** The Share dialog has a new **Copy Figma Export** button. It copies a ready-to-run instruction set for a Claude session connected to Figma (via the figma-console Bridge): that session captures the frame's layout and swaps in real Arcade 0.3 component instances — sidebar rows, chat bubbles, buttons with their real icons — instead of flat rectangles. This is the first cut: it hands off a prompt rather than pushing to Figma in one click (writing components into Figma needs the desktop plugin Bridge the app can't reach yet), and the sidebar row currently maps to a component the design library is mid-migrating. Usage is tracked (`figma_export_copied`).
 
 ### Added
 - **The app now reports crashes and basic usage (internal beta).** Studio sends crash reports plus a small set of usage events — app launches, frame generations and their outcomes, frames that fail to render, share attempts, and settings opens — so the team can see whether the beta is working and being used. The prompts you type are included (so we can learn what people are trying to build); file contents and project names stay on your machine. Events are tagged with your DevRev email. Telemetry only runs in the installed app, never in local dev.
