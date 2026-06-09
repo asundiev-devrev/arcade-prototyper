@@ -14,6 +14,7 @@ const chatItem: FigmaComponentMapping = {
 const maps: SwapPlanMaps = {
   findComponentMapping: (n) => (n === "ComputerSidebar.Item" ? chatItem : null),
   tokenNameToVariableKey: () => null,
+  findIconSetKey: () => null,
 };
 
 const cap = (id: string, name: string, x: number, y: number, w: number, h: number, parentId = "root"): CaptureNode =>
@@ -72,6 +73,7 @@ describe("planSwap — discrete region", () => {
     const ibMaps: SwapPlanMaps = {
       findComponentMapping: (n) => (n === "IconButton" ? iconButton : null),
       tokenNameToVariableKey: () => null,
+      findIconSetKey: () => null,
     };
     const manifest: ManifestComponent[] = [
       { component: "IconButton", box: { x: 201, y: 12, width: 20, height: 20 }, props: { variant: "tertiary", size: "sm" }, text: null },
@@ -88,6 +90,52 @@ describe("planSwap — discrete region", () => {
       variant: { Variant: "Tertiary", Size: "Small" },
     });
   });
+
+  it("emits icon.setKey on replaceWithInstance when the component has a mapped icon", () => {
+    const iconButton: FigmaComponentMapping = {
+      arcadeGen: "IconButton", status: "mapped", generation: "0.3",
+      figma: { componentSetKey: "ICON_BUTTON_KEY", setName: "Icon Button" }, variants: [], note: "",
+    };
+    const ibMaps: SwapPlanMaps = {
+      findComponentMapping: (n) => (n === "IconButton" ? iconButton : null),
+      tokenNameToVariableKey: () => null,
+      findIconSetKey: (icon) => (icon === "ChevronLeftSmall" ? "ICONS_CHEVRON_LEFT" : null),
+    };
+    const manifest: ManifestComponent[] = [
+      { component: "IconButton", box: { x: 201, y: 12, width: 20, height: 20 }, props: {}, text: null, icon: "ChevronLeftSmall" },
+    ];
+    const nodes: CaptureNode[] = [
+      cap("root", "Frame", 0, 0, 1280, 631, ""),
+      cap("flatIB", "Button - Back", 201, 12, 20, 20, "chrome"),
+      cap("chrome", "WindowChrome", 0, 0, 255, 44, "root"),
+    ];
+    const ops = planSwap(manifest, nodes, { transcriptRegion: null }, ibMaps);
+    expect(ops).toHaveLength(1);
+    expect(ops[0]).toMatchObject({ op: "replaceWithInstance", icon: { setKey: "ICONS_CHEVRON_LEFT" } });
+  });
+
+  it("omits icon when the icon is unmapped (findIconSetKey returns null)", () => {
+    const iconButton: FigmaComponentMapping = {
+      arcadeGen: "IconButton", status: "mapped", generation: "0.3",
+      figma: { componentSetKey: "ICON_BUTTON_KEY", setName: "Icon Button" }, variants: [], note: "",
+    };
+    const ibMaps: SwapPlanMaps = {
+      findComponentMapping: (n) => (n === "IconButton" ? iconButton : null),
+      tokenNameToVariableKey: () => null,
+      findIconSetKey: () => null,
+    };
+    const manifest: ManifestComponent[] = [
+      { component: "IconButton", box: { x: 201, y: 12, width: 20, height: 20 }, props: {}, text: null, icon: "DotInLeftWindow" },
+    ];
+    const nodes: CaptureNode[] = [
+      cap("root", "Frame", 0, 0, 1280, 631, ""),
+      cap("flatIB", "Button", 201, 12, 20, 20, "chrome"),
+      cap("chrome", "WindowChrome", 0, 0, 255, 44, "root"),
+    ];
+    const ops = planSwap(manifest, nodes, { transcriptRegion: null }, ibMaps) as any[];
+    expect(ops).toHaveLength(1);
+    expect(ops[0].icon).toBeUndefined();
+  });
 });
 
 const bubbleMapping: FigmaComponentMapping = {
@@ -99,6 +147,7 @@ const bubbleMapping: FigmaComponentMapping = {
 const maps2: SwapPlanMaps = {
   findComponentMapping: (n) => (n === "ChatBubble" ? bubbleMapping : n === "ComputerSidebar.Item" ? chatItem : null),
   tokenNameToVariableKey: () => null,
+  findIconSetKey: () => null,
 };
 
 describe("planSwap — transcript region", () => {

@@ -31,6 +31,8 @@ function findTranscriptContainer(region: Box, captureNodes: CaptureNode[]): Capt
 export interface SwapPlanMaps {
   findComponentMapping: (name: string) => FigmaComponentMapping | null;
   tokenNameToVariableKey: (cssTokenName: string) => string | null;
+  /** arcade-gen icon name → Icons/* component-set key, or null if unmapped/ambiguous. */
+  findIconSetKey: (arcadeGenIconName: string) => string | null;
 }
 
 export interface SwapRegions {
@@ -100,7 +102,8 @@ export function planSwap(
     const match = matchByGeometry(comp.box, candidates);
     if (!match || match.parentId === null) continue;
     used.add(match.id);
-    ops.push({
+    const iconSetKey = comp.icon ? maps.findIconSetKey(comp.icon) : null;
+    const op: SwapOp = {
       op: "replaceWithInstance",
       targetNodeId: match.id,
       componentSetKey: mapping.figma.componentSetKey,
@@ -108,7 +111,9 @@ export function planSwap(
       box: { x: match.x, y: match.y, width: match.width, height: match.height },
       parentNodeId: match.parentId,
       text: textPayload(mapping, comp.text),
-    });
+    };
+    if (iconSetKey) (op as Extract<SwapOp, { op: "replaceWithInstance" }>).icon = { setKey: iconSetKey };
+    ops.push(op);
   }
   return ops;
 }
