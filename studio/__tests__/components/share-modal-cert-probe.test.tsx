@@ -11,11 +11,15 @@ vi.mock("@xorkavi/arcade-gen", async () => {
     Description: ({ children }: any) => React.createElement("p", null, children),
     Body: ({ children }: any) => React.createElement("div", null, children),
     Footer: ({ children }: any) => React.createElement("div", null, children),
+    Close: ({ children }: any) => children,
   };
   return {
     Modal,
     Button: ({ children, onClick, disabled, ...rest }: any) =>
       React.createElement("button", { onClick, disabled, ...rest }, children),
+    IconButton: ({ children, onClick, "aria-label": ariaLabel }: any) =>
+      React.createElement("button", { onClick, "aria-label": ariaLabel }, children),
+    CrossSmall: () => React.createElement("span", null, "×"),
   };
 });
 
@@ -63,7 +67,7 @@ describe("ShareModal SSL probe", () => {
     );
 
     fireEvent.click(screen.getByDisplayValue("hero"));
-    fireEvent.click(screen.getByText("Deploy to Cloudflare"));
+    fireEvent.click(screen.getByText("Deploy"));
 
     await waitFor(() => expect(screen.getByText(/Deployed successfully/)).toBeTruthy());
     expect(probeAttempts).toBeGreaterThanOrEqual(2);
@@ -106,7 +110,7 @@ describe("ShareModal SSL probe", () => {
     );
 
     fireEvent.click(screen.getByDisplayValue("hero"));
-    fireEvent.click(screen.getByText("Deploy to Cloudflare"));
+    fireEvent.click(screen.getByText("Deploy"));
 
     await waitFor(() =>
       expect(screen.getByText(/URL isn't responding yet/i)).toBeTruthy(),
@@ -139,7 +143,7 @@ describe("ShareModal SSL probe", () => {
     );
 
     fireEvent.click(screen.getByDisplayValue("hero"));
-    fireEvent.click(screen.getByText("Deploy to Cloudflare"));
+    fireEvent.click(screen.getByText("Deploy"));
 
     await waitFor(() =>
       expect(screen.getByText(/URL isn't responding yet/i)).toBeTruthy(),
@@ -157,7 +161,7 @@ describe("ShareModal — Copy Figma Export", () => {
     );
 
     fireEvent.click(screen.getByDisplayValue("hero"));
-    fireEvent.click(screen.getByText("Copy Figma Export"));
+    fireEvent.click(screen.getByText("Export to Figma"));
 
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
     const payload = writeText.mock.calls[0][0] as string;

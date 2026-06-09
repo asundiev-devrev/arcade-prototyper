@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Modal, Button } from "@xorkavi/arcade-gen";
+import { Modal, Button, IconButton, CrossSmall } from "@xorkavi/arcade-gen";
 import type { Frame } from "../../../server/types";
 import { wrapManifestWithPrompt } from "../../lift/wrapPrompt";
 import { wrapFigmaExportPrompt } from "../../export/figma/wrapFigmaExportPrompt";
@@ -205,6 +205,16 @@ export function ShareModal({
           <Modal.Description>
             Deploy a frame as a standalone preview on Cloudflare Pages.
           </Modal.Description>
+          <Modal.Close asChild>
+            <IconButton
+              aria-label="Close"
+              variant="tertiary"
+              size="sm"
+              style={{ position: "absolute", top: 16, right: 16 }}
+            >
+              <CrossSmall />
+            </IconButton>
+          </Modal.Close>
         </Modal.Header>
 
         <Modal.Body>
@@ -351,29 +361,26 @@ export function ShareModal({
             </>
           ) : (
             <>
-              <Button variant="secondary" onClick={handleClose}>
-                Cancel
-              </Button>
               <Button
                 variant="secondary"
                 onClick={handleCopyManifest}
                 disabled={!selectedFrame || loading || frames.length === 0}
               >
-                {manifestCopied ? "Copied!" : "Copy Lift Manifest"}
+                {manifestCopied ? "Copied!" : "Export to code"}
               </Button>
               <Button
                 variant="secondary"
                 onClick={handleCopyFigmaExport}
                 disabled={!selectedFrame || loading || frames.length === 0}
               >
-                {figmaCopied ? "Copied!" : "Copy Figma Export"}
+                {figmaCopied ? "Copied!" : "Export to Figma"}
               </Button>
               <Button
                 variant="primary"
                 onClick={handleDeploy}
                 disabled={!selectedFrame || loading || frames.length === 0}
               >
-                {loading ? "Deploying…" : "Deploy to Cloudflare"}
+                {loading ? "Deploying…" : "Deploy"}
               </Button>
             </>
           )}
