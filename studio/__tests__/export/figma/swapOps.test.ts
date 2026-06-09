@@ -49,3 +49,30 @@ describe("flattenManifest", () => {
     expect(m.map((c) => c.component)).toEqual(["ChatBubble"]);
   });
 });
+
+describe("flattenManifest — icon", () => {
+  it("carries the ComponentNode.icon onto the manifest entry", () => {
+    const slj: SljDocument = {
+      slj: 1, frame: { slug: "f", project: "p", width: 100, mode: "light" },
+      root: {
+        kind: "component", component: "IconButton", source: "arcade/components",
+        props: { variant: "tertiary" }, box: { x: 0, y: 0, width: 20, height: 20 },
+        layout: null, children: [], icon: "ChevronLeftSmall",
+      },
+    };
+    const m = flattenManifest(slj);
+    expect(m).toHaveLength(1);
+    expect(m[0].icon).toBe("ChevronLeftSmall");
+  });
+
+  it("leaves icon undefined when the node has none", () => {
+    const slj: SljDocument = {
+      slj: 1, frame: { slug: "f", project: "p", width: 100, mode: "light" },
+      root: {
+        kind: "component", component: "ChatBubble", source: "arcade/components",
+        props: {}, box: { x: 0, y: 0, width: 10, height: 10 }, layout: null, children: [],
+      },
+    };
+    expect(flattenManifest(slj)[0].icon).toBeUndefined();
+  });
+});

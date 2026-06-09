@@ -8,6 +8,8 @@ export interface ManifestComponent {
   box: Box;                          // frame-relative
   props: Record<string, unknown>;
   text: string | null;              // first visible text under the component, or null
+  /** arcade-gen icon name of the glyph inside this component, if any. */
+  icon?: string;
 }
 
 /** First visible text anywhere under a node (depth-first). */
@@ -29,7 +31,7 @@ export function flattenManifest(slj: SljDocument): ManifestComponent[] {
   const out: ManifestComponent[] = [];
   function walk(node: SljNode): void {
     if (isComponentNode(node)) {
-      out.push({ component: node.component, box: node.box, props: node.props, text: firstText(node) });
+      out.push({ component: node.component, box: node.box, props: node.props, text: firstText(node), icon: node.icon });
       return; // do not descend into a component's children
     }
     for (const c of node.children) walk(c);
@@ -49,6 +51,8 @@ export type SwapOp =
       parentNodeId: string;            // captured parent to attach under
       text?: { propName?: string; characters: string };
       binds?: { field: "fill" | "stroke"; variableKey: string }[];
+      /** Set the instance's inner Icons/* child to this component-set key. */
+      icon?: { setKey: string };
     }
   | {
       op: "injectInstances";
