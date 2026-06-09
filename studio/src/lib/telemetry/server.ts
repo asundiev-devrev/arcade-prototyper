@@ -30,7 +30,13 @@ export async function initServerTelemetry(args: InitArgs): Promise<void> {
     }
     if (args.config.enabled) {
       adapter = {
-        capture: (name, distinctId, props) => posthog?.capture({ distinctId, event: name, properties: props }),
+        capture: (name, distinctId, props) => {
+          posthog?.capture({ distinctId, event: name, properties: props });
+          // One line per sent event so the packaged-app file log proves what
+          // fired (posthog-node capture is otherwise silent). Name + who only —
+          // no payload, leaks nothing beyond what already ships.
+          console.log(`[telemetry] sent ${name} (${distinctId})`);
+        },
         captureException: (err) => sentry?.captureException(err),
       };
     }
