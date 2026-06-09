@@ -11,6 +11,10 @@ export interface WalkCtx {
   resolveColor: (value: string) => string;
   /** Radix/internal wrappers to pass through transparently. */
   isSkippable: (name: string) => boolean;
+  /** For a fiber being pruned as a mapped primitive, the arcade-gen name of the
+   *  first icon-mapped descendant (e.g. "ChevronLeftSmall"), or null. Lets the
+   *  walk record the glyph identity without un-pruning the subtree. */
+  iconNameFor: (f: MinimalFiber) => string | null;
 }
 
 const TRANSPARENT = new Set(["rgba(0, 0, 0, 0)", "transparent", "rgba(0,0,0,0)"]);
@@ -81,7 +85,8 @@ export function walkFiber(rootFiber: MinimalFiber, ctx: WalkCtx): SljNode {
         const children: SljNode[] = text
           ? [{ kind: "element", tag: "text", box, layout: null, style: { characters: text }, children: [] }]
           : [];
-        return { kind: "component", component: nm, source: "arcade/components", props: scalarProps(f.memoizedProps), box, layout: null, children };
+        const icon = ctx.iconNameFor(f) ?? undefined;
+        return { kind: "component", component: nm, source: "arcade/components", props: scalarProps(f.memoizedProps), box, layout: null, children, icon };
       }
       // composite / unknown → fall through to a frame that recurses
     }

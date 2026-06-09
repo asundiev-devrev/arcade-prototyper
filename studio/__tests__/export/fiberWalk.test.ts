@@ -29,6 +29,7 @@ const ctx: WalkCtx = {
   isComponent: (n) => (n === "ChatBubble" ? "primitive" : n === "ComputerSidebar" ? "composite" : null),
   resolveColor: (v) => v,
   isSkippable: (n) => n === "MenuProvider" || n === "Root",
+  iconNameFor: () => null,
 };
 
 describe("walkFiber — host + text + skip", () => {
@@ -88,5 +89,30 @@ describe("walkFiber — icons", () => {
     if (node.kind !== "component") throw new Error("expected component");
     expect(node.component).toBe("ChevronLeftSmall");
     expect(node.props).toEqual({ size: 16 });
+  });
+});
+
+describe("walkFiber — icon capture at prune", () => {
+  const iconCtx: WalkCtx = {
+    reader,
+    isComponent: (n) => (n === "IconButton" ? "primitive" : null),
+    resolveColor: (v) => v,
+    isSkippable: () => false,
+    iconNameFor: (f) => (f as any).__icon ?? null,
+  };
+
+  it("records the icon name on a pruned primitive when iconNameFor returns one", () => {
+    const inner = host("svg");
+    const btn = comp("IconButton", [inner], { variant: "tertiary" });
+    (btn as any).__icon = "ChevronLeftSmall";
+    const node = walkFiber(btn, iconCtx);
+    expect(node.kind).toBe("component");
+    if (node.kind === "component") expect(node.icon).toBe("ChevronLeftSmall");
+  });
+
+  it("leaves icon undefined when iconNameFor returns null", () => {
+    const btn = comp("IconButton", [host("svg")], {});
+    const node = walkFiber(btn, iconCtx);
+    if (node.kind === "component") expect(node.icon).toBeUndefined();
   });
 });

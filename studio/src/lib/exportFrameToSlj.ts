@@ -91,6 +91,10 @@ export async function exportFrameToSlj(args: ExportArgs): Promise<SljDocument> {
     },
     resolveColor: (value) => resolveToken(tokenIndex, value),
     isSkippable: (name) => SKIPPABLE.has(name),
+    // Glyph capture: scan the pruned subtree for the first icon-mapped
+    // descendant's arcade-gen name. Not yet wired — returns null until the
+    // descendant-scan task lands; the walk records `icon` only when non-null.
+    iconNameFor: () => null,
   };
 
   const root = walkFiber(rootFiber, ctx);
