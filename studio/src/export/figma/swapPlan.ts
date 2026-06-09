@@ -3,9 +3,30 @@ import type { Box } from "../slj";
 import type { FigmaComponentMapping } from "./types";
 import type { ManifestComponent, SwapOp } from "./swapOps";
 import type { CaptureNode } from "./captureTree";
-import { matchByGeometry, DEFAULT_MATCH_OPTS } from "./geometryMatch";
+import { matchByGeometry } from "./geometryMatch";
 
 const TRANSCRIPT_COMPONENTS = new Set(["ChatBubble"]);
+
+/** Find the capture node that visually CONTAINS the transcript: its x-span
+ *  covers the bubbles' x-span, its top sits at/above the first bubble, it's
+ *  reasonably tall, and among all such wrappers it's the tightest (smallest
+ *  area). The converter clips the transcript to the viewport, so we must NOT
+ *  require the container box to match the (full-scrollback) bubble bbox. */
+function findTranscriptContainer(region: Box, captureNodes: CaptureNode[]): CaptureNode | null {
+  const TOL = 24;
+  const left = region.x;
+  const right = region.x + region.width;
+  const candidates = captureNodes.filter(
+    (n) =>
+      n.width > 0 &&
+      n.height > 200 &&
+      n.x <= left + TOL &&
+      n.x + n.width >= right - TOL &&
+      n.y <= region.y + TOL,
+  );
+  candidates.sort((a, b) => a.width * a.height - b.width * b.height);
+  return candidates[0] ?? null;
+}
 
 export interface SwapPlanMaps {
   findComponentMapping: (name: string) => FigmaComponentMapping | null;
@@ -49,13 +70,7 @@ export function planSwap(
   // --- transcript region: inject our bubbles, discard their flat ones ---
   const bubbles = manifest.filter((c) => TRANSCRIPT_COMPONENTS.has(c.component));
   if (bubbles.length > 0 && regions.transcriptRegion) {
-    // The container box may differ slightly from our region box, so match it
-    // with looser tolerance than the discrete components use.
-    const container = matchByGeometry(regions.transcriptRegion, captureNodes, {
-      ...DEFAULT_MATCH_OPTS,
-      threshold: 64,
-      areaTol: 0.4,
-    });
+    const container = findTranscriptContainer(regions.transcriptRegion, captureNodes);
     if (container) {
       used.add(container.id);
       const instances = bubbles

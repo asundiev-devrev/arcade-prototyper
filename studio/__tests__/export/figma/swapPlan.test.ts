@@ -115,4 +115,29 @@ describe("planSwap — transcript region", () => {
     const ops = planSwap(manifest, nodes, { transcriptRegion }, maps2);
     expect(ops).toHaveLength(0);
   });
+
+  it("matches the clipped transcript container by containment even when bubbles overflow it (full scrollback)", () => {
+    // Our SLJ has the full scrollback; the converter clips the pane. The bubbles'
+    // bounding box (tall) must NOT be required to match the container's box.
+    const transcriptRegion = { x: 272, y: 64, width: 400, height: 4332 }; // full scrollback bbox
+    const manifest: ManifestComponent[] = [
+      { component: "ChatBubble", box: { x: 272, y: 64, width: 400, height: 126 }, props: { variant: "receiver" }, text: "first" },
+      { component: "ChatBubble", box: { x: 272, y: 3900, width: 400, height: 400 }, props: { variant: "sender" }, text: "last (far below the fold)" },
+    ];
+    const nodes: CaptureNode[] = [
+      cap("root", "Frame", 0, 0, 1280, 631, ""),
+      // the clipped transcript container: contains the bubbles' x-span, top at/above first bubble, but only 518 tall
+      cap("transcript", "Container", 256, 48, 752, 518, "root"),
+      cap("flatBubble", "List Item", 306, 90, 352, 40, "transcript"),
+    ];
+    const ops = planSwap(manifest, nodes, { transcriptRegion }, maps2);
+    const inject = ops.find((o) => o.op === "injectInstances");
+    expect(inject).toBeDefined();
+    if (inject && inject.op === "injectInstances") {
+      expect(inject.containerNodeId).toBe("transcript");
+      expect(inject.instances).toHaveLength(2);
+      // boxes relative to the container origin (256,48)
+      expect(inject.instances[0].box).toEqual({ x: 16, y: 16, width: 400, height: 126 });
+    }
+  });
 });
