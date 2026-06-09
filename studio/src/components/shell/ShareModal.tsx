@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Modal, Button } from "@xorkavi/arcade-gen";
 import type { Frame } from "../../../server/types";
 import { wrapManifestWithPrompt } from "../../lift/wrapPrompt";
+import { track } from "../../lib/telemetry/renderer";
 
 interface ShareModalProps {
   open: boolean;
@@ -59,6 +60,10 @@ export function ShareModal({
     };
   }, []);
 
+  useEffect(() => {
+    if (open) track({ name: "share_opened", props: { frame_count: frames.length } });
+  }, [open]);
+
   async function handleCopyManifest() {
     if (!selectedFrame) return;
     try {
@@ -82,6 +87,7 @@ export function ShareModal({
     setLoading(true);
     setError(null);
     setPhase("deploying");
+    track({ name: "share_started", props: { frame_count: frames.length, project_slug_hash: "" } });
     try {
       const res = await fetch(`/api/projects/${projectSlug}/share`, {
         method: "POST",
@@ -155,6 +161,7 @@ export function ShareModal({
   function handleCopy() {
     if (!shareUrl) return;
     navigator.clipboard.writeText(shareUrl);
+    track({ name: "share_url_copied", props: {} });
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }

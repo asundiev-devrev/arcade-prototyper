@@ -31,6 +31,9 @@ import {
 } from "../frameChangeContract";
 import { recordChatEventForReplay, type ProjectRef } from "./chatRelayMirror";
 import { recordTurnMetric } from "../metrics";
+import { track } from "../../src/lib/telemetry/server";
+import { hashSlug, truncate } from "../../src/lib/telemetry/redact";
+import type { GenerationErrorKind } from "../../src/lib/telemetry/events";
 import { resolveDevuFromPat } from "../relay/auth";
 import { getDevRevPat } from "../secrets/keychain";
 import type { RelayEvent } from "../relay/types";
@@ -162,6 +165,19 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
     return;
   }
 
+  track({
+    name: "prompt_submitted",
+    props: {
+      prompt_length: prompt.length,
+      // Full prompt text — opted in for behavioral analysis (internal beta).
+      // Capped at 2000 chars so a pasted-document prompt can't bloat the
+      // payload / hit PostHog property limits.
+      prompt_text: truncate(prompt, 2000),
+      project_slug_hash: hashSlug(slug),
+      frame_count_before: project.frames?.length ?? 0,
+    },
+  });
+
   const isComputerTurn = COMPUTER_MENTION.test(prompt);
 
   // Bedrock-auth pre-check applies only to Claude (Bedrock) turns; the
@@ -170,6 +186,7 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
   // resolve via `aws sts get-caller-identity`. Otherwise we fail fast
   // instead of spawning claude into a silent hang.
   if (!isComputerTurn && !(await hasBedrockAuth())) {
+    track({ name: "generation_failed", props: { project_slug_hash: hashSlug(slug), error_kind: "bedrock_auth" } });
     const turn = startTurn(slug, {
       prompt,
       run: ({ end }) => {
@@ -392,6 +409,17 @@ function handleCancel(res: ServerResponse, slug: string): void {
   }
   res.writeHead(200, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ cancelled: true, slug }));
+  track({ name: "generation_cancelled", props: { project_slug_hash: hashSlug(slug) } });
+}
+
+/** Map a finished/crashed turn to a telemetry error_kind. Pure + exported for test. */
+export function classifyGenerationError(info: { error?: string; timedOut: boolean; exitCode: number | null }): GenerationErrorKind {
+  if (info.timedOut) return "timeout";
+  const msg = (info.error ?? "").toLowerCase();
+  if (/bedrock|credential|expired|auth|sso|token/.test(msg)) return "bedrock_auth";
+  if (typeof info.exitCode === "number" && info.exitCode !== 0) return "cli_crash";
+  if (/parse|json|unexpected token/.test(msg)) return "parser_error";
+  return "other";
 }
 
 async function enrichPromptWithFigmaContext(
@@ -690,6 +718,30 @@ async function runClaudeBranch(ctx: {
     cacheReadTokens: lastMetrics?.cacheReadTokens,
     costUsd: lastMetrics?.costUsd,
   });
+  if (endResult.ok) {
+    track({
+      name: "frame_generated",
+      props: {
+        project_slug_hash: hashSlug(slug),
+        duration_ms: lastMetrics?.durationMs,
+        model: lastMetrics?.model,
+        tokens_input: lastMetrics?.inputTokens,
+        tokens_output: lastMetrics?.outputTokens,
+        turn_type: turnType,
+        frame_lines: frameLines,
+      },
+    });
+  } else {
+    track({
+      name: "generation_failed",
+      props: {
+        project_slug_hash: hashSlug(slug),
+        duration_ms: lastMetrics?.durationMs,
+        error_kind: classifyGenerationError({ error: endResult.error, timedOut: didStall, exitCode: null }),
+        model: lastMetrics?.model,
+      },
+    });
+  }
   if (endResult.ok) {
     // Enforce the deviations-section contract defined in templates/CLAUDE.md.tpl.
     // If the agent produced narration at all and that narration doesn't contain

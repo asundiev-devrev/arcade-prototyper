@@ -28,13 +28,18 @@ import { getDevRevPat } from "./server/secrets/keychain";
 import { resolveDevuFromPat } from "./server/relay/auth";
 import { listMirrors } from "./server/sharedProjects/cache";
 import { connectMirror } from "./server/sharedProjects/relayClient";
-import { settingsMiddleware } from "./server/middleware/settings";
+import { settingsMiddleware, readGlobalSettings, writeTelemetryDistinctId } from "./server/middleware/settings";
+import { resolveConfig, readFileConfig } from "./src/lib/telemetry/config";
+import { resolveDistinctId } from "./src/lib/telemetry/identity";
+import { initServerTelemetry, shutdownServerTelemetry } from "./src/lib/telemetry/server";
+import { randomUUID } from "node:crypto";
 import { thumbnailsMiddleware } from "./server/middleware/thumbnails";
 import { liftMiddleware } from "./server/middleware/lift";
 import { exportMiddleware } from "./server/middleware/export";
 import { cloudflareMiddleware } from "./server/middleware/cloudflare";
 import { runtimeErrorMiddleware } from "./server/middleware/runtimeError";
 import { versionMiddleware, logVersionOnBoot } from "./server/middleware/version";
+import { telemetryIdentityMiddleware, setIdentitySnapshot } from "./server/middleware/telemetryIdentity";
 import { awsLoginMiddleware } from "./server/middleware/awsLogin";
 import { frameMountPlugin } from "./server/plugins/frameMountPlugin";
 import { projectWatchPlugin } from "./server/plugins/projectWatchPlugin";
@@ -51,6 +56,7 @@ function apiPlugin(): import("vite").Plugin {
     name: "arcade-studio-api",
     configureServer(server) {
       server.middlewares.use(versionMiddleware());
+      server.middlewares.use(telemetryIdentityMiddleware());
       server.middlewares.use(awsLoginMiddleware());
       server.middlewares.use(devrevMiddleware());
       server.middlewares.use(multiplayerMiddleware());
@@ -131,6 +137,41 @@ function apiPlugin(): import("vite").Plugin {
           console.warn("[shared-projects] failed to enumerate mirrors:", err);
         }
       })();
+      void (async () => {
+        try {
+          const resourcesPath = process.env.ARCADE_RESOURCES_PATH;
+          const packaged = process.env.ARCADE_IS_PACKAGED === "1";
+          const fileConfig = await readFileConfig(resourcesPath);
+          const config = resolveConfig({ packaged, debugEnv: process.env.ARCADE_TELEMETRY_DEBUG, fileConfig });
+
+          const distinctId = await resolveDistinctId({
+            readSettings: async () => (await readGlobalSettings()) as any,
+            writeDistinctId: writeTelemetryDistinctId,
+            resolveEmail: async () => {
+              try {
+                const pat = (await getDevRevPat()) || process.env.DEVREV_PAT || "";
+                if (!pat) return null;
+                return (await resolveDevuFromPat(pat))?.email ?? null;
+              } catch { return null; }
+            },
+            genUuid: () => randomUUID(),
+          });
+
+          const version = process.env.ARCADE_APP_VERSION || process.env.npm_package_version || "0.0.0";
+          const os = `${process.platform}-${process.arch}`;
+          const sessionId = randomUUID();
+
+          await initServerTelemetry({ config, distinctId, sessionId, version, os });
+          setIdentitySnapshot({ distinctId, sessionId, version, os, config });
+          const flush = () => { void shutdownServerTelemetry(); };
+          process.once("SIGTERM", flush);
+          process.once("SIGINT", flush);
+          process.once("beforeExit", flush);
+          if (config.debug || config.enabled) console.log(`[telemetry] server ready (enabled=${config.enabled} debug=${config.debug})`);
+        } catch (err) {
+          console.warn("[telemetry] server boot block failed:", err instanceof Error ? err.message : err);
+        }
+      })();
       void logVersionOnBoot();
       void cleanStaleStagingSessions();
       void ensureMemoryStubs(globalMemoryDir(), "global")
@@ -158,6 +199,13 @@ export default defineConfig({
   },
   server: {
     port: 5556,
+    // Bind 5556 or FAIL — never silently drift to another port. The Electron
+    // wrapper (electron/viteRunner.ts) hardcodes 5556 and loads the renderer
+    // from it; if Vite drifted to 5557 on a collision, the app would load a
+    // DIFFERENT server (e.g. a stale leftover instance) than the one it spawned
+    // — telemetry, project state, everything would silently point at the wrong
+    // process. strictPort makes the collision loud instead.
+    strictPort: true,
     // Auto-open is gated on ARCADE_STUDIO_OPEN_BROWSER. The Electron
     // wrapper sets this to "0" so Vite doesn't open a browser tab in
     // addition to the Electron window. Plain `pnpm run studio` keeps

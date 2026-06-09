@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { startVite, stopVite } from "./viteRunner.js";
 import { initUpdater } from "./updater.js";
+import { initMainTelemetry, emitAppLaunched, emitAppShutdown } from "./telemetry.js";
 
 /**
  * File-based logging — code-signed packaged apps detach from the TTY,
@@ -49,6 +50,12 @@ function patchPath(): void {
   process.env.ARCADE_STUDIO_CLAUDE_BIN = path.join(resourcesPath, "bin", "claude");
 }
 patchPath();
+
+// Surface packaging state + version to the Vite child (it inherits
+// process.env when spawned). Must be set before createWindow() →
+// startVite() forks the child.
+process.env.ARCADE_IS_PACKAGED = app.isPackaged ? "1" : "0";
+process.env.ARCADE_APP_VERSION = app.getVersion();
 
 /**
  * First-run bootstrap of ~/.aws/config with the DevRev SSO [profile dev]
@@ -189,7 +196,9 @@ app.on("open-url", (event, url) => {
   }
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await initMainTelemetry();
+  emitAppLaunched(false);
   void createWindow();
   initUpdater();
 });
@@ -204,6 +213,7 @@ app.on("window-all-closed", () => {
 app.on("before-quit", async (event) => {
   // Stop Vite cleanly before exit.
   event.preventDefault();
+  await emitAppShutdown();
   await stopVite();
   app.exit(0);
 });

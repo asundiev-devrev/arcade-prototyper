@@ -48,6 +48,8 @@ extraResources:
     to: "bin/figmanage"
   - from: "studio/packaging/cloudflared/cloudflared"
     to: "bin/cloudflared"
+  - from: "studio/packaging/telemetry.config.json"
+    to: "telemetry.config.json"
   # AWS CLI v2 expanded layout from fetch-cli-deps.sh is
   # studio/packaging/aws-cli/aws-cli/aws (the inner aws-cli/ dir is
   # the package's own root, with `aws`, `aws_completer`, libs, and a

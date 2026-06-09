@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Modal, Button, Input, Badge, Switch, Select } from "@xorkavi/arcade-gen";
 import ReactMarkdown from "react-markdown";
 import { savePat, getPatStatus, clearPat, type DevRevPatStatus } from "../../lib/devrev";
+import { track } from "../../lib/telemetry/renderer";
 
 interface AppSettings {
   cloudflare?: {
@@ -117,7 +118,10 @@ export function AppSettingsModal({
   }, []);
 
   useEffect(() => {
-    if (open) void fetchSettings();
+    if (open) {
+      void fetchSettings();
+      track({ name: "settings_opened", props: { tab: "general" } });
+    }
   }, [open, fetchSettings]);
 
   async function handleSavePat() {
