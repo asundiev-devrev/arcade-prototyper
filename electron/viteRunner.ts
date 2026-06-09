@@ -8,6 +8,10 @@ const STARTUP_TIMEOUT_MS = 30_000;
 const POLL_INTERVAL_MS = 250;
 
 let viteProc: ChildProcess | null = null;
+/** Set when the child exits before we confirm it's serving — lets waitForPort
+ *  bail immediately instead of waiting out the full timeout (and never letting
+ *  a foreign server's response masquerade as ours). */
+let viteExitedDuringStartup = false;
 
 /**
  * Spawns Vite as a child process and waits for localhost:5556 to respond.
@@ -21,7 +25,21 @@ export async function startVite(appRoot: string): Promise<string> {
   const viteEntry = path.join(appRoot, "node_modules", "vite", "bin", "vite.js");
   const configPath = path.join(appRoot, "studio", "vite.config.ts");
 
+  // Pre-flight: if something ALREADY answers on 5556, it's not us — a stale
+  // prior instance, a leftover dev server, or a port squatter. Vite is
+  // strictPort, so our child would fail to bind and exit; but the app hardcodes
+  // 5556 and would then load that FOREIGN server. Detect + fail loudly instead
+  // of silently driving the wrong process.
+  if (await tryGet(VITE_URL)) {
+    throw new Error(
+      `[viteRunner] Port ${VITE_PORT} is already in use by another process. ` +
+      `Arcade Studio may already be running, or a previous instance didn't exit cleanly. ` +
+      `Quit it (or free port ${VITE_PORT}) and relaunch.`,
+    );
+  }
+
   console.log(`[viteRunner] spawning Vite via ${process.execPath} entry=${viteEntry} cwd=${appRoot}`);
+  viteExitedDuringStartup = false;
   viteProc = spawn(process.execPath, [viteEntry, "--config", configPath], {
     cwd: appRoot,
     env: {
@@ -51,6 +69,7 @@ export async function startVite(appRoot: string): Promise<string> {
   });
   viteProc.on("exit", (code, signal) => {
     console.log(`[viteRunner] Vite exited with code=${code} signal=${signal}`);
+    viteExitedDuringStartup = true;
     viteProc = null;
   });
 
@@ -91,6 +110,14 @@ export function stopVite(): Promise<void> {
 async function waitForPort(url: string, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
+    // If the child died (e.g. strictPort bind failure), stop waiting — don't
+    // risk a foreign server on this port answering and looking like success.
+    if (viteExitedDuringStartup) {
+      throw new Error(
+        `[viteRunner] Vite exited during startup before serving ${url}. ` +
+        `Likely a port ${VITE_PORT} bind failure (strictPort) — another instance may hold it.`,
+      );
+    }
     if (await tryGet(url)) return;
     await sleep(POLL_INTERVAL_MS);
   }
