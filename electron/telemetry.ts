@@ -33,7 +33,9 @@ function mainBeforeSend(event: any): any {
 export async function initMainTelemetry(): Promise<void> {
   const cfg = readConfig();
   debug = Boolean(process.env.ARCADE_TELEMETRY_DEBUG);
-  enabled = app.isPackaged && Boolean(cfg.sentryDsn && cfg.posthogKey);
+  // At least one key — Sentry + PostHog ship independently; each inits only
+  // when its own key is present below.
+  enabled = app.isPackaged && Boolean(cfg.sentryDsn || cfg.posthogKey);
   sessionStart = Date.now();
   sessionId = randomUUID();
 

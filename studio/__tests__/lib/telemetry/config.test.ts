@@ -12,6 +12,14 @@ describe("resolveConfig", () => {
     expect(c.enabled).toBe(true);
     expect(c.posthogHost).toBe("https://us.i.posthog.com");
   });
+  it("enabled with only PostHog key (Sentry added later)", () => {
+    const c = resolveConfig({ packaged: true, debugEnv: undefined, fileConfig: { posthogKey: "phc_x", posthogHost: "https://eu.i.posthog.com" } });
+    expect(c.enabled).toBe(true);
+    expect(c.sentryDsn).toBeUndefined();
+  });
+  it("enabled with only Sentry DSN (no PostHog)", () => {
+    expect(resolveConfig({ packaged: true, debugEnv: undefined, fileConfig: { sentryDsn: "d" } }).enabled).toBe(true);
+  });
   it("packaged but no keys → disabled (silent)", () => {
     expect(resolveConfig({ packaged: true, debugEnv: undefined, fileConfig: {} }).enabled).toBe(false);
   });

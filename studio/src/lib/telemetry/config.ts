@@ -14,7 +14,11 @@ const DEFAULT_HOST = "https://us.i.posthog.com";
 
 export function resolveConfig(input: { packaged: boolean; debugEnv: string | undefined; fileConfig: TelemetryFileConfig }): ResolvedTelemetryConfig {
   const { packaged, debugEnv, fileConfig } = input;
-  const hasKeys = Boolean(fileConfig.sentryDsn && fileConfig.posthogKey);
+  // Enable if AT LEAST ONE key is present — Sentry and PostHog ship
+  // independently (e.g. PostHog-first, Sentry added later). Each SDK only
+  // actually inits when ITS own key exists (see server.ts / renderer.ts /
+  // electron/telemetry.ts), so a blank half stays dormant, not broken.
+  const hasKeys = Boolean(fileConfig.sentryDsn || fileConfig.posthogKey);
   return {
     sentryDsn: fileConfig.sentryDsn,
     posthogKey: fileConfig.posthogKey,
