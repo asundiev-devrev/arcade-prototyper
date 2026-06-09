@@ -54,6 +54,40 @@ describe("planSwap — discrete region", () => {
     const ops = planSwap(manifest, nodes, { transcriptRegion: null }, maps);
     expect(ops).toHaveLength(0);
   });
+
+  it("resolves multi-axis variant props (Variant + Size) onto the instance", () => {
+    // Regression guard: the live T8 inline script defaulted every IconButton to
+    // the set's Primary/filled-circular variant because it never applied the
+    // mapping. The planner MUST translate arcade-gen props (variant:"tertiary",
+    // size:"sm") through the valueMap to the Figma variant axes.
+    const iconButton: FigmaComponentMapping = {
+      arcadeGen: "IconButton", status: "mapped", generation: "0.3",
+      figma: { componentSetKey: "ICON_BUTTON_KEY", setName: "Icon Button" },
+      variants: [
+        { prop: "variant", figmaProp: "Variant", valueMap: { primary: "Primary", secondary: "Secondary", tertiary: "Tertiary" } },
+        { prop: "size", figmaProp: "Size", valueMap: { sm: "Small", md: "Default", lg: "Large" } },
+      ],
+      note: "",
+    };
+    const ibMaps: SwapPlanMaps = {
+      findComponentMapping: (n) => (n === "IconButton" ? iconButton : null),
+      tokenNameToVariableKey: () => null,
+    };
+    const manifest: ManifestComponent[] = [
+      { component: "IconButton", box: { x: 201, y: 12, width: 20, height: 20 }, props: { variant: "tertiary", size: "sm" }, text: null },
+    ];
+    const nodes: CaptureNode[] = [
+      cap("root", "Frame", 0, 0, 1280, 631, ""),
+      cap("flatIB", "Button - Back", 201, 12, 20, 20, "chrome"),
+      cap("chrome", "WindowChrome", 0, 0, 255, 44, "root"),
+    ];
+    const ops = planSwap(manifest, nodes, { transcriptRegion: null }, ibMaps);
+    expect(ops).toHaveLength(1);
+    expect(ops[0]).toMatchObject({
+      op: "replaceWithInstance", componentSetKey: "ICON_BUTTON_KEY",
+      variant: { Variant: "Tertiary", Size: "Small" },
+    });
+  });
 });
 
 const bubbleMapping: FigmaComponentMapping = {
