@@ -14,3 +14,7 @@ studio/packaging/aws-cli/
 
 # Electron build output
 electron/dist/
+
+# Observability secrets and generated config
+.env.production
+studio/packaging/telemetry.config.json

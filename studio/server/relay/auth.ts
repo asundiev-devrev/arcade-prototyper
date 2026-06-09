@@ -10,6 +10,7 @@
 export interface DevuIdentity {
   id: string;           // e.g. "don:identity:dvrv-us-1:devo/0:devu/6654"
   displayName: string;  // e.g. "Andrey Sundiev"
+  email?: string;
 }
 
 export async function resolveDevuFromPat(pat: string): Promise<DevuIdentity | null> {
@@ -22,10 +23,10 @@ export async function resolveDevuFromPat(pat: string): Promise<DevuIdentity | nu
     });
     if (!res.ok) return null;
     const data = (await res.json()) as {
-      dev_user?: { id?: string; display_name?: string };
+      dev_user?: { id?: string; display_name?: string; email?: string };
     };
     if (data.dev_user?.id && data.dev_user?.display_name) {
-      return { id: data.dev_user.id, displayName: data.dev_user.display_name };
+      return { id: data.dev_user.id, displayName: data.dev_user.display_name, email: data.dev_user.email };
     }
     return null;
   } catch {

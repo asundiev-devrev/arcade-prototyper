@@ -11,6 +11,6 @@
     "resolveJsonModule": true,
     "types": ["node"]
   },
-  "include": ["main.ts", "viteRunner.ts", "updater.ts"],
+  "include": ["main.ts", "viteRunner.ts", "updater.ts", "telemetry.ts"],
   "exclude": ["dist"]
 }

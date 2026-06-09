@@ -8,6 +8,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.30.0] — 2026-06-08
+
+### Added
+- **The app now reports crashes and basic usage (internal beta).** Studio sends crash reports plus a small set of usage events — app launches, frame generations and their outcomes, frames that fail to render, share attempts, and settings opens — so the team can see whether the beta is working and being used. The prompts you type are included (so we can learn what people are trying to build); file contents and project names stay on your machine. Events are tagged with your DevRev email. Telemetry only runs in the installed app, never in local dev.
+
 ## [0.29.0] — 2026-06-05
 
 ### Added
