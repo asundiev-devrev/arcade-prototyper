@@ -55,3 +55,64 @@ describe("planSwap — discrete region", () => {
     expect(ops).toHaveLength(0);
   });
 });
+
+const bubbleMapping: FigmaComponentMapping = {
+  arcadeGen: "ChatBubble", status: "mapped", generation: "0.3",
+  figma: { componentSetKey: "BUBBLE_KEY", setName: "Bubble" },
+  variants: [{ prop: "variant", figmaProp: "Type", valueMap: { receiver: "Receiver", sender: "Sender" } }],
+  textNode: { strategy: "lowest-depth" }, note: "",
+};
+const maps2: SwapPlanMaps = {
+  findComponentMapping: (n) => (n === "ChatBubble" ? bubbleMapping : n === "ComputerSidebar.Item" ? chatItem : null),
+  tokenNameToVariableKey: () => null,
+};
+
+describe("planSwap — transcript region", () => {
+  it("routes ChatBubbles to a single injectInstances op into the transcript container", () => {
+    const transcriptRegion = { x: 256, y: 48, width: 1200, height: 832 };
+    const manifest: ManifestComponent[] = [
+      { component: "ChatBubble", box: { x: 272, y: 64, width: 400, height: 409 }, props: { variant: "receiver" }, text: "Hi" },
+      { component: "ChatBubble", box: { x: 272, y: 497, width: 317, height: 41 }, props: { variant: "sender" }, text: "Yo" },
+    ];
+    const nodes: CaptureNode[] = [
+      cap("root", "Frame", 0, 0, 1280, 631, ""),
+      cap("transcript", "Container", 256, 48, 1200, 832, "root"),
+      cap("flatBubbleA", "List Item", 306, 261, 352, 21, "transcript"),
+    ];
+    const ops = planSwap(manifest, nodes, { transcriptRegion }, maps2);
+    const inject = ops.find((o) => o.op === "injectInstances");
+    expect(inject).toBeDefined();
+    if (inject && inject.op === "injectInstances") {
+      expect(inject.containerNodeId).toBe("transcript");
+      expect(inject.clearChildren).toBe(true);
+      expect(inject.instances).toHaveLength(2);
+      expect(inject.instances[0].box).toEqual({ x: 16, y: 16, width: 400, height: 409 });
+      expect(inject.instances[0].variant).toEqual({ Type: "Receiver" });
+      expect(inject.instances[0].text).toEqual({ characters: "Hi" });
+      expect(inject.instances[1].variant).toEqual({ Type: "Sender" });
+    }
+  });
+
+  it("does not emit replaceWithInstance for bubbles (they go through injection only)", () => {
+    const transcriptRegion = { x: 256, y: 48, width: 1200, height: 832 };
+    const manifest: ManifestComponent[] = [
+      { component: "ChatBubble", box: { x: 272, y: 64, width: 400, height: 409 }, props: { variant: "receiver" }, text: "Hi" },
+    ];
+    const nodes: CaptureNode[] = [
+      cap("root", "Frame", 0, 0, 1280, 631, ""),
+      cap("transcript", "Container", 256, 48, 1200, 832, "root"),
+    ];
+    const ops = planSwap(manifest, nodes, { transcriptRegion }, maps2);
+    expect(ops.every((o) => o.op !== "replaceWithInstance")).toBe(true);
+  });
+
+  it("falls back to leaving bubbles alone when no transcript container is found", () => {
+    const transcriptRegion = { x: 256, y: 48, width: 1200, height: 832 };
+    const manifest: ManifestComponent[] = [
+      { component: "ChatBubble", box: { x: 272, y: 64, width: 400, height: 409 }, props: { variant: "receiver" }, text: "Hi" },
+    ];
+    const nodes: CaptureNode[] = [cap("root", "Frame", 0, 0, 1280, 631, "")];
+    const ops = planSwap(manifest, nodes, { transcriptRegion }, maps2);
+    expect(ops).toHaveLength(0);
+  });
+});
