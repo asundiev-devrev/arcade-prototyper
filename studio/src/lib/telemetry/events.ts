@@ -16,7 +16,7 @@ export type TelemetryEvent =
   | { name: "app_launched"; props: { version: string; os: string; os_version: string; is_first_launch: boolean } }
   | { name: "app_shutdown"; props: { session_duration_ms: number } }
   // --- frame generation (vite child) ---
-  | { name: "prompt_submitted"; props: { prompt_length: number; project_slug_hash: string; model?: string; frame_count_before: number } }
+  | { name: "prompt_submitted"; props: { prompt_length: number; prompt_text: string; project_slug_hash: string; model?: string; frame_count_before: number } }
   | { name: "frame_generated"; props: { project_slug_hash: string; duration_ms?: number; model?: string; tokens_input?: number; tokens_output?: number; turn_type: "build" | "edit" | "none"; frame_lines?: number } }
   | { name: "generation_failed"; props: { project_slug_hash: string; duration_ms?: number; error_kind: GenerationErrorKind; model?: string } }
   | { name: "generation_cancelled"; props: { project_slug_hash: string; duration_ms?: number; model?: string } }

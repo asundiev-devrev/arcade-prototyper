@@ -11,7 +11,7 @@ describe("server telemetry shim", () => {
       config: { enabled: false, debug: true, posthogHost: "h" },
       distinctId: "u1", sessionId: "s1", version: "0.30.0", os: "darwin-arm64",
     });
-    track({ name: "prompt_submitted", props: { prompt_length: 3, project_slug_hash: "h", frame_count_before: 0 } });
+    track({ name: "prompt_submitted", props: { prompt_length: 3, prompt_text: "hey", project_slug_hash: "h", frame_count_before: 0 } });
     expect(spy).toHaveBeenCalledWith(
       expect.stringContaining("[telemetry:server] prompt_submitted"),
       expect.objectContaining({ distinct_id: "u1" }),

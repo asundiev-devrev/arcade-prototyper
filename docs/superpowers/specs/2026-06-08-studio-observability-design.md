@@ -106,10 +106,12 @@ Pairs with `frame_generated` to compute "% of generated frames that actually ren
 
 ## Privacy — what never leaves the machine
 
-- Prompt text (length only).
 - Frame contents, file paths, project names (hashed `project_slug_hash` / `frame_hash` only — sha1 of relative path/slug).
 - DevRev / Figma / Cloudflare PATs; AWS Bedrock credentials.
-- DevRev email IS sent (as distinct_id) — accepted for internal beta.
+
+What IS sent (accepted for internal beta):
+- Prompt text on `prompt_submitted` (`prompt_text`, capped 2000 chars) — opted in for behavioral analysis. Reverses the original length-only decision.
+- DevRev email as `distinct_id`.
 
 ## Package layout
 

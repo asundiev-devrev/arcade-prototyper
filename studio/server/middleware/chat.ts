@@ -32,7 +32,7 @@ import {
 import { recordChatEventForReplay, type ProjectRef } from "./chatRelayMirror";
 import { recordTurnMetric } from "../metrics";
 import { track } from "../../src/lib/telemetry/server";
-import { hashSlug } from "../../src/lib/telemetry/redact";
+import { hashSlug, truncate } from "../../src/lib/telemetry/redact";
 import type { GenerationErrorKind } from "../../src/lib/telemetry/events";
 import { resolveDevuFromPat } from "../relay/auth";
 import { getDevRevPat } from "../secrets/keychain";
@@ -169,6 +169,10 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
     name: "prompt_submitted",
     props: {
       prompt_length: prompt.length,
+      // Full prompt text — opted in for behavioral analysis (internal beta).
+      // Capped at 2000 chars so a pasted-document prompt can't bloat the
+      // payload / hit PostHog property limits.
+      prompt_text: truncate(prompt, 2000),
       project_slug_hash: hashSlug(slug),
       frame_count_before: project.frames?.length ?? 0,
     },
