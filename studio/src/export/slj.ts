@@ -43,6 +43,10 @@ export interface ComponentNode {
   box: Box;
   layout: Layout | null;
   children: SljNode[];
+  /** arcade-gen icon name of the glyph inside this component (e.g. an
+   *  IconButton's "ChevronLeftSmall"), captured at prune time. Absent for
+   *  components with no recognized icon. */
+  icon?: string;
 }
 
 export interface ElementNode {

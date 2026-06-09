@@ -210,6 +210,7 @@ if (root) {
       format: "esm",
       platform: "browser",
       target: "es2020",
+      keepNames: true,
       outdir: tempDir,
       write: false,
       loader: {
