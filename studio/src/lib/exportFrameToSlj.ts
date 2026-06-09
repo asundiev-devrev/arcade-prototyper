@@ -1,6 +1,6 @@
 // studio/src/lib/exportFrameToSlj.ts
 import { walkFiber, type WalkCtx } from "../export/fiberWalk";
-import type { MinimalFiber, FiberReader } from "../export/fiberTypes";
+import { fiberName, type MinimalFiber, type FiberReader } from "../export/fiberTypes";
 import { buildTokenIndex, tokenNamesFromRoot, resolveToken } from "../export/tokenIndex";
 import { SLJ_VERSION, type SljDocument, type Box } from "../export/slj";
 import { findComponentMapping } from "../export/figma/componentMap";
@@ -91,10 +91,23 @@ export async function exportFrameToSlj(args: ExportArgs): Promise<SljDocument> {
     },
     resolveColor: (value) => resolveToken(tokenIndex, value),
     isSkippable: (name) => SKIPPABLE.has(name),
-    // Glyph capture: scan the pruned subtree for the first icon-mapped
-    // descendant's arcade-gen name. Not yet wired — returns null until the
-    // descendant-scan task lands; the walk records `icon` only when non-null.
-    iconNameFor: () => null,
+    // Glyph capture: when pruning a mapped primitive (e.g. an IconButton),
+    // scan its fiber subtree for the first icon-mapped descendant and return
+    // that arcade-gen name (e.g. "ChevronLeftSmall"). Bounded BFS so a deep
+    // subtree can't stall the walk; null when no recognized icon is inside.
+    iconNameFor: (f: MinimalFiber): string | null => {
+      const queue: (MinimalFiber | null)[] = [f.child];
+      let guard = 0;
+      while (queue.length && guard++ < 200) {
+        const n = queue.shift();
+        if (!n) continue;
+        const name = fiberName(n);
+        if (name && findIconMapping(name)) return name;
+        if (n.child) queue.push(n.child);
+        if (n.sibling) queue.push(n.sibling);
+      }
+      return null;
+    },
   };
 
   const root = walkFiber(rootFiber, ctx);
