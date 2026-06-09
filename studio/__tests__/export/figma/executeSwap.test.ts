@@ -12,6 +12,7 @@ function makeBridge(overrides: Partial<SwapBridge> = {}): { bridge: SwapBridge; 
     async positionNode(id, box) { calls.push(`position:${id}:${box.x},${box.y},${box.width},${box.height}`); },
     async setInstanceText(id, propName, chars) { calls.push(`text:${id}:${propName ?? "(auto)"}:${chars}`); },
     async bindVariable(id, field, key) { calls.push(`bind:${id}:${field}:${key}`); },
+    async setIconChild(id, iconSetKey) { calls.push(`icon:${id}:${iconSetKey}`); },
     async clearChildren(id) { calls.push(`clear:${id}`); },
     async removeNode(id) { calls.push(`remove:${id}`); },
   };
@@ -58,5 +59,39 @@ describe("executeSwap", () => {
     expect(calls).toContain('createInstance:B->transcript:{"Type":"Sender"}');
     expect(calls).toContain("text:inst-0:(auto):Hi");
     expect(r.summary.injected).toBe(2);
+  });
+
+  it("replaceWithInstance with icon: calls setIconChild after create/position", async () => {
+    const ops: SwapOp[] = [{
+      op: "replaceWithInstance", targetNodeId: "flat1", componentSetKey: "IB", parentNodeId: "side",
+      box: { x: 201, y: 12, width: 20, height: 20 }, icon: { setKey: "ICONS_CHEVRON_LEFT" },
+    }];
+    const { bridge, calls } = makeBridge();
+    const r = await executeSwap(ops, bridge);
+    expect(calls).toContain("icon:inst-0:ICONS_CHEVRON_LEFT");
+    expect(calls.indexOf("icon:inst-0:ICONS_CHEVRON_LEFT")).toBeGreaterThan(calls.indexOf("createInstance:IB->side:"));
+    expect(r.summary.replaced).toBe(1);
+    expect(r.summary.failures).toBe(0);
+  });
+
+  it("does not call setIconChild when the op has no icon", async () => {
+    const ops: SwapOp[] = [{
+      op: "replaceWithInstance", targetNodeId: "flat1", componentSetKey: "IB", parentNodeId: "side",
+      box: { x: 0, y: 0, width: 1, height: 1 },
+    }];
+    const { bridge, calls } = makeBridge();
+    await executeSwap(ops, bridge);
+    expect(calls.some((c) => c.startsWith("icon:"))).toBe(false);
+  });
+
+  it("a failing setIconChild is caught; instance still counts as replaced", async () => {
+    const ops: SwapOp[] = [{
+      op: "replaceWithInstance", targetNodeId: "flat1", componentSetKey: "IB", parentNodeId: "side",
+      box: { x: 0, y: 0, width: 1, height: 1 }, icon: { setKey: "BAD" },
+    }];
+    const { bridge } = makeBridge({ async setIconChild() { throw new Error("no icon child"); } });
+    const r = await executeSwap(ops, bridge);
+    expect(r.summary.replaced).toBe(1);
+    expect(r.summary.failures).toBe(0);
   });
 });
