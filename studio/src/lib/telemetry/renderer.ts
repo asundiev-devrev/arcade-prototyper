@@ -53,7 +53,23 @@ export async function initRendererTelemetry(args: InitArgs): Promise<void> {
     if (args.config.enabled && args.config.posthogKey) {
       const mod = await import("posthog-js");
       posthog = mod.default ?? mod;
-      posthog.init(args.config.posthogKey, { api_host: args.config.posthogHost, autocapture: false, capture_pageview: false, disable_session_recording: true });
+      posthog.init(args.config.posthogKey, {
+        api_host: args.config.posthogHost,
+        // bootstrap distinctID = the DevRev email so posthog-js NEVER mints an
+        // anonymous UUID. Without this, posthog-js generates a random id, fires
+        // events under it, and identify() later merges anon→email — leaving the
+        // person LABELLED by the ugly UUID in the Activity view. Bootstrapping
+        // makes the email the distinct_id from event #1; matches posthog-node
+        // (server/main also use the email), so one person, labelled by email.
+        bootstrap: { distinctID: args.distinctId },
+        autocapture: false,
+        capture_pageview: false,
+        // posthog-js auto-captures Web Vitals / performance under its own flag
+        // (NOT autocapture) — that's the "Web vitals" noise in the feed. Off:
+        // we only want our explicit events.
+        capture_performance: false,
+        disable_session_recording: true,
+      });
       posthog.identify(args.distinctId);
     }
     if (args.config.enabled) {
