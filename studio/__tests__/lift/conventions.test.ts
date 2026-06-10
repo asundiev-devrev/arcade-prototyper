@@ -13,6 +13,7 @@ import {
   hasOverlayMarkup,
   ICON_CONVENTION,
   OVERLAY_CONVENTION,
+  STYLE_ATTRIBUTE_CONVENTION,
 } from "../../src/lift/conventions";
 
 describe("applicableConventions", () => {
@@ -82,6 +83,19 @@ describe("applicableConventions", () => {
   it("omits overlay_convention by default", () => {
     const c = applicableConventions({ hasIcons: false, importedNames: [] });
     expect(c).not.toContain(OVERLAY_CONVENTION);
+  });
+
+  it("style_attribute_convention warns that utilities are auto-generated, not hand-listed", () => {
+    // Regression guard: a live lift false-flagged bg-surface-shallow as "not
+    // a real utility" because it wasn't hand-listed in the Tailwind config,
+    // then "fixed" a working class. The convention must teach that
+    // devrev-web auto-generates bg-*/border-*/fg-* from CSS vars, so config
+    // absence != not-a-utility, and the live render is the only authority.
+    expect(STYLE_ATTRIBUTE_CONVENTION.lookup).toMatch(/auto-generate/i);
+    expect(STYLE_ATTRIBUTE_CONVENTION.lookup).toMatch(/dark-styles\.css/);
+    expect(STYLE_ATTRIBUTE_CONVENTION.lookup).toMatch(/not.*mean.*not a utility/i);
+    // The surface-shallow anchor documents the exact false-positive.
+    expect(STYLE_ATTRIBUTE_CONVENTION.anchors.join("\n")).toMatch(/bg-surface-shallow/);
   });
 
   it("emits app_scoped_token_convention when ChatBubble is imported", () => {

@@ -134,10 +134,26 @@ export const STYLE_ATTRIBUTE_CONVENTION: Convention = {
     "`border-[hsl(var(--stroke-X))]` (the `border-X` auto-generated " +
     "utilities sometimes double-wrap `hsl()` and break — arbitrary value " +
     "is safer). For `borderBottom: '1px solid var(--X)'` use " +
-    "`className=\"border-b border-[hsl(var(--X))]\"`. Before committing, " +
-    "open the rendered page in a browser — a transparent background or " +
-    "a black border means a token fell through; swap to the arbitrary-" +
-    "value form.",
+    "`className=\"border-b border-[hsl(var(--X))]\"`. " +
+    // 2026-06-10: a live lift FALSE-FLAGGED `bg-surface-shallow` as
+    // "paints nothing, not a real utility" because it wasn't hand-listed
+    // in tailwind.config.base.js — then "fixed" a working class. The
+    // utilities are AUTO-GENERATED, not enumerated: generateCSSVariables()
+    // walks every `--bg-*` / `--border-*` / `--color-*` var in
+    // apps/product/styles/dark-styles.css and emits a matching bg-*/
+    // border-*/fg-* utility. So a token absent from the config's
+    // hand-written color block can still be a fully valid class.
+    "DO NOT conclude a class is fake just because you don't see it " +
+    "hand-listed in the Tailwind config — devrev-web AUTO-GENERATES " +
+    "bg-*/border-*/fg-* utilities from the `--X` CSS vars defined in " +
+    "apps/product/styles/dark-styles.css (see generateCSSVariables in " +
+    "tailwind.config.base.js). 'Not in the config's color block' does NOT " +
+    "mean 'not a utility'. The ONLY authoritative test of whether a class " +
+    "paints is the live render (getComputedStyle), never a config grep. " +
+    "Before committing, open the rendered page in a browser — a " +
+    "transparent background or a black border means a token fell through; " +
+    "swap to the arbitrary-value form. Equally: do not 'fix' a class you " +
+    "only suspect is broken — confirm it paints wrong in the render first.",
   anchors: [
     'style={{ background: \'var(--bg-surface-overlay)\' }} → className="bg-surface-overlay"',
     'style={{ background: \'var(--bg-neutral-soft)\' }} → className="bg-neutral-soft"',
@@ -145,6 +161,7 @@ export const STYLE_ATTRIBUTE_CONVENTION: Convention = {
     'style={{ color: \'var(--fg-neutral-subtle)\' }} → className="fg-neutral-subtle"',
     'style={{ borderColor: \'var(--stroke-neutral-subtle)\' }} → className="border-[hsl(var(--stroke-neutral-subtle))]" (auto border-* utility is unreliable; use the arbitrary value)',
     'style={{ borderBottom: \'1px solid var(--stroke-neutral-subtle)\' }} → className="border-b border-[hsl(var(--stroke-neutral-subtle))]"',
+    'bg-surface-shallow IS a real generated utility (renders rgb(249,250,250)) even though it is NOT hand-listed in the config color block — it is auto-generated from --bg-surface-shallow in apps/product/styles/dark-styles.css. Do not "fix" it.',
   ],
 };
 
