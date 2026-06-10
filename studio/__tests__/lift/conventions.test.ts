@@ -6,6 +6,7 @@
 
 import { describe, it, expect } from "vitest";
 import {
+  APP_SCOPED_TOKEN_CONVENTION,
   applicableConventions,
   CHROME_CONVENTION,
   DEFAULT_MAPPING_CONVENTION,
@@ -81,6 +82,34 @@ describe("applicableConventions", () => {
   it("omits overlay_convention by default", () => {
     const c = applicableConventions({ hasIcons: false, importedNames: [] });
     expect(c).not.toContain(OVERLAY_CONVENTION);
+  });
+
+  it("emits app_scoped_token_convention when ChatBubble is imported", () => {
+    const c = applicableConventions({
+      hasIcons: false,
+      importedNames: ["ChatBubble", "Button"],
+    });
+    expect(c).toContain(APP_SCOPED_TOKEN_CONVENTION);
+  });
+
+  it("omits app_scoped_token_convention when no app-scoped primitive is present", () => {
+    const c = applicableConventions({
+      hasIcons: false,
+      importedNames: ["Button", "Input"],
+    });
+    expect(c).not.toContain(APP_SCOPED_TOKEN_CONVENTION);
+  });
+
+  it("app_scoped_token_convention names the user-bubble tokens and the defining app shells", () => {
+    // Regression guard: the live 01-chat-with-canvas lift shipped a
+    // transparent sender bubble because the agent grepped instead of
+    // rendering. The convention must call out the exact tokens AND that
+    // grep can't catch this.
+    expect(APP_SCOPED_TOKEN_CONVENTION.rule).toMatch(/user-bubble-primary/);
+    expect(APP_SCOPED_TOKEN_CONVENTION.rule).toMatch(/grep/i);
+    expect(APP_SCOPED_TOKEN_CONVENTION.lookup).toMatch(/portal-shell/);
+    expect(APP_SCOPED_TOKEN_CONVENTION.lookup).toMatch(/plug-widget/);
+    expect(APP_SCOPED_TOKEN_CONVENTION.lookup).toMatch(/bg-menu-selected/);
   });
 
   it("puts icon_convention first and default_mapping_convention last", () => {

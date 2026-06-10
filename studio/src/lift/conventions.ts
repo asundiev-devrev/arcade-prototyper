@@ -25,7 +25,8 @@ export interface Convention {
     | "chrome_convention"
     | "default_mapping_convention"
     | "overlay_convention"
-    | "style_attribute_convention";
+    | "style_attribute_convention"
+    | "app_scoped_token_convention";
   /** One-sentence translation rule. */
   rule: string;
   /** Grep/read instruction for resolving specifics. */
@@ -147,6 +148,42 @@ export const STYLE_ATTRIBUTE_CONVENTION: Convention = {
   ],
 };
 
+export const APP_SCOPED_TOKEN_CONVENTION: Convention = {
+  tag: "app_scoped_token_convention",
+  rule:
+    "Some Tailwind color utilities in devrev-web are NOT global — their " +
+    "backing CSS variable is defined only inside a specific app shell's " +
+    "globals.css, not in the design-system theme. The chat-bubble tokens " +
+    "are the known case: `bg-user-bubble-primary` / `text-user-bubble-" +
+    "primary` (and the companion `force-dark` / `bubble-theme` classes the " +
+    "sender-bubble prior art uses) resolve to a real color ONLY in app " +
+    "shells that define `--bg-user-bubble-primary-color` / `--text-user-" +
+    "bubble-primary-color`. In any app/context that doesn't, they fall " +
+    "through to transparent text on a transparent background — the bubble " +
+    "renders invisible. Grep alone CANNOT catch this: the class string " +
+    "exists and is 'used', but it paints nothing. You MUST confirm at " +
+    "render time (see render_harness) OR confirm the target app's " +
+    "globals.css defines the token.",
+  lookup:
+    "Find which app shells define the token: " +
+    "grep -rn \"user-bubble-primary\" apps/*/styles/globals.css. As of " +
+    "2026-06 only apps/portal-shell (→ var(--bg-menu-selected)) and " +
+    "apps/plug-widget (→ var(--bg-accent)) define it; the main devrev " +
+    "product app does NOT. Decision rule: (1) if lifting INTO portal-shell " +
+    "or plug-widget, the tokens resolve — keep them. (2) if lifting into " +
+    "the devrev product app (or any shell without the token), do NOT use " +
+    "`bg-user-bubble-primary`; substitute a token that IS global — the " +
+    "receiver bubble's `bg-menu-selected` is the safe neutral fill, or " +
+    "surface to the reviewer for the intended sender treatment. Either " +
+    "way, render and read computed `backgroundColor` — it must NOT be " +
+    "`rgba(0, 0, 0, 0)`.",
+  anchors: [
+    "Sender bubble in apps/portal-shell: `bg-user-bubble-primary` resolves to `var(--bg-menu-selected)` (globals.css:34) — keep as-is.",
+    "Same class in the devrev product app: undefined → transparent. Substitute `bg-menu-selected` (global) or get the reviewer's intended sender fill.",
+    "Prior art that uses the app-scoped form (only safe inside its own shell): libs/timeline/shared/feature/src/support-timeline/chat/chat-bubble.tsx.",
+  ],
+};
+
 export const DEFAULT_MAPPING_CONVENTION: Convention = {
   tag: "default_mapping_convention",
   rule:
@@ -178,6 +215,17 @@ const CHROME_PRIMITIVES = new Set<string>([
   "AppShell",
   "BreadcrumbBar",
 ]);
+
+/**
+ * Trigger: the app-scoped-token convention fires when the frame imports a
+ * Studio primitive whose canonical production translation pulls in an
+ * app-scoped (non-global) color utility. ChatBubble is the known case —
+ * its sender variant lifts to `bg-user-bubble-primary`, a token defined
+ * only in apps/{portal-shell,plug-widget}/styles/globals.css. A live lift
+ * of 01-chat-with-canvas shipped a transparent sender bubble because the
+ * agent's static grep "confirmed the token resolves" when it didn't paint.
+ */
+const APP_SCOPED_TOKEN_PRIMITIVES = new Set<string>(["ChatBubble"]);
 
 /**
  * Detect hand-rolled overlays. Studio's generator authors modals as raw
@@ -241,6 +289,9 @@ export function applicableConventions(opts: {
   const names = new Set(opts.importedNames);
   if ([...CHROME_PRIMITIVES].some((n) => names.has(n))) {
     out.push(CHROME_CONVENTION);
+  }
+  if ([...APP_SCOPED_TOKEN_PRIMITIVES].some((n) => names.has(n))) {
+    out.push(APP_SCOPED_TOKEN_CONVENTION);
   }
   if (opts.hasOverlay) out.push(OVERLAY_CONVENTION);
   if (opts.hasInlineStyleTokens) out.push(STYLE_ATTRIBUTE_CONVENTION);

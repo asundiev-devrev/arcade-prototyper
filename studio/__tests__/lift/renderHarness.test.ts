@@ -65,6 +65,44 @@ describe("buildRenderHarness", () => {
     expect(harness.targetPath).toContain("my-slug.tsx");
   });
 
+  it("baseline checks lead with grep-does-not-prove-paint", () => {
+    // Regression guard: the live 01-chat-with-canvas lift verified "by grep"
+    // and shipped a transparent bubble. The harness must explicitly forbid
+    // grep-as-verification before any visual claim.
+    const harness = buildRenderHarness(mk(`export default () => null;`));
+    expect(harness.checks[0]).toMatch(/grep/i);
+    expect(harness.checks[0]).toMatch(/getComputedStyle|computed style/i);
+  });
+
+  it("emits a concrete story scaffold with launch command and predicted story id", () => {
+    const harness = buildRenderHarness(mk(`export default () => null;`, "chat-with-canvas"));
+    // The scaffold must remove the excuses: it names the globbed dir, the
+    // launch command, and a derivable iframe URL.
+    expect(harness.storyScaffold).toMatch(/__lift_validation/);
+    expect(harness.storyScaffold).toMatch(/start:storybook/);
+    expect(harness.storyScaffold).toMatch(/lift-validation-chatwithcanvas--default/);
+    // iframeUrl is now concrete (4400), not a placeholder.
+    expect(harness.iframeUrl).toMatch(/localhost:4400/);
+    expect(harness.iframeUrl).toMatch(/lift-validation-chatwithcanvas--default/);
+  });
+
+  it("prefixes a numeric-leading slug so the component name is a valid identifier", () => {
+    const harness = buildRenderHarness(mk(`export default () => null;`, "01-chat"));
+    // PascalCase("01-chat") = "01Chat" — not a valid JS identifier; must be
+    // prefixed. The predicted story id reflects the safe name.
+    expect(harness.storyScaffold).toMatch(/Frame01Chat/);
+    expect(harness.iframeUrl).toMatch(/frame01chat--default/);
+  });
+
+  it("adds an app-scoped-token check when the frame imports ChatBubble", () => {
+    const harness = buildRenderHarness(
+      mk(`import { ChatBubble } from "arcade/components";`),
+    );
+    const joined = harness.checks.join("\n");
+    expect(joined).toMatch(/user-bubble-primary/);
+    expect(joined).toMatch(/bg-menu-selected/);
+  });
+
   it("backdrop note prescribes a non-white background to expose near-white borders", () => {
     const harness = buildRenderHarness(mk(`export default () => null;`));
     expect(harness.backdropNote).toMatch(/backdrop|background/i);
