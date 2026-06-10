@@ -141,6 +141,7 @@ async function build(node, parent, ox, oy) {
   var f = figma.createFrame();
   f.name = "frame";
   f.fills = [];
+  f.clipsContent = false;
   applyLayout(f, node.layout);
   parent.appendChild(f);
   try { f.resizeWithoutConstraints(Math.max(node.box.width, 1), Math.max(node.box.height, 1)); } catch (e) {}
@@ -152,14 +153,30 @@ async function build(node, parent, ox, oy) {
   for (var i = 0; i < node.children.length; i++) { await build(node.children[i], f, childOx, childOy); }
 }
 
+// Size the wrapper to the widest/tallest descendant box in the plan, NOT to
+// __root.box — the outer DOM container often measures 0x0 and would collapse
+// the wrapper to 1x1, clipping everything inside. clipsContent=false is a
+// second safety net so an off-by-a-bit box never hides content again.
+function planBounds(node, ox, oy, acc) {
+  var x = node.box.x - ox, y = node.box.y - oy;
+  if (node.box.width > 0 && node.box.height > 0) {
+    if (x + node.box.width > acc.w) acc.w = x + node.box.width;
+    if (y + node.box.height > acc.h) acc.h = y + node.box.height;
+  }
+  for (var i = 0; i < (node.children ? node.children.length : 0); i++) planBounds(node.children[i], ox, oy, acc);
+  return acc;
+}
+
 var __root = __PLAN__.root;
 var pageRoot = figma.createFrame();
 pageRoot.name = "Arcade Export — " + __PLAN__.frame.slug;
 pageRoot.fills = [];
 pageRoot.layoutMode = "NONE";
+pageRoot.clipsContent = false;
 figma.currentPage.appendChild(pageRoot);
-try { pageRoot.resizeWithoutConstraints(Math.max(__root.box.width, 1), Math.max(__root.box.height, 1)); } catch (e) {}
 var rOx = __root.box.x, rOy = __root.box.y;
+var bounds = planBounds(__root, rOx, rOy, { w: 1, h: 1 });
+try { pageRoot.resizeWithoutConstraints(Math.max(bounds.w, 1), Math.max(bounds.h, 1)); } catch (e) {}
 if (__root.kind === "frame" && !__root.layout) {
   if (__root.fillVariableKey) { await bindFill(pageRoot, __root.fillVariableKey); } else if (__root.fillColor) { setSolid(pageRoot, __root.fillColor); }
   for (var i = 0; i < __root.children.length; i++) { await build(__root.children[i], pageRoot, rOx, rOy); }
