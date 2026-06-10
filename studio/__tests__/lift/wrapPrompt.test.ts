@@ -57,6 +57,33 @@ describe("wrapManifestWithPrompt", () => {
     expect(out).toContain("<frame_path>");
   });
 
+  it("instructs a live render and forbids grep-as-verification", () => {
+    // Regression guard: a live lift skipped the render_harness because the
+    // prompt said "do NOT modify anything else" and never mentioned
+    // rendering. The agent verified by grep — which the harness itself says
+    // is invalid — and reported a gap. The prompt must (a) tell the agent to
+    // render via the render_harness, and (b) explicitly reject grep.
+    const out = wrapManifestWithPrompt({
+      manifestXml: SAMPLE_MANIFEST,
+      frameSlug: "hello",
+    });
+    expect(out).toContain("render_harness");
+    expect(out).toMatch(/getComputedStyle|computed styles?/i);
+    expect(out).toMatch(/grep/i);
+  });
+
+  it("carves the scratch validation story out of the no-other-changes rule", () => {
+    // The "don't modify anything else" instruction must not read as
+    // forbidding the in-scope verification scratch story — that conflict is
+    // exactly what made the agent skip the render.
+    const out = wrapManifestWithPrompt({
+      manifestXml: SAMPLE_MANIFEST,
+      frameSlug: "hello",
+    });
+    expect(out).toMatch(/in-scope|scratch story/i);
+    expect(out).toMatch(/delete it|then delete/i);
+  });
+
   it("doesn't name a specific target codebase (devrev-web, etc.)", () => {
     // Shipping posture: the prompt works against any target repo. A beta
     // tester using Studio against a different codebase shouldn't get
