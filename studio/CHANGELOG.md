@@ -8,6 +8,16 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.31.1] — 2026-06-10
+
+### Fixed
+- **The "lift to production" handoff now verifies itself by actually rendering the result.** When you copy a lift manifest and hand it to a Claude session, the instructions now make it build the translated frame, open it live in Storybook, and check the real on-screen colors — instead of just eyeballing the code. This caught bugs a code-only check misses: a chat bubble that rendered invisible, a delete-confirmation modal using a component shape that doesn't exist in production. When it finishes it leaves Storybook running and hands over a clickable link so you can inspect the result yourself.
+- **Two component-translation rules were wrong and are corrected.** The Avatar size mapping pointed at sizes that don't exist in production; the Modal mapping referenced a `Modal.Root` piece production doesn't have. Both produced broken code when reused — fixed against the real production component definitions.
+- **The handoff now knows which styles are app-specific.** Some colors (like the chat-bubble fill) only exist inside certain apps; the instructions flag these so a lifted frame doesn't render with invisible text, and stop the agent from "fixing" styles that were actually fine.
+
+### Changed
+- **Telemetry tags events with your DevRev email more reliably** and stops sending low-value page-performance noise (internal beta).
+
 ## [0.31.0] — 2026-06-09
 
 ### Added
