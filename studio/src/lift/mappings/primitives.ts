@@ -182,13 +182,35 @@ export const PRIMITIVE_MAPPINGS: MappingEntry[] = [
     studio: { source: "arcade", name: "Modal" },
     production: { source: rawDs("Modal"), name: "Modal" },
     propDeltas: [
+      // `open` / `onOpenChange` move from Studio's <Modal.Root> onto the
+      // production <Modal> top-level element (which IS the root).
       { from: "open", to: "open" },
       { from: "onOpenChange", to: "onOpenChange" },
     ],
     slotNotes: [
-      "Both use compound subcomponents. Rename Modal.Root → Modal.Root, Modal.Content → Modal.Content, etc. API shape matches closely; mechanical.",
+      // 2026-06-10: CORRECTED. The prior note said "Rename Modal.Root →
+      // Modal.Root" — but production raw-design-system has NO Modal.Root.
+      // Verified in modal.tsx: `<Modal>` itself wraps radix Dialog Root
+      // (Modal.Root = ModalRoot does NOT exist; the attached subcomponents
+      // are only .Content/.Header/.Body/.Footer/.Close/.Trigger). A live
+      // lift of 01-ticket-delete hit this and had to discover it at render
+      // time. arcade Modal DOES expose .Root (Object.assign in arcade-gen
+      // Modal.tsx), so the shapes differ — this is structural, not a 1:1.
+      "Studio's <Modal.Root open onOpenChange>…</Modal.Root> collapses to production's top-level <Modal open onOpenChange>…</Modal> — there is NO production Modal.Root. Move the open/onOpenChange props onto <Modal> itself and DROP the .Root wrapper.",
+      "Inside, the subcomponents map 1:1: Modal.Content → Modal.Content, Modal.Header → Modal.Header (with Modal.Header.Title / .Actions / .Description), Modal.Body → Modal.Body, Modal.Footer → Modal.Footer. Modal.Close and Modal.Trigger also exist.",
+      "Prior art (read before writing): libs/commerce/features/your-plan/src/components/switch-plan-confirm-dialog.tsx — <Modal open onOpenChange size=\"480\"><Modal.Content><Modal.Header><Modal.Header.Title/></Modal.Header><Modal.Body/><Modal.Footer/></Modal.Content></Modal>.",
+      "Accessibility: production Modal.Content warns at runtime if there's no Modal.Header.Title (radix DialogTitle requirement). If the Studio source had no header title, add a Modal.Header.Title (visually-hidden if needed) rather than leaving the a11y advisory.",
     ],
-    translationClass: "mechanical",
+    // Reclassified mechanical → structural: the Root collapse is a real shape
+    // change a bare rename gets wrong (the live lift proved "Modal.Root →
+    // Modal.Root" produces a non-existent production component).
+    translationClass: "structural",
+    priorArt: [
+      {
+        path: "libs/commerce/features/your-plan/src/components/switch-plan-confirm-dialog.tsx",
+        covers: "Modal (root) + Content + Header.Title + Body + Footer, no Modal.Root",
+      },
+    ],
   },
   {
     studio: { source: "arcade", name: "Popover" },

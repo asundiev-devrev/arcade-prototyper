@@ -584,10 +584,16 @@ exports[`renderXml > renders an ad-hoc frame 1`] = `
       <prop_delta from="variant"/>
       <slot_note>Children are identical. Leading/trailing icons move from raw children to \`start\` / \`end\` slots in production.</slot_note>
     </mapping>
-    <mapping class="mechanical" studio_source="arcade" studio_name="Modal" production_source="@devrev-web-internal/design-system-shared-raw-design-system/components/modal" production_name="Modal">
+    <mapping class="structural" studio_source="arcade" studio_name="Modal" production_source="@devrev-web-internal/design-system-shared-raw-design-system/components/modal" production_name="Modal">
       <prop_delta from="open"/>
       <prop_delta from="onOpenChange"/>
-      <slot_note>Both use compound subcomponents. Rename Modal.Root → Modal.Root, Modal.Content → Modal.Content, etc. API shape matches closely; mechanical.</slot_note>
+      <slot_note>Studio's &lt;Modal.Root open onOpenChange&gt;…&lt;/Modal.Root&gt; collapses to production's top-level &lt;Modal open onOpenChange&gt;…&lt;/Modal&gt; — there is NO production Modal.Root. Move the open/onOpenChange props onto &lt;Modal&gt; itself and DROP the .Root wrapper.</slot_note>
+      <slot_note>Inside, the subcomponents map 1:1: Modal.Content → Modal.Content, Modal.Header → Modal.Header (with Modal.Header.Title / .Actions / .Description), Modal.Body → Modal.Body, Modal.Footer → Modal.Footer. Modal.Close and Modal.Trigger also exist.</slot_note>
+      <slot_note>Prior art (read before writing): libs/commerce/features/your-plan/src/components/switch-plan-confirm-dialog.tsx — &lt;Modal open onOpenChange size="480"&gt;&lt;Modal.Content&gt;&lt;Modal.Header&gt;&lt;Modal.Header.Title/&gt;&lt;/Modal.Header&gt;&lt;Modal.Body/&gt;&lt;Modal.Footer/&gt;&lt;/Modal.Content&gt;&lt;/Modal&gt;.</slot_note>
+      <slot_note>Accessibility: production Modal.Content warns at runtime if there's no Modal.Header.Title (radix DialogTitle requirement). If the Studio source had no header title, add a Modal.Header.Title (visually-hidden if needed) rather than leaving the a11y advisory.</slot_note>
+      <prior_art>
+        <example path="libs/commerce/features/your-plan/src/components/switch-plan-confirm-dialog.tsx" covers="Modal (root) + Content + Header.Title + Body + Footer, no Modal.Root"/>
+      </prior_art>
     </mapping>
   </frame_inventory>
   <scaffolding shape="ad-hoc">
