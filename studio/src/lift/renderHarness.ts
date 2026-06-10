@@ -20,11 +20,6 @@ import type { Manifest, RenderHarness } from "./types";
 
 export function buildRenderHarness(m: Manifest): RenderHarness {
   const targetPath = `tmp/lift/${m.frameSlug}.tsx`;
-  // Durable visual receipt of the render, saved beside the lift file. A human
-  // reviews the lift by LOOKING at it; the screenshot is how they see the
-  // result after the scratch story + server are torn down. Distinct from the
-  // throwaway story — this one is kept.
-  const screenshotPath = `tmp/lift/${m.frameSlug}.render.png`;
 
   // A clean React component name derived from the slug, used both for the
   // default export and to predict the Storybook story id. Storybook lowercases
@@ -48,17 +43,20 @@ export function buildRenderHarness(m: Manifest): RenderHarness {
   // the exact files, location, launch command, and predicted URL.
   const storyScaffold = [
     "SCOPE: the render-validation story below is an EXPECTED, IN-SCOPE",
-    "verification artifact of this lift — NOT a codebase modification. It is",
-    "throwaway scratch (same category as the tmp/lift file itself), deleted",
-    "after you read the computed styles. A kickoff rule like \"only write the",
-    "lift file\" or \"don't change anything else\" does NOT forbid it: rendering",
-    "IS the lift's verification step, and these files are its scaffolding. Do",
-    "not skip the render and flag it as a gap — create the scratch story,",
-    "render, read styles, then delete the story. If a real constraint makes",
-    "even scratch files impossible, say so explicitly and name what blocked it.",
+    "verification artifact of this lift — NOT a codebase modification. A",
+    "kickoff rule like \"only write the lift file\" or \"don't change anything",
+    "else\" does NOT forbid it: rendering IS the lift's verification step, and",
+    "these files are its scaffolding. Do not skip the render and flag it as a",
+    "gap. If a real constraint makes even scratch files impossible, say so",
+    "explicitly and name what blocked it.",
+    "",
+    "THE DELIVERABLE IS A LIVE, CLICKABLE STORYBOOK — not a screenshot, not a",
+    "static check. When you finish, the reviewer opens the iframe URL in their",
+    "own browser and clicks around. So: KEEP the story file and LEAVE STORYBOOK",
+    "RUNNING. Do NOT tear down the server or delete the story at the end.",
     "",
     "DO NOT stop at static grep — a class string existing in the file does",
-    "NOT prove it paints (see baseline check below). To get a live render:",
+    "NOT prove it paints (see baseline check below). To get the live render:",
     "",
     "1. Co-locate the lifted component AND a paired story in a directory the",
     "   Storybook glob already scans and the DS ThemeProvider already wraps:",
@@ -93,18 +91,19 @@ export function buildRenderHarness(m: Manifest): RenderHarness {
     "   then restore it.",
     "",
     `4. Navigate to: ${iframeUrl}`,
-    "   Then run the checks below against the live computed styles.",
+    "   Run the checks below against the live computed styles.",
     "",
-    `5. SAVE A SCREENSHOT to \`${screenshotPath}\` — a full-page capture of the`,
-    "   rendered story. This is a DURABLE output, NOT scratch: a human reviews",
-    "   the lift visually and the screenshot is the only way they see it after",
-    "   the server is gone. Do NOT delete it. Report its path in your summary.",
+    "5. LEAVE IT RUNNING. Do NOT stop Storybook and do NOT delete the story —",
+    "   the reviewer needs to open the URL themselves. The two things that must",
+    `   survive: the lift file \`${targetPath}\` and the running Storybook with`,
+    "   its story. The ONLY cleanup you do: if you moved a pre-existing broken",
+    "   story aside in step 3 to get the build green, restore it (but if",
+    "   restoring it re-breaks the running build, leave it parked and say so —",
+    "   a working server the reviewer can click beats a tidy story dir).",
     "",
-    "6. Clean up ONLY the ephemeral pieces: delete the scratch component +",
-    "   story you created in step 1, restore anything you moved aside in",
-    "   step 3, stop the server. KEEP the lift file AND the screenshot from",
-    `   step 5 — the two durable outputs are \`${targetPath}\` and`,
-    `   \`${screenshotPath}\`.`,
+    "6. In your summary, give the reviewer the clickable URL on its own line:",
+    `   ${iframeUrl}`,
+    "   plus the Storybook port (4400) and a one-line how-to-stop-it note.",
     "",
     "If Storybook is genuinely unavailable, you still owe a live render via",
     "some isolated entry — do not substitute grep and call the lift verified.",
@@ -172,5 +171,5 @@ export function buildRenderHarness(m: Manifest): RenderHarness {
     );
   }
 
-  return { targetPath, iframeUrl, screenshotPath, backdropNote, storyScaffold, checks };
+  return { targetPath, iframeUrl, backdropNote, storyScaffold, checks };
 }

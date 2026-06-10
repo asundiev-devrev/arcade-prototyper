@@ -78,16 +78,22 @@ describe("buildRenderHarness", () => {
     expect(harness.checks[0]).toMatch(/getComputedStyle|computed style/i);
   });
 
-  it("names a durable screenshot path beside the lift file and keeps it through cleanup", () => {
-    // Regression guard: a lift deleted its render as "verification scratch"
-    // and left the human reviewer with nothing to look at. The screenshot is
-    // a DURABLE output (kept beside the lift); the cleanup step keeps it and
-    // deletes only the scratch story.
+  it("tells the agent to leave Storybook running and keep the story (live deliverable)", () => {
+    // Regression guard: the reviewer wants a LIVE clickable Storybook, not a
+    // screenshot. Earlier scaffolds had the agent screenshot then tear
+    // everything down — the reviewer asked "where is it?" and the answer was
+    // "gone by design". The scaffold must keep the server up + story in place.
     const harness = buildRenderHarness(mk(`export default () => null;`, "chat-with-canvas"));
-    expect(harness.screenshotPath).toBe("tmp/lift/chat-with-canvas.render.png");
-    expect(harness.storyScaffold).toMatch(/SAVE A SCREENSHOT/);
-    expect(harness.storyScaffold).toMatch(/durable output, NOT scratch/i);
-    expect(harness.storyScaffold).toMatch(/KEEP the lift file AND the screenshot/);
+    expect(harness.storyScaffold).toMatch(/LEAVE STORYBOOK RUNNING|LEAVE IT RUNNING/);
+    expect(harness.storyScaffold).toMatch(/KEEP the story|keep the story/i);
+    expect(harness.storyScaffold).toMatch(/clickable/i);
+    // The reviewer-facing URL must be in the scaffold for the summary.
+    expect(harness.storyScaffold).toMatch(/localhost:4400/);
+    // No leftover screenshot MANDATE (the old "SAVE A SCREENSHOT" step). A
+    // passing mention like "not a screenshot" is fine; a save-instruction is
+    // not.
+    expect(harness.storyScaffold).not.toMatch(/SAVE A SCREENSHOT/i);
+    expect(harness.storyScaffold).not.toMatch(/\.render\.png/);
   });
 
   it("emits a concrete story scaffold with launch command and predicted story id", () => {
@@ -102,16 +108,20 @@ describe("buildRenderHarness", () => {
     expect(harness.iframeUrl).toMatch(/lift-validation-chatwithcanvas--default/);
   });
 
-  it("story scaffold declares the render story is in-scope and prescribes cleanup", () => {
+  it("story scaffold declares the render story is in-scope (resolves the kickoff conflict)", () => {
     // Regression guard: a live lift agent skipped the render because the
     // kickoff said "only write the lift file" and the scaffold told it to
     // write a story elsewhere — it read that as a scope conflict and flagged
     // a gap instead of rendering. The scaffold must resolve the conflict
-    // explicitly (story = in-scope verification scratch) and have the agent
-    // delete it after.
+    // explicitly: the story is an in-scope verification artifact, not a
+    // forbidden codebase change.
     expect(harnessScaffold()).toMatch(/in-scope|IN-SCOPE/);
     expect(harnessScaffold()).toMatch(/not a codebase|NOT a codebase|codebase modification/i);
-    expect(harnessScaffold()).toMatch(/delete the scratch|Clean up/i);
+    // And it must tell the agent to KEEP the story + leave the server up —
+    // the live server is the deliverable. (The only mention of deleting is in
+    // the explicit "do NOT ... delete" instruction.)
+    expect(harnessScaffold()).toMatch(/KEEP the story file|LEAVE STORYBOOK RUNNING/);
+    expect(harnessScaffold()).toMatch(/Do NOT tear down the server or delete the story/i);
   });
 
   it("prefixes a numeric-leading slug so the component name is a valid identifier", () => {
@@ -143,14 +153,15 @@ describe("render_harness XML emission", () => {
     const xml = renderXml(mk(`export default () => null;`));
     expect(xml).toContain("<render_harness>");
     expect(xml).toContain("<target_path>");
-    expect(xml).toContain("<iframe_url>");
+    expect(xml).toContain(`<iframe_url keep_running="true">`);
     expect(xml).toContain("<backdrop_note>");
     expect(xml).toContain("<checks>");
     expect(xml).toContain("<check>");
   });
 
-  it("emits a kept <screenshot_path> so the render survives for review", () => {
+  it("marks the iframe_url as keep_running so the server survives for review", () => {
     const xml = renderXml(mk(`export default () => null;`, "my-frame"));
-    expect(xml).toContain(`<screenshot_path keep="true">tmp/lift/my-frame.render.png</screenshot_path>`);
+    expect(xml).toContain(`<iframe_url keep_running="true">`);
+    expect(xml).toContain(`lift-validation-myframe--default`);
   });
 });

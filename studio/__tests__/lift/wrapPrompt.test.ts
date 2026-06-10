@@ -72,29 +72,31 @@ describe("wrapManifestWithPrompt", () => {
     expect(out).toMatch(/grep/i);
   });
 
-  it("carves the scratch validation story out of the no-other-changes rule", () => {
+  it("carves the validation story out of the no-other-changes rule", () => {
     // The "don't modify anything else" instruction must not read as
-    // forbidding the in-scope verification scratch story — that conflict is
-    // exactly what made the agent skip the render.
+    // forbidding the in-scope verification story — that conflict is exactly
+    // what made the agent skip the render.
     const out = wrapManifestWithPrompt({
       manifestXml: SAMPLE_MANIFEST,
       frameSlug: "hello",
     });
-    expect(out).toMatch(/in-scope|scratch story/i);
-    expect(out).toMatch(/delete it|then delete|scratch \*story\*/i);
+    expect(out).toMatch(/in-scope/i);
+    expect(out).toMatch(/not a forbidden codebase change|in-scope verification artifact/i);
   });
 
-  it("requires saving a durable screenshot and forbids deleting it", () => {
-    // Regression guard: a lift treated the whole render as deletable scratch
-    // and removed the screenshot, leaving the human reviewer nothing to look
-    // at. The prompt must require saving to <screenshot_path> and keeping it.
+  it("requires leaving Storybook running and handing over the clickable URL", () => {
+    // Regression guard: the reviewer wants a LIVE clickable Storybook, not a
+    // screenshot and not a torn-down server. The prompt must tell the agent
+    // to leave Storybook running, keep the story, and surface the URL.
     const out = wrapManifestWithPrompt({
       manifestXml: SAMPLE_MANIFEST,
       frameSlug: "hello",
     });
-    expect(out).toMatch(/screenshot/i);
-    expect(out).toMatch(/screenshot_path/);
-    expect(out).toMatch(/do NOT delete it|durable output/i);
+    expect(out).toMatch(/LEAVE STORYBOOK RUNNING/);
+    expect(out).toMatch(/clickable/i);
+    expect(out).toMatch(/iframe URL|iframe_url/);
+    // No leftover screenshot mandate.
+    expect(out).not.toMatch(/screenshot/i);
   });
 
   it("doesn't name a specific target codebase (devrev-web, etc.)", () => {
