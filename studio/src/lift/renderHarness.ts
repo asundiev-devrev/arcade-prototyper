@@ -20,6 +20,11 @@ import type { Manifest, RenderHarness } from "./types";
 
 export function buildRenderHarness(m: Manifest): RenderHarness {
   const targetPath = `tmp/lift/${m.frameSlug}.tsx`;
+  // Durable visual receipt of the render, saved beside the lift file. A human
+  // reviews the lift by LOOKING at it; the screenshot is how they see the
+  // result after the scratch story + server are torn down. Distinct from the
+  // throwaway story — this one is kept.
+  const screenshotPath = `tmp/lift/${m.frameSlug}.render.png`;
 
   // A clean React component name derived from the slug, used both for the
   // default export and to predict the Storybook story id. Storybook lowercases
@@ -90,9 +95,16 @@ export function buildRenderHarness(m: Manifest): RenderHarness {
     `4. Navigate to: ${iframeUrl}`,
     "   Then run the checks below against the live computed styles.",
     "",
-    "5. Clean up: delete the scratch component + story you created in step 1",
-    "   (and restore anything you moved aside in step 3). The lift's only",
-    "   durable output is the tmp/lift file.",
+    `5. SAVE A SCREENSHOT to \`${screenshotPath}\` — a full-page capture of the`,
+    "   rendered story. This is a DURABLE output, NOT scratch: a human reviews",
+    "   the lift visually and the screenshot is the only way they see it after",
+    "   the server is gone. Do NOT delete it. Report its path in your summary.",
+    "",
+    "6. Clean up ONLY the ephemeral pieces: delete the scratch component +",
+    "   story you created in step 1, restore anything you moved aside in",
+    "   step 3, stop the server. KEEP the lift file AND the screenshot from",
+    `   step 5 — the two durable outputs are \`${targetPath}\` and`,
+    `   \`${screenshotPath}\`.`,
     "",
     "If Storybook is genuinely unavailable, you still owe a live render via",
     "some isolated entry — do not substitute grep and call the lift verified.",
@@ -160,5 +172,5 @@ export function buildRenderHarness(m: Manifest): RenderHarness {
     );
   }
 
-  return { targetPath, iframeUrl, backdropNote, storyScaffold, checks };
+  return { targetPath, iframeUrl, screenshotPath, backdropNote, storyScaffold, checks };
 }

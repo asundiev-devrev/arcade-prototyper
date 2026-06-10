@@ -198,6 +198,13 @@ export interface RenderHarness {
   /** URL pattern for the rendered story; `{frameSlug}` interpolated. */
   iframeUrl: string;
   /**
+   * Durable path for the render screenshot — a visual receipt kept alongside
+   * the lift file (NOT torn down with the scratch story). A human reviews the
+   * lift by looking at this image after the server is gone. Added 2026-06-10
+   * after a lift deleted its render and left the reviewer with nothing to see.
+   */
+  screenshotPath: string;
+  /**
    * Concrete, copy-paste scaffold that makes the render ACTUALLY happen
    * rather than degrading to static grep. A bare file under tmp/lift/ has
    * no Storybook story and no dev-server entry, so the agent can't navigate

@@ -81,7 +81,20 @@ describe("wrapManifestWithPrompt", () => {
       frameSlug: "hello",
     });
     expect(out).toMatch(/in-scope|scratch story/i);
-    expect(out).toMatch(/delete it|then delete/i);
+    expect(out).toMatch(/delete it|then delete|scratch \*story\*/i);
+  });
+
+  it("requires saving a durable screenshot and forbids deleting it", () => {
+    // Regression guard: a lift treated the whole render as deletable scratch
+    // and removed the screenshot, leaving the human reviewer nothing to look
+    // at. The prompt must require saving to <screenshot_path> and keeping it.
+    const out = wrapManifestWithPrompt({
+      manifestXml: SAMPLE_MANIFEST,
+      frameSlug: "hello",
+    });
+    expect(out).toMatch(/screenshot/i);
+    expect(out).toMatch(/screenshot_path/);
+    expect(out).toMatch(/do NOT delete it|durable output/i);
   });
 
   it("doesn't name a specific target codebase (devrev-web, etc.)", () => {

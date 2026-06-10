@@ -78,6 +78,18 @@ describe("buildRenderHarness", () => {
     expect(harness.checks[0]).toMatch(/getComputedStyle|computed style/i);
   });
 
+  it("names a durable screenshot path beside the lift file and keeps it through cleanup", () => {
+    // Regression guard: a lift deleted its render as "verification scratch"
+    // and left the human reviewer with nothing to look at. The screenshot is
+    // a DURABLE output (kept beside the lift); the cleanup step keeps it and
+    // deletes only the scratch story.
+    const harness = buildRenderHarness(mk(`export default () => null;`, "chat-with-canvas"));
+    expect(harness.screenshotPath).toBe("tmp/lift/chat-with-canvas.render.png");
+    expect(harness.storyScaffold).toMatch(/SAVE A SCREENSHOT/);
+    expect(harness.storyScaffold).toMatch(/durable output, NOT scratch/i);
+    expect(harness.storyScaffold).toMatch(/KEEP the lift file AND the screenshot/);
+  });
+
   it("emits a concrete story scaffold with launch command and predicted story id", () => {
     const harness = buildRenderHarness(mk(`export default () => null;`, "chat-with-canvas"));
     // The scaffold must remove the excuses: it names the globbed dir, the
@@ -135,5 +147,10 @@ describe("render_harness XML emission", () => {
     expect(xml).toContain("<backdrop_note>");
     expect(xml).toContain("<checks>");
     expect(xml).toContain("<check>");
+  });
+
+  it("emits a kept <screenshot_path> so the render survives for review", () => {
+    const xml = renderXml(mk(`export default () => null;`, "my-frame"));
+    expect(xml).toContain(`<screenshot_path keep="true">tmp/lift/my-frame.render.png</screenshot_path>`);
   });
 });

@@ -112,6 +112,7 @@ export function renderXml(m: Manifest): string {
   push(`  <render_harness>`);
   push(`    <target_path>${text(harness.targetPath)}</target_path>`);
   push(`    <iframe_url>${text(harness.iframeUrl)}</iframe_url>`);
+  push(`    <screenshot_path keep="true">${text(harness.screenshotPath)}</screenshot_path>`);
   push(`    <story_scaffold>${text(harness.storyScaffold)}</story_scaffold>`);
   push(`    <backdrop_note>${text(harness.backdropNote)}</backdrop_note>`);
   push(`    <checks>`);

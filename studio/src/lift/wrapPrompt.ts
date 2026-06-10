@@ -34,7 +34,7 @@ export function wrapManifestWithPrompt({ manifestXml, frameSlug }: WrapPromptOpt
 
   return `I want you to lift an Arcade Studio frame into this codebase, following the lift manifest below verbatim.
 
-**Target file:** write the lifted frame to \`${targetFile}\`. Create the directory if needed. Do NOT register the file in a router, data layer, or i18n — this is a translation experiment, not a feature ship. The lifted frame is the only DURABLE output. The one exception to "leave the repo alone": the manifest's \`<render_harness>\` has you create a throwaway scratch story to render and verify the lift — that scratch story is an in-scope verification artifact (you create it, read computed styles, then delete it), NOT a codebase change. Create it; don't skip the render and report it as a gap.
+**Target file:** write the lifted frame to \`${targetFile}\`. Create the directory if needed. Do NOT register the file in a router, data layer, or i18n — this is a translation experiment, not a feature ship. There are TWO durable outputs: the lifted frame AND a render screenshot (the manifest's \`<render_harness>\` names its path) — a human reviews the lift by LOOKING at that screenshot, so it must survive. The one exception to "leave the repo alone": the manifest's \`<render_harness>\` has you create a throwaway scratch story to render and verify — that scratch *story* is an in-scope verification artifact you create, screenshot, then delete; the *screenshot* is durable and is NOT deleted. Don't skip the render and report it as a gap.
 
 **What to do:**
 
@@ -50,7 +50,7 @@ export function wrapManifestWithPrompt({ manifestXml, frameSlug }: WrapPromptOpt
 7. If \`<tokens alignment="patching">\` appears: each \`<patch>\` entry names an arcade-gen token or class that doesn't resolve in the target. Rewrite to the \`production\` value everywhere it appears in the lift.
 8. If \`<overlay_convention>\` is present: the frame has hand-rolled overlay markup (fixed inset-0 + backdrop). Follow the convention's lookup and anchors — do NOT preserve the raw-div overlay.
 9. Read the studio source frame at the \`<frame_path>\` listed in the manifest — it's the actual source the manifest was generated from.
-10. VERIFY BY RENDERING. If the manifest has a \`<render_harness>\`, follow its \`<story_scaffold>\` verbatim: create the scratch validation story, boot the render server, navigate the \`<iframe_url>\`, and check each \`<check>\` against LIVE \`getComputedStyle\` output — then delete the scratch story. A class string existing in the file (grep) does NOT prove it paints — many tokens are app-scoped or theme-gated and fall through to transparent. Do not substitute grep for a live render and call the lift verified.
+10. VERIFY BY RENDERING. If the manifest has a \`<render_harness>\`, follow its \`<story_scaffold>\` verbatim: create the scratch validation story, boot the render server, navigate the \`<iframe_url>\`, and check each \`<check>\` against LIVE \`getComputedStyle\` output. A class string existing in the file (grep) does NOT prove it paints — many tokens are app-scoped or theme-gated and fall through to transparent. Do not substitute grep for a live render and call the lift verified. THEN save a full-page screenshot to the \`<screenshot_path>\` named in the harness — this is a durable output, do NOT delete it. Only AFTER saving the screenshot, clean up the ephemeral pieces: delete the scratch story, restore any file you moved aside, stop the server. Keep the lift file and the screenshot.
 
 **Don't:**
 
@@ -58,7 +58,7 @@ export function wrapManifestWithPrompt({ manifestXml, frameSlug }: WrapPromptOpt
 - Don't wire up the \`<scaffolding>\` items (data-layer hook, adapter, route, flag, tracker). Note them in a comment at the top of the file, but don't create those files — out of scope for this experiment.
 - Don't reach for \`react-router\` or similar routing if the manifest says "judgment" for \`FrameLink\` — leave a TODO instead.
 
-**When done:** the lift is NOT done until you have rendered it live and confirmed the \`<render_harness>\` checks against computed styles (step 10). Then print a short summary — confirm the render passed (and what you read), how many TODOs you left, what each represents, and anything the manifest told you but didn't give you enough to act on. If you genuinely could not render, say so explicitly and name what blocked it — do not present a grep-only check as verification.
+**When done:** the lift is NOT done until you have rendered it live, confirmed the \`<render_harness>\` checks against computed styles, and SAVED the screenshot (step 10). Then print a short summary — state the saved screenshot path first (so the reviewer can open it), confirm the render passed (and what you read), how many TODOs you left, what each represents, and anything the manifest told you but didn't give you enough to act on. If you genuinely could not render, say so explicitly and name what blocked it — do not present a grep-only check as verification.
 
 Here's the manifest:
 

@@ -47,6 +47,7 @@ exports[`renderXml > marks n/a composites with equivalent="none" 1`] = `
   <render_harness>
     <target_path>tmp/lift/computer-frame.tsx</target_path>
     <iframe_url>http://localhost:4400/iframe.html?id=lift-validation-computerframe--default&amp;viewMode=story</iframe_url>
+    <screenshot_path keep="true">tmp/lift/computer-frame.render.png</screenshot_path>
     <story_scaffold>SCOPE: the render-validation story below is an EXPECTED, IN-SCOPE
 verification artifact of this lift — NOT a codebase modification. It is
 throwaway scratch (same category as the tmp/lift file itself), deleted
@@ -95,9 +96,16 @@ NOT prove it paints (see baseline check below). To get a live render:
 4. Navigate to: http://localhost:4400/iframe.html?id=lift-validation-computerframe--default&amp;viewMode=story
    Then run the checks below against the live computed styles.
 
-5. Clean up: delete the scratch component + story you created in step 1
-   (and restore anything you moved aside in step 3). The lift's only
-   durable output is the tmp/lift file.
+5. SAVE A SCREENSHOT to \`tmp/lift/computer-frame.render.png\` — a full-page capture of the
+   rendered story. This is a DURABLE output, NOT scratch: a human reviews
+   the lift visually and the screenshot is the only way they see it after
+   the server is gone. Do NOT delete it. Report its path in your summary.
+
+6. Clean up ONLY the ephemeral pieces: delete the scratch component +
+   story you created in step 1, restore anything you moved aside in
+   step 3, stop the server. KEEP the lift file AND the screenshot from
+   step 5 — the two durable outputs are \`tmp/lift/computer-frame.tsx\` and
+   \`tmp/lift/computer-frame.render.png\`.
 
 If Storybook is genuinely unavailable, you still owe a live render via
 some isolated entry — do not substitute grep and call the lift verified.</story_scaffold>
@@ -181,6 +189,7 @@ exports[`renderXml > renders a detail frame 1`] = `
   <render_harness>
     <target_path>tmp/lift/detail-frame.tsx</target_path>
     <iframe_url>http://localhost:4400/iframe.html?id=lift-validation-detailframe--default&amp;viewMode=story</iframe_url>
+    <screenshot_path keep="true">tmp/lift/detail-frame.render.png</screenshot_path>
     <story_scaffold>SCOPE: the render-validation story below is an EXPECTED, IN-SCOPE
 verification artifact of this lift — NOT a codebase modification. It is
 throwaway scratch (same category as the tmp/lift file itself), deleted
@@ -229,9 +238,16 @@ NOT prove it paints (see baseline check below). To get a live render:
 4. Navigate to: http://localhost:4400/iframe.html?id=lift-validation-detailframe--default&amp;viewMode=story
    Then run the checks below against the live computed styles.
 
-5. Clean up: delete the scratch component + story you created in step 1
-   (and restore anything you moved aside in step 3). The lift's only
-   durable output is the tmp/lift file.
+5. SAVE A SCREENSHOT to \`tmp/lift/detail-frame.render.png\` — a full-page capture of the
+   rendered story. This is a DURABLE output, NOT scratch: a human reviews
+   the lift visually and the screenshot is the only way they see it after
+   the server is gone. Do NOT delete it. Report its path in your summary.
+
+6. Clean up ONLY the ephemeral pieces: delete the scratch component +
+   story you created in step 1, restore anything you moved aside in
+   step 3, stop the server. KEEP the lift file AND the screenshot from
+   step 5 — the two durable outputs are \`tmp/lift/detail-frame.tsx\` and
+   \`tmp/lift/detail-frame.render.png\`.
 
 If Storybook is genuinely unavailable, you still owe a live render via
 some isolated entry — do not substitute grep and call the lift verified.</story_scaffold>
@@ -309,6 +325,7 @@ exports[`renderXml > renders a list-view frame 1`] = `
   <render_harness>
     <target_path>tmp/lift/list-frame.tsx</target_path>
     <iframe_url>http://localhost:4400/iframe.html?id=lift-validation-listframe--default&amp;viewMode=story</iframe_url>
+    <screenshot_path keep="true">tmp/lift/list-frame.render.png</screenshot_path>
     <story_scaffold>SCOPE: the render-validation story below is an EXPECTED, IN-SCOPE
 verification artifact of this lift — NOT a codebase modification. It is
 throwaway scratch (same category as the tmp/lift file itself), deleted
@@ -357,9 +374,16 @@ NOT prove it paints (see baseline check below). To get a live render:
 4. Navigate to: http://localhost:4400/iframe.html?id=lift-validation-listframe--default&amp;viewMode=story
    Then run the checks below against the live computed styles.
 
-5. Clean up: delete the scratch component + story you created in step 1
-   (and restore anything you moved aside in step 3). The lift's only
-   durable output is the tmp/lift file.
+5. SAVE A SCREENSHOT to \`tmp/lift/list-frame.render.png\` — a full-page capture of the
+   rendered story. This is a DURABLE output, NOT scratch: a human reviews
+   the lift visually and the screenshot is the only way they see it after
+   the server is gone. Do NOT delete it. Report its path in your summary.
+
+6. Clean up ONLY the ephemeral pieces: delete the scratch component +
+   story you created in step 1, restore anything you moved aside in
+   step 3, stop the server. KEEP the lift file AND the screenshot from
+   step 5 — the two durable outputs are \`tmp/lift/list-frame.tsx\` and
+   \`tmp/lift/list-frame.render.png\`.
 
 If Storybook is genuinely unavailable, you still owe a live render via
 some isolated entry — do not substitute grep and call the lift verified.</story_scaffold>
@@ -451,6 +475,7 @@ exports[`renderXml > renders a settings-form frame 1`] = `
   <render_harness>
     <target_path>tmp/lift/settings-frame.tsx</target_path>
     <iframe_url>http://localhost:4400/iframe.html?id=lift-validation-settingsframe--default&amp;viewMode=story</iframe_url>
+    <screenshot_path keep="true">tmp/lift/settings-frame.render.png</screenshot_path>
     <story_scaffold>SCOPE: the render-validation story below is an EXPECTED, IN-SCOPE
 verification artifact of this lift — NOT a codebase modification. It is
 throwaway scratch (same category as the tmp/lift file itself), deleted
@@ -499,9 +524,16 @@ NOT prove it paints (see baseline check below). To get a live render:
 4. Navigate to: http://localhost:4400/iframe.html?id=lift-validation-settingsframe--default&amp;viewMode=story
    Then run the checks below against the live computed styles.
 
-5. Clean up: delete the scratch component + story you created in step 1
-   (and restore anything you moved aside in step 3). The lift's only
-   durable output is the tmp/lift file.
+5. SAVE A SCREENSHOT to \`tmp/lift/settings-frame.render.png\` — a full-page capture of the
+   rendered story. This is a DURABLE output, NOT scratch: a human reviews
+   the lift visually and the screenshot is the only way they see it after
+   the server is gone. Do NOT delete it. Report its path in your summary.
+
+6. Clean up ONLY the ephemeral pieces: delete the scratch component +
+   story you created in step 1, restore anything you moved aside in
+   step 3, stop the server. KEEP the lift file AND the screenshot from
+   step 5 — the two durable outputs are \`tmp/lift/settings-frame.tsx\` and
+   \`tmp/lift/settings-frame.render.png\`.
 
 If Storybook is genuinely unavailable, you still owe a live render via
 some isolated entry — do not substitute grep and call the lift verified.</story_scaffold>
@@ -564,6 +596,7 @@ exports[`renderXml > renders an ad-hoc frame 1`] = `
   <render_harness>
     <target_path>tmp/lift/adhoc-frame.tsx</target_path>
     <iframe_url>http://localhost:4400/iframe.html?id=lift-validation-adhocframe--default&amp;viewMode=story</iframe_url>
+    <screenshot_path keep="true">tmp/lift/adhoc-frame.render.png</screenshot_path>
     <story_scaffold>SCOPE: the render-validation story below is an EXPECTED, IN-SCOPE
 verification artifact of this lift — NOT a codebase modification. It is
 throwaway scratch (same category as the tmp/lift file itself), deleted
@@ -612,9 +645,16 @@ NOT prove it paints (see baseline check below). To get a live render:
 4. Navigate to: http://localhost:4400/iframe.html?id=lift-validation-adhocframe--default&amp;viewMode=story
    Then run the checks below against the live computed styles.
 
-5. Clean up: delete the scratch component + story you created in step 1
-   (and restore anything you moved aside in step 3). The lift's only
-   durable output is the tmp/lift file.
+5. SAVE A SCREENSHOT to \`tmp/lift/adhoc-frame.render.png\` — a full-page capture of the
+   rendered story. This is a DURABLE output, NOT scratch: a human reviews
+   the lift visually and the screenshot is the only way they see it after
+   the server is gone. Do NOT delete it. Report its path in your summary.
+
+6. Clean up ONLY the ephemeral pieces: delete the scratch component +
+   story you created in step 1, restore anything you moved aside in
+   step 3, stop the server. KEEP the lift file AND the screenshot from
+   step 5 — the two durable outputs are \`tmp/lift/adhoc-frame.tsx\` and
+   \`tmp/lift/adhoc-frame.render.png\`.
 
 If Storybook is genuinely unavailable, you still owe a live render via
 some isolated entry — do not substitute grep and call the lift verified.</story_scaffold>
