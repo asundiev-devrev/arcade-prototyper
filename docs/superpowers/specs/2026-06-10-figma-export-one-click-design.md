@@ -148,6 +148,27 @@ The in-Figma runtime stays best-effort per node (proven: instance-before-remove,
 
 In Studio, with Figma open + the Bridge plugin running on the Arcade UI Kit 0.3 library, clicking **Export to Figma** on the Computer-with-panel frame produces the real two-pane UI with real component instances in Figma — no prompt, no Claude session — within one `EXECUTE_CODE` round trip. Screenshot-verified. When Figma/plugin isn't ready, the modal says exactly what to do.
 
+## PARKED — 2026-06-10 (status: works end-to-end, but fidelity is ~30% of the app)
+
+The one-click pipeline is **built, tested (full suite green), and validated live** against the real 0.3 kit via the figma-console Bridge: clicking Export drops a real frame with 44 component instances + 27 text nodes — no prompt, no Claude session. Two runtime defects were found live and fixed (both committed, both with regression tests eval'ing the runtime against a figma mock):
+
+1. **1×1 invisible wrapper** — the runtime sized the export wrapper to the SLJ root's box, which the outer DOM measures as 0×0 → clamped to 1×1, and Figma frames clip by default, so all 44 instances were clipped to nothing. Fix: size the wrapper to the union of all descendant boxes (content bounds) + `clipsContent=false` on the wrapper and every frame.
+2. **Text-bearing instances clipped their 2nd line** — every instance was force-`resize()`d to its DOM box, pinning the AUTO height axis FIXED. Fix: for nodes that carry text, restore the hugging height axis to AUTO. Gated on `node.text` so components like Menu (also AUTO-vertical, but hugging to a 406px full-dropdown natural height) don't balloon.
+
+**Why parked:** the bar is **pixel-perfect to the Arcade Studio frame**. This approach cannot reach it — not a bug list, the wrong machine. Three independent, structural sources of divergence, none closable by runtime polish:
+
+- **Layout semantics lost.** The pipeline replays captured *absolute boxes*, not the app's fill/flex/pinned-composer semantics. Content crams into the top ~480px of a 900px frame; the app fills the height.
+- **SLJ is lossy.** It carries boxes + a few styles + component names — NOT every computed style (shadows, radii, borders, exact type, letter-spacing, gaps). Even a perfect rebuild from SLJ can't be pixel-identical; the source data isn't there.
+- **Component swap actively diverges from the app.** Dropping in the real kit `Menu`/`Bubble`/`Chat Item` makes the output look like *the kit*, not *the app*. That's the feature working as designed — and it is the opposite of pixel-perfect. **Pixel-perfect and "real swapped Arcade components" are mutually exclusive.**
+
+Observed fidelity on `01-chat-with-canvas`: structurally present (correct 3 columns, real components, real labels/avatars/glyphs) but **~30%** by the looks-like-the-frame bar. Remaining visible gaps beyond the two fixed: header Menu renders as a squished blob (wrong trigger-vs-panel mapping), the message composer row is empty (DOM `<input>` had no mapping), large dead vertical space (no fill-height), a stray status dot bottom-left.
+
+**Open decision (with the design team) that dictates next steps:** is **html.to.design's pixel-perfect conversion WITHOUT real components** (flat frames/text/vectors that look identical and stay editable) acceptable? 
+- If **yes** → rebuild the feature around faithful full-DOM→Figma conversion (reads every computed style off the live render); abandon the component swap.
+- If **no** (real components are non-negotiable) → pixel-perfect is unreachable; reset expectations to "structurally-faithful real-components starting point," not a finished frame.
+
+**Branch `feat/figma-export-one-click` holds all of it** (9 commits) — kept, not merged, pending that decision. The old reconciliation units (`captureTree`/`geometryMatch`/`swapPlan`/`executeSwap`/`runSwap`/`wrapFigmaExportPrompt`) were NOT retired (T8 skipped) precisely because the converter path may resurrect that direction.
+
 ## Risks
 
 - **Plugin not running / wrong file.** The dominant failure. Mitigation: typed `no_bridge` + actionable copy; short connect window so the button fails fast, not hangs.
