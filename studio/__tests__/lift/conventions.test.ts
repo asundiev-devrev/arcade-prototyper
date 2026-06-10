@@ -6,12 +6,14 @@
 
 import { describe, it, expect } from "vitest";
 import {
+  APP_SCOPED_TOKEN_CONVENTION,
   applicableConventions,
   CHROME_CONVENTION,
   DEFAULT_MAPPING_CONVENTION,
   hasOverlayMarkup,
   ICON_CONVENTION,
   OVERLAY_CONVENTION,
+  STYLE_ATTRIBUTE_CONVENTION,
 } from "../../src/lift/conventions";
 
 describe("applicableConventions", () => {
@@ -81,6 +83,47 @@ describe("applicableConventions", () => {
   it("omits overlay_convention by default", () => {
     const c = applicableConventions({ hasIcons: false, importedNames: [] });
     expect(c).not.toContain(OVERLAY_CONVENTION);
+  });
+
+  it("style_attribute_convention warns that utilities are auto-generated, not hand-listed", () => {
+    // Regression guard: a live lift false-flagged bg-surface-shallow as "not
+    // a real utility" because it wasn't hand-listed in the Tailwind config,
+    // then "fixed" a working class. The convention must teach that
+    // devrev-web auto-generates bg-*/border-*/fg-* from CSS vars, so config
+    // absence != not-a-utility, and the live render is the only authority.
+    expect(STYLE_ATTRIBUTE_CONVENTION.lookup).toMatch(/auto-generate/i);
+    expect(STYLE_ATTRIBUTE_CONVENTION.lookup).toMatch(/dark-styles\.css/);
+    expect(STYLE_ATTRIBUTE_CONVENTION.lookup).toMatch(/not.*mean.*not a utility/i);
+    // The surface-shallow anchor documents the exact false-positive.
+    expect(STYLE_ATTRIBUTE_CONVENTION.anchors.join("\n")).toMatch(/bg-surface-shallow/);
+  });
+
+  it("emits app_scoped_token_convention when ChatBubble is imported", () => {
+    const c = applicableConventions({
+      hasIcons: false,
+      importedNames: ["ChatBubble", "Button"],
+    });
+    expect(c).toContain(APP_SCOPED_TOKEN_CONVENTION);
+  });
+
+  it("omits app_scoped_token_convention when no app-scoped primitive is present", () => {
+    const c = applicableConventions({
+      hasIcons: false,
+      importedNames: ["Button", "Input"],
+    });
+    expect(c).not.toContain(APP_SCOPED_TOKEN_CONVENTION);
+  });
+
+  it("app_scoped_token_convention names the user-bubble tokens and the defining app shells", () => {
+    // Regression guard: the live 01-chat-with-canvas lift shipped a
+    // transparent sender bubble because the agent grepped instead of
+    // rendering. The convention must call out the exact tokens AND that
+    // grep can't catch this.
+    expect(APP_SCOPED_TOKEN_CONVENTION.rule).toMatch(/user-bubble-primary/);
+    expect(APP_SCOPED_TOKEN_CONVENTION.rule).toMatch(/grep/i);
+    expect(APP_SCOPED_TOKEN_CONVENTION.lookup).toMatch(/portal-shell/);
+    expect(APP_SCOPED_TOKEN_CONVENTION.lookup).toMatch(/plug-widget/);
+    expect(APP_SCOPED_TOKEN_CONVENTION.lookup).toMatch(/bg-menu-selected/);
   });
 
   it("puts icon_convention first and default_mapping_convention last", () => {

@@ -111,7 +111,8 @@ export function renderXml(m: Manifest): string {
   const harness = buildRenderHarness(m);
   push(`  <render_harness>`);
   push(`    <target_path>${text(harness.targetPath)}</target_path>`);
-  push(`    <iframe_url>${text(harness.iframeUrl)}</iframe_url>`);
+  push(`    <iframe_url keep_running="true">${text(harness.iframeUrl)}</iframe_url>`);
+  push(`    <story_scaffold>${text(harness.storyScaffold)}</story_scaffold>`);
   push(`    <backdrop_note>${text(harness.backdropNote)}</backdrop_note>`);
   push(`    <checks>`);
   for (const c of harness.checks) {
@@ -146,10 +147,18 @@ export function renderXml(m: Manifest): string {
       `inline style={{ ... var(--...) ... }} in the frame source must be ` +
       `rewritten per that convention's anchors — leaving them intact will ` +
       `produce black borders or transparent backgrounds at render time. If ` +
-      `&lt;render_harness&gt; is present, after writing the lift drop the ` +
-      `output under the target path, navigate to the iframe URL, and ` +
-      `verify the live computed styles against the directive's checklist ` +
-      `before declaring the lift done.`,
+      `&lt;render_harness&gt; is present, after writing the lift you MUST ` +
+      `produce a LIVE render and read computed styles — static grep that a ` +
+      `class "resolves" is NOT acceptable verification (a class string can ` +
+      `exist and still paint nothing). Follow &lt;story_scaffold&gt; ` +
+      `verbatim: it gives the exact globbed+themed directory, the paired ` +
+      `story file, the launch command, and the predicted iframe URL — there ` +
+      `is no "bare tmp/lift file has no story" excuse. The scratch story the ` +
+      `scaffold has you create is an IN-SCOPE verification artifact, not a ` +
+      `codebase change — a kickoff rule like "only write the lift file" does ` +
+      `NOT forbid it, and you create then delete it as part of verifying. ` +
+      `Navigate the iframe URL and verify every check against live ` +
+      `getComputedStyle output before declaring the lift done.`,
   );
   push(`  </agent_directives>`);
 

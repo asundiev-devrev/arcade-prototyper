@@ -198,6 +198,18 @@ export interface RenderHarness {
   /** URL pattern for the rendered story; `{frameSlug}` interpolated. */
   iframeUrl: string;
   /**
+   * Concrete, copy-paste scaffold that makes the render ACTUALLY happen
+   * rather than degrading to static grep. A bare file under tmp/lift/ has
+   * no Storybook story and no dev-server entry, so the agent can't navigate
+   * an iframe — and "I verified statically instead" is exactly the gap that
+   * shipped a transparent sender bubble (live lift of 01-chat-with-canvas,
+   * 2026-06). This field gives the agent the paired-story recipe + the
+   * predicted story id so there's no excuse to skip the live render. Added
+   * 2026-06-09. Consumers on a non-Storybook target adapt the mechanics but
+   * still owe a live render.
+   */
+  storyScaffold: string;
+  /**
    * Short instructions for wrapping the story in a backdrop so card
    * borders have something to sit on. Many DS tokens use near-white
    * values that disappear against a pure-white iframe.

@@ -46,17 +46,83 @@ exports[`renderXml > marks n/a composites with equivalent="none" 1`] = `
   </grounding>
   <render_harness>
     <target_path>tmp/lift/computer-frame.tsx</target_path>
-    <iframe_url>(target dev server URL pointing at the lifted component — e.g. a Storybook \`iframe.html?id=&lt;story-id&gt;&amp;viewMode=story\` URL; failing that, whatever URL serves the component in isolation)</iframe_url>
+    <iframe_url keep_running="true">http://localhost:4400/iframe.html?id=lift-validation-computerframe--default&amp;viewMode=story</iframe_url>
+    <story_scaffold>SCOPE: the render-validation story below is an EXPECTED, IN-SCOPE
+verification artifact of this lift — NOT a codebase modification. A
+kickoff rule like "only write the lift file" or "don't change anything
+else" does NOT forbid it: rendering IS the lift's verification step, and
+these files are its scaffolding. Do not skip the render and flag it as a
+gap. If a real constraint makes even scratch files impossible, say so
+explicitly and name what blocked it.
+
+THE DELIVERABLE IS A LIVE, CLICKABLE STORYBOOK — not a screenshot, not a
+static check. When you finish, the reviewer opens the iframe URL in their
+own browser and clicks around. So: KEEP the story file and LEAVE STORYBOOK
+RUNNING. Do NOT tear down the server or delete the story at the end.
+
+DO NOT stop at static grep — a class string existing in the file does
+NOT prove it paints (see baseline check below). To get the live render:
+
+1. Co-locate the lifted component AND a paired story in a directory the
+   Storybook glob already scans and the DS ThemeProvider already wraps:
+     libs/agent-platform/feature/agent-studio/src/stories/__lift_validation/
+   Write the component as computerframe.tsx (default export
+   \`ComputerFrame\`) and computerframe.stories.tsx beside it.
+
+2. Story file (mirror the existing skills-gallery.stories.tsx in that dir):
+     import { Decorator, Meta } from '@storybook/nextjs';
+     import { MemoryRouter, Route, Routes } from 'react-router-dom';
+     import ComputerFrame from './computerframe';
+     const withRouter: Decorator = (Story) =&gt; (
+       &lt;MemoryRouter initialEntries={['/']}&gt;
+         &lt;Routes&gt;&lt;Route path="/*" element={&lt;Story /&gt;} /&gt;&lt;/Routes&gt;
+       &lt;/MemoryRouter&gt;
+     );
+     export default {
+       decorators: [withRouter], tags: ['lift-validation'],
+       title: 'Lift Validation/ComputerFrame',
+       parameters: { layout: 'fullscreen' },
+     } as Meta;
+     export const Default = () =&gt; &lt;ComputerFrame /&gt;;
+
+3. Launch Storybook (from the devrev-web root): \`pnpm run start:storybook\`.
+   It binds on http://localhost:4400 (NOT 6006). The first cold build
+   takes a few minutes; poll the port before navigating.
+
+   GOTCHA: Storybook bundles ALL stories into one preview — a single
+   pre-existing story with a stale import will fail the whole build and
+   the port never binds. If start fails, read the log for \`ERROR in\`;
+   if the broken file is NOT yours, temporarily move it aside, render,
+   then restore it.
+
+4. Navigate to: http://localhost:4400/iframe.html?id=lift-validation-computerframe--default&amp;viewMode=story
+   Run the checks below against the live computed styles.
+
+5. LEAVE IT RUNNING. Do NOT stop Storybook and do NOT delete the story —
+   the reviewer needs to open the URL themselves. The two things that must
+   survive: the lift file \`tmp/lift/computer-frame.tsx\` and the running Storybook with
+   its story. The ONLY cleanup you do: if you moved a pre-existing broken
+   story aside in step 3 to get the build green, restore it (but if
+   restoring it re-breaks the running build, leave it parked and say so —
+   a working server the reviewer can click beats a tidy story dir).
+
+6. In your summary, give the reviewer the clickable URL on its own line:
+   http://localhost:4400/iframe.html?id=lift-validation-computerframe--default&amp;viewMode=story
+   plus the Storybook port (4400) and a one-line how-to-stop-it note.
+
+If Storybook is genuinely unavailable, you still owe a live render via
+some isolated entry — do not substitute grep and call the lift verified.</story_scaffold>
     <backdrop_note>Wrap the rendered story in a decorator that gives it a non-white backdrop — many DS border tokens resolve to near-white (e.g. \`#FAFAFA\`) and will vanish against a pure-white iframe. A simple \`&lt;div className="min-h-screen bg-[hsl(var(--bg-surface-shallow))]"&gt;\` wrapper is enough when the target codebase's tokens are raw HSL channels; if the token is already a full color, omit the \`hsl()\` wrap.</backdrop_note>
     <checks>
+      <check>GREP DOES NOT PROVE PAINT. Confirming a class string exists in the file (or is 'used somewhere' by grep) does NOT verify it resolves to a color in THIS render context — many tokens are app-scoped or theme-gated and fall through to transparent/currentColor. Every visual claim below must come from a LIVE computed style read (getComputedStyle), never from grep.</check>
       <check>No browser console errors or unresolved React errors on first mount.</check>
       <check>For each card/container, computed \`borderColor\` is a real color (not transparent, not \`rgb(0,0,0)\`/near-black). Near-black borders on a light-theme render almost always mean a token fell through to Tailwind's \`currentColor\` default.</check>
-      <check>For each element that Studio gave a \`background\`, computed \`backgroundColor\` is NOT \`rgba(0, 0, 0, 0)\` (transparent) unless the Studio source was also transparent. A transparent background usually means a theme variable was embedded inline as a raw HSL triple and silently invalidated.</check>
+      <check>For each element that Studio gave a \`background\`, computed \`backgroundColor\` is NOT \`rgba(0, 0, 0, 0)\` (transparent) unless the Studio source was also transparent. A transparent background usually means a theme variable was embedded inline as a raw HSL triple and silently invalidated, OR the utility's backing token is app-scoped and undefined in this shell (see app_scoped_token_convention).</check>
       <check>Active/selected states (e.g. tab underline, button hover) render visibly. If the active tab has the same color as an inactive tab, a state token didn't resolve.</check>
     </checks>
   </render_harness>
   <agent_directives>
-    You are lifting an Arcade Studio frame into devrev-web. Read the CONVENTIONS first — they tell you HOW to translate classes of Studio construct (icons, chrome, unmapped components, inline style tokens). Then walk the frame inventory: apply MECHANICAL rewrites directly; for CLOSE-BUT-NOT-IDENTITY entries treat the propDeltas and slotNotes as load-bearing — the surface looks identity-1:1 but a bare rename will not compile or will render wrong, so follow the per-delta note verbatim (wrap the callback, reach for the arbitrary-value class, etc.); write the production shape for STRUCTURAL ones with a brief comment on what changed; and leave // TODO comments with the judgment_note verbatim for JUDGMENT entries. When a mapping includes &lt;prior_art&gt;, OPEN the first example file before writing code — it's a real consumer and will resolve most shape questions faster than slot_notes can. When a mapping lists &lt;dropped_props&gt;, those Studio props have no production equivalent — don't guess a replacement; drop them with the reason as a TODO comment. For each icon under &lt;icons&gt;, resolve via the icon_convention (grep ICON_TYPES). For each &lt;unmapped/&gt; entry, apply the default_mapping_convention — verify the assumed target exists by grep before using it. If &lt;style_attribute_convention&gt; fired, every inline style={{ ... var(--...) ... }} in the frame source must be rewritten per that convention's anchors — leaving them intact will produce black borders or transparent backgrounds at render time. If &lt;render_harness&gt; is present, after writing the lift drop the output under the target path, navigate to the iframe URL, and verify the live computed styles against the directive's checklist before declaring the lift done.
+    You are lifting an Arcade Studio frame into devrev-web. Read the CONVENTIONS first — they tell you HOW to translate classes of Studio construct (icons, chrome, unmapped components, inline style tokens). Then walk the frame inventory: apply MECHANICAL rewrites directly; for CLOSE-BUT-NOT-IDENTITY entries treat the propDeltas and slotNotes as load-bearing — the surface looks identity-1:1 but a bare rename will not compile or will render wrong, so follow the per-delta note verbatim (wrap the callback, reach for the arbitrary-value class, etc.); write the production shape for STRUCTURAL ones with a brief comment on what changed; and leave // TODO comments with the judgment_note verbatim for JUDGMENT entries. When a mapping includes &lt;prior_art&gt;, OPEN the first example file before writing code — it's a real consumer and will resolve most shape questions faster than slot_notes can. When a mapping lists &lt;dropped_props&gt;, those Studio props have no production equivalent — don't guess a replacement; drop them with the reason as a TODO comment. For each icon under &lt;icons&gt;, resolve via the icon_convention (grep ICON_TYPES). For each &lt;unmapped/&gt; entry, apply the default_mapping_convention — verify the assumed target exists by grep before using it. If &lt;style_attribute_convention&gt; fired, every inline style={{ ... var(--...) ... }} in the frame source must be rewritten per that convention's anchors — leaving them intact will produce black borders or transparent backgrounds at render time. If &lt;render_harness&gt; is present, after writing the lift you MUST produce a LIVE render and read computed styles — static grep that a class "resolves" is NOT acceptable verification (a class string can exist and still paint nothing). Follow &lt;story_scaffold&gt; verbatim: it gives the exact globbed+themed directory, the paired story file, the launch command, and the predicted iframe URL — there is no "bare tmp/lift file has no story" excuse. The scratch story the scaffold has you create is an IN-SCOPE verification artifact, not a codebase change — a kickoff rule like "only write the lift file" does NOT forbid it, and you create then delete it as part of verifying. Navigate the iframe URL and verify every check against live getComputedStyle output before declaring the lift done.
   </agent_directives>
 </lift_manifest>
 "
@@ -125,18 +191,84 @@ exports[`renderXml > renders a detail frame 1`] = `
   </grounding>
   <render_harness>
     <target_path>tmp/lift/detail-frame.tsx</target_path>
-    <iframe_url>(target dev server URL pointing at the lifted component — e.g. a Storybook \`iframe.html?id=&lt;story-id&gt;&amp;viewMode=story\` URL; failing that, whatever URL serves the component in isolation)</iframe_url>
+    <iframe_url keep_running="true">http://localhost:4400/iframe.html?id=lift-validation-detailframe--default&amp;viewMode=story</iframe_url>
+    <story_scaffold>SCOPE: the render-validation story below is an EXPECTED, IN-SCOPE
+verification artifact of this lift — NOT a codebase modification. A
+kickoff rule like "only write the lift file" or "don't change anything
+else" does NOT forbid it: rendering IS the lift's verification step, and
+these files are its scaffolding. Do not skip the render and flag it as a
+gap. If a real constraint makes even scratch files impossible, say so
+explicitly and name what blocked it.
+
+THE DELIVERABLE IS A LIVE, CLICKABLE STORYBOOK — not a screenshot, not a
+static check. When you finish, the reviewer opens the iframe URL in their
+own browser and clicks around. So: KEEP the story file and LEAVE STORYBOOK
+RUNNING. Do NOT tear down the server or delete the story at the end.
+
+DO NOT stop at static grep — a class string existing in the file does
+NOT prove it paints (see baseline check below). To get the live render:
+
+1. Co-locate the lifted component AND a paired story in a directory the
+   Storybook glob already scans and the DS ThemeProvider already wraps:
+     libs/agent-platform/feature/agent-studio/src/stories/__lift_validation/
+   Write the component as detailframe.tsx (default export
+   \`DetailFrame\`) and detailframe.stories.tsx beside it.
+
+2. Story file (mirror the existing skills-gallery.stories.tsx in that dir):
+     import { Decorator, Meta } from '@storybook/nextjs';
+     import { MemoryRouter, Route, Routes } from 'react-router-dom';
+     import DetailFrame from './detailframe';
+     const withRouter: Decorator = (Story) =&gt; (
+       &lt;MemoryRouter initialEntries={['/']}&gt;
+         &lt;Routes&gt;&lt;Route path="/*" element={&lt;Story /&gt;} /&gt;&lt;/Routes&gt;
+       &lt;/MemoryRouter&gt;
+     );
+     export default {
+       decorators: [withRouter], tags: ['lift-validation'],
+       title: 'Lift Validation/DetailFrame',
+       parameters: { layout: 'fullscreen' },
+     } as Meta;
+     export const Default = () =&gt; &lt;DetailFrame /&gt;;
+
+3. Launch Storybook (from the devrev-web root): \`pnpm run start:storybook\`.
+   It binds on http://localhost:4400 (NOT 6006). The first cold build
+   takes a few minutes; poll the port before navigating.
+
+   GOTCHA: Storybook bundles ALL stories into one preview — a single
+   pre-existing story with a stale import will fail the whole build and
+   the port never binds. If start fails, read the log for \`ERROR in\`;
+   if the broken file is NOT yours, temporarily move it aside, render,
+   then restore it.
+
+4. Navigate to: http://localhost:4400/iframe.html?id=lift-validation-detailframe--default&amp;viewMode=story
+   Run the checks below against the live computed styles.
+
+5. LEAVE IT RUNNING. Do NOT stop Storybook and do NOT delete the story —
+   the reviewer needs to open the URL themselves. The two things that must
+   survive: the lift file \`tmp/lift/detail-frame.tsx\` and the running Storybook with
+   its story. The ONLY cleanup you do: if you moved a pre-existing broken
+   story aside in step 3 to get the build green, restore it (but if
+   restoring it re-breaks the running build, leave it parked and say so —
+   a working server the reviewer can click beats a tidy story dir).
+
+6. In your summary, give the reviewer the clickable URL on its own line:
+   http://localhost:4400/iframe.html?id=lift-validation-detailframe--default&amp;viewMode=story
+   plus the Storybook port (4400) and a one-line how-to-stop-it note.
+
+If Storybook is genuinely unavailable, you still owe a live render via
+some isolated entry — do not substitute grep and call the lift verified.</story_scaffold>
     <backdrop_note>Wrap the rendered story in a decorator that gives it a non-white backdrop — many DS border tokens resolve to near-white (e.g. \`#FAFAFA\`) and will vanish against a pure-white iframe. A simple \`&lt;div className="min-h-screen bg-[hsl(var(--bg-surface-shallow))]"&gt;\` wrapper is enough when the target codebase's tokens are raw HSL channels; if the token is already a full color, omit the \`hsl()\` wrap.</backdrop_note>
     <checks>
+      <check>GREP DOES NOT PROVE PAINT. Confirming a class string exists in the file (or is 'used somewhere' by grep) does NOT verify it resolves to a color in THIS render context — many tokens are app-scoped or theme-gated and fall through to transparent/currentColor. Every visual claim below must come from a LIVE computed style read (getComputedStyle), never from grep.</check>
       <check>No browser console errors or unresolved React errors on first mount.</check>
       <check>For each card/container, computed \`borderColor\` is a real color (not transparent, not \`rgb(0,0,0)\`/near-black). Near-black borders on a light-theme render almost always mean a token fell through to Tailwind's \`currentColor\` default.</check>
-      <check>For each element that Studio gave a \`background\`, computed \`backgroundColor\` is NOT \`rgba(0, 0, 0, 0)\` (transparent) unless the Studio source was also transparent. A transparent background usually means a theme variable was embedded inline as a raw HSL triple and silently invalidated.</check>
+      <check>For each element that Studio gave a \`background\`, computed \`backgroundColor\` is NOT \`rgba(0, 0, 0, 0)\` (transparent) unless the Studio source was also transparent. A transparent background usually means a theme variable was embedded inline as a raw HSL triple and silently invalidated, OR the utility's backing token is app-scoped and undefined in this shell (see app_scoped_token_convention).</check>
       <check>Active/selected states (e.g. tab underline, button hover) render visibly. If the active tab has the same color as an inactive tab, a state token didn't resolve.</check>
       <check>For each close-but-not-identity mapping (Tabs), confirm the propDeltas' "wrap" / "narrow" guidance was applied verbatim at every call site. A bare setState or identity handler will typecheck-fail or render wrong.</check>
     </checks>
   </render_harness>
   <agent_directives>
-    You are lifting an Arcade Studio frame into devrev-web. Read the CONVENTIONS first — they tell you HOW to translate classes of Studio construct (icons, chrome, unmapped components, inline style tokens). Then walk the frame inventory: apply MECHANICAL rewrites directly; for CLOSE-BUT-NOT-IDENTITY entries treat the propDeltas and slotNotes as load-bearing — the surface looks identity-1:1 but a bare rename will not compile or will render wrong, so follow the per-delta note verbatim (wrap the callback, reach for the arbitrary-value class, etc.); write the production shape for STRUCTURAL ones with a brief comment on what changed; and leave // TODO comments with the judgment_note verbatim for JUDGMENT entries. When a mapping includes &lt;prior_art&gt;, OPEN the first example file before writing code — it's a real consumer and will resolve most shape questions faster than slot_notes can. When a mapping lists &lt;dropped_props&gt;, those Studio props have no production equivalent — don't guess a replacement; drop them with the reason as a TODO comment. For each icon under &lt;icons&gt;, resolve via the icon_convention (grep ICON_TYPES). For each &lt;unmapped/&gt; entry, apply the default_mapping_convention — verify the assumed target exists by grep before using it. If &lt;style_attribute_convention&gt; fired, every inline style={{ ... var(--...) ... }} in the frame source must be rewritten per that convention's anchors — leaving them intact will produce black borders or transparent backgrounds at render time. If &lt;render_harness&gt; is present, after writing the lift drop the output under the target path, navigate to the iframe URL, and verify the live computed styles against the directive's checklist before declaring the lift done.
+    You are lifting an Arcade Studio frame into devrev-web. Read the CONVENTIONS first — they tell you HOW to translate classes of Studio construct (icons, chrome, unmapped components, inline style tokens). Then walk the frame inventory: apply MECHANICAL rewrites directly; for CLOSE-BUT-NOT-IDENTITY entries treat the propDeltas and slotNotes as load-bearing — the surface looks identity-1:1 but a bare rename will not compile or will render wrong, so follow the per-delta note verbatim (wrap the callback, reach for the arbitrary-value class, etc.); write the production shape for STRUCTURAL ones with a brief comment on what changed; and leave // TODO comments with the judgment_note verbatim for JUDGMENT entries. When a mapping includes &lt;prior_art&gt;, OPEN the first example file before writing code — it's a real consumer and will resolve most shape questions faster than slot_notes can. When a mapping lists &lt;dropped_props&gt;, those Studio props have no production equivalent — don't guess a replacement; drop them with the reason as a TODO comment. For each icon under &lt;icons&gt;, resolve via the icon_convention (grep ICON_TYPES). For each &lt;unmapped/&gt; entry, apply the default_mapping_convention — verify the assumed target exists by grep before using it. If &lt;style_attribute_convention&gt; fired, every inline style={{ ... var(--...) ... }} in the frame source must be rewritten per that convention's anchors — leaving them intact will produce black borders or transparent backgrounds at render time. If &lt;render_harness&gt; is present, after writing the lift you MUST produce a LIVE render and read computed styles — static grep that a class "resolves" is NOT acceptable verification (a class string can exist and still paint nothing). Follow &lt;story_scaffold&gt; verbatim: it gives the exact globbed+themed directory, the paired story file, the launch command, and the predicted iframe URL — there is no "bare tmp/lift file has no story" excuse. The scratch story the scaffold has you create is an IN-SCOPE verification artifact, not a codebase change — a kickoff rule like "only write the lift file" does NOT forbid it, and you create then delete it as part of verifying. Navigate the iframe URL and verify every check against live getComputedStyle output before declaring the lift done.
   </agent_directives>
 </lift_manifest>
 "
@@ -198,17 +330,83 @@ exports[`renderXml > renders a list-view frame 1`] = `
   </grounding>
   <render_harness>
     <target_path>tmp/lift/list-frame.tsx</target_path>
-    <iframe_url>(target dev server URL pointing at the lifted component — e.g. a Storybook \`iframe.html?id=&lt;story-id&gt;&amp;viewMode=story\` URL; failing that, whatever URL serves the component in isolation)</iframe_url>
+    <iframe_url keep_running="true">http://localhost:4400/iframe.html?id=lift-validation-listframe--default&amp;viewMode=story</iframe_url>
+    <story_scaffold>SCOPE: the render-validation story below is an EXPECTED, IN-SCOPE
+verification artifact of this lift — NOT a codebase modification. A
+kickoff rule like "only write the lift file" or "don't change anything
+else" does NOT forbid it: rendering IS the lift's verification step, and
+these files are its scaffolding. Do not skip the render and flag it as a
+gap. If a real constraint makes even scratch files impossible, say so
+explicitly and name what blocked it.
+
+THE DELIVERABLE IS A LIVE, CLICKABLE STORYBOOK — not a screenshot, not a
+static check. When you finish, the reviewer opens the iframe URL in their
+own browser and clicks around. So: KEEP the story file and LEAVE STORYBOOK
+RUNNING. Do NOT tear down the server or delete the story at the end.
+
+DO NOT stop at static grep — a class string existing in the file does
+NOT prove it paints (see baseline check below). To get the live render:
+
+1. Co-locate the lifted component AND a paired story in a directory the
+   Storybook glob already scans and the DS ThemeProvider already wraps:
+     libs/agent-platform/feature/agent-studio/src/stories/__lift_validation/
+   Write the component as listframe.tsx (default export
+   \`ListFrame\`) and listframe.stories.tsx beside it.
+
+2. Story file (mirror the existing skills-gallery.stories.tsx in that dir):
+     import { Decorator, Meta } from '@storybook/nextjs';
+     import { MemoryRouter, Route, Routes } from 'react-router-dom';
+     import ListFrame from './listframe';
+     const withRouter: Decorator = (Story) =&gt; (
+       &lt;MemoryRouter initialEntries={['/']}&gt;
+         &lt;Routes&gt;&lt;Route path="/*" element={&lt;Story /&gt;} /&gt;&lt;/Routes&gt;
+       &lt;/MemoryRouter&gt;
+     );
+     export default {
+       decorators: [withRouter], tags: ['lift-validation'],
+       title: 'Lift Validation/ListFrame',
+       parameters: { layout: 'fullscreen' },
+     } as Meta;
+     export const Default = () =&gt; &lt;ListFrame /&gt;;
+
+3. Launch Storybook (from the devrev-web root): \`pnpm run start:storybook\`.
+   It binds on http://localhost:4400 (NOT 6006). The first cold build
+   takes a few minutes; poll the port before navigating.
+
+   GOTCHA: Storybook bundles ALL stories into one preview — a single
+   pre-existing story with a stale import will fail the whole build and
+   the port never binds. If start fails, read the log for \`ERROR in\`;
+   if the broken file is NOT yours, temporarily move it aside, render,
+   then restore it.
+
+4. Navigate to: http://localhost:4400/iframe.html?id=lift-validation-listframe--default&amp;viewMode=story
+   Run the checks below against the live computed styles.
+
+5. LEAVE IT RUNNING. Do NOT stop Storybook and do NOT delete the story —
+   the reviewer needs to open the URL themselves. The two things that must
+   survive: the lift file \`tmp/lift/list-frame.tsx\` and the running Storybook with
+   its story. The ONLY cleanup you do: if you moved a pre-existing broken
+   story aside in step 3 to get the build green, restore it (but if
+   restoring it re-breaks the running build, leave it parked and say so —
+   a working server the reviewer can click beats a tidy story dir).
+
+6. In your summary, give the reviewer the clickable URL on its own line:
+   http://localhost:4400/iframe.html?id=lift-validation-listframe--default&amp;viewMode=story
+   plus the Storybook port (4400) and a one-line how-to-stop-it note.
+
+If Storybook is genuinely unavailable, you still owe a live render via
+some isolated entry — do not substitute grep and call the lift verified.</story_scaffold>
     <backdrop_note>Wrap the rendered story in a decorator that gives it a non-white backdrop — many DS border tokens resolve to near-white (e.g. \`#FAFAFA\`) and will vanish against a pure-white iframe. A simple \`&lt;div className="min-h-screen bg-[hsl(var(--bg-surface-shallow))]"&gt;\` wrapper is enough when the target codebase's tokens are raw HSL channels; if the token is already a full color, omit the \`hsl()\` wrap.</backdrop_note>
     <checks>
+      <check>GREP DOES NOT PROVE PAINT. Confirming a class string exists in the file (or is 'used somewhere' by grep) does NOT verify it resolves to a color in THIS render context — many tokens are app-scoped or theme-gated and fall through to transparent/currentColor. Every visual claim below must come from a LIVE computed style read (getComputedStyle), never from grep.</check>
       <check>No browser console errors or unresolved React errors on first mount.</check>
       <check>For each card/container, computed \`borderColor\` is a real color (not transparent, not \`rgb(0,0,0)\`/near-black). Near-black borders on a light-theme render almost always mean a token fell through to Tailwind's \`currentColor\` default.</check>
-      <check>For each element that Studio gave a \`background\`, computed \`backgroundColor\` is NOT \`rgba(0, 0, 0, 0)\` (transparent) unless the Studio source was also transparent. A transparent background usually means a theme variable was embedded inline as a raw HSL triple and silently invalidated.</check>
+      <check>For each element that Studio gave a \`background\`, computed \`backgroundColor\` is NOT \`rgba(0, 0, 0, 0)\` (transparent) unless the Studio source was also transparent. A transparent background usually means a theme variable was embedded inline as a raw HSL triple and silently invalidated, OR the utility's backing token is app-scoped and undefined in this shell (see app_scoped_token_convention).</check>
       <check>Active/selected states (e.g. tab underline, button hover) render visibly. If the active tab has the same color as an inactive tab, a state token didn't resolve.</check>
     </checks>
   </render_harness>
   <agent_directives>
-    You are lifting an Arcade Studio frame into devrev-web. Read the CONVENTIONS first — they tell you HOW to translate classes of Studio construct (icons, chrome, unmapped components, inline style tokens). Then walk the frame inventory: apply MECHANICAL rewrites directly; for CLOSE-BUT-NOT-IDENTITY entries treat the propDeltas and slotNotes as load-bearing — the surface looks identity-1:1 but a bare rename will not compile or will render wrong, so follow the per-delta note verbatim (wrap the callback, reach for the arbitrary-value class, etc.); write the production shape for STRUCTURAL ones with a brief comment on what changed; and leave // TODO comments with the judgment_note verbatim for JUDGMENT entries. When a mapping includes &lt;prior_art&gt;, OPEN the first example file before writing code — it's a real consumer and will resolve most shape questions faster than slot_notes can. When a mapping lists &lt;dropped_props&gt;, those Studio props have no production equivalent — don't guess a replacement; drop them with the reason as a TODO comment. For each icon under &lt;icons&gt;, resolve via the icon_convention (grep ICON_TYPES). For each &lt;unmapped/&gt; entry, apply the default_mapping_convention — verify the assumed target exists by grep before using it. If &lt;style_attribute_convention&gt; fired, every inline style={{ ... var(--...) ... }} in the frame source must be rewritten per that convention's anchors — leaving them intact will produce black borders or transparent backgrounds at render time. If &lt;render_harness&gt; is present, after writing the lift drop the output under the target path, navigate to the iframe URL, and verify the live computed styles against the directive's checklist before declaring the lift done.
+    You are lifting an Arcade Studio frame into devrev-web. Read the CONVENTIONS first — they tell you HOW to translate classes of Studio construct (icons, chrome, unmapped components, inline style tokens). Then walk the frame inventory: apply MECHANICAL rewrites directly; for CLOSE-BUT-NOT-IDENTITY entries treat the propDeltas and slotNotes as load-bearing — the surface looks identity-1:1 but a bare rename will not compile or will render wrong, so follow the per-delta note verbatim (wrap the callback, reach for the arbitrary-value class, etc.); write the production shape for STRUCTURAL ones with a brief comment on what changed; and leave // TODO comments with the judgment_note verbatim for JUDGMENT entries. When a mapping includes &lt;prior_art&gt;, OPEN the first example file before writing code — it's a real consumer and will resolve most shape questions faster than slot_notes can. When a mapping lists &lt;dropped_props&gt;, those Studio props have no production equivalent — don't guess a replacement; drop them with the reason as a TODO comment. For each icon under &lt;icons&gt;, resolve via the icon_convention (grep ICON_TYPES). For each &lt;unmapped/&gt; entry, apply the default_mapping_convention — verify the assumed target exists by grep before using it. If &lt;style_attribute_convention&gt; fired, every inline style={{ ... var(--...) ... }} in the frame source must be rewritten per that convention's anchors — leaving them intact will produce black borders or transparent backgrounds at render time. If &lt;render_harness&gt; is present, after writing the lift you MUST produce a LIVE render and read computed styles — static grep that a class "resolves" is NOT acceptable verification (a class string can exist and still paint nothing). Follow &lt;story_scaffold&gt; verbatim: it gives the exact globbed+themed directory, the paired story file, the launch command, and the predicted iframe URL — there is no "bare tmp/lift file has no story" excuse. The scratch story the scaffold has you create is an IN-SCOPE verification artifact, not a codebase change — a kickoff rule like "only write the lift file" does NOT forbid it, and you create then delete it as part of verifying. Navigate the iframe URL and verify every check against live getComputedStyle output before declaring the lift done.
   </agent_directives>
 </lift_manifest>
 "
@@ -285,17 +483,83 @@ exports[`renderXml > renders a settings-form frame 1`] = `
   </grounding>
   <render_harness>
     <target_path>tmp/lift/settings-frame.tsx</target_path>
-    <iframe_url>(target dev server URL pointing at the lifted component — e.g. a Storybook \`iframe.html?id=&lt;story-id&gt;&amp;viewMode=story\` URL; failing that, whatever URL serves the component in isolation)</iframe_url>
+    <iframe_url keep_running="true">http://localhost:4400/iframe.html?id=lift-validation-settingsframe--default&amp;viewMode=story</iframe_url>
+    <story_scaffold>SCOPE: the render-validation story below is an EXPECTED, IN-SCOPE
+verification artifact of this lift — NOT a codebase modification. A
+kickoff rule like "only write the lift file" or "don't change anything
+else" does NOT forbid it: rendering IS the lift's verification step, and
+these files are its scaffolding. Do not skip the render and flag it as a
+gap. If a real constraint makes even scratch files impossible, say so
+explicitly and name what blocked it.
+
+THE DELIVERABLE IS A LIVE, CLICKABLE STORYBOOK — not a screenshot, not a
+static check. When you finish, the reviewer opens the iframe URL in their
+own browser and clicks around. So: KEEP the story file and LEAVE STORYBOOK
+RUNNING. Do NOT tear down the server or delete the story at the end.
+
+DO NOT stop at static grep — a class string existing in the file does
+NOT prove it paints (see baseline check below). To get the live render:
+
+1. Co-locate the lifted component AND a paired story in a directory the
+   Storybook glob already scans and the DS ThemeProvider already wraps:
+     libs/agent-platform/feature/agent-studio/src/stories/__lift_validation/
+   Write the component as settingsframe.tsx (default export
+   \`SettingsFrame\`) and settingsframe.stories.tsx beside it.
+
+2. Story file (mirror the existing skills-gallery.stories.tsx in that dir):
+     import { Decorator, Meta } from '@storybook/nextjs';
+     import { MemoryRouter, Route, Routes } from 'react-router-dom';
+     import SettingsFrame from './settingsframe';
+     const withRouter: Decorator = (Story) =&gt; (
+       &lt;MemoryRouter initialEntries={['/']}&gt;
+         &lt;Routes&gt;&lt;Route path="/*" element={&lt;Story /&gt;} /&gt;&lt;/Routes&gt;
+       &lt;/MemoryRouter&gt;
+     );
+     export default {
+       decorators: [withRouter], tags: ['lift-validation'],
+       title: 'Lift Validation/SettingsFrame',
+       parameters: { layout: 'fullscreen' },
+     } as Meta;
+     export const Default = () =&gt; &lt;SettingsFrame /&gt;;
+
+3. Launch Storybook (from the devrev-web root): \`pnpm run start:storybook\`.
+   It binds on http://localhost:4400 (NOT 6006). The first cold build
+   takes a few minutes; poll the port before navigating.
+
+   GOTCHA: Storybook bundles ALL stories into one preview — a single
+   pre-existing story with a stale import will fail the whole build and
+   the port never binds. If start fails, read the log for \`ERROR in\`;
+   if the broken file is NOT yours, temporarily move it aside, render,
+   then restore it.
+
+4. Navigate to: http://localhost:4400/iframe.html?id=lift-validation-settingsframe--default&amp;viewMode=story
+   Run the checks below against the live computed styles.
+
+5. LEAVE IT RUNNING. Do NOT stop Storybook and do NOT delete the story —
+   the reviewer needs to open the URL themselves. The two things that must
+   survive: the lift file \`tmp/lift/settings-frame.tsx\` and the running Storybook with
+   its story. The ONLY cleanup you do: if you moved a pre-existing broken
+   story aside in step 3 to get the build green, restore it (but if
+   restoring it re-breaks the running build, leave it parked and say so —
+   a working server the reviewer can click beats a tidy story dir).
+
+6. In your summary, give the reviewer the clickable URL on its own line:
+   http://localhost:4400/iframe.html?id=lift-validation-settingsframe--default&amp;viewMode=story
+   plus the Storybook port (4400) and a one-line how-to-stop-it note.
+
+If Storybook is genuinely unavailable, you still owe a live render via
+some isolated entry — do not substitute grep and call the lift verified.</story_scaffold>
     <backdrop_note>Wrap the rendered story in a decorator that gives it a non-white backdrop — many DS border tokens resolve to near-white (e.g. \`#FAFAFA\`) and will vanish against a pure-white iframe. A simple \`&lt;div className="min-h-screen bg-[hsl(var(--bg-surface-shallow))]"&gt;\` wrapper is enough when the target codebase's tokens are raw HSL channels; if the token is already a full color, omit the \`hsl()\` wrap.</backdrop_note>
     <checks>
+      <check>GREP DOES NOT PROVE PAINT. Confirming a class string exists in the file (or is 'used somewhere' by grep) does NOT verify it resolves to a color in THIS render context — many tokens are app-scoped or theme-gated and fall through to transparent/currentColor. Every visual claim below must come from a LIVE computed style read (getComputedStyle), never from grep.</check>
       <check>No browser console errors or unresolved React errors on first mount.</check>
       <check>For each card/container, computed \`borderColor\` is a real color (not transparent, not \`rgb(0,0,0)\`/near-black). Near-black borders on a light-theme render almost always mean a token fell through to Tailwind's \`currentColor\` default.</check>
-      <check>For each element that Studio gave a \`background\`, computed \`backgroundColor\` is NOT \`rgba(0, 0, 0, 0)\` (transparent) unless the Studio source was also transparent. A transparent background usually means a theme variable was embedded inline as a raw HSL triple and silently invalidated.</check>
+      <check>For each element that Studio gave a \`background\`, computed \`backgroundColor\` is NOT \`rgba(0, 0, 0, 0)\` (transparent) unless the Studio source was also transparent. A transparent background usually means a theme variable was embedded inline as a raw HSL triple and silently invalidated, OR the utility's backing token is app-scoped and undefined in this shell (see app_scoped_token_convention).</check>
       <check>Active/selected states (e.g. tab underline, button hover) render visibly. If the active tab has the same color as an inactive tab, a state token didn't resolve.</check>
     </checks>
   </render_harness>
   <agent_directives>
-    You are lifting an Arcade Studio frame into devrev-web. Read the CONVENTIONS first — they tell you HOW to translate classes of Studio construct (icons, chrome, unmapped components, inline style tokens). Then walk the frame inventory: apply MECHANICAL rewrites directly; for CLOSE-BUT-NOT-IDENTITY entries treat the propDeltas and slotNotes as load-bearing — the surface looks identity-1:1 but a bare rename will not compile or will render wrong, so follow the per-delta note verbatim (wrap the callback, reach for the arbitrary-value class, etc.); write the production shape for STRUCTURAL ones with a brief comment on what changed; and leave // TODO comments with the judgment_note verbatim for JUDGMENT entries. When a mapping includes &lt;prior_art&gt;, OPEN the first example file before writing code — it's a real consumer and will resolve most shape questions faster than slot_notes can. When a mapping lists &lt;dropped_props&gt;, those Studio props have no production equivalent — don't guess a replacement; drop them with the reason as a TODO comment. For each icon under &lt;icons&gt;, resolve via the icon_convention (grep ICON_TYPES). For each &lt;unmapped/&gt; entry, apply the default_mapping_convention — verify the assumed target exists by grep before using it. If &lt;style_attribute_convention&gt; fired, every inline style={{ ... var(--...) ... }} in the frame source must be rewritten per that convention's anchors — leaving them intact will produce black borders or transparent backgrounds at render time. If &lt;render_harness&gt; is present, after writing the lift drop the output under the target path, navigate to the iframe URL, and verify the live computed styles against the directive's checklist before declaring the lift done.
+    You are lifting an Arcade Studio frame into devrev-web. Read the CONVENTIONS first — they tell you HOW to translate classes of Studio construct (icons, chrome, unmapped components, inline style tokens). Then walk the frame inventory: apply MECHANICAL rewrites directly; for CLOSE-BUT-NOT-IDENTITY entries treat the propDeltas and slotNotes as load-bearing — the surface looks identity-1:1 but a bare rename will not compile or will render wrong, so follow the per-delta note verbatim (wrap the callback, reach for the arbitrary-value class, etc.); write the production shape for STRUCTURAL ones with a brief comment on what changed; and leave // TODO comments with the judgment_note verbatim for JUDGMENT entries. When a mapping includes &lt;prior_art&gt;, OPEN the first example file before writing code — it's a real consumer and will resolve most shape questions faster than slot_notes can. When a mapping lists &lt;dropped_props&gt;, those Studio props have no production equivalent — don't guess a replacement; drop them with the reason as a TODO comment. For each icon under &lt;icons&gt;, resolve via the icon_convention (grep ICON_TYPES). For each &lt;unmapped/&gt; entry, apply the default_mapping_convention — verify the assumed target exists by grep before using it. If &lt;style_attribute_convention&gt; fired, every inline style={{ ... var(--...) ... }} in the frame source must be rewritten per that convention's anchors — leaving them intact will produce black borders or transparent backgrounds at render time. If &lt;render_harness&gt; is present, after writing the lift you MUST produce a LIVE render and read computed styles — static grep that a class "resolves" is NOT acceptable verification (a class string can exist and still paint nothing). Follow &lt;story_scaffold&gt; verbatim: it gives the exact globbed+themed directory, the paired story file, the launch command, and the predicted iframe URL — there is no "bare tmp/lift file has no story" excuse. The scratch story the scaffold has you create is an IN-SCOPE verification artifact, not a codebase change — a kickoff rule like "only write the lift file" does NOT forbid it, and you create then delete it as part of verifying. Navigate the iframe URL and verify every check against live getComputedStyle output before declaring the lift done.
   </agent_directives>
 </lift_manifest>
 "
@@ -320,10 +584,16 @@ exports[`renderXml > renders an ad-hoc frame 1`] = `
       <prop_delta from="variant"/>
       <slot_note>Children are identical. Leading/trailing icons move from raw children to \`start\` / \`end\` slots in production.</slot_note>
     </mapping>
-    <mapping class="mechanical" studio_source="arcade" studio_name="Modal" production_source="@devrev-web-internal/design-system-shared-raw-design-system/components/modal" production_name="Modal">
+    <mapping class="structural" studio_source="arcade" studio_name="Modal" production_source="@devrev-web-internal/design-system-shared-raw-design-system/components/modal" production_name="Modal">
       <prop_delta from="open"/>
       <prop_delta from="onOpenChange"/>
-      <slot_note>Both use compound subcomponents. Rename Modal.Root → Modal.Root, Modal.Content → Modal.Content, etc. API shape matches closely; mechanical.</slot_note>
+      <slot_note>Studio's &lt;Modal.Root open onOpenChange&gt;…&lt;/Modal.Root&gt; collapses to production's top-level &lt;Modal open onOpenChange&gt;…&lt;/Modal&gt; — there is NO production Modal.Root. Move the open/onOpenChange props onto &lt;Modal&gt; itself and DROP the .Root wrapper.</slot_note>
+      <slot_note>Inside, the subcomponents map 1:1: Modal.Content → Modal.Content, Modal.Header → Modal.Header (with Modal.Header.Title / .Actions / .Description), Modal.Body → Modal.Body, Modal.Footer → Modal.Footer. Modal.Close and Modal.Trigger also exist.</slot_note>
+      <slot_note>Prior art (read before writing): libs/commerce/features/your-plan/src/components/switch-plan-confirm-dialog.tsx — &lt;Modal open onOpenChange size="480"&gt;&lt;Modal.Content&gt;&lt;Modal.Header&gt;&lt;Modal.Header.Title/&gt;&lt;/Modal.Header&gt;&lt;Modal.Body/&gt;&lt;Modal.Footer/&gt;&lt;/Modal.Content&gt;&lt;/Modal&gt;.</slot_note>
+      <slot_note>Accessibility: production Modal.Content warns at runtime if there's no Modal.Header.Title (radix DialogTitle requirement). If the Studio source had no header title, add a Modal.Header.Title (visually-hidden if needed) rather than leaving the a11y advisory.</slot_note>
+      <prior_art>
+        <example path="libs/commerce/features/your-plan/src/components/switch-plan-confirm-dialog.tsx" covers="Modal (root) + Content + Header.Title + Body + Footer, no Modal.Root"/>
+      </prior_art>
     </mapping>
   </frame_inventory>
   <scaffolding shape="ad-hoc">
@@ -343,17 +613,83 @@ exports[`renderXml > renders an ad-hoc frame 1`] = `
   </grounding>
   <render_harness>
     <target_path>tmp/lift/adhoc-frame.tsx</target_path>
-    <iframe_url>(target dev server URL pointing at the lifted component — e.g. a Storybook \`iframe.html?id=&lt;story-id&gt;&amp;viewMode=story\` URL; failing that, whatever URL serves the component in isolation)</iframe_url>
+    <iframe_url keep_running="true">http://localhost:4400/iframe.html?id=lift-validation-adhocframe--default&amp;viewMode=story</iframe_url>
+    <story_scaffold>SCOPE: the render-validation story below is an EXPECTED, IN-SCOPE
+verification artifact of this lift — NOT a codebase modification. A
+kickoff rule like "only write the lift file" or "don't change anything
+else" does NOT forbid it: rendering IS the lift's verification step, and
+these files are its scaffolding. Do not skip the render and flag it as a
+gap. If a real constraint makes even scratch files impossible, say so
+explicitly and name what blocked it.
+
+THE DELIVERABLE IS A LIVE, CLICKABLE STORYBOOK — not a screenshot, not a
+static check. When you finish, the reviewer opens the iframe URL in their
+own browser and clicks around. So: KEEP the story file and LEAVE STORYBOOK
+RUNNING. Do NOT tear down the server or delete the story at the end.
+
+DO NOT stop at static grep — a class string existing in the file does
+NOT prove it paints (see baseline check below). To get the live render:
+
+1. Co-locate the lifted component AND a paired story in a directory the
+   Storybook glob already scans and the DS ThemeProvider already wraps:
+     libs/agent-platform/feature/agent-studio/src/stories/__lift_validation/
+   Write the component as adhocframe.tsx (default export
+   \`AdhocFrame\`) and adhocframe.stories.tsx beside it.
+
+2. Story file (mirror the existing skills-gallery.stories.tsx in that dir):
+     import { Decorator, Meta } from '@storybook/nextjs';
+     import { MemoryRouter, Route, Routes } from 'react-router-dom';
+     import AdhocFrame from './adhocframe';
+     const withRouter: Decorator = (Story) =&gt; (
+       &lt;MemoryRouter initialEntries={['/']}&gt;
+         &lt;Routes&gt;&lt;Route path="/*" element={&lt;Story /&gt;} /&gt;&lt;/Routes&gt;
+       &lt;/MemoryRouter&gt;
+     );
+     export default {
+       decorators: [withRouter], tags: ['lift-validation'],
+       title: 'Lift Validation/AdhocFrame',
+       parameters: { layout: 'fullscreen' },
+     } as Meta;
+     export const Default = () =&gt; &lt;AdhocFrame /&gt;;
+
+3. Launch Storybook (from the devrev-web root): \`pnpm run start:storybook\`.
+   It binds on http://localhost:4400 (NOT 6006). The first cold build
+   takes a few minutes; poll the port before navigating.
+
+   GOTCHA: Storybook bundles ALL stories into one preview — a single
+   pre-existing story with a stale import will fail the whole build and
+   the port never binds. If start fails, read the log for \`ERROR in\`;
+   if the broken file is NOT yours, temporarily move it aside, render,
+   then restore it.
+
+4. Navigate to: http://localhost:4400/iframe.html?id=lift-validation-adhocframe--default&amp;viewMode=story
+   Run the checks below against the live computed styles.
+
+5. LEAVE IT RUNNING. Do NOT stop Storybook and do NOT delete the story —
+   the reviewer needs to open the URL themselves. The two things that must
+   survive: the lift file \`tmp/lift/adhoc-frame.tsx\` and the running Storybook with
+   its story. The ONLY cleanup you do: if you moved a pre-existing broken
+   story aside in step 3 to get the build green, restore it (but if
+   restoring it re-breaks the running build, leave it parked and say so —
+   a working server the reviewer can click beats a tidy story dir).
+
+6. In your summary, give the reviewer the clickable URL on its own line:
+   http://localhost:4400/iframe.html?id=lift-validation-adhocframe--default&amp;viewMode=story
+   plus the Storybook port (4400) and a one-line how-to-stop-it note.
+
+If Storybook is genuinely unavailable, you still owe a live render via
+some isolated entry — do not substitute grep and call the lift verified.</story_scaffold>
     <backdrop_note>Wrap the rendered story in a decorator that gives it a non-white backdrop — many DS border tokens resolve to near-white (e.g. \`#FAFAFA\`) and will vanish against a pure-white iframe. A simple \`&lt;div className="min-h-screen bg-[hsl(var(--bg-surface-shallow))]"&gt;\` wrapper is enough when the target codebase's tokens are raw HSL channels; if the token is already a full color, omit the \`hsl()\` wrap.</backdrop_note>
     <checks>
+      <check>GREP DOES NOT PROVE PAINT. Confirming a class string exists in the file (or is 'used somewhere' by grep) does NOT verify it resolves to a color in THIS render context — many tokens are app-scoped or theme-gated and fall through to transparent/currentColor. Every visual claim below must come from a LIVE computed style read (getComputedStyle), never from grep.</check>
       <check>No browser console errors or unresolved React errors on first mount.</check>
       <check>For each card/container, computed \`borderColor\` is a real color (not transparent, not \`rgb(0,0,0)\`/near-black). Near-black borders on a light-theme render almost always mean a token fell through to Tailwind's \`currentColor\` default.</check>
-      <check>For each element that Studio gave a \`background\`, computed \`backgroundColor\` is NOT \`rgba(0, 0, 0, 0)\` (transparent) unless the Studio source was also transparent. A transparent background usually means a theme variable was embedded inline as a raw HSL triple and silently invalidated.</check>
+      <check>For each element that Studio gave a \`background\`, computed \`backgroundColor\` is NOT \`rgba(0, 0, 0, 0)\` (transparent) unless the Studio source was also transparent. A transparent background usually means a theme variable was embedded inline as a raw HSL triple and silently invalidated, OR the utility's backing token is app-scoped and undefined in this shell (see app_scoped_token_convention).</check>
       <check>Active/selected states (e.g. tab underline, button hover) render visibly. If the active tab has the same color as an inactive tab, a state token didn't resolve.</check>
     </checks>
   </render_harness>
   <agent_directives>
-    You are lifting an Arcade Studio frame into devrev-web. Read the CONVENTIONS first — they tell you HOW to translate classes of Studio construct (icons, chrome, unmapped components, inline style tokens). Then walk the frame inventory: apply MECHANICAL rewrites directly; for CLOSE-BUT-NOT-IDENTITY entries treat the propDeltas and slotNotes as load-bearing — the surface looks identity-1:1 but a bare rename will not compile or will render wrong, so follow the per-delta note verbatim (wrap the callback, reach for the arbitrary-value class, etc.); write the production shape for STRUCTURAL ones with a brief comment on what changed; and leave // TODO comments with the judgment_note verbatim for JUDGMENT entries. When a mapping includes &lt;prior_art&gt;, OPEN the first example file before writing code — it's a real consumer and will resolve most shape questions faster than slot_notes can. When a mapping lists &lt;dropped_props&gt;, those Studio props have no production equivalent — don't guess a replacement; drop them with the reason as a TODO comment. For each icon under &lt;icons&gt;, resolve via the icon_convention (grep ICON_TYPES). For each &lt;unmapped/&gt; entry, apply the default_mapping_convention — verify the assumed target exists by grep before using it. If &lt;style_attribute_convention&gt; fired, every inline style={{ ... var(--...) ... }} in the frame source must be rewritten per that convention's anchors — leaving them intact will produce black borders or transparent backgrounds at render time. If &lt;render_harness&gt; is present, after writing the lift drop the output under the target path, navigate to the iframe URL, and verify the live computed styles against the directive's checklist before declaring the lift done.
+    You are lifting an Arcade Studio frame into devrev-web. Read the CONVENTIONS first — they tell you HOW to translate classes of Studio construct (icons, chrome, unmapped components, inline style tokens). Then walk the frame inventory: apply MECHANICAL rewrites directly; for CLOSE-BUT-NOT-IDENTITY entries treat the propDeltas and slotNotes as load-bearing — the surface looks identity-1:1 but a bare rename will not compile or will render wrong, so follow the per-delta note verbatim (wrap the callback, reach for the arbitrary-value class, etc.); write the production shape for STRUCTURAL ones with a brief comment on what changed; and leave // TODO comments with the judgment_note verbatim for JUDGMENT entries. When a mapping includes &lt;prior_art&gt;, OPEN the first example file before writing code — it's a real consumer and will resolve most shape questions faster than slot_notes can. When a mapping lists &lt;dropped_props&gt;, those Studio props have no production equivalent — don't guess a replacement; drop them with the reason as a TODO comment. For each icon under &lt;icons&gt;, resolve via the icon_convention (grep ICON_TYPES). For each &lt;unmapped/&gt; entry, apply the default_mapping_convention — verify the assumed target exists by grep before using it. If &lt;style_attribute_convention&gt; fired, every inline style={{ ... var(--...) ... }} in the frame source must be rewritten per that convention's anchors — leaving them intact will produce black borders or transparent backgrounds at render time. If &lt;render_harness&gt; is present, after writing the lift you MUST produce a LIVE render and read computed styles — static grep that a class "resolves" is NOT acceptable verification (a class string can exist and still paint nothing). Follow &lt;story_scaffold&gt; verbatim: it gives the exact globbed+themed directory, the paired story file, the launch command, and the predicted iframe URL — there is no "bare tmp/lift file has no story" excuse. The scratch story the scaffold has you create is an IN-SCOPE verification artifact, not a codebase change — a kickoff rule like "only write the lift file" does NOT forbid it, and you create then delete it as part of verifying. Navigate the iframe URL and verify every check against live getComputedStyle output before declaring the lift done.
   </agent_directives>
 </lift_manifest>
 "

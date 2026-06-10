@@ -182,13 +182,35 @@ export const PRIMITIVE_MAPPINGS: MappingEntry[] = [
     studio: { source: "arcade", name: "Modal" },
     production: { source: rawDs("Modal"), name: "Modal" },
     propDeltas: [
+      // `open` / `onOpenChange` move from Studio's <Modal.Root> onto the
+      // production <Modal> top-level element (which IS the root).
       { from: "open", to: "open" },
       { from: "onOpenChange", to: "onOpenChange" },
     ],
     slotNotes: [
-      "Both use compound subcomponents. Rename Modal.Root → Modal.Root, Modal.Content → Modal.Content, etc. API shape matches closely; mechanical.",
+      // 2026-06-10: CORRECTED. The prior note said "Rename Modal.Root →
+      // Modal.Root" — but production raw-design-system has NO Modal.Root.
+      // Verified in modal.tsx: `<Modal>` itself wraps radix Dialog Root
+      // (Modal.Root = ModalRoot does NOT exist; the attached subcomponents
+      // are only .Content/.Header/.Body/.Footer/.Close/.Trigger). A live
+      // lift of 01-ticket-delete hit this and had to discover it at render
+      // time. arcade Modal DOES expose .Root (Object.assign in arcade-gen
+      // Modal.tsx), so the shapes differ — this is structural, not a 1:1.
+      "Studio's <Modal.Root open onOpenChange>…</Modal.Root> collapses to production's top-level <Modal open onOpenChange>…</Modal> — there is NO production Modal.Root. Move the open/onOpenChange props onto <Modal> itself and DROP the .Root wrapper.",
+      "Inside, the subcomponents map 1:1: Modal.Content → Modal.Content, Modal.Header → Modal.Header (with Modal.Header.Title / .Actions / .Description), Modal.Body → Modal.Body, Modal.Footer → Modal.Footer. Modal.Close and Modal.Trigger also exist.",
+      "Prior art (read before writing): libs/commerce/features/your-plan/src/components/switch-plan-confirm-dialog.tsx — <Modal open onOpenChange size=\"480\"><Modal.Content><Modal.Header><Modal.Header.Title/></Modal.Header><Modal.Body/><Modal.Footer/></Modal.Content></Modal>.",
+      "Accessibility: production Modal.Content warns at runtime if there's no Modal.Header.Title (radix DialogTitle requirement). If the Studio source had no header title, add a Modal.Header.Title (visually-hidden if needed) rather than leaving the a11y advisory.",
     ],
-    translationClass: "mechanical",
+    // Reclassified mechanical → structural: the Root collapse is a real shape
+    // change a bare rename gets wrong (the live lift proved "Modal.Root →
+    // Modal.Root" produces a non-existent production component).
+    translationClass: "structural",
+    priorArt: [
+      {
+        path: "libs/commerce/features/your-plan/src/components/switch-plan-confirm-dialog.tsx",
+        covers: "Modal (root) + Content + Header.Title + Body + Footer, no Modal.Root",
+      },
+    ],
   },
   {
     studio: { source: "arcade", name: "Popover" },
@@ -262,12 +284,29 @@ export const PRIMITIVE_MAPPINGS: MappingEntry[] = [
       {
         from: "size",
         to: "size",
-        // Production Avatar `size` is a NUMERIC-STRING token enum
-        // ('12'|'16'|'20'|'24'|'28'|'32'|'40'|'48'|'64'|'72'|'96'|...).
-        // Studio's xs|sm|md|lg|xl don't map 1:1 — these are conservative
-        // visual matches picked against the arcade-gen default sizes.
-        // Reviewer should confirm per-call-site against design.
-        valueMap: { xs: "16", sm: "24", md: "32", lg: "40", xl: "64" },
+        // 2026-06-09: CORRECTED after a live lift flagged the old map as
+        // producing invalid props. Two errors in the prior entry:
+        //   1. It listed Studio tokens as xs|sm|md|lg|xl (5). The arcade-gen
+        //      Avatar CVA actually exposes 8: xs|sm|md|default|lg|xl|xxl|xxxl
+        //      (src/components/ui/Avatar/Avatar.tsx).
+        //   2. It claimed production `size` was a numeric-string enum. It's a
+        //      NAMED enum: 'sm'|'base'|'md'|'xl'|'2xl'|'3xl'|'4xl'|'7.5xl'
+        //      (raw-design-system/components/avatar/avatar.types.tsx L16).
+        // Verified px ladders (Studio component.css ↔ devrev-app-theme):
+        //   Studio  xs=16 sm=20 default=20 md=28 lg=36 xl=48 xxl=64 xxxl=96
+        //   Prod    sm=16 base=20         md=28 xl=36 2xl=48 3xl=64 4xl=96 (7.5xl=160, no Studio peer)
+        // The two ladders align 1:1 by pixel size, so this map is exact, not
+        // a conservative guess. (md→md is identity; the renderer strips it.)
+        valueMap: {
+          xs: "sm",
+          sm: "base",
+          default: "base",
+          md: "md",
+          lg: "xl",
+          xl: "2xl",
+          xxl: "3xl",
+          xxxl: "4xl",
+        },
       },
       // Production Avatar takes `name` (not displayName — a 2026-05-12
       // live-lift run hallucinated displayName based on other DS
@@ -279,7 +318,7 @@ export const PRIMITIVE_MAPPINGS: MappingEntry[] = [
       { from: "src", to: "image" },
     ],
     slotNotes: [
-      "Studio's string size tokens (xs|sm|md|lg|xl) map to production numeric-string tokens. Confirm per call site against design — numeric tokens exist at finer granularity than Studio's five-step scale.",
+      "Studio size tokens (xs|sm|md|default|lg|xl|xxl|xxxl) map onto production's NAMED size enum (sm|base|md|xl|2xl|3xl|4xl|7.5xl) — NOT numeric strings. The value_map is matched by pixel size and is exact; production's 7.5xl (160px) has no Studio peer.",
       // Explicit because the hallucination is cheap: downstream LLMs see Avatar and guess 'displayName' from familiar DS APIs. Production uses `name`.
       "Prop names carry unchanged: `name` stays `name` (NOT `displayName`), `image` stays `image`. Production Avatar extracts initials from `name` the same way Studio does.",
     ],
