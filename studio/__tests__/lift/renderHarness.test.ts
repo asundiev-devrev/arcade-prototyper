@@ -18,6 +18,10 @@ function mk(src: string, slug = "f") {
   });
 }
 
+function harnessScaffold(slug = "f") {
+  return buildRenderHarness(mk(`export default () => null;`, slug)).storyScaffold;
+}
+
 describe("buildRenderHarness", () => {
   it("always includes baseline checks (console clean, real border color, non-transparent backgrounds)", () => {
     const harness = buildRenderHarness(mk(`export default () => null;`));
@@ -84,6 +88,18 @@ describe("buildRenderHarness", () => {
     // iframeUrl is now concrete (4400), not a placeholder.
     expect(harness.iframeUrl).toMatch(/localhost:4400/);
     expect(harness.iframeUrl).toMatch(/lift-validation-chatwithcanvas--default/);
+  });
+
+  it("story scaffold declares the render story is in-scope and prescribes cleanup", () => {
+    // Regression guard: a live lift agent skipped the render because the
+    // kickoff said "only write the lift file" and the scaffold told it to
+    // write a story elsewhere — it read that as a scope conflict and flagged
+    // a gap instead of rendering. The scaffold must resolve the conflict
+    // explicitly (story = in-scope verification scratch) and have the agent
+    // delete it after.
+    expect(harnessScaffold()).toMatch(/in-scope|IN-SCOPE/);
+    expect(harnessScaffold()).toMatch(/not a codebase|NOT a codebase|codebase modification/i);
+    expect(harnessScaffold()).toMatch(/delete the scratch|Clean up/i);
   });
 
   it("prefixes a numeric-leading slug so the component name is a valid identifier", () => {

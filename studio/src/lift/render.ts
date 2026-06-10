@@ -153,9 +153,12 @@ export function renderXml(m: Manifest): string {
       `exist and still paint nothing). Follow &lt;story_scaffold&gt; ` +
       `verbatim: it gives the exact globbed+themed directory, the paired ` +
       `story file, the launch command, and the predicted iframe URL — there ` +
-      `is no "bare tmp/lift file has no story" excuse. Navigate the iframe ` +
-      `URL and verify every check against live getComputedStyle output ` +
-      `before declaring the lift done.`,
+      `is no "bare tmp/lift file has no story" excuse. The scratch story the ` +
+      `scaffold has you create is an IN-SCOPE verification artifact, not a ` +
+      `codebase change — a kickoff rule like "only write the lift file" does ` +
+      `NOT forbid it, and you create then delete it as part of verifying. ` +
+      `Navigate the iframe URL and verify every check against live ` +
+      `getComputedStyle output before declaring the lift done.`,
   );
   push(`  </agent_directives>`);
 

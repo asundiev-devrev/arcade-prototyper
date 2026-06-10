@@ -47,7 +47,17 @@ exports[`renderXml > marks n/a composites with equivalent="none" 1`] = `
   <render_harness>
     <target_path>tmp/lift/computer-frame.tsx</target_path>
     <iframe_url>http://localhost:4400/iframe.html?id=lift-validation-computerframe--default&amp;viewMode=story</iframe_url>
-    <story_scaffold>DO NOT stop at static grep — a class string existing in the file does
+    <story_scaffold>SCOPE: the render-validation story below is an EXPECTED, IN-SCOPE
+verification artifact of this lift — NOT a codebase modification. It is
+throwaway scratch (same category as the tmp/lift file itself), deleted
+after you read the computed styles. A kickoff rule like "only write the
+lift file" or "don't change anything else" does NOT forbid it: rendering
+IS the lift's verification step, and these files are its scaffolding. Do
+not skip the render and flag it as a gap — create the scratch story,
+render, read styles, then delete the story. If a real constraint makes
+even scratch files impossible, say so explicitly and name what blocked it.
+
+DO NOT stop at static grep — a class string existing in the file does
 NOT prove it paints (see baseline check below). To get a live render:
 
 1. Co-locate the lifted component AND a paired story in a directory the
@@ -85,6 +95,10 @@ NOT prove it paints (see baseline check below). To get a live render:
 4. Navigate to: http://localhost:4400/iframe.html?id=lift-validation-computerframe--default&amp;viewMode=story
    Then run the checks below against the live computed styles.
 
+5. Clean up: delete the scratch component + story you created in step 1
+   (and restore anything you moved aside in step 3). The lift's only
+   durable output is the tmp/lift file.
+
 If Storybook is genuinely unavailable, you still owe a live render via
 some isolated entry — do not substitute grep and call the lift verified.</story_scaffold>
     <backdrop_note>Wrap the rendered story in a decorator that gives it a non-white backdrop — many DS border tokens resolve to near-white (e.g. \`#FAFAFA\`) and will vanish against a pure-white iframe. A simple \`&lt;div className="min-h-screen bg-[hsl(var(--bg-surface-shallow))]"&gt;\` wrapper is enough when the target codebase's tokens are raw HSL channels; if the token is already a full color, omit the \`hsl()\` wrap.</backdrop_note>
@@ -97,7 +111,7 @@ some isolated entry — do not substitute grep and call the lift verified.</stor
     </checks>
   </render_harness>
   <agent_directives>
-    You are lifting an Arcade Studio frame into devrev-web. Read the CONVENTIONS first — they tell you HOW to translate classes of Studio construct (icons, chrome, unmapped components, inline style tokens). Then walk the frame inventory: apply MECHANICAL rewrites directly; for CLOSE-BUT-NOT-IDENTITY entries treat the propDeltas and slotNotes as load-bearing — the surface looks identity-1:1 but a bare rename will not compile or will render wrong, so follow the per-delta note verbatim (wrap the callback, reach for the arbitrary-value class, etc.); write the production shape for STRUCTURAL ones with a brief comment on what changed; and leave // TODO comments with the judgment_note verbatim for JUDGMENT entries. When a mapping includes &lt;prior_art&gt;, OPEN the first example file before writing code — it's a real consumer and will resolve most shape questions faster than slot_notes can. When a mapping lists &lt;dropped_props&gt;, those Studio props have no production equivalent — don't guess a replacement; drop them with the reason as a TODO comment. For each icon under &lt;icons&gt;, resolve via the icon_convention (grep ICON_TYPES). For each &lt;unmapped/&gt; entry, apply the default_mapping_convention — verify the assumed target exists by grep before using it. If &lt;style_attribute_convention&gt; fired, every inline style={{ ... var(--...) ... }} in the frame source must be rewritten per that convention's anchors — leaving them intact will produce black borders or transparent backgrounds at render time. If &lt;render_harness&gt; is present, after writing the lift you MUST produce a LIVE render and read computed styles — static grep that a class "resolves" is NOT acceptable verification (a class string can exist and still paint nothing). Follow &lt;story_scaffold&gt; verbatim: it gives the exact globbed+themed directory, the paired story file, the launch command, and the predicted iframe URL — there is no "bare tmp/lift file has no story" excuse. Navigate the iframe URL and verify every check against live getComputedStyle output before declaring the lift done.
+    You are lifting an Arcade Studio frame into devrev-web. Read the CONVENTIONS first — they tell you HOW to translate classes of Studio construct (icons, chrome, unmapped components, inline style tokens). Then walk the frame inventory: apply MECHANICAL rewrites directly; for CLOSE-BUT-NOT-IDENTITY entries treat the propDeltas and slotNotes as load-bearing — the surface looks identity-1:1 but a bare rename will not compile or will render wrong, so follow the per-delta note verbatim (wrap the callback, reach for the arbitrary-value class, etc.); write the production shape for STRUCTURAL ones with a brief comment on what changed; and leave // TODO comments with the judgment_note verbatim for JUDGMENT entries. When a mapping includes &lt;prior_art&gt;, OPEN the first example file before writing code — it's a real consumer and will resolve most shape questions faster than slot_notes can. When a mapping lists &lt;dropped_props&gt;, those Studio props have no production equivalent — don't guess a replacement; drop them with the reason as a TODO comment. For each icon under &lt;icons&gt;, resolve via the icon_convention (grep ICON_TYPES). For each &lt;unmapped/&gt; entry, apply the default_mapping_convention — verify the assumed target exists by grep before using it. If &lt;style_attribute_convention&gt; fired, every inline style={{ ... var(--...) ... }} in the frame source must be rewritten per that convention's anchors — leaving them intact will produce black borders or transparent backgrounds at render time. If &lt;render_harness&gt; is present, after writing the lift you MUST produce a LIVE render and read computed styles — static grep that a class "resolves" is NOT acceptable verification (a class string can exist and still paint nothing). Follow &lt;story_scaffold&gt; verbatim: it gives the exact globbed+themed directory, the paired story file, the launch command, and the predicted iframe URL — there is no "bare tmp/lift file has no story" excuse. The scratch story the scaffold has you create is an IN-SCOPE verification artifact, not a codebase change — a kickoff rule like "only write the lift file" does NOT forbid it, and you create then delete it as part of verifying. Navigate the iframe URL and verify every check against live getComputedStyle output before declaring the lift done.
   </agent_directives>
 </lift_manifest>
 "
@@ -167,7 +181,17 @@ exports[`renderXml > renders a detail frame 1`] = `
   <render_harness>
     <target_path>tmp/lift/detail-frame.tsx</target_path>
     <iframe_url>http://localhost:4400/iframe.html?id=lift-validation-detailframe--default&amp;viewMode=story</iframe_url>
-    <story_scaffold>DO NOT stop at static grep — a class string existing in the file does
+    <story_scaffold>SCOPE: the render-validation story below is an EXPECTED, IN-SCOPE
+verification artifact of this lift — NOT a codebase modification. It is
+throwaway scratch (same category as the tmp/lift file itself), deleted
+after you read the computed styles. A kickoff rule like "only write the
+lift file" or "don't change anything else" does NOT forbid it: rendering
+IS the lift's verification step, and these files are its scaffolding. Do
+not skip the render and flag it as a gap — create the scratch story,
+render, read styles, then delete the story. If a real constraint makes
+even scratch files impossible, say so explicitly and name what blocked it.
+
+DO NOT stop at static grep — a class string existing in the file does
 NOT prove it paints (see baseline check below). To get a live render:
 
 1. Co-locate the lifted component AND a paired story in a directory the
@@ -205,6 +229,10 @@ NOT prove it paints (see baseline check below). To get a live render:
 4. Navigate to: http://localhost:4400/iframe.html?id=lift-validation-detailframe--default&amp;viewMode=story
    Then run the checks below against the live computed styles.
 
+5. Clean up: delete the scratch component + story you created in step 1
+   (and restore anything you moved aside in step 3). The lift's only
+   durable output is the tmp/lift file.
+
 If Storybook is genuinely unavailable, you still owe a live render via
 some isolated entry — do not substitute grep and call the lift verified.</story_scaffold>
     <backdrop_note>Wrap the rendered story in a decorator that gives it a non-white backdrop — many DS border tokens resolve to near-white (e.g. \`#FAFAFA\`) and will vanish against a pure-white iframe. A simple \`&lt;div className="min-h-screen bg-[hsl(var(--bg-surface-shallow))]"&gt;\` wrapper is enough when the target codebase's tokens are raw HSL channels; if the token is already a full color, omit the \`hsl()\` wrap.</backdrop_note>
@@ -218,7 +246,7 @@ some isolated entry — do not substitute grep and call the lift verified.</stor
     </checks>
   </render_harness>
   <agent_directives>
-    You are lifting an Arcade Studio frame into devrev-web. Read the CONVENTIONS first — they tell you HOW to translate classes of Studio construct (icons, chrome, unmapped components, inline style tokens). Then walk the frame inventory: apply MECHANICAL rewrites directly; for CLOSE-BUT-NOT-IDENTITY entries treat the propDeltas and slotNotes as load-bearing — the surface looks identity-1:1 but a bare rename will not compile or will render wrong, so follow the per-delta note verbatim (wrap the callback, reach for the arbitrary-value class, etc.); write the production shape for STRUCTURAL ones with a brief comment on what changed; and leave // TODO comments with the judgment_note verbatim for JUDGMENT entries. When a mapping includes &lt;prior_art&gt;, OPEN the first example file before writing code — it's a real consumer and will resolve most shape questions faster than slot_notes can. When a mapping lists &lt;dropped_props&gt;, those Studio props have no production equivalent — don't guess a replacement; drop them with the reason as a TODO comment. For each icon under &lt;icons&gt;, resolve via the icon_convention (grep ICON_TYPES). For each &lt;unmapped/&gt; entry, apply the default_mapping_convention — verify the assumed target exists by grep before using it. If &lt;style_attribute_convention&gt; fired, every inline style={{ ... var(--...) ... }} in the frame source must be rewritten per that convention's anchors — leaving them intact will produce black borders or transparent backgrounds at render time. If &lt;render_harness&gt; is present, after writing the lift you MUST produce a LIVE render and read computed styles — static grep that a class "resolves" is NOT acceptable verification (a class string can exist and still paint nothing). Follow &lt;story_scaffold&gt; verbatim: it gives the exact globbed+themed directory, the paired story file, the launch command, and the predicted iframe URL — there is no "bare tmp/lift file has no story" excuse. Navigate the iframe URL and verify every check against live getComputedStyle output before declaring the lift done.
+    You are lifting an Arcade Studio frame into devrev-web. Read the CONVENTIONS first — they tell you HOW to translate classes of Studio construct (icons, chrome, unmapped components, inline style tokens). Then walk the frame inventory: apply MECHANICAL rewrites directly; for CLOSE-BUT-NOT-IDENTITY entries treat the propDeltas and slotNotes as load-bearing — the surface looks identity-1:1 but a bare rename will not compile or will render wrong, so follow the per-delta note verbatim (wrap the callback, reach for the arbitrary-value class, etc.); write the production shape for STRUCTURAL ones with a brief comment on what changed; and leave // TODO comments with the judgment_note verbatim for JUDGMENT entries. When a mapping includes &lt;prior_art&gt;, OPEN the first example file before writing code — it's a real consumer and will resolve most shape questions faster than slot_notes can. When a mapping lists &lt;dropped_props&gt;, those Studio props have no production equivalent — don't guess a replacement; drop them with the reason as a TODO comment. For each icon under &lt;icons&gt;, resolve via the icon_convention (grep ICON_TYPES). For each &lt;unmapped/&gt; entry, apply the default_mapping_convention — verify the assumed target exists by grep before using it. If &lt;style_attribute_convention&gt; fired, every inline style={{ ... var(--...) ... }} in the frame source must be rewritten per that convention's anchors — leaving them intact will produce black borders or transparent backgrounds at render time. If &lt;render_harness&gt; is present, after writing the lift you MUST produce a LIVE render and read computed styles — static grep that a class "resolves" is NOT acceptable verification (a class string can exist and still paint nothing). Follow &lt;story_scaffold&gt; verbatim: it gives the exact globbed+themed directory, the paired story file, the launch command, and the predicted iframe URL — there is no "bare tmp/lift file has no story" excuse. The scratch story the scaffold has you create is an IN-SCOPE verification artifact, not a codebase change — a kickoff rule like "only write the lift file" does NOT forbid it, and you create then delete it as part of verifying. Navigate the iframe URL and verify every check against live getComputedStyle output before declaring the lift done.
   </agent_directives>
 </lift_manifest>
 "
@@ -281,7 +309,17 @@ exports[`renderXml > renders a list-view frame 1`] = `
   <render_harness>
     <target_path>tmp/lift/list-frame.tsx</target_path>
     <iframe_url>http://localhost:4400/iframe.html?id=lift-validation-listframe--default&amp;viewMode=story</iframe_url>
-    <story_scaffold>DO NOT stop at static grep — a class string existing in the file does
+    <story_scaffold>SCOPE: the render-validation story below is an EXPECTED, IN-SCOPE
+verification artifact of this lift — NOT a codebase modification. It is
+throwaway scratch (same category as the tmp/lift file itself), deleted
+after you read the computed styles. A kickoff rule like "only write the
+lift file" or "don't change anything else" does NOT forbid it: rendering
+IS the lift's verification step, and these files are its scaffolding. Do
+not skip the render and flag it as a gap — create the scratch story,
+render, read styles, then delete the story. If a real constraint makes
+even scratch files impossible, say so explicitly and name what blocked it.
+
+DO NOT stop at static grep — a class string existing in the file does
 NOT prove it paints (see baseline check below). To get a live render:
 
 1. Co-locate the lifted component AND a paired story in a directory the
@@ -319,6 +357,10 @@ NOT prove it paints (see baseline check below). To get a live render:
 4. Navigate to: http://localhost:4400/iframe.html?id=lift-validation-listframe--default&amp;viewMode=story
    Then run the checks below against the live computed styles.
 
+5. Clean up: delete the scratch component + story you created in step 1
+   (and restore anything you moved aside in step 3). The lift's only
+   durable output is the tmp/lift file.
+
 If Storybook is genuinely unavailable, you still owe a live render via
 some isolated entry — do not substitute grep and call the lift verified.</story_scaffold>
     <backdrop_note>Wrap the rendered story in a decorator that gives it a non-white backdrop — many DS border tokens resolve to near-white (e.g. \`#FAFAFA\`) and will vanish against a pure-white iframe. A simple \`&lt;div className="min-h-screen bg-[hsl(var(--bg-surface-shallow))]"&gt;\` wrapper is enough when the target codebase's tokens are raw HSL channels; if the token is already a full color, omit the \`hsl()\` wrap.</backdrop_note>
@@ -331,7 +373,7 @@ some isolated entry — do not substitute grep and call the lift verified.</stor
     </checks>
   </render_harness>
   <agent_directives>
-    You are lifting an Arcade Studio frame into devrev-web. Read the CONVENTIONS first — they tell you HOW to translate classes of Studio construct (icons, chrome, unmapped components, inline style tokens). Then walk the frame inventory: apply MECHANICAL rewrites directly; for CLOSE-BUT-NOT-IDENTITY entries treat the propDeltas and slotNotes as load-bearing — the surface looks identity-1:1 but a bare rename will not compile or will render wrong, so follow the per-delta note verbatim (wrap the callback, reach for the arbitrary-value class, etc.); write the production shape for STRUCTURAL ones with a brief comment on what changed; and leave // TODO comments with the judgment_note verbatim for JUDGMENT entries. When a mapping includes &lt;prior_art&gt;, OPEN the first example file before writing code — it's a real consumer and will resolve most shape questions faster than slot_notes can. When a mapping lists &lt;dropped_props&gt;, those Studio props have no production equivalent — don't guess a replacement; drop them with the reason as a TODO comment. For each icon under &lt;icons&gt;, resolve via the icon_convention (grep ICON_TYPES). For each &lt;unmapped/&gt; entry, apply the default_mapping_convention — verify the assumed target exists by grep before using it. If &lt;style_attribute_convention&gt; fired, every inline style={{ ... var(--...) ... }} in the frame source must be rewritten per that convention's anchors — leaving them intact will produce black borders or transparent backgrounds at render time. If &lt;render_harness&gt; is present, after writing the lift you MUST produce a LIVE render and read computed styles — static grep that a class "resolves" is NOT acceptable verification (a class string can exist and still paint nothing). Follow &lt;story_scaffold&gt; verbatim: it gives the exact globbed+themed directory, the paired story file, the launch command, and the predicted iframe URL — there is no "bare tmp/lift file has no story" excuse. Navigate the iframe URL and verify every check against live getComputedStyle output before declaring the lift done.
+    You are lifting an Arcade Studio frame into devrev-web. Read the CONVENTIONS first — they tell you HOW to translate classes of Studio construct (icons, chrome, unmapped components, inline style tokens). Then walk the frame inventory: apply MECHANICAL rewrites directly; for CLOSE-BUT-NOT-IDENTITY entries treat the propDeltas and slotNotes as load-bearing — the surface looks identity-1:1 but a bare rename will not compile or will render wrong, so follow the per-delta note verbatim (wrap the callback, reach for the arbitrary-value class, etc.); write the production shape for STRUCTURAL ones with a brief comment on what changed; and leave // TODO comments with the judgment_note verbatim for JUDGMENT entries. When a mapping includes &lt;prior_art&gt;, OPEN the first example file before writing code — it's a real consumer and will resolve most shape questions faster than slot_notes can. When a mapping lists &lt;dropped_props&gt;, those Studio props have no production equivalent — don't guess a replacement; drop them with the reason as a TODO comment. For each icon under &lt;icons&gt;, resolve via the icon_convention (grep ICON_TYPES). For each &lt;unmapped/&gt; entry, apply the default_mapping_convention — verify the assumed target exists by grep before using it. If &lt;style_attribute_convention&gt; fired, every inline style={{ ... var(--...) ... }} in the frame source must be rewritten per that convention's anchors — leaving them intact will produce black borders or transparent backgrounds at render time. If &lt;render_harness&gt; is present, after writing the lift you MUST produce a LIVE render and read computed styles — static grep that a class "resolves" is NOT acceptable verification (a class string can exist and still paint nothing). Follow &lt;story_scaffold&gt; verbatim: it gives the exact globbed+themed directory, the paired story file, the launch command, and the predicted iframe URL — there is no "bare tmp/lift file has no story" excuse. The scratch story the scaffold has you create is an IN-SCOPE verification artifact, not a codebase change — a kickoff rule like "only write the lift file" does NOT forbid it, and you create then delete it as part of verifying. Navigate the iframe URL and verify every check against live getComputedStyle output before declaring the lift done.
   </agent_directives>
 </lift_manifest>
 "
@@ -409,7 +451,17 @@ exports[`renderXml > renders a settings-form frame 1`] = `
   <render_harness>
     <target_path>tmp/lift/settings-frame.tsx</target_path>
     <iframe_url>http://localhost:4400/iframe.html?id=lift-validation-settingsframe--default&amp;viewMode=story</iframe_url>
-    <story_scaffold>DO NOT stop at static grep — a class string existing in the file does
+    <story_scaffold>SCOPE: the render-validation story below is an EXPECTED, IN-SCOPE
+verification artifact of this lift — NOT a codebase modification. It is
+throwaway scratch (same category as the tmp/lift file itself), deleted
+after you read the computed styles. A kickoff rule like "only write the
+lift file" or "don't change anything else" does NOT forbid it: rendering
+IS the lift's verification step, and these files are its scaffolding. Do
+not skip the render and flag it as a gap — create the scratch story,
+render, read styles, then delete the story. If a real constraint makes
+even scratch files impossible, say so explicitly and name what blocked it.
+
+DO NOT stop at static grep — a class string existing in the file does
 NOT prove it paints (see baseline check below). To get a live render:
 
 1. Co-locate the lifted component AND a paired story in a directory the
@@ -447,6 +499,10 @@ NOT prove it paints (see baseline check below). To get a live render:
 4. Navigate to: http://localhost:4400/iframe.html?id=lift-validation-settingsframe--default&amp;viewMode=story
    Then run the checks below against the live computed styles.
 
+5. Clean up: delete the scratch component + story you created in step 1
+   (and restore anything you moved aside in step 3). The lift's only
+   durable output is the tmp/lift file.
+
 If Storybook is genuinely unavailable, you still owe a live render via
 some isolated entry — do not substitute grep and call the lift verified.</story_scaffold>
     <backdrop_note>Wrap the rendered story in a decorator that gives it a non-white backdrop — many DS border tokens resolve to near-white (e.g. \`#FAFAFA\`) and will vanish against a pure-white iframe. A simple \`&lt;div className="min-h-screen bg-[hsl(var(--bg-surface-shallow))]"&gt;\` wrapper is enough when the target codebase's tokens are raw HSL channels; if the token is already a full color, omit the \`hsl()\` wrap.</backdrop_note>
@@ -459,7 +515,7 @@ some isolated entry — do not substitute grep and call the lift verified.</stor
     </checks>
   </render_harness>
   <agent_directives>
-    You are lifting an Arcade Studio frame into devrev-web. Read the CONVENTIONS first — they tell you HOW to translate classes of Studio construct (icons, chrome, unmapped components, inline style tokens). Then walk the frame inventory: apply MECHANICAL rewrites directly; for CLOSE-BUT-NOT-IDENTITY entries treat the propDeltas and slotNotes as load-bearing — the surface looks identity-1:1 but a bare rename will not compile or will render wrong, so follow the per-delta note verbatim (wrap the callback, reach for the arbitrary-value class, etc.); write the production shape for STRUCTURAL ones with a brief comment on what changed; and leave // TODO comments with the judgment_note verbatim for JUDGMENT entries. When a mapping includes &lt;prior_art&gt;, OPEN the first example file before writing code — it's a real consumer and will resolve most shape questions faster than slot_notes can. When a mapping lists &lt;dropped_props&gt;, those Studio props have no production equivalent — don't guess a replacement; drop them with the reason as a TODO comment. For each icon under &lt;icons&gt;, resolve via the icon_convention (grep ICON_TYPES). For each &lt;unmapped/&gt; entry, apply the default_mapping_convention — verify the assumed target exists by grep before using it. If &lt;style_attribute_convention&gt; fired, every inline style={{ ... var(--...) ... }} in the frame source must be rewritten per that convention's anchors — leaving them intact will produce black borders or transparent backgrounds at render time. If &lt;render_harness&gt; is present, after writing the lift you MUST produce a LIVE render and read computed styles — static grep that a class "resolves" is NOT acceptable verification (a class string can exist and still paint nothing). Follow &lt;story_scaffold&gt; verbatim: it gives the exact globbed+themed directory, the paired story file, the launch command, and the predicted iframe URL — there is no "bare tmp/lift file has no story" excuse. Navigate the iframe URL and verify every check against live getComputedStyle output before declaring the lift done.
+    You are lifting an Arcade Studio frame into devrev-web. Read the CONVENTIONS first — they tell you HOW to translate classes of Studio construct (icons, chrome, unmapped components, inline style tokens). Then walk the frame inventory: apply MECHANICAL rewrites directly; for CLOSE-BUT-NOT-IDENTITY entries treat the propDeltas and slotNotes as load-bearing — the surface looks identity-1:1 but a bare rename will not compile or will render wrong, so follow the per-delta note verbatim (wrap the callback, reach for the arbitrary-value class, etc.); write the production shape for STRUCTURAL ones with a brief comment on what changed; and leave // TODO comments with the judgment_note verbatim for JUDGMENT entries. When a mapping includes &lt;prior_art&gt;, OPEN the first example file before writing code — it's a real consumer and will resolve most shape questions faster than slot_notes can. When a mapping lists &lt;dropped_props&gt;, those Studio props have no production equivalent — don't guess a replacement; drop them with the reason as a TODO comment. For each icon under &lt;icons&gt;, resolve via the icon_convention (grep ICON_TYPES). For each &lt;unmapped/&gt; entry, apply the default_mapping_convention — verify the assumed target exists by grep before using it. If &lt;style_attribute_convention&gt; fired, every inline style={{ ... var(--...) ... }} in the frame source must be rewritten per that convention's anchors — leaving them intact will produce black borders or transparent backgrounds at render time. If &lt;render_harness&gt; is present, after writing the lift you MUST produce a LIVE render and read computed styles — static grep that a class "resolves" is NOT acceptable verification (a class string can exist and still paint nothing). Follow &lt;story_scaffold&gt; verbatim: it gives the exact globbed+themed directory, the paired story file, the launch command, and the predicted iframe URL — there is no "bare tmp/lift file has no story" excuse. The scratch story the scaffold has you create is an IN-SCOPE verification artifact, not a codebase change — a kickoff rule like "only write the lift file" does NOT forbid it, and you create then delete it as part of verifying. Navigate the iframe URL and verify every check against live getComputedStyle output before declaring the lift done.
   </agent_directives>
 </lift_manifest>
 "
@@ -508,7 +564,17 @@ exports[`renderXml > renders an ad-hoc frame 1`] = `
   <render_harness>
     <target_path>tmp/lift/adhoc-frame.tsx</target_path>
     <iframe_url>http://localhost:4400/iframe.html?id=lift-validation-adhocframe--default&amp;viewMode=story</iframe_url>
-    <story_scaffold>DO NOT stop at static grep — a class string existing in the file does
+    <story_scaffold>SCOPE: the render-validation story below is an EXPECTED, IN-SCOPE
+verification artifact of this lift — NOT a codebase modification. It is
+throwaway scratch (same category as the tmp/lift file itself), deleted
+after you read the computed styles. A kickoff rule like "only write the
+lift file" or "don't change anything else" does NOT forbid it: rendering
+IS the lift's verification step, and these files are its scaffolding. Do
+not skip the render and flag it as a gap — create the scratch story,
+render, read styles, then delete the story. If a real constraint makes
+even scratch files impossible, say so explicitly and name what blocked it.
+
+DO NOT stop at static grep — a class string existing in the file does
 NOT prove it paints (see baseline check below). To get a live render:
 
 1. Co-locate the lifted component AND a paired story in a directory the
@@ -546,6 +612,10 @@ NOT prove it paints (see baseline check below). To get a live render:
 4. Navigate to: http://localhost:4400/iframe.html?id=lift-validation-adhocframe--default&amp;viewMode=story
    Then run the checks below against the live computed styles.
 
+5. Clean up: delete the scratch component + story you created in step 1
+   (and restore anything you moved aside in step 3). The lift's only
+   durable output is the tmp/lift file.
+
 If Storybook is genuinely unavailable, you still owe a live render via
 some isolated entry — do not substitute grep and call the lift verified.</story_scaffold>
     <backdrop_note>Wrap the rendered story in a decorator that gives it a non-white backdrop — many DS border tokens resolve to near-white (e.g. \`#FAFAFA\`) and will vanish against a pure-white iframe. A simple \`&lt;div className="min-h-screen bg-[hsl(var(--bg-surface-shallow))]"&gt;\` wrapper is enough when the target codebase's tokens are raw HSL channels; if the token is already a full color, omit the \`hsl()\` wrap.</backdrop_note>
@@ -558,7 +628,7 @@ some isolated entry — do not substitute grep and call the lift verified.</stor
     </checks>
   </render_harness>
   <agent_directives>
-    You are lifting an Arcade Studio frame into devrev-web. Read the CONVENTIONS first — they tell you HOW to translate classes of Studio construct (icons, chrome, unmapped components, inline style tokens). Then walk the frame inventory: apply MECHANICAL rewrites directly; for CLOSE-BUT-NOT-IDENTITY entries treat the propDeltas and slotNotes as load-bearing — the surface looks identity-1:1 but a bare rename will not compile or will render wrong, so follow the per-delta note verbatim (wrap the callback, reach for the arbitrary-value class, etc.); write the production shape for STRUCTURAL ones with a brief comment on what changed; and leave // TODO comments with the judgment_note verbatim for JUDGMENT entries. When a mapping includes &lt;prior_art&gt;, OPEN the first example file before writing code — it's a real consumer and will resolve most shape questions faster than slot_notes can. When a mapping lists &lt;dropped_props&gt;, those Studio props have no production equivalent — don't guess a replacement; drop them with the reason as a TODO comment. For each icon under &lt;icons&gt;, resolve via the icon_convention (grep ICON_TYPES). For each &lt;unmapped/&gt; entry, apply the default_mapping_convention — verify the assumed target exists by grep before using it. If &lt;style_attribute_convention&gt; fired, every inline style={{ ... var(--...) ... }} in the frame source must be rewritten per that convention's anchors — leaving them intact will produce black borders or transparent backgrounds at render time. If &lt;render_harness&gt; is present, after writing the lift you MUST produce a LIVE render and read computed styles — static grep that a class "resolves" is NOT acceptable verification (a class string can exist and still paint nothing). Follow &lt;story_scaffold&gt; verbatim: it gives the exact globbed+themed directory, the paired story file, the launch command, and the predicted iframe URL — there is no "bare tmp/lift file has no story" excuse. Navigate the iframe URL and verify every check against live getComputedStyle output before declaring the lift done.
+    You are lifting an Arcade Studio frame into devrev-web. Read the CONVENTIONS first — they tell you HOW to translate classes of Studio construct (icons, chrome, unmapped components, inline style tokens). Then walk the frame inventory: apply MECHANICAL rewrites directly; for CLOSE-BUT-NOT-IDENTITY entries treat the propDeltas and slotNotes as load-bearing — the surface looks identity-1:1 but a bare rename will not compile or will render wrong, so follow the per-delta note verbatim (wrap the callback, reach for the arbitrary-value class, etc.); write the production shape for STRUCTURAL ones with a brief comment on what changed; and leave // TODO comments with the judgment_note verbatim for JUDGMENT entries. When a mapping includes &lt;prior_art&gt;, OPEN the first example file before writing code — it's a real consumer and will resolve most shape questions faster than slot_notes can. When a mapping lists &lt;dropped_props&gt;, those Studio props have no production equivalent — don't guess a replacement; drop them with the reason as a TODO comment. For each icon under &lt;icons&gt;, resolve via the icon_convention (grep ICON_TYPES). For each &lt;unmapped/&gt; entry, apply the default_mapping_convention — verify the assumed target exists by grep before using it. If &lt;style_attribute_convention&gt; fired, every inline style={{ ... var(--...) ... }} in the frame source must be rewritten per that convention's anchors — leaving them intact will produce black borders or transparent backgrounds at render time. If &lt;render_harness&gt; is present, after writing the lift you MUST produce a LIVE render and read computed styles — static grep that a class "resolves" is NOT acceptable verification (a class string can exist and still paint nothing). Follow &lt;story_scaffold&gt; verbatim: it gives the exact globbed+themed directory, the paired story file, the launch command, and the predicted iframe URL — there is no "bare tmp/lift file has no story" excuse. The scratch story the scaffold has you create is an IN-SCOPE verification artifact, not a codebase change — a kickoff rule like "only write the lift file" does NOT forbid it, and you create then delete it as part of verifying. Navigate the iframe URL and verify every check against live getComputedStyle output before declaring the lift done.
   </agent_directives>
 </lift_manifest>
 "

@@ -42,6 +42,16 @@ export function buildRenderHarness(m: Manifest): RenderHarness {
   // placeholder", "no Storybook story", "bare tmp/lift/ file") by handing it
   // the exact files, location, launch command, and predicted URL.
   const storyScaffold = [
+    "SCOPE: the render-validation story below is an EXPECTED, IN-SCOPE",
+    "verification artifact of this lift — NOT a codebase modification. It is",
+    "throwaway scratch (same category as the tmp/lift file itself), deleted",
+    "after you read the computed styles. A kickoff rule like \"only write the",
+    "lift file\" or \"don't change anything else\" does NOT forbid it: rendering",
+    "IS the lift's verification step, and these files are its scaffolding. Do",
+    "not skip the render and flag it as a gap — create the scratch story,",
+    "render, read styles, then delete the story. If a real constraint makes",
+    "even scratch files impossible, say so explicitly and name what blocked it.",
+    "",
     "DO NOT stop at static grep — a class string existing in the file does",
     "NOT prove it paints (see baseline check below). To get a live render:",
     "",
@@ -79,6 +89,10 @@ export function buildRenderHarness(m: Manifest): RenderHarness {
     "",
     `4. Navigate to: ${iframeUrl}`,
     "   Then run the checks below against the live computed styles.",
+    "",
+    "5. Clean up: delete the scratch component + story you created in step 1",
+    "   (and restore anything you moved aside in step 3). The lift's only",
+    "   durable output is the tmp/lift file.",
     "",
     "If Storybook is genuinely unavailable, you still owe a live render via",
     "some isolated entry — do not substitute grep and call the lift verified.",
