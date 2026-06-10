@@ -14,6 +14,7 @@ vi.mock("@xorkavi/arcade-gen", () => ({
     Description: ({ children }: any) => React.createElement("p", null, children),
     Body: ({ children }: any) => React.createElement("div", null, children),
     Footer: ({ children }: any) => React.createElement("div", null, children),
+    Close: ({ children }: any) => children,
   },
   Button: ({ children, onClick, disabled, variant }: any) =>
     React.createElement(
@@ -21,6 +22,9 @@ vi.mock("@xorkavi/arcade-gen", () => ({
       { onClick, disabled, "data-variant": variant },
       children,
     ),
+  IconButton: ({ children, onClick, "aria-label": ariaLabel }: any) =>
+    React.createElement("button", { onClick, "aria-label": ariaLabel }, children),
+  CrossSmall: () => React.createElement("span", null, "×"),
 }));
 
 afterEach(() => cleanup());
@@ -46,13 +50,13 @@ describe("ShareModal — Copy Lift Manifest", () => {
     render(<ShareModal open={true} onClose={() => {}} projectSlug="demo" frames={frames} />);
     fireEvent.click(screen.getByRole("radio", { name: /Hello/ }));
     // toBeInTheDocument isn't loaded; use a plain assertion.
-    expect(screen.getByRole("button", { name: /Copy Lift Manifest/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Export to code/i })).toBeTruthy();
   });
 
   it("fetches the XML manifest and writes a paste-ready prompt to clipboard", async () => {
     render(<ShareModal open={true} onClose={() => {}} projectSlug="demo" frames={frames} />);
     fireEvent.click(screen.getByRole("radio", { name: /Hello/ }));
-    fireEvent.click(screen.getByRole("button", { name: /Copy Lift Manifest/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Export to code/i }));
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith("/api/projects/demo/lift/hello.xml");
       const [clipboardArg] = (navigator.clipboard.writeText as any).mock.calls[0];
