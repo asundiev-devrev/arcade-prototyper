@@ -121,7 +121,24 @@ async function build(node, parent, ox, oy) {
     if (!comp) { made.fail++; return; }
     var inst = comp.createInstance();
     parent.appendChild(inst);
+    // Resize to the DOM box. For TEXT-BEARING instances (Bubble, etc.) the
+    // wrapped label can need more height than the DOM box measured, and these
+    // components ship with an AUTO height axis — forcing it FIXED clips the 2nd
+    // line. So when this node carries text, restore the height axis to AUTO if
+    // it started AUTO, letting the box grow to fit. Gating on node.text is
+    // important: components like Menu also hug VERTICAL, but to a huge natural
+    // height (a full dropdown) — they have no text payload, so they stay at the
+    // DOM box and don't balloon. Fixed components (IconButton) stay fixed too.
+    var primMode = inst.primaryAxisSizingMode;
+    var counterMode = inst.counterAxisSizingMode;
+    var layoutMode = inst.layoutMode;
     try { if (node.box.width > 0 && node.box.height > 0) inst.resize(node.box.width, node.box.height); } catch (e) {}
+    if (node.text) {
+      try {
+        if (layoutMode === "VERTICAL" && primMode === "AUTO") inst.primaryAxisSizingMode = "AUTO";
+        else if (layoutMode === "HORIZONTAL" && counterMode === "AUTO") inst.counterAxisSizingMode = "AUTO";
+      } catch (e) {}
+    }
     inst.x = node.box.x - ox; inst.y = node.box.y - oy;
     if (node.text) await setLabel(inst, node.text.propName ? node.text.propName : null, node.text.characters);
     if (node.iconSetKey) { await setIcon(inst, node.iconSetKey, node.iconSetName ? node.iconSetName : ""); made.icons++; }

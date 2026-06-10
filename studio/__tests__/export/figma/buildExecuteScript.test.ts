@@ -85,6 +85,76 @@ describe("buildExecuteScript", () => {
     // the real instance was created (not silently dropped).
     expect(mock.figma.__made.instances).toBe(1);
   });
+
+  // Regression: bubbles clipped their 2nd line because every instance was
+  // force-resized to its DOM box, pinning the AUTO height axis FIXED. The fix
+  // restores the hugging height axis — but ONLY for text-bearing nodes, so
+  // components like Menu (also AUTO-vertical, but to a huge natural height)
+  // don't balloon. This test drives both: a text instance keeps its height
+  // axis AUTO; a no-text instance stays FIXED at the DOM box.
+  it("restores the hugging height axis for text instances but not for text-less ones", async () => {
+    const docWith = (hasText: boolean): SljDocument => ({
+      slj: 1, frame: { slug: "f", project: "p", width: 1280, mode: "light" },
+      root: {
+        kind: "element", tag: "div", box: { x: 0, y: 0, width: 400, height: 400 }, layout: null, style: {},
+        children: [{
+          kind: "component", component: "IconButton", source: "arcade/components",
+          props: {}, box: { x: 0, y: 0, width: 300, height: 36 }, layout: null, children: [],
+          ...(hasText ? { /* text added via plan below */ } : {}),
+        }],
+      },
+    });
+    // The plan builder only attaches text when the component mapping has a
+    // textNode strategy + the node has text; simplest path: inject text via a
+    // mapping that carries it. We instead assert on the runtime directly by
+    // building a plan whose instance has/has-not a `text` field. Reuse the
+    // real builder with a text-bearing child element so firstText() picks it up.
+    const withText: SljDocument = {
+      slj: 1, frame: { slug: "f", project: "p", width: 1280, mode: "light" },
+      root: {
+        kind: "element", tag: "div", box: { x: 0, y: 0, width: 400, height: 400 }, layout: null, style: {},
+        children: [{
+          kind: "component", component: "Labeled", source: "arcade/components",
+          props: {}, box: { x: 0, y: 0, width: 300, height: 36 }, layout: null,
+          children: [{ kind: "element", tag: "text", box: { x: 0, y: 0, width: 50, height: 16 }, layout: null, style: { characters: "Hi there, this wraps" }, children: [] }],
+        }],
+      },
+    };
+    const withoutText: SljDocument = {
+      slj: 1, frame: { slug: "f", project: "p", width: 1280, mode: "light" },
+      root: {
+        kind: "element", tag: "div", box: { x: 0, y: 0, width: 400, height: 400 }, layout: null, style: {},
+        children: [{
+          kind: "component", component: "Plain", source: "arcade/components",
+          props: {}, box: { x: 0, y: 0, width: 300, height: 36 }, layout: null, children: [],
+        }],
+      },
+    };
+    const labeledMapping: FigmaComponentMapping = {
+      arcadeGen: "Labeled", status: "mapped", generation: "0.3",
+      figma: { componentSetKey: "AL_KEY", setName: "AutoLayout" },
+      variants: [], textNode: { strategy: "lowest-depth" }, note: "",
+    };
+    const plainMapping: FigmaComponentMapping = {
+      arcadeGen: "Plain", status: "mapped", generation: "0.3",
+      figma: { componentSetKey: "AL_KEY", setName: "AutoLayout" }, variants: [], note: "",
+    };
+    const autoMaps: ExecutePlanMaps = {
+      findComponentMapping: (n) => (n === "Labeled" ? labeledMapping : n === "Plain" ? plainMapping : null),
+      findIconSetKey: () => null, findIconSetName: () => null, tokenNameToVariableKey: () => null,
+    };
+
+    // text-bearing → height axis restored to AUTO
+    const m1 = makeFigmaMock({ setKey: "AL_KEY", setName: "AutoLayout", layoutMode: "VERTICAL", primaryAxisSizingMode: "AUTO", counterAxisSizingMode: "FIXED" });
+    await runRuntime(buildExecuteScript(withText, autoMaps), m1.figma);
+    expect(m1.lastInstance.primaryAxisSizingMode).toBe("AUTO");
+
+    // text-less → height axis stays FIXED (set by resize), never restored
+    const m2 = makeFigmaMock({ setKey: "AL_KEY", setName: "AutoLayout", layoutMode: "VERTICAL", primaryAxisSizingMode: "AUTO", counterAxisSizingMode: "FIXED" });
+    await runRuntime(buildExecuteScript(withoutText, autoMaps), m2.figma);
+    expect(m2.lastInstance.primaryAxisSizingMode).toBe("FIXED");
+    void docWith;
+  });
 });
 
 /** Run the sandbox script (top-level await + return) against a figma mock. */
@@ -94,10 +164,18 @@ function runRuntime(code: string, figma: any): Promise<any> {
   return fn(figma);
 }
 
-/** Minimal Figma plugin-API mock — enough for the wrapper-sizing path + one
- *  IconButton instance. Records the created pageRoot + a made summary. */
-function makeFigmaMock() {
+/** Minimal Figma plugin-API mock. Defaults serve the wrapper-sizing path with a
+ *  single "Icon Button" set. Pass opts to model an auto-layout instance (its
+ *  sizing modes + layout) so the hug-height rule can be exercised. */
+function makeFigmaMock(opts?: {
+  setKey?: string; setName?: string;
+  layoutMode?: "VERTICAL" | "HORIZONTAL" | "NONE";
+  primaryAxisSizingMode?: "AUTO" | "FIXED";
+  counterAxisSizingMode?: "AUTO" | "FIXED";
+}) {
   const made = { instances: 0 };
+  const setKey = opts?.setKey ?? "IB_KEY";
+  const setName = opts?.setName ?? "Icon Button";
   function frameNode() {
     return {
       type: "FRAME", name: "", fills: [] as any[], clipsContent: true,
@@ -110,16 +188,26 @@ function makeFigmaMock() {
       resize(w: number, h: number) { this.width = w; this.height = h; },
     };
   }
-  const instanceProto = {
-    type: "INSTANCE", x: 0, y: 0, width: 0, height: 0, componentProperties: {},
-    resize(w: number, h: number) { (this as any).width = w; (this as any).height = h; },
-    findAll() { return []; }, findOne() { return null; },
-  };
+  // a single shared TEXT node so setLabel finds something to write to.
+  function makeInstance() {
+    const textNode = { type: "TEXT", name: "label", width: 50, height: 16, fontName: { family: "Inter", style: "Regular" }, characters: "" };
+    return {
+      type: "INSTANCE", x: 0, y: 0, width: 0, height: 0, componentProperties: {},
+      layoutMode: opts?.layoutMode ?? "NONE",
+      primaryAxisSizingMode: opts?.primaryAxisSizingMode ?? "FIXED",
+      counterAxisSizingMode: opts?.counterAxisSizingMode ?? "FIXED",
+      // resize pins BOTH axes FIXED, like the real API.
+      resize(w: number, h: number) { (this as any).width = w; (this as any).height = h; (this as any).primaryAxisSizingMode = "FIXED"; (this as any).counterAxisSizingMode = "FIXED"; },
+      findAll(pred: (n: any) => boolean) { return [textNode].filter(pred); },
+      findOne() { return null; },
+    };
+  }
+  let lastInstance: any = null;
   const comp = {
     type: "COMPONENT", variantProperties: {},
-    createInstance() { made.instances++; return Object.assign({}, instanceProto); },
+    createInstance() { made.instances++; lastInstance = makeInstance(); return lastInstance; },
   };
-  const componentSet = { type: "COMPONENT_SET", key: "IB_KEY", name: "Icon Button", children: [comp], defaultVariant: comp };
+  const componentSet = { type: "COMPONENT_SET", key: setKey, name: setName, children: [comp], defaultVariant: comp };
 
   let pageRoot: any = null;
   let createCount = 0;
@@ -141,6 +229,6 @@ function makeFigmaMock() {
     async importComponentSetByKeyAsync() { throw new Error("no remote import"); },
     async loadFontAsync() {},
   };
-  // pageRoot is assigned during the run; read it after via the getter.
-  return { figma, get pageRoot() { return pageRoot; } };
+  // pageRoot + lastInstance are assigned during the run; read after via getters.
+  return { figma, get pageRoot() { return pageRoot; }, get lastInstance() { return lastInstance; } };
 }
