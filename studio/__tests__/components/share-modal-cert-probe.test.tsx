@@ -29,6 +29,10 @@ vi.mock("../../src/lib/telemetry/renderer", () => ({
   captureError: () => {},
 }));
 
+vi.mock("../../src/lib/serializeFrameForExport", () => ({
+  serializeFrameForExport: vi.fn(async () => ({ slj: 1, frame: { slug: "hero", project: "test-proj", width: 1440, mode: "light" }, root: {} })),
+}));
+
 import { ShareModal } from "../../src/components/shell/ShareModal";
 
 const FRAMES = [{ slug: "hero", name: "Hero", size: 1440 }] as any;
@@ -151,29 +155,35 @@ describe("ShareModal SSL probe", () => {
   });
 });
 
-describe("ShareModal — Copy Figma Export", () => {
-  it("copies an export prompt to the clipboard and fires the figma_export_copied event", async () => {
-    const writeText = vi.fn(async () => {});
-    vi.stubGlobal("navigator", { clipboard: { writeText } } as any);
+describe("ShareModal — Export to Figma (one-click)", () => {
+  it("serializes the frame, posts to /to-figma, shows success, and fires figma_export_run", async () => {
+    const fetchSpy = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
+      const u = String(input);
+      if (u.endsWith("/to-figma") && init?.method === "POST") {
+        return new Response(JSON.stringify({ ok: true, summary: { made: { instances: 7, fail: 0 } } }), { status: 200 });
+      }
+      return new Response("{}", { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchSpy);
 
-    render(
-      <ShareModal open={true} onClose={() => {}} projectSlug="test-proj" frames={FRAMES} />,
-    );
-
+    render(<ShareModal open={true} onClose={() => {}} projectSlug="test-proj" frames={FRAMES} />);
     fireEvent.click(screen.getByDisplayValue("hero"));
     fireEvent.click(screen.getByText("Export to Figma"));
 
-    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
-    const payload = writeText.mock.calls[0][0] as string;
-    // the prompt references the selected frame + the hybrid-export steps
-    expect(payload).toContain("hero");
-    expect(payload).toMatch(/Export this Arcade Studio frame to Figma/i);
-    expect(payload).toMatch(/swap/i);
+    await waitFor(() => expect(screen.getByText(/Opened in Figma/i)).toBeTruthy());
+    expect(fetchSpy.mock.calls.some(([u, i]) => String(u).endsWith("/to-figma") && (i as any)?.method === "POST")).toBe(true);
+    expect(trackSpy).toHaveBeenCalledWith({ name: "figma_export_run", props: expect.objectContaining({ outcome: "ok" }) });
+  });
 
-    // the button flips to its copied affirmation
-    await waitFor(() => expect(screen.getByText("Copied!")).toBeTruthy());
-
-    // the telemetry event fired with the frame count
-    expect(trackSpy).toHaveBeenCalledWith({ name: "figma_export_copied", props: { frame_count: 1 } });
+  it("shows an actionable message when the plugin isn't connected (no_bridge)", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo, init?: RequestInit) => {
+      if (String(input).endsWith("/to-figma")) return new Response(JSON.stringify({ error: { code: "no_bridge", message: "no plugin" } }), { status: 409 });
+      return new Response("{}", { status: 200 });
+    }));
+    render(<ShareModal open={true} onClose={() => {}} projectSlug="test-proj" frames={FRAMES} />);
+    fireEvent.click(screen.getByDisplayValue("hero"));
+    fireEvent.click(screen.getByText("Export to Figma"));
+    await waitFor(() => expect(screen.getByText(/Open the Arcade export plugin in Figma/i)).toBeTruthy());
+    expect(trackSpy).toHaveBeenCalledWith({ name: "figma_export_run", props: expect.objectContaining({ outcome: "no_bridge" }) });
   });
 });

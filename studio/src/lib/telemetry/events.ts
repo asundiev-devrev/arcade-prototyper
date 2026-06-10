@@ -28,8 +28,8 @@ export type TelemetryEvent =
   | { name: "share_succeeded"; props: { duration_ms: number; frame_count: number } }
   | { name: "share_failed"; props: { duration_ms: number; error_kind: ShareErrorKind } }
   | { name: "share_url_copied"; props: Record<string, never> }
-  // --- figma export (renderer click) ---
-  | { name: "figma_export_copied"; props: { frame_count: number } }
+  // --- figma export (renderer) ---
+  | { name: "figma_export_run"; props: { outcome: "ok" | "no_bridge" | "error"; instance_count?: number; failure_count?: number } }
   // --- settings (renderer) ---
   | { name: "settings_opened"; props: { tab: string } };
 
@@ -40,6 +40,6 @@ export const EVENT_NAMES = [
   "prompt_submitted", "frame_generated", "generation_failed", "generation_cancelled",
   "frame_runtime_error",
   "share_opened", "share_started", "share_succeeded", "share_failed", "share_url_copied",
-  "figma_export_copied",
+  "figma_export_run",
   "settings_opened",
 ] as const satisfies readonly TelemetryEventName[];
