@@ -26,7 +26,7 @@ const START_FONT = 50;
 const FLOOR_FONT = 20;
 const STEP_FONT = 6;
 const LINE_HEIGHT = 1.2;
-const PLACEHOLDER = "What we're building today?";
+const PLACEHOLDER = "What do you want to build today?";
 
 export interface HeroPromptSubmitArgs {
   prompt: string;
