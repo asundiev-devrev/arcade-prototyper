@@ -85,19 +85,23 @@ export function assetFileName(nodeId: string, ext: string): string {
 
 /**
  * Version token for the asset cache (A2). The get-nodes dict carries a
- * top-level `lastModified` (preferred) and `version` (fallback) — both bump
- * whenever the Figma file changes ANYWHERE, which over-invalidates slightly but
- * is always safe: a changed file = a new cache folder, never a stale asset.
+ * top-level `version` (a strictly-monotonic id that bumps on EVERY change) and
+ * `lastModified` (an ISO timestamp, second-granular). We prefer `version`: it
+ * has no granularity collision, whereas two saves within the same wall-clock
+ * second share a `lastModified` and would alias to the same cache folder (could
+ * serve a pre-edit asset). `lastModified` is the fallback when `version` is
+ * absent. Both bump on any file change, so a changed file = a new cache folder,
+ * never a stale asset.
  *
  * Returns null when BOTH are absent — the caller then DISABLES the cache for
  * that import (export fresh) rather than risk serving a wrong cached asset.
  */
 export function assetCacheVersion(dict: any): string | null {
-  const lm = dict?.lastModified;
-  if (typeof lm === "string" && lm) return lm;
   const v = dict?.version;
   if (typeof v === "string" && v) return v;
   if (typeof v === "number") return String(v);
+  const lm = dict?.lastModified;
+  if (typeof lm === "string" && lm) return lm;
   return null;
 }
 

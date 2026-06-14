@@ -746,10 +746,12 @@ describe("emitKitFrame", () => {
   const BADGE_KEY = "367267f81839b123664fa8b1304b16ee6006b37a";
   const TAG_KEY = "3067f69c7f76e7c43815148ce843654e36081bed";
 
-  it("C2: Badge Variant=Emphasis → variant=\"info\"; Neutral → variant=\"neutral\"", () => {
+  it("C2: Badge Variant=Emphasis → variant=\"emphasis\"; Neutral → variant=\"neutral\"", () => {
+    // The kit Badge union is exactly emphasis|neutral; Emphasis must map to the
+    // real "emphasis" (NOT "info", a dead value that renders neutral).
     const emph = keyInstance("bg1", BADGE_KEY, "Counter", { Variant: "Emphasis" }, ["12"]);
     const re = emitKitFrame(frameNode("0", [emph.node]), { ...emph.maps, assetFiles: new Map() });
-    expect(re.source).toContain('<Badge variant="info">12</Badge>');
+    expect(re.source).toContain('<Badge variant="emphasis">12</Badge>');
 
     const neu = keyInstance("bg2", BADGE_KEY, "Counter", { Variant: "Neutral" }, ["3"]);
     const rn = emitKitFrame(frameNode("0", [neu.node]), { ...neu.maps, assetFiles: new Map() });
@@ -948,22 +950,27 @@ describe("kit mappings hygiene", () => {
       .toEqual([]);
   });
 
-  it("C2 reverse maps invert the curated componentEntries valueMaps (Figma→kit)", () => {
-    // The C2 maps must be the exact reverse of the canonical valueMaps recorded
-    // in src/export/figma/componentEntries.ts (kit value → Figma option). If the
-    // curated table changes, this catches the desync rather than silently
-    // dropping a state. Badge "Counter" Variant: {neutral:Neutral, info:Emphasis,
-    // intelligence:Emphasis} — both info & intelligence map FROM Emphasis, so the
-    // reverse picks one (info); we assert the round-trip for the canonical keys.
-    expect(BADGE_VARIANT_MAP.Neutral).toBe("neutral");
-    expect(BADGE_VARIANT_MAP.Emphasis).toBe("info");
-    // Tag "Chip" Type (intent) + Appearance — full round-trip.
-    const tagIntent = { neutral: "Neutral", alert: "Alert", success: "Success", warning: "Warning", info: "Info", intelligence: "Intelligence" };
-    for (const [kit, figma] of Object.entries(tagIntent)) {
-      expect(TAG_INTENT_MAP[figma]).toBe(kit);
+  it("C2 variant maps emit only values in the kit's real prop unions (Figma→kit)", () => {
+    // The authority for the IMPORT direction is the kit's actual prop union, not
+    // the export-direction componentEntries table (which can lag the kit). Every
+    // value these maps emit MUST be a member of the kit union, else the component
+    // silently renders its default/fallback (the Badge variant="info" bug: "info"
+    // is not in BadgeVariant, so the kit fell through to neutral).
+    const BADGE_VARIANTS = new Set(["emphasis", "neutral"]); // kit BadgeVariant
+    for (const [figma, kit] of Object.entries(BADGE_VARIANT_MAP)) {
+      expect(BADGE_VARIANTS.has(kit), `Badge ${figma}→${kit} not in kit BadgeVariant`).toBe(true);
     }
-    expect(TAG_APPEARANCE_MAP.Tinted).toBe("tinted");
-    expect(TAG_APPEARANCE_MAP.Filled).toBe("filled");
+    expect(BADGE_VARIANT_MAP.Emphasis).toBe("emphasis");
+    expect(BADGE_VARIANT_MAP.Neutral).toBe("neutral");
+
+    const TAG_INTENTS = new Set(["neutral", "alert", "success", "warning", "info", "intelligence"]);
+    for (const [figma, kit] of Object.entries(TAG_INTENT_MAP)) {
+      expect(TAG_INTENTS.has(kit), `Tag ${figma}→${kit} not in kit TagIntent`).toBe(true);
+    }
+    const TAG_APPEARANCES = new Set(["tinted", "filled"]);
+    for (const [figma, kit] of Object.entries(TAG_APPEARANCE_MAP)) {
+      expect(TAG_APPEARANCES.has(kit), `Tag appearance ${figma}→${kit} not in kit TagAppearance`).toBe(true);
+    }
   });
 
   it("a deliberately bad mapping value would be caught (negative control)", () => {

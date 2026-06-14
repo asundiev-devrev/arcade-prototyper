@@ -318,16 +318,18 @@ describe("formatCoverage (C3)", () => {
 });
 
 describe("assetCacheVersion", () => {
-  it("prefers lastModified", () => {
-    expect(assetCacheVersion({ lastModified: "X", version: "1" })).toBe("X");
+  it("prefers the monotonic version over lastModified (no same-second collision)", () => {
+    // version bumps on every change with no granularity collision; lastModified
+    // is second-granular and two saves in one second would alias to one folder.
+    expect(assetCacheVersion({ lastModified: "X", version: "1" })).toBe("1");
+    expect(assetCacheVersion({ lastModified: "X", version: 7 })).toBe("7");
   });
-  it("falls back to version (string or number)", () => {
-    expect(assetCacheVersion({ version: "42" })).toBe("42");
-    expect(assetCacheVersion({ version: 42 })).toBe("42");
+  it("falls back to lastModified when version is absent", () => {
+    expect(assetCacheVersion({ lastModified: "2026-06-14T00:00:00Z" })).toBe("2026-06-14T00:00:00Z");
   });
   it("returns null when neither is present (disables the cache)", () => {
     expect(assetCacheVersion({})).toBeNull();
-    expect(assetCacheVersion({ lastModified: "" })).toBeNull();
+    expect(assetCacheVersion({ lastModified: "", version: "" })).toBeNull();
     expect(assetCacheVersion(null)).toBeNull();
   });
 });

@@ -167,12 +167,16 @@ export const SIZE_VALUE_MAP: Record<string, string> = {
 // arcade-gen prop value). An unmapped Figma value falls through to the
 // component's own default — never a wrong/throwing prop.
 
-/** Badge `Variant` axis → arcade-gen Badge `variant`. 0.3 "Counter" only
- *  exposes Emphasis / Neutral; the kit's BadgeVariant is neutral | info |
- *  intelligence. Emphasis maps to the kit's emphatic `info`. */
+/** Badge `Variant` axis → arcade-gen Badge `variant`. The kit's BadgeVariant
+ *  is exactly `"emphasis" | "neutral"` (verified against the installed barrel;
+ *  the runtime is `variant === "emphasis" ? emphatic : neutral`). 0.3 "Counter"
+ *  exposes Emphasis / Neutral — a direct 1:1 map. An earlier table emitted
+ *  Emphasis → "info" (a value the kit Badge has NO case for), which silently
+ *  rendered every emphatic counter as neutral while an unset variant rendered
+ *  emphatic (kit default) — fully inverted. Map onto the real union. */
 export const BADGE_VARIANT_MAP: Record<string, string> = {
   Neutral: "neutral",
-  Emphasis: "info",
+  Emphasis: "emphasis",
 };
 
 /** Tag (0.3 "Chip") `Type` axis → arcade-gen Tag `intent`. */
