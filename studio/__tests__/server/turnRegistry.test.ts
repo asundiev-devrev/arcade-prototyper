@@ -4,6 +4,7 @@ import {
   startTurn,
   subscribe,
   getTurn,
+  hasActiveTurn,
   __resetTurnRegistryForTests,
 } from "../../server/turnRegistry";
 import type { StudioEvent } from "../../src/lib/streamJson";
@@ -90,5 +91,32 @@ describe("turn registry", () => {
     startTurn("b", { prompt: "b1", run: ({ end }) => end({ ok: false, error: "x" }) });
     expect(getTurn("a")?.status).toBe("done");
     expect(getTurn("b")?.status).toBe("error");
+  });
+});
+
+describe("hasActiveTurn", () => {
+  beforeEach(() => __resetTurnRegistryForTests());
+
+  it("is false when no turns exist", () => {
+    expect(hasActiveTurn()).toBe(false);
+  });
+
+  it("is true while a turn is running", () => {
+    startTurn("proj-a", { prompt: "x", run: () => { /* never ends */ } });
+    expect(hasActiveTurn()).toBe(true);
+  });
+
+  it("is false after the only turn finishes", () => {
+    startTurn("proj-a", {
+      prompt: "x",
+      run: ({ end }) => { end({ ok: true }); },
+    });
+    expect(hasActiveTurn()).toBe(false);
+  });
+
+  it("is true if ANY of several turns is running", () => {
+    startTurn("proj-done", { prompt: "x", run: ({ end }) => end({ ok: true }) });
+    startTurn("proj-live", { prompt: "y", run: () => { /* never ends */ } });
+    expect(hasActiveTurn()).toBe(true);
   });
 });
