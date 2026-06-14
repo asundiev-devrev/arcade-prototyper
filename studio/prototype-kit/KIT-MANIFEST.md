@@ -6,10 +6,72 @@
 > template source; if a prop signature here is enough, skip the extra
 > `Read`. Open the `.tsx` only when you need the full rendered markup.
 
-_25 entries — 22 composites, 3 templates._
+_34 entries — 30 composites, 4 templates._
 
 ## Templates
 
+
+## BuilderPage (template)
+_source: `templates/BuilderPage.tsx`_
+
+BuilderPage — agent / entity builder page template.
+
+Matches the Figma Agent creation page (AS-Deploy, node 7546:37777): a desktop
+window with a left nav, a tab bar (Build / Test / Deploy / Observe), and a
+centered editor column containing the entity title + description, a
+"Capabilities" group of CapabilitySections, and an Instructions block.
+
+  ┌──────────────────────────────────────────────────────────┐
+  │  TitleBar                                                  │
+  ├───────────┬──────────────────────────────────────────────┤
+  │           │  Build  Test  Deploy  Observe        (tabs)   │
+  │  sidebar  ├──────────────────────────────────────────────┤
+  │           │        CX Agent                               │
+  │           │        You are a customer experience agent…   │
+  │           │        Capabilities                            │
+  │           │        ◇ Knowledge              + Add          │
+  │           │        ◇ Skills, Tools & …      + Add          │
+  │           │        ◇ Guardrails             + Add          │
+  │           │        Instructions                            │
+  └───────────┴──────────────────────────────────────────────┘
+
+Why a template: encodes the relationship between AppShell + the centered
+720px editor column + capability sections, so a generated agent-builder frame
+is declarative slots, not hand-rolled chrome.
+
+Intentional opinions:
+- Composes `AppShell` (title bar + sidebar) and renders a single centered
+  max-w-[720px] editor column — the Figma agent editor content width.
+- `tabs` is an optional row above the editor (Build/Test/Deploy/Observe).
+  Pass a composed `Tabs` or leave undefined.
+- `title` + `subtitle` are the agent heading; `children` is the editor body
+  (typically a "Capabilities" heading + `CapabilitySection` stack + an
+  Instructions block).
+
+Slots:
+- `sidebar` — a composed NavSidebar (required).
+- `actions` — TitleBar trailing cluster.
+- `tabs` — optional tab row above the editor column.
+- `title` / `subtitle` — agent name + role description.
+- `children` — editor body (CapabilitySection stack, Instructions, etc.).
+
+
+```ts
+type BuilderPageProps = {
+  sidebar: ReactNode;
+  actions?: ReactNode;
+  tabs?: ReactNode;
+  title?: ReactNode;
+  subtitle?: ReactNode;
+  children: ReactNode;
+}
+```
+
+**When NOT to use this:**
+- Do NOT widen the editor column past 720px — the builder is a
+  centered reading-width column, not a full-bleed page.
+- Do NOT use this for a settings/list page. Use `SettingsPage`
+  or `VistaPage`. This template is for the capability-editor layout.
 
 ## ComputerPage (template)
 _source: `templates/ComputerPage.tsx`_
@@ -372,6 +434,103 @@ Compound:
 
 **Compound:** `CanvasPanel.Step`, `CanvasPanel.Group`, `CanvasPanel.GroupAddButton`, `CanvasPanel.Item`, `CanvasPanel.FileIcon`, `CanvasPanel.FolderIcon`, `CanvasPanel.StatusDot`, `CanvasPanel.CountBadge`
 
+## CapabilitySection (composite)
+_source: `composites/CapabilitySection.tsx`_
+
+CapabilitySection — a titled capability group on the agent builder page.
+
+Matches the Figma "Capabilities" sections on the Agent creation page
+(AS-Deploy, node 7546:37777): each capability (Knowledge, Skills/Tools/
+Workflows, Guardrails) is a group with a leading icon, a title, a one-line
+description, a trailing "+ Add" action, and a stack of added-item rows below.
+
+  ◇  Knowledge                                        + Add
+     Add sources your agent can reference.
+  ┌──────────────────────────────────────────────┐
+  │  Knowledge Base                                 │  ← rows (children)
+  │  Knowledge Base                                 │
+  └──────────────────────────────────────────────┘
+
+Intentional opinions:
+- The header row is `icon + (title over description)` on the left and the
+  `action` slot (typically a tertiary "+ Add" Button) on the right.
+- `children` are the added rows, stacked at 8px. When empty, nothing renders
+  below the header (the empty state is just the header + Add).
+- This is a section *within* an agent builder body — it does not own page
+  chrome. Stack several inside a centered column (see BuilderPage usage).
+
+Slots:
+- `icon` — leading capability icon (arcade icon element).
+- `title` — capability name.
+- `description` — one-line explanation.
+- `action` — trailing action (e.g. `<Button variant="tertiary">+ Add</Button>`).
+- `children` — added-item rows (optional).
+
+
+```ts
+type CapabilitySectionProps = {
+  icon?: ReactNode;
+  title: ReactNode;
+  description?: ReactNode;
+  action?: ReactNode;
+  children?: ReactNode;
+}
+```
+
+**When NOT to use this:**
+- Do NOT hardcode a "+ Add" button with your own styling. Pass
+  the arcade `<Button variant="tertiary">` as `action`.
+- Do NOT wrap the whole section in a card border — sections are
+  separated by spacing in the builder column, not boxed (the rows may be
+  boxed by the caller, the section is not).
+
+**Tokens commonly needed inside this composite's user slot:**
+
+| Element | Token |
+| Title text | `--fg-neutral-prominent` |
+| Description text | `--fg-neutral-subtle` |
+| Icon | `--fg-neutral-medium` |
+
+## CardGrid (composite)
+_source: `composites/CardGrid.tsx`_
+
+CardGrid — responsive multi-column grid of EntityCards.
+
+Matches the Figma "Connectors" / Skills card grid: a 2-column grid of
+EntityCards with an 8px gutter (Figma GRID container, ~662px content width =
+two 327px cards + gap).
+
+  ┌─────────────┐  ┌─────────────┐
+  │  Gmail      │  │  Outlook     │
+  └─────────────┘  └─────────────┘
+  ┌─────────────┐  ┌─────────────┐
+  │  Salesforce │  │  HubSpot     │
+  └─────────────┘  └─────────────┘
+
+Intentional opinions:
+- Default 2 columns (the DevRev settings/connectors default). `columns={1}`
+  for a single-column list; `columns={3}` for a dense gallery (Skills "From
+  your org" uses 3). No other values — a different shape is a different grid.
+- 8px gutter, matching the Figma grid gap. Cards stretch to fill their cell.
+
+Slots:
+- `children` — EntityCard instances (or any cards).
+- `columns` — 1 | 2 | 3 (default 2).
+
+
+```ts
+type CardGridProps = {
+  columns?: 1 | 2 | 3;
+  children: ReactNode;
+}
+```
+
+**When NOT to use this:**
+- Do NOT set your own `grid-cols-*` or `gap-*` on a wrapper —
+  pass `columns` instead. The gutter is fixed to the Figma value.
+- Do NOT put section titles inside the grid. Render the title
+  above the grid (the grid is cards only).
+
 ## ChatEmptyState (composite)
 _source: `composites/ChatEmptyState.tsx`_
 
@@ -695,6 +854,267 @@ Usage tips:
 
 **Compound:** `ComputerSidebar.Group`, `ComputerSidebar.Item`, `ComputerSidebar.User`, `ComputerSidebar.Banner`
 
+## DetailModal (composite)
+_source: `composites/DetailModal.tsx`_
+
+DetailModal — entity detail dialog with a hero banner and a primary action.
+
+Matches the Figma Skill detail modal (C-Skills, node 6685:88323): a 720px
+dialog whose top is a full-bleed hero banner (image/illustration) with the
+close button overlaid, followed by a body of title + byline, a primary
+action button, a divider, and a details section.
+
+  ┌──────────────────────────────────────────────┐
+  │                                            ✕   │
+  │            ░░ hero banner ░░                    │  ← hero (full-bleed)
+  ├──────────────────────────────────────────────┤
+  │  List outstanding items                        │  ← title
+  │  Extracts all open action items…               │  ← byline
+  │  [ + Add to Computer ]                          │  ← primary action
+  │  ──────────────────────────────────────────    │  ← divider
+  │  Instructions                                   │  ← details section
+  │  You are a professional copywriter…            │
+  └──────────────────────────────────────────────┘
+
+Intentional opinions:
+- Wraps the production `Modal` at `size="md"` (720px). The hero is rendered
+  ABOVE `Modal.Header`'s usual title slot — title lives in the body so it can
+  sit under the hero, matching Figma.
+- The hero is full-bleed (no body padding) and clips to the modal's top
+  corners. Pass an `<img>`, gradient div, or illustration as `hero`.
+- `action` is a single primary button slot (e.g. "+ Add to Computer"). Pass
+  the arcade `<Button>` directly so the caller controls label/icon/onClick.
+- The body sections are separated by a `Separator`; `children` is the detail
+  content (e.g. an "Instructions" block).
+
+Slots:
+- `hero` — full-bleed banner node (image/gradient/illustration).
+- `title` / `byline` — entity name + supporting line.
+- `action` — primary button node.
+- `children` — details section below the divider.
+
+
+```ts
+type DetailModalProps = {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hero?: ReactNode;
+  title: ReactNode;
+  byline?: ReactNode;
+  action?: ReactNode;
+  children?: ReactNode;
+}
+```
+
+**When NOT to use this:**
+- Do NOT pad or border the `hero` — it is full-bleed and
+  corner-clipped by the composite.
+- Do NOT pass `title` to `Modal.Header`. This composite renders
+  the title in the body, under the hero (Figma layout).
+- Do NOT add your own close button over the hero — the modal's
+  `Modal.Close` is rendered for you, overlaid top-right.
+
+**Tokens commonly needed inside this composite's user slot:**
+
+| Element | Token |
+| Title text | `--fg-neutral-prominent` |
+| Byline text | `--fg-neutral-subtle` |
+| Hero fallback bg | `--surface-shallow` |
+
+## EntityCard (composite)
+_source: `composites/EntityCard.tsx`_
+
+EntityCard — a single selectable/listed entity row-card.
+
+Matches the Figma "Cards" instance used across Connectors, Skills, and
+Agent capability grids: a 72px-tall bordered card with a leading brand/icon
+slot, a title (+ optional description), and an optional trailing status Tag
+or action.
+
+  ┌──────────────────────────────────────────────┐
+  │  [icon]  Gmail                    Connected    │   ← single-line (Connectors)
+  └──────────────────────────────────────────────┘
+  ┌──────────────────────────────────────────────┐
+  │  [icon]  Prospect Research                     │   ← two-line (Skills)
+  │          Pulls a company brief before any…     │
+  └──────────────────────────────────────────────┘
+
+Intentional opinions:
+- Bordered, radius `rounded-square` (Figma card radius ≈ 8.5px), 16px padding,
+  12px gap between the icon slot and the text — the Figma "Cards" geometry.
+- The leading `icon` renders in a fixed 40px slot. Pass a brand favicon
+  (`<img>`) or an arcade icon element.
+- `status` renders a trailing arcade `Tag` — pass the node directly
+  (e.g. `<Tag intent="success">Connected</Tag>`). For a clickable card use
+  `trailing` for a button/chevron instead.
+- `description` is optional; when present the card grows to fit two lines and
+  the text column stacks title over description.
+
+Slots:
+- `icon` — leading brand/icon element (40px slot).
+- `title` — entity name.
+- `description` — optional supporting line (truncated to 2 lines).
+- `status` / `trailing` — optional trailing node (Tag, button, chevron).
+
+
+```ts
+type EntityCardProps = {
+  icon?: ReactNode;
+  title: ReactNode;
+  description?: ReactNode;
+  status?: ReactNode;
+  trailing?: ReactNode;
+}
+```
+
+**When NOT to use this:**
+- Do NOT add your own `border`/`rounded`/`p-4` — the card is a
+  bordered, padded, rounded container already.
+- Do NOT hardcode a green pill for "Connected". Use the arcade
+  `<Tag intent="success">` as the `status` node.
+- Do NOT wrap many EntityCards in your own flex/grid — use the
+  `CardGrid` composite, which owns the 2-column layout and gutters.
+
+**Tokens commonly needed inside this composite's user slot:**
+
+| Element | Token |
+| Card surface | `--surface-overlay` |
+| Card border | `--stroke-neutral-subtle` |
+| Title text | `--fg-neutral-prominent` |
+| Description text | `--fg-neutral-subtle` |
+
+## FormField (composite)
+_source: `composites/FormField.tsx`_
+
+FormField — labelled form control wrapper with required marker.
+
+Matches the Figma "Text Field" label row, which renders the field label
+followed by a red required asterisk (e.g. "Server name*"). The production
+arcade `Input`/`TextArea` render their own label but do NOT render the
+required `*`, so this wrapper owns the label row and the control is passed
+label-less as `children`.
+
+  Server name *           ← label + red asterisk (this composite)
+  [ My great MCP        ] ← children (arcade Input/TextArea/Select, no label prop)
+
+Intentional opinions:
+- Label uses the exact arcade input label style
+  (`text-system-small-medium`, `--component-input-fg-label`) so a FormField
+  label is indistinguishable from a native arcade `Input label=…`.
+- The required `*` uses `--fg-alert-prominent` and a leading space, matching
+  Figma's "Placeholder*" label glyph.
+- 6px gap between label and control (Figma label→content spacing).
+
+Slots:
+- `label` — field label text.
+- `required` — when true, appends a red `*`.
+- `children` — the control. Pass arcade controls WITHOUT their own `label`
+  prop (this wrapper renders the label).
+
+
+```ts
+type FormFieldProps = {
+  label: string;
+  required?: boolean;
+  children: ReactNode;
+}
+```
+
+**When NOT to use this:**
+- Do NOT also set `label=` on the arcade `Input` inside — you'll
+  get two labels. The control passed as `children` must be label-less.
+- Do NOT hardcode a red hex for the asterisk. Use this wrapper;
+  it applies `--fg-alert-prominent`.
+
+**Tokens commonly needed inside this composite's user slot:**
+
+| Element | Token |
+| Label text | `--component-input-fg-label` |
+| Required asterisk | `--fg-alert-prominent` |
+
+## FormModal (composite)
+_source: `composites/FormModal.tsx`_
+
+FormModal — DevRev "create / configure" dialog composite.
+
+Matches the Figma "Modal Content" used across Connectors (Create custom MCP),
+Settings, and Agent Studio: a centered 720px dialog with an icon-chip header,
+a title + supporting subtitle, a vertical stack of form fields, and a
+right-aligned footer with a Cancel + a primary submit button.
+
+  ┌─────────────────────────────────────────────────────────┐
+  │  ◇  Create custom MCP                                 ✕   │  ← header
+  │     Point Computer to your own MCP server to make…       │     (icon chip + title + subtitle)
+  ├─────────────────────────────────────────────────────────┤
+  │   [ Server name*            ]                            │  ← body
+  │   [ Server URL*             ]                            │     (field children, 24px gap)
+  │   [ Server description      ]                            │
+  ├─────────────────────────────────────────────────────────┤
+  │                                    Cancel    [ Next ]    │  ← footer (right-aligned)
+  └─────────────────────────────────────────────────────────┘
+
+Intentional opinions:
+- Wraps the production `Modal` compound (Root/Content/Header/Body/Footer) —
+  never re-implements the overlay, shadow, blur, or animation. `size="md"`
+  is the DevRev default (720px) and matches Figma exactly.
+- The optional `icon` renders in a rounded chip to the left of the title,
+  matching the "Icon" 45px chip in Figma. Pass an arcade icon element.
+- Footer buttons are right-aligned. `submitLabel` is a primary button;
+  Cancel is tertiary. Submit fires `onSubmit`; Cancel/✕/overlay fire
+  `onOpenChange(false)`.
+- Body children are the caller's form fields (arcade `<Input>`, `<TextArea>`,
+  `<Select>` — each already renders its own label/required/helper). They are
+  stacked vertically at 24px gap, the Figma "Content" gap.
+
+Slots:
+- `title` — dialog heading (string or node).
+- `subtitle` — supporting line under the title (optional).
+- `icon` — leading icon element for the header chip (optional).
+- `children` — form fields, stacked at 24px gap.
+- `submitLabel` / `cancelLabel` — footer button text.
+
+
+```ts
+type FormModalProps = {
+  /** Controlled open state. */
+  open?: boolean;
+  /** Fired when the dialog requests to close (✕, Cancel, overlay, Esc). */
+  onOpenChange?: (open: boolean) => void;
+  /** Dialog heading. */
+  title: ReactNode;
+  /** Supporting line under the title. */
+  subtitle?: ReactNode;
+  /** Leading icon element rendered in the header chip. */
+  icon?: ReactNode;
+  /** Form fields — stacked vertically at 24px gap. */
+  children: ReactNode;
+  /** Primary footer button label. */
+  submitLabel?: string;
+  /** Secondary footer button label. */
+  cancelLabel?: string;
+  /** Fired when the primary button is clicked. */
+  onSubmit?: () => void;
+}
+```
+
+**When NOT to use this:**
+- Do NOT wrap children in your own `<form>` with custom gap or
+  padding — the composite owns the 24px field stack and the body padding.
+- Do NOT re-create a Cancel/submit row inside `children`. Use
+  the `onSubmit` + `submitLabel` props; the footer is built for you.
+- Do NOT pass `text-title-*` classes to `title`/`subtitle`.
+  The composite renders the title at the modal's body-large-bold and the
+  subtitle at the modal description token.
+- Do NOT hardcode the 720px width or the shadow — that lives in
+  `Modal.Content size="md"`. Changing size is a different composite.
+
+**Tokens commonly needed inside this composite's user slot:**
+
+| Element | Token |
+| Header icon chip bg | `--surface-shallow` |
+| Subtitle text | `--component-modal-desc-fg` (via Modal.Description) |
+| Body field gap | 24px (Figma "Content" itemSpacing) |
+
 ## FrameLink (composite)
 _source: `composites/FrameLink.tsx`_
 
@@ -782,6 +1202,59 @@ type MarkdownProps = {
 }
 ```
 
+## MobileFrame (composite)
+_source: `composites/MobileFrame.tsx`_
+
+MobileFrame — iOS device chrome wrapper for mobile prototype screens.
+
+Matches the Figma "iPhone" frame chrome used across Computer chat and
+Onboarding (Home Indicator + Status bar - iPhone): a 402×874 device viewport
+with a status bar (time left, signal/wifi/battery right) at top and a home
+indicator pill at the bottom. The screen content sits between them.
+
+  ┌─────────────────────────────┐
+  │  9:41          ▴ 􀙇 􀛨         │  ← status bar
+  │                             │
+  │        children             │  ← screen content
+  │                             │
+  │          ────                │  ← home indicator
+  └─────────────────────────────┘
+
+Intentional opinions:
+- Fixed 402px width (iPhone 16 Pro logical width), the Figma mobile artboard.
+- Status bar is 54px tall with the canonical "9:41" time; the right cluster
+  is the signal/wifi/battery glyph row. Time/glyphs are presentational.
+- Home indicator is the 5px rounded bar in a 34px safe-area band.
+- Content area scrolls between the two bars; pass a full mobile screen as
+  `children`. Use `bg` to set the screen background (default surface-overlay).
+
+Slots:
+- `children` — the mobile screen content.
+- `time` — status-bar time (default "9:41").
+- `bg` — screen background token class (default `bg-(--surface-overlay)`).
+
+
+```ts
+type MobileFrameProps = {
+  children: ReactNode;
+  time?: string;
+  bg?: string;
+}
+```
+
+**When NOT to use this:**
+- Do NOT draw your own status bar or home indicator inside
+  `children` — this wrapper renders both. Double chrome is the #1 mobile bug.
+- Do NOT set a custom width — the frame is fixed to the iPhone
+  logical width so multiple mobile frames line up.
+
+**Tokens commonly needed inside this composite's user slot:**
+
+| Element | Token |
+| Status bar text/glyphs | `--fg-neutral-prominent` |
+| Home indicator | `--fg-neutral-prominent` |
+| Screen bg | `--surface-overlay` (override via `bg`) |
+
 ## NavSidebar (composite)
 _source: `composites/NavSidebar.tsx`_
 
@@ -793,27 +1266,31 @@ the TitleBar in AppShell, so it does NOT render traffic lights or a
 collapse button — those are the TitleBar's responsibility.
 
 Intentional opinions:
-- Three zones: brand header (top, workspace dropdown only), nav body
-  (scrollable middle), Computer footer (bottom).
+- Three zones: a header (top), nav body (scrollable middle), footer (bottom).
+  Two header/footer chrome variants are supported — Computer (brand chip +
+  "computer ⌘.") and Settings (← back + title, "Agent Studio" footer).
 - Uses --surface-shallow so the sidebar reads as a muted panel against
   the body's --surface-overlay.
 - Nav body accepts NavSidebar.Section and NavSidebar.Item children —
   same compound pattern as arcade.Sidebar for familiarity.
-- Active item is solid --bg-info-prominent with --fg-info-on-prominent,
-  matching the DevRev production app (not a muted gray pill).
-- Section titles render at text-system-medium with --fg-neutral-prominent
-  — NOT uppercase/caption. Uppercase was a carry-over from an older
-  design and doesn't match the current sidebar spec.
+- Active item is a SUBTLE neutral selection (--control-bg-neutral-subtle-active
+  + --fg-neutral-prominent), matching the Settings sidenav — NOT a solid blue
+  pill. (The blue --bg-info-prominent was drift; corrected 2026-06.)
+- Section titles render small/subtle (text-caption + --fg-neutral-subtle),
+  matching the Figma "Personal"/"Organization" group labels.
 
 Slots:
-- `workspace` (optional) — label in the brand header (e.g. "DevRev").
-  When omitted or falsy, the brand header is NOT rendered — use this when
-  the Figma frame does not show a workspace header.
-- `showFooter` (optional, default true) — when false, the Computer footer
-  is not rendered. Use this when Figma shows a different footer pattern.
+- `workspace` (optional) — label in the default brand header (e.g. "DevRev").
+  When omitted or falsy, the brand header is NOT rendered.
+- `header` (optional) — custom header node replacing the brand header. Use
+  `<NavSidebar.BackHeader title="Settings" />` for the Settings chrome.
+- `showFooter` (optional, default true) — when false, the Computer footer is
+  not rendered.
+- `footer` (optional) — custom footer node replacing the Computer footer. Use
+  `<NavSidebar.AppFooter />` for the "Agent Studio" Settings chrome.
 - `children` — NavSidebar.Section / NavSidebar.Item tree.
 
-**Compound:** `NavSidebar.Section`, `NavSidebar.Item`
+**Compound:** `NavSidebar.Section`, `NavSidebar.Item`, `NavSidebar.BackHeader`, `NavSidebar.AppFooter`
 
 **When NOT to use this:**
 - When Figma shows a chat-style sidebar (with "New Chat" and chat history), use `ComputerSidebar` instead. That composite owns its own window chrome; do NOT also render a `TitleBar` alongside it.
@@ -868,6 +1345,67 @@ When you author content inside the `children` slot, prefer these tokens:
 | Subtle borders          | `--stroke-neutral-subtle`          |
 | Card surface (rare — usually a SettingsCard) | `--surface-overlay`   |
 | Inline code background  | `--bg-neutral-subtle`              |
+
+## PickerModal (composite)
+_source: `composites/PickerModal.tsx`_
+
+PickerModal — tabbed picker dialog with a search field and a card grid body.
+
+Matches the Figma "Agent Capabilities" modal (AS-MCP, node 9793:16889): a
+large dialog whose header row carries a tab bar on the left and a search
+field on the right, and whose body is a grid of selectable EntityCards that
+swaps per active tab.
+
+  ┌──────────────────────────────────────────────────────────┐
+  │  Agent Capabilities                                    ✕   │
+  │  Skills  Workflows  Tools  Connectors      [ 🔍 Search ]   │  ← tab bar + search
+  ├──────────────────────────────────────────────────────────┤
+  │  ┌────────┐ ┌────────┐ ┌────────┐                         │
+  │  │ card   │ │ card   │ │ card   │   ← CardGrid per tab     │
+  │  └────────┘ └────────┘ └────────┘                         │
+  └──────────────────────────────────────────────────────────┘
+
+Intentional opinions:
+- Wraps the production `Modal` at `size="lg"` (the wide picker; Figma content
+  ≈ 881px). Header holds the title; the tab+search row sits in the body top.
+- Uses the production `Tabs` compound for the tab bar and a search `Input`
+  with a leading magnifier — never a hand-rolled tab strip.
+- `tabs` is an array of `{ value, label, content }`. The body renders the
+  active tab's `content` (typically a `CardGrid` of `EntityCard`s).
+- Search is presentational by default (the prototype rarely needs live
+  filtering); pass `onSearch` to wire it.
+
+Slots:
+- `title` / `subtitle` — header text.
+- `tabs` — `{ value, label, content }[]`. First tab is active by default.
+- `searchPlaceholder` — search field placeholder.
+
+
+```ts
+type PickerModalProps = {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  title: ReactNode;
+  subtitle?: ReactNode;
+  tabs: PickerTab[];
+  searchPlaceholder?: string;
+  onSearch?: (value: string) => void;
+}
+```
+
+**When NOT to use this:**
+- Do NOT hand-roll the tab strip with styled divs. Pass `tabs`;
+  the composite renders the production `Tabs`.
+- Do NOT put a footer with Cancel/Save here unless the design
+  has one — the capability picker commits on card click. Use `FormModal` for
+  form dialogs with a footer.
+- Do NOT set `size` — the picker is always the wide `lg` modal.
+
+**Tokens commonly needed inside this composite's user slot:**
+
+| Element | Token |
+| Search field | arcade `Input` defaults |
+| Tab bar | arcade `Tabs` defaults |
 
 ## SettingsCard (composite)
 _source: `composites/SettingsCard.tsx`_

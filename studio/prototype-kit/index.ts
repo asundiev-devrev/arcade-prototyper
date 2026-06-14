@@ -29,8 +29,17 @@ export type { StageTone, PriorityValue } from "./composites/VistaRow.js";
 export { VistaFilterPill } from "./composites/VistaFilterPill.js";
 export { VistaPagination } from "./composites/VistaPagination.js";
 export { FrameLink } from "./composites/FrameLink.js";
+export { FormModal } from "./composites/FormModal.js";
+export { FormField } from "./composites/FormField.js";
+export { EntityCard } from "./composites/EntityCard.js";
+export { CardGrid } from "./composites/CardGrid.js";
+export { PickerModal } from "./composites/PickerModal.js";
+export { DetailModal } from "./composites/DetailModal.js";
+export { CapabilitySection } from "./composites/CapabilitySection.js";
+export { MobileFrame } from "./composites/MobileFrame.js";
 
 // Templates
 export { SettingsPage } from "./templates/SettingsPage.js";
 export { VistaPage } from "./templates/VistaPage.js";
 export { ComputerPage } from "./templates/ComputerPage.js";
+export { BuilderPage } from "./templates/BuilderPage.js";

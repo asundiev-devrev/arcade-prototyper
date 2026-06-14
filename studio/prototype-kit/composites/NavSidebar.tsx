@@ -7,24 +7,28 @@
  * collapse button — those are the TitleBar's responsibility.
  *
  * Intentional opinions:
- * - Three zones: brand header (top, workspace dropdown only), nav body
- *   (scrollable middle), Computer footer (bottom).
+ * - Three zones: a header (top), nav body (scrollable middle), footer (bottom).
+ *   Two header/footer chrome variants are supported — Computer (brand chip +
+ *   "computer ⌘.") and Settings (← back + title, "Agent Studio" footer).
  * - Uses --surface-shallow so the sidebar reads as a muted panel against
  *   the body's --surface-overlay.
  * - Nav body accepts NavSidebar.Section and NavSidebar.Item children —
  *   same compound pattern as arcade.Sidebar for familiarity.
- * - Active item is solid --bg-info-prominent with --fg-info-on-prominent,
- *   matching the DevRev production app (not a muted gray pill).
- * - Section titles render at text-system-medium with --fg-neutral-prominent
- *   — NOT uppercase/caption. Uppercase was a carry-over from an older
- *   design and doesn't match the current sidebar spec.
+ * - Active item is a SUBTLE neutral selection (--control-bg-neutral-subtle-active
+ *   + --fg-neutral-prominent), matching the Settings sidenav — NOT a solid blue
+ *   pill. (The blue --bg-info-prominent was drift; corrected 2026-06.)
+ * - Section titles render small/subtle (text-caption + --fg-neutral-subtle),
+ *   matching the Figma "Personal"/"Organization" group labels.
  *
  * Slots:
- * - `workspace` (optional) — label in the brand header (e.g. "DevRev").
- *   When omitted or falsy, the brand header is NOT rendered — use this when
- *   the Figma frame does not show a workspace header.
- * - `showFooter` (optional, default true) — when false, the Computer footer
- *   is not rendered. Use this when Figma shows a different footer pattern.
+ * - `workspace` (optional) — label in the default brand header (e.g. "DevRev").
+ *   When omitted or falsy, the brand header is NOT rendered.
+ * - `header` (optional) — custom header node replacing the brand header. Use
+ *   `<NavSidebar.BackHeader title="Settings" />` for the Settings chrome.
+ * - `showFooter` (optional, default true) — when false, the Computer footer is
+ *   not rendered.
+ * - `footer` (optional) — custom footer node replacing the Computer footer. Use
+ *   `<NavSidebar.AppFooter />` for the "Agent Studio" Settings chrome.
  * - `children` — NavSidebar.Section / NavSidebar.Item tree.
  *
  * @counterexample When Figma shows a chat-style sidebar (with "New Chat" and chat history), use `ComputerSidebar` instead. That composite owns its own window chrome; do NOT also render a `TitleBar` alongside it.
@@ -32,22 +36,75 @@
  * @counterexample Do not pass `workspace=""` to hide the brand header. Composites check truthiness; the empty string counts as "present but empty". Omit the prop entirely.
  */
 import { forwardRef, type ReactNode } from "react";
-import { ChevronDownSmall } from "@xorkavi/arcade-gen";
+import { ChevronDownSmall, ArrowLeftSmall, AgentStudio } from "@xorkavi/arcade-gen";
 
 /* ─── Root ──────────────────────────────────────────────────────────────── */
 
 type NavSidebarRootProps = {
   workspace?: ReactNode;
   showFooter?: boolean;
+  /** Custom header node, replacing the default brand/workspace header. Use
+   *  `<NavSidebar.BackHeader>` for the Settings-style "← Title" chrome. When
+   *  set, `workspace` is ignored. */
+  header?: ReactNode;
+  /** Custom footer node, replacing the default Computer footer. Use
+   *  `<NavSidebar.AppFooter>` for the "Agent Studio + bell" Settings chrome.
+   *  When set, `showFooter` is ignored. */
+  footer?: ReactNode;
   children?: ReactNode;
 };
 
-function Root({ workspace, showFooter = true, children }: NavSidebarRootProps) {
+function Root({
+  workspace,
+  showFooter = true,
+  header,
+  footer,
+  children,
+}: NavSidebarRootProps) {
+  const headerNode =
+    header ?? (workspace ? <BrandHeader workspace={workspace} /> : null);
+  const footerNode = footer ?? (showFooter ? <ComputerFooter /> : null);
   return (
     <div className="flex flex-col h-full w-full bg-(--surface-shallow)">
-      {workspace ? <BrandHeader workspace={workspace} /> : null}
+      {headerNode}
       <nav className="flex-1 min-h-0 overflow-auto py-1">{children}</nav>
-      {showFooter ? <ComputerFooter /> : null}
+      {footerNode}
+    </div>
+  );
+}
+
+/* ─── Settings-style header & footer (slottable variants) ───────────────── */
+
+function BackHeader({ title, onBack }: { title: ReactNode; onBack?: () => void }) {
+  return (
+    <div className="flex items-center gap-2 px-3 h-11 shrink-0">
+      <button
+        type="button"
+        onClick={onBack}
+        aria-label="Back"
+        className="flex h-6 w-6 items-center justify-center rounded-square text-(--fg-neutral-medium) hover:bg-(--control-bg-neutral-subtle-hover)"
+      >
+        <ArrowLeftSmall size={16} />
+      </button>
+      <span className="text-body-large-bold text-(--fg-neutral-prominent)">
+        {title}
+      </span>
+    </div>
+  );
+}
+
+function AppFooter({
+  label = "Agent Studio",
+  trailing,
+}: {
+  label?: ReactNode;
+  trailing?: ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-2 h-10 px-3 shrink-0">
+      <AgentStudio size={16} className="text-(--fg-neutral-medium)" />
+      <span className="flex-1 text-system text-(--fg-neutral-subtle)">{label}</span>
+      {trailing}
     </div>
   );
 }
@@ -80,7 +137,7 @@ function Section({ title, children }: SectionProps) {
   return (
     <div className="py-2">
       {title && (
-        <div className="px-3 pb-1 text-system-medium text-(--fg-neutral-prominent)">
+        <div className="px-3 pb-1 text-caption text-(--fg-neutral-subtle)">
           {title}
         </div>
       )}
@@ -126,7 +183,7 @@ const Item = forwardRef<HTMLDivElement, ItemProps>(function Item(
         "flex items-center gap-2 py-1 rounded-square text-system cursor-pointer select-none",
         indent ? "pl-8 pr-2" : "px-2",
         active
-          ? "bg-(--bg-info-prominent) text-(--fg-info-on-prominent)"
+          ? "bg-(--control-bg-neutral-subtle-active) text-(--fg-neutral-prominent)"
           : "text-(--fg-neutral-subtle) hover:bg-(--control-bg-neutral-subtle-hover) hover:text-(--fg-neutral-prominent)",
       ].join(" ")}
     >
@@ -223,4 +280,9 @@ function ComputerMark() {
 
 /* ─── Compound export ───────────────────────────────────────────────────── */
 
-export const NavSidebar = Object.assign(Root, { Section, Item });
+export const NavSidebar = Object.assign(Root, {
+  Section,
+  Item,
+  BackHeader,
+  AppFooter,
+});
