@@ -42,6 +42,7 @@ import { runtimeErrorMiddleware } from "./server/middleware/runtimeError";
 import { versionMiddleware, logVersionOnBoot } from "./server/middleware/version";
 import { telemetryIdentityMiddleware, setIdentitySnapshot } from "./server/middleware/telemetryIdentity";
 import { awsLoginMiddleware } from "./server/middleware/awsLogin";
+import { turnsMiddleware } from "./server/middleware/turns";
 import { frameMountPlugin } from "./server/plugins/frameMountPlugin";
 import { projectWatchPlugin } from "./server/plugins/projectWatchPlugin";
 import { injectStudioSourcePlugin } from "./server/plugins/injectStudioSourcePlugin";
@@ -57,6 +58,7 @@ function apiPlugin(): import("vite").Plugin {
     name: "arcade-studio-api",
     configureServer(server) {
       server.middlewares.use(versionMiddleware());
+      server.middlewares.use(turnsMiddleware());
       server.middlewares.use(telemetryIdentityMiddleware());
       server.middlewares.use(awsLoginMiddleware());
       server.middlewares.use(devrevMiddleware());
