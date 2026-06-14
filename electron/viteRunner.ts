@@ -1,4 +1,4 @@
-import { spawn, ChildProcess } from "node:child_process";
+import { spawn, ChildProcess, execFile } from "node:child_process";
 import path from "node:path";
 import http from "node:http";
 
@@ -25,17 +25,22 @@ export async function startVite(appRoot: string): Promise<string> {
   const viteEntry = path.join(appRoot, "node_modules", "vite", "bin", "vite.js");
   const configPath = path.join(appRoot, "studio", "vite.config.ts");
 
-  // Pre-flight: if something ALREADY answers on 5556, it's not us — a stale
-  // prior instance, a leftover dev server, or a port squatter. Vite is
-  // strictPort, so our child would fail to bind and exit; but the app hardcodes
-  // 5556 and would then load that FOREIGN server. Detect + fail loudly instead
-  // of silently driving the wrong process.
+  // Pre-flight: if something ALREADY answers on 5556, our strictPort child
+  // can't bind and the app would load the FOREIGN server (or, more often, show
+  // a windowless shell). The common cause is a STALE Arcade Vite — an orphaned
+  // child from an auto-update restart that raced its own cleanup, or a leftover
+  // `pnpm run studio` dev server. We self-heal those: identify the holder and,
+  // ONLY if it is unmistakably an Arcade Vite (its argv runs studio/vite.config
+  // via vite.js), kill it and wait for the port to free. A genuine foreign
+  // process is never touched — we still fail loudly so we don't hijack it.
   if (await tryGet(VITE_URL)) {
-    throw new Error(
-      `[viteRunner] Port ${VITE_PORT} is already in use by another process. ` +
-      `Arcade Studio may already be running, or a previous instance didn't exit cleanly. ` +
-      `Quit it (or free port ${VITE_PORT}) and relaunch.`,
-    );
+    const reclaimed = await reclaimStaleVitePort();
+    if (!reclaimed) {
+      throw new Error(
+        `[viteRunner] Port ${VITE_PORT} is already in use by another process ` +
+        `(not an Arcade Studio Vite server). Free port ${VITE_PORT} and relaunch.`,
+      );
+    }
   }
 
   console.log(`[viteRunner] spawning Vite via ${process.execPath} entry=${viteEntry} cwd=${appRoot}`);
@@ -105,6 +110,100 @@ export function stopVite(): Promise<void> {
       setTimeout(finish, 200);
     }, 2000);
   });
+}
+
+/**
+ * Is this process command line unmistakably an Arcade Studio Vite server?
+ * Pure + exported for tests. The signature is the Vite entry script running
+ * our config — true for BOTH a packaged-app child and a `pnpm run studio` dev
+ * server, false for any unrelated process (a different vite, a random server),
+ * so we only ever kill something that is genuinely our own stale Vite.
+ */
+export function isArcadeViteCommand(command: string): boolean {
+  if (!command) return false;
+  // Require the actual Vite ENTRY SCRIPT (vite/bin/vite.js), not merely the
+  // substring "vite" — otherwise a process whose args happen to contain "vite"
+  // (e.g. "...vite.config.ts.bak") would false-match, and we KILL matches.
+  const hasViteEntry = command.includes("vite/bin/vite.js");
+  // Require our config passed as a real --config argument (with a separator
+  // after the path), so "studio/vite.config.ts.bak" doesn't satisfy it.
+  const hasOurConfig = /studio\/vite\.config\.ts(\s|$|")/.test(command);
+  return hasViteEntry && hasOurConfig;
+}
+
+/**
+ * Parse `lsof -nP -iTCP:<port> -sTCP:LISTEN -Fpc` output into the listening
+ * pid(s) + their command names. lsof -F emits field-prefixed lines: `p<pid>`,
+ * `c<command>`. Pure + exported for tests.
+ */
+export function parseLsofListeners(output: string): Array<{ pid: number; command: string }> {
+  const out: Array<{ pid: number; command: string }> = [];
+  let pid: number | null = null;
+  for (const line of output.split("\n")) {
+    if (line.startsWith("p")) {
+      const n = Number.parseInt(line.slice(1), 10);
+      pid = Number.isFinite(n) ? n : null;
+    } else if (line.startsWith("c") && pid !== null) {
+      out.push({ pid, command: line.slice(1) });
+    }
+  }
+  return out;
+}
+
+/** Full argv of a pid via `ps -o command=`. Empty string on any failure. */
+function processCommand(pid: number): Promise<string> {
+  return new Promise((resolve) => {
+    execFile("ps", ["-o", "command=", "-p", String(pid)], (err, stdout) => {
+      resolve(err ? "" : stdout.trim());
+    });
+  });
+}
+
+/** Pids LISTENing on VITE_PORT, via lsof. Empty on any failure (lsof missing,
+ *  nothing listening) — the caller then can't reclaim and fails loudly. */
+function listenersOnVitePort(): Promise<Array<{ pid: number; command: string }>> {
+  return new Promise((resolve) => {
+    execFile(
+      "lsof",
+      ["-nP", `-iTCP:${VITE_PORT}`, "-sTCP:LISTEN", "-Fpc"],
+      (err, stdout) => {
+        if (err && !stdout) { resolve([]); return; }
+        resolve(parseLsofListeners(stdout));
+      },
+    );
+  });
+}
+
+/**
+ * If port VITE_PORT is held by a STALE Arcade Vite (per isArcadeViteCommand on
+ * its full argv), SIGKILL it and wait for the port to free. Returns true if the
+ * port is now free to bind, false if the holder is foreign (caller fails loudly)
+ * or it couldn't be freed. Never kills a non-Arcade process.
+ */
+async function reclaimStaleVitePort(): Promise<boolean> {
+  const listeners = await listenersOnVitePort();
+  if (!listeners.length) {
+    // Something answered HTTP but we can't see a listener (e.g. lsof absent).
+    // Don't blind-kill; treat as not-reclaimable.
+    return false;
+  }
+  for (const { pid } of listeners) {
+    // Use the FULL argv (ps), not lsof's truncated command name, to match.
+    const argv = await processCommand(pid);
+    if (!isArcadeViteCommand(argv)) {
+      console.error(`[viteRunner] port ${VITE_PORT} held by foreign pid ${pid} (${argv.slice(0, 80)}); not killing.`);
+      return false;
+    }
+    console.log(`[viteRunner] reclaiming stale Arcade Vite pid ${pid} holding port ${VITE_PORT}`);
+    try { process.kill(pid, "SIGKILL"); } catch { /* already gone */ }
+  }
+  // Wait up to ~3s for the port to actually free (TIME_WAIT / socket teardown).
+  const deadline = Date.now() + 3000;
+  while (Date.now() < deadline) {
+    if (!(await tryGet(VITE_URL))) return true;
+    await sleep(150);
+  }
+  return false;
 }
 
 async function waitForPort(url: string, timeoutMs: number): Promise<void> {
