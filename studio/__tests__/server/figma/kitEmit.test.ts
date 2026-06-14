@@ -578,6 +578,278 @@ describe("emitKitFrame", () => {
     expect(r.source).not.toContain("GRADIENT");
     expect(r.source).not.toContain("linear-gradient");
   });
+
+  // --- auto-layout → flexbox (B2) ------------------------------------------
+  //
+  // Raw figmanage auto-layout fields are stripped from the compacted fixtures,
+  // so (as in compactTree.test.ts) these hand-build raw nodes. A confident
+  // auto-layout frame must emit display:flex with the right direction / gap /
+  // padding / align / justify AND let its children FLOW — children of a flex
+  // parent must NOT be position:absolute. Non-auto-layout frames keep the
+  // absolute path unchanged (the safe fallback).
+
+  /** A VERTICAL auto-layout frame with two plain-box children (TEXT-bearing so
+   *  the confident gate doesn't flatten it to one graphic). */
+  function verticalAutoLayoutFrame(): any {
+    return frameNode("0", [{
+      id: "stack", type: "FRAME",
+      absoluteBoundingBox: bbox(0, 0, 200, 120),
+      layoutMode: "VERTICAL", itemSpacing: 12,
+      paddingTop: 16, paddingRight: 8, paddingBottom: 16, paddingLeft: 8,
+      primaryAxisAlignItems: "CENTER", counterAxisAlignItems: "MIN",
+      fills: [{ type: "SOLID", color: { r: 1, g: 1, b: 1, a: 1 } }],
+      children: [
+        { id: "a", type: "TEXT", characters: "First",
+          absoluteBoundingBox: bbox(8, 16, 100, 20),
+          style: { fontFamily: "Inter", fontSize: 13 } },
+        { id: "b", type: "TEXT", characters: "Second",
+          absoluteBoundingBox: bbox(8, 48, 100, 20),
+          style: { fontFamily: "Inter", fontSize: 13 } },
+      ],
+    }]);
+  }
+
+  it("B2: a VERTICAL auto-layout frame emits flex column with gap/padding/align/justify", () => {
+    const r = emitKitFrame(verticalAutoLayoutFrame(), {
+      components: {}, componentSets: {}, assetFiles: new Map(),
+    });
+    // The auto-layout frame is a flex container.
+    expect(r.source).toContain('display: "flex"');
+    expect(r.source).toContain('flexDirection: "column"');
+    expect(r.source).toContain('gap: "12px"');
+    expect(r.source).toContain('padding: "16px 8px 16px 8px"');
+    // primaryAxisAlignItems CENTER → justify-content; counterAxisAlignItems MIN
+    // → align-items flex-start.
+    expect(r.source).toContain('justifyContent: "center"');
+    expect(r.source).toContain('alignItems: "flex-start"');
+    // border-box so Figma's inside-the-border padding matches.
+    expect(r.source).toContain('boxSizing: "border-box"');
+  });
+
+  it("B2: children of a flex parent are NOT absolutely positioned", () => {
+    const r = emitKitFrame(verticalAutoLayoutFrame(), {
+      components: {}, componentSets: {}, assetFiles: new Map(),
+    });
+    // The two text children flow — no position:absolute / left / top on them.
+    // (The outer wrapper is position:relative and the auto-layout frame itself
+    // is the relative-positioned root child; its CHILDREN must be flowing.)
+    const childLines = r.source
+      .split("\n")
+      .filter((l) => l.includes("First") || l.includes("Second"));
+    expect(childLines).toHaveLength(2);
+    for (const l of childLines) {
+      expect(l).not.toContain('position: "absolute"');
+      expect(l).not.toContain("left:");
+      expect(l).not.toContain("top:");
+    }
+  });
+
+  it("B2: a HORIZONTAL auto-layout frame emits flex row", () => {
+    const doc = frameNode("0", [{
+      id: "row", type: "FRAME",
+      absoluteBoundingBox: bbox(0, 0, 300, 40),
+      layoutMode: "HORIZONTAL", itemSpacing: 8,
+      primaryAxisAlignItems: "SPACE_BETWEEN", counterAxisAlignItems: "CENTER",
+      fills: [{ type: "SOLID", color: { r: 1, g: 1, b: 1, a: 1 } }],
+      children: [
+        { id: "lhs", type: "TEXT", characters: "Left",
+          absoluteBoundingBox: bbox(0, 8, 80, 20), style: { fontFamily: "Inter" } },
+        { id: "rhs", type: "TEXT", characters: "Right",
+          absoluteBoundingBox: bbox(220, 8, 80, 20), style: { fontFamily: "Inter" } },
+      ],
+    }]);
+    const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map() });
+    expect(r.source).toContain('flexDirection: "row"');
+    expect(r.source).toContain('justifyContent: "space-between"');
+    expect(r.source).toContain('alignItems: "center"');
+    // SPACE_BETWEEN distributes; itemSpacing gap must be dropped (Figma ignores
+    // it in that mode — RISK 4).
+    expect(r.source).not.toContain('gap: "8px"');
+  });
+
+  it("B2: a non-auto-layout (NONE) frame still emits absolute children (fallback)", () => {
+    const doc = frameNode("0", [{
+      id: "canvas", type: "FRAME",
+      absoluteBoundingBox: bbox(0, 0, 300, 200),
+      // no layoutMode (free-form canvas) → absolute positioning, unchanged
+      fills: [{ type: "SOLID", color: { r: 1, g: 1, b: 1, a: 1 } }],
+      children: [
+        { id: "a", type: "TEXT", characters: "Floating",
+          absoluteBoundingBox: bbox(40, 60, 100, 20), style: { fontFamily: "Inter" } },
+      ],
+    }]);
+    const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map() });
+    // The container is NOT flex.
+    expect(r.source).not.toContain('display: "flex"');
+    // The child is absolutely positioned at its Figma offset.
+    const childLine = r.source.split("\n").find((l) => l.includes("Floating"))!;
+    expect(childLine).toContain('position: "absolute"');
+    expect(childLine).toContain('left: "40px"');
+    expect(childLine).toContain('top: "60px"');
+  });
+
+  it("B2: explicit layoutMode NONE is treated as free-form (absolute)", () => {
+    const doc = frameNode("0", [{
+      id: "canvas", type: "FRAME",
+      absoluteBoundingBox: bbox(0, 0, 300, 200),
+      layoutMode: "NONE",
+      fills: [{ type: "SOLID", color: { r: 1, g: 1, b: 1, a: 1 } }],
+      children: [
+        { id: "a", type: "TEXT", characters: "Pinned",
+          absoluteBoundingBox: bbox(10, 20, 80, 16), style: { fontFamily: "Inter" } },
+      ],
+    }]);
+    const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map() });
+    const childLine = r.source.split("\n").find((l) => l.includes("Pinned"))!;
+    expect(childLine).toContain('position: "absolute"');
+  });
+
+  it("B2: a flex child with layoutGrow:1 gets flexGrow:1 and no fixed main-axis size", () => {
+    const doc = frameNode("0", [{
+      id: "row", type: "FRAME",
+      absoluteBoundingBox: bbox(0, 0, 300, 40),
+      layoutMode: "HORIZONTAL", itemSpacing: 8,
+      fills: [{ type: "SOLID", color: { r: 1, g: 1, b: 1, a: 1 } }],
+      children: [
+        { id: "grow", type: "TEXT", characters: "Stretchy", layoutGrow: 1,
+          absoluteBoundingBox: bbox(0, 8, 200, 20), style: { fontFamily: "Inter" } },
+        { id: "fixed", type: "TEXT", characters: "Fixed",
+          absoluteBoundingBox: bbox(212, 8, 80, 20), style: { fontFamily: "Inter" } },
+      ],
+    }]);
+    const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map() });
+    const growLine = r.source.split("\n").find((l) => l.includes("Stretchy"))!;
+    expect(growLine).toContain("flexGrow: 1");
+    // main axis is horizontal → grow drops the fixed width
+    expect(growLine).not.toContain('width: "200px"');
+    // the non-grow sibling keeps its Figma width
+    const fixedLine = r.source.split("\n").find((l) => l.includes(">Fixed<"))!;
+    expect(fixedLine).toContain('width: "80px"');
+    expect(fixedLine).not.toContain("flexGrow");
+  });
+
+  it("B2: a flex child with layoutAlign STRETCH gets alignSelf:stretch on the cross axis", () => {
+    const doc = frameNode("0", [{
+      id: "col", type: "FRAME",
+      absoluteBoundingBox: bbox(0, 0, 200, 100),
+      layoutMode: "VERTICAL", itemSpacing: 8,
+      fills: [{ type: "SOLID", color: { r: 1, g: 1, b: 1, a: 1 } }],
+      children: [
+        { id: "stretched", type: "TEXT", characters: "FullWidth", layoutAlign: "STRETCH",
+          absoluteBoundingBox: bbox(0, 0, 200, 24), style: { fontFamily: "Inter" } },
+      ],
+    }]);
+    const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map() });
+    const line = r.source.split("\n").find((l) => l.includes("FullWidth"))!;
+    expect(line).toContain('alignSelf: "stretch"');
+    // cross axis (horizontal here) size dropped under stretch
+    expect(line).not.toContain('width: "200px"');
+  });
+
+  it("B2: a child with layoutPositioning ABSOLUTE falls the whole frame back to absolute", () => {
+    // Figma's per-child "absolute position" escape hatch (badge / close button).
+    // Simplest safe v1 (RISK 5): if any child uses it, the whole frame stays
+    // absolute so nothing silently jumps to (0,0) of the flow.
+    const doc = frameNode("0", [{
+      id: "card", type: "FRAME",
+      absoluteBoundingBox: bbox(0, 0, 200, 100),
+      layoutMode: "VERTICAL", itemSpacing: 8,
+      fills: [{ type: "SOLID", color: { r: 1, g: 1, b: 1, a: 1 } }],
+      children: [
+        { id: "body", type: "TEXT", characters: "Body",
+          absoluteBoundingBox: bbox(8, 8, 100, 20), style: { fontFamily: "Inter" } },
+        { id: "badge", type: "TEXT", characters: "Badge", layoutPositioning: "ABSOLUTE",
+          absoluteBoundingBox: bbox(170, 4, 24, 16), style: { fontFamily: "Inter" } },
+      ],
+    }]);
+    const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map() });
+    // The card frame is NOT a flex container (fell back).
+    expect(r.source).not.toContain('display: "flex"');
+    // Both children keep absolute positioning at their Figma offsets.
+    const bodyLine = r.source.split("\n").find((l) => l.includes(">Body<"))!;
+    expect(bodyLine).toContain('position: "absolute"');
+    const badgeLine = r.source.split("\n").find((l) => l.includes(">Badge<"))!;
+    expect(badgeLine).toContain('position: "absolute"');
+  });
+
+  it("B2: a kit component inside a flex parent flows (its wrapper drops position:absolute)", () => {
+    const { components, componentSets } = checkboxMaps();
+    const doc = frameNode("0", [{
+      id: "row", type: "FRAME",
+      absoluteBoundingBox: bbox(0, 0, 200, 40),
+      layoutMode: "HORIZONTAL", itemSpacing: 8,
+      fills: [{ type: "SOLID", color: { r: 1, g: 1, b: 1, a: 1 } }],
+      children: [
+        checkboxInstance("cb1", true),
+        { id: "lbl", type: "TEXT", characters: "Agree",
+          absoluteBoundingBox: bbox(30, 12, 80, 16), style: { fontFamily: "Inter" } },
+      ],
+    }]);
+    const r = emitKitFrame(doc, { components, componentSets, assetFiles: new Map() });
+    // The Checkbox still renders…
+    expect(r.source).toContain("<Checkbox");
+    // …but its centering wrapper flows (no absolute positioning).
+    const cbLine = r.source.split("\n").find((l) => l.includes("<Checkbox"))!;
+    expect(cbLine).not.toContain('position: "absolute"');
+    expect(cbLine).not.toContain("left:");
+    // It keeps display:flex for its OWN internal centering (orthogonal to flow).
+    expect(cbLine).toContain('display: "flex"');
+    expect(cbLine).toContain('alignItems: "center"');
+  });
+
+  it("B2: a flex frame whose children all flatten to graphics stays absolute (gains nothing)", () => {
+    // An auto-layout frame containing only icon-scale vectors: every child is an
+    // exported SVG, so flex flow buys nothing — the confident gate declines.
+    const doc = frameNode("0", [{
+      id: "iconrow", type: "FRAME",
+      absoluteBoundingBox: bbox(0, 0, 60, 24),
+      layoutMode: "HORIZONTAL", itemSpacing: 4,
+      fills: [{ type: "SOLID", color: { r: 1, g: 1, b: 1, a: 1 } }],
+      children: [
+        { id: "v1", type: "VECTOR", absoluteBoundingBox: bbox(0, 0, 16, 16) },
+        { id: "v2", type: "VECTOR", absoluteBoundingBox: bbox(20, 0, 16, 16) },
+      ],
+    }]);
+    const r = emitKitFrame(doc, {
+      components: {}, componentSets: {},
+      assetFiles: new Map([["v1", "v1.svg"], ["v2", "v2.svg"]]),
+    });
+    expect(r.source).not.toContain('flexDirection: "row"');
+    // the icon imgs are absolute-positioned (fallback unchanged)
+    const imgLines = r.source.split("\n").filter((l) => l.includes("<img"));
+    expect(imgLines.length).toBe(2);
+    for (const l of imgLines) expect(l).toContain('position: "absolute"');
+  });
+
+  it("B2: the root document node itself can be an auto-layout flex container", () => {
+    // Root = a VERTICAL auto-layout frame. The outer wrapper becomes flex and
+    // its children flow; the wrapper still carries position:relative + size.
+    const doc = {
+      id: "root", type: "FRAME",
+      absoluteBoundingBox: bbox(0, 0, 240, 200),
+      layoutMode: "VERTICAL", itemSpacing: 16,
+      paddingTop: 24, paddingRight: 24, paddingBottom: 24, paddingLeft: 24,
+      counterAxisAlignItems: "CENTER",
+      fills: [{ type: "SOLID", color: { r: 1, g: 1, b: 1, a: 1 } }],
+      children: [
+        { id: "h", type: "TEXT", characters: "Heading",
+          absoluteBoundingBox: bbox(24, 24, 192, 28), style: { fontFamily: "Inter", fontSize: 20 } },
+        { id: "p", type: "TEXT", characters: "Paragraph",
+          absoluteBoundingBox: bbox(24, 68, 192, 40), style: { fontFamily: "Inter", fontSize: 13 } },
+      ],
+    };
+    const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map() });
+    // outer wrapper is relative + flex column.
+    const wrapperLine = r.source.split("\n").find((l) => l.includes("position: \"relative\""))!;
+    expect(wrapperLine).toContain('display: "flex"');
+    expect(wrapperLine).toContain('flexDirection: "column"');
+    expect(wrapperLine).toContain('gap: "16px"');
+    expect(wrapperLine).toContain('padding: "24px 24px 24px 24px"');
+    expect(wrapperLine).toContain('alignItems: "center"');
+    // direct children flow (no absolute).
+    const headingLine = r.source.split("\n").find((l) => l.includes("Heading"))!;
+    expect(headingLine).not.toContain('position: "absolute"');
+  });
 });
 
 // --- mapping hygiene (D2) ----------------------------------------------------

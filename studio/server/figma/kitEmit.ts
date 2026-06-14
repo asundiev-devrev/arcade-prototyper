@@ -263,6 +263,16 @@ function paintCss(p: any): string | null {
 
 type Style = Record<string, string | number>;
 
+/** Layout context threaded through emit(): does this node sit inside a flex
+ *  parent (so it must FLOW, not absolute-position), and if so what is the
+ *  parent's main-axis direction (so we can pick main vs cross axis for
+ *  grow/stretch/hug). The root starts !inFlex (it is position:relative). (B2) */
+interface FlexCtx {
+  inFlex: boolean;
+  parentMode: string;
+}
+const ABSOLUTE_CTX: FlexCtx = { inFlex: false, parentMode: "NONE" };
+
 // ---------------------------------------------------------------------------
 // Design-token resolution (B1)
 //
@@ -306,15 +316,16 @@ function makeTokenResolver(variables: any | null): TokenResolver | null {
   return r;
 }
 
-function boxStyle(n: RawNode, px: number, py: number, tok?: TokenResolver | null): Style {
-  const b = n.absoluteBoundingBox ?? {};
-  const s: Style = {
-    position: "absolute",
-    left: `${Math.round((b.x ?? 0) - px)}px`,
-    top: `${Math.round((b.y ?? 0) - py)}px`,
-    width: `${Math.round(b.width ?? 0)}px`,
-    height: `${Math.round(b.height ?? 0)}px`,
-  };
+/**
+ * The PAINT half of a node's box: fills, stroke (as an inset shadow), drop
+ * shadows, radius, overflow, opacity. Deliberately carries NO position/size —
+ * the absolute path (boxStyle) prepends position + bbox geometry; the flex path
+ * (flexChildStyle) prepends flex-child props instead. Splitting this out lets
+ * both paths reuse the (subtle, already-debugged) paint logic without
+ * duplicating it. (B2)
+ */
+function paintStyle(n: RawNode, tok?: TokenResolver | null): Style {
+  const s: Style = {};
   if (typeof n.opacity === "number" && n.opacity < 1) s.opacity = Math.round(n.opacity * 1000) / 1000;
   if (n.type !== "TEXT") {
     for (const f of n.fills ?? []) {
@@ -351,6 +362,142 @@ function boxStyle(n: RawNode, px: number, py: number, tok?: TokenResolver | null
   return s;
 }
 
+function boxStyle(n: RawNode, px: number, py: number, tok?: TokenResolver | null): Style {
+  const b = n.absoluteBoundingBox ?? {};
+  const s: Style = {
+    position: "absolute",
+    left: `${Math.round((b.x ?? 0) - px)}px`,
+    top: `${Math.round((b.y ?? 0) - py)}px`,
+    width: `${Math.round(b.width ?? 0)}px`,
+    height: `${Math.round(b.height ?? 0)}px`,
+  };
+  return { ...s, ...paintStyle(n, tok) };
+}
+
+// ---------------------------------------------------------------------------
+// Auto-layout → flexbox (B2)
+//
+// When a frame node carries Figma auto-layout (layoutMode HORIZONTAL/VERTICAL),
+// we emit a flex container and let its children FLOW, instead of absolute-
+// positioning each child at its Figma x/y. This makes the output responsive,
+// robust to longer text, and editable by a designer — at the cost of a few px of
+// drift vs the exact absolute copy. Absolute stays the fallback for non-auto-
+// layout (free-form) frames. Owner decision (2026-06-14): flex where confident,
+// absolute fallback; favor staying absolute when unsure.
+
+const FLEX_JUSTIFY: Record<string, string> = {
+  MIN: "flex-start", CENTER: "center", MAX: "flex-end", SPACE_BETWEEN: "space-between",
+};
+const FLEX_ALIGN: Record<string, string> = {
+  MIN: "flex-start", CENTER: "center", MAX: "flex-end", BASELINE: "baseline",
+};
+
+/** Is this node an auto-layout frame with a real flex direction? The gate that
+ *  decides flex vs absolute for the node's OWN children. */
+function isFlexFrame(n: RawNode): boolean {
+  return n.layoutMode === "HORIZONTAL" || n.layoutMode === "VERTICAL";
+}
+
+/** A child opted out of its parent's auto-layout to float absolutely (Figma's
+ *  "absolute position" escape hatch — badges, close buttons). */
+function isAbsoluteChild(c: RawNode): boolean {
+  return c.layoutPositioning === "ABSOLUTE";
+}
+
+/**
+ * Confident-flex gate. Emit this frame's children as flex flow only when:
+ *   - it is an auto-layout frame with a real direction,
+ *   - it has at least one visible child that is NOT a flattened graphic/image
+ *     (a flex frame full of vectors that collapse to one <img> gains nothing),
+ *   - no visible child uses the absolute-position escape hatch (simplest safe
+ *     v1: if any does, fall the whole frame back to absolute — RISK 5).
+ * Otherwise the absolute path is used (the safe default, favoring fidelity).
+ */
+function shouldFlex(n: RawNode, ctx: EmitContext, broken: Set<string>): boolean {
+  if (!isFlexFrame(n)) return false;
+  const kids = (n.children ?? []).filter((c: RawNode) => !hidden(c));
+  if (!kids.length) return false;
+  if (kids.some(isAbsoluteChild)) return false;
+  // The node itself must not be one we flatten to a single graphic/image.
+  if (isGraphic(n, broken) || hasImageFill(n)) return false;
+  if (isUnmappedGlyph(n, ctx, broken)) return false;
+  // At least one child must survive as flowing markup (not absorbed into an
+  // exported asset). A frame whose every child flattens to a graphic gains
+  // nothing from flex.
+  const flowing = kids.some((c: RawNode) =>
+    !isGraphic(c, broken) && !isUnmappedGlyph(c, ctx, broken));
+  return flowing;
+}
+
+/** Container-side flex style for an auto-layout frame: display:flex plus
+ *  direction / gap / padding / justify / align mapped from the Figma enums.
+ *  box-sizing:border-box because Figma auto-layout padding sits INSIDE the
+ *  border (RISK 7). */
+function flexContainerStyle(n: RawNode): Style {
+  const s: Style = {
+    display: "flex",
+    flexDirection: n.layoutMode === "VERTICAL" ? "column" : "row",
+    boxSizing: "border-box",
+  };
+  const justify = FLEX_JUSTIFY[n.primaryAxisAlignItems];
+  if (justify) s.justifyContent = justify;
+  const align = FLEX_ALIGN[n.counterAxisAlignItems];
+  if (align) s.alignItems = align;
+  // SPACE_BETWEEN already distributes; a fixed gap fights it and Figma ignores
+  // itemSpacing in that mode (RISK 4) — drop the gap there.
+  if (typeof n.itemSpacing === "number" && n.itemSpacing > 0 && justify !== "space-between") {
+    s.gap = `${Math.round(n.itemSpacing)}px`;
+  }
+  const pt = Math.round(n.paddingTop ?? 0);
+  const pr = Math.round(n.paddingRight ?? 0);
+  const pb = Math.round(n.paddingBottom ?? 0);
+  const pl = Math.round(n.paddingLeft ?? 0);
+  if (pt || pr || pb || pl) s.padding = `${pt}px ${pr}px ${pb}px ${pl}px`;
+  return s;
+}
+
+/**
+ * Box style for a node that sits INSIDE a flex parent: paint + size, but NO
+ * position/left/top — it flows in the parent's layout. Sizing posture (RISK 3,
+ * scout step 3): keep the Figma px as the safe default so text reflows like the
+ * design, and only relax it where Figma explicitly says FILL / HUG / grow:
+ *   - main axis: layoutGrow===1 or layoutSizing FILL → flexGrow:1, drop fixed
+ *     size on that axis;
+ *   - cross axis: layoutAlign STRETCH or layoutSizing FILL → alignSelf:stretch,
+ *     drop fixed size on that axis;
+ *   - HUG on an axis → drop the fixed size so the node hugs its content.
+ * The parent's direction tells us which axis is main vs cross.
+ */
+function flexChildStyle(n: RawNode, parentMode: string, tok?: TokenResolver | null): Style {
+  const b = n.absoluteBoundingBox ?? {};
+  const horizontal = parentMode === "HORIZONTAL";
+  let setW = true;
+  let setH = true;
+  const s: Style = { boxSizing: "border-box" };
+
+  const hSizing = n.layoutSizingHorizontal;
+  const vSizing = n.layoutSizingVertical;
+  const grow = n.layoutGrow === 1;
+  const stretch = n.layoutAlign === "STRETCH";
+
+  // Main axis (the parent's primary axis): grow / FILL → flexGrow:1 + drop size.
+  if (horizontal) {
+    if (grow || hSizing === "FILL") { s.flexGrow = 1; setW = false; }
+    if (hSizing === "HUG") setW = false;
+    if (stretch || vSizing === "FILL") { s.alignSelf = "stretch"; setH = false; }
+    if (vSizing === "HUG") setH = false;
+  } else {
+    if (grow || vSizing === "FILL") { s.flexGrow = 1; setH = false; }
+    if (vSizing === "HUG") setH = false;
+    if (stretch || hSizing === "FILL") { s.alignSelf = "stretch"; setW = false; }
+    if (hSizing === "HUG") setW = false;
+  }
+
+  if (setW) s.width = `${Math.round(b.width ?? 0)}px`;
+  if (setH) s.height = `${Math.round(b.height ?? 0)}px`;
+  return { ...s, ...paintStyle(n, tok) };
+}
+
 function textStyle(n: RawNode, tok?: TokenResolver | null): Style {
   const st = n.style ?? {};
   const s: Style = {
@@ -384,8 +531,19 @@ function textStyle(n: RawNode, tok?: TokenResolver | null): Style {
   return s;
 }
 
-function centerBox(n: RawNode, px: number, py: number): Style {
-  const s = boxStyle(n, px, py);
+/**
+ * Centering wrapper for a kit component. By default it is an absolutely-
+ * positioned box (its Figma geometry). When its PARENT is a flex container
+ * (inFlex), it must instead FLOW: drop position/left/top and become an inline
+ * centering box that participates in the parent's layout, keeping width/height
+ * so the component reserves the right footprint (B2). Its OWN internal
+ * display:flex/center is unchanged — that centers the component inside the box
+ * and is orthogonal to its role as a flex child (RISK 2).
+ */
+function centerBox(n: RawNode, px: number, py: number, ctx?: { inFlex?: boolean; parentMode?: string }): Style {
+  const s = ctx?.inFlex
+    ? flexChildStyle(n, ctx.parentMode ?? "HORIZONTAL")
+    : boxStyle(n, px, py);
   delete s.background;
   delete s.boxShadow;
   s.display = "flex"; s.alignItems = "center"; s.justifyContent = "center";
@@ -589,7 +747,15 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
     return v;
   };
 
-  function emitAvatar(n: RawNode, px: number, py: number, pad: string, opts2: { type?: string } = {}): void {
+  /** A node's box style for its current layout context: flowing (no position,
+   *  flex-child props + size) when its parent is a flex container, else the
+   *  classic absolute box. Both share paintStyle, so a node never loses its
+   *  fills/radius/shadow regardless of which path it takes (RISK 1: every
+   *  return path in emit goes through this). */
+  const nodeBox = (n: RawNode, px: number, py: number, flex: FlexCtx): Style =>
+    flex.inFlex ? flexChildStyle(n, flex.parentMode, tok) : boxStyle(n, px, py, tok);
+
+  function emitAvatar(n: RawNode, px: number, py: number, pad: string, flex: FlexCtx, opts2: { type?: string } = {}): void {
     usedKit.add("Avatar");
     kitInstanceCount++;
     const b = n.absoluteBoundingBox ?? {};
@@ -604,7 +770,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
       opts2.type ? `type="${opts2.type}" shape="square"` : "",
       `size="${avatarSizeForPx(b.width ?? 24)}"`,
     ].filter(Boolean).join(" ");
-    lines.push(`${pad}<div style=${sx(centerBox(n, px, py))}><Avatar ${attrs} /></div>`);
+    lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><Avatar ${attrs} /></div>`);
   }
 
   /** The glyph a kit IconButton/Button should render: a kit icon if the
@@ -620,7 +786,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
     return { jsx: "<span />", kit: null };
   }
 
-  function emit(n: RawNode, px: number, py: number, ind: number): void {
+  function emit(n: RawNode, px: number, py: number, ind: number, flex: FlexCtx): void {
     if (hidden(n)) return;
     const pad = "  ".repeat(ind);
     const b = n.absoluteBoundingBox ?? {};
@@ -633,7 +799,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
       if (k.kind === "icon") {
         usedKit.add(k.kit);
         kitInstanceCount++;
-        const s = centerBox(n, px, py);
+        const s = centerBox(n, px, py, flex);
         const col = vectorColor(n, tok);
         if (col) s.color = col;
         lines.push(`${pad}<div style=${sx(s)}><${k.kit} size={${Math.round(Math.min(w, b.height ?? 16))}} /></div>`);
@@ -648,7 +814,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
           const szv = SIZE_VALUE_MAP[p.Size ?? ""] ?? "md";
           const g = buttonGlyph(n);
           if (g.kit) usedKit.add(g.kit);
-          lines.push(`${pad}<div style=${sx(centerBox(n, px, py))}><IconButton variant="${v}" size="${szv}" aria-label="action">${g.jsx}</IconButton></div>`);
+          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><IconButton variant="${v}" size="${szv}" aria-label="action">${g.jsx}</IconButton></div>`);
           return;
         }
         case "Button": {
@@ -662,28 +828,28 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
             kitInstanceCount++;
             const g = buttonGlyph(n);
             if (g.kit) usedKit.add(g.kit);
-            lines.push(`${pad}<div style=${sx(centerBox(n, px, py))}><IconButton variant="${v}" size="${szv}" aria-label="action">${g.jsx}</IconButton></div>`);
+            lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><IconButton variant="${v}" size="${szv}" aria-label="action">${g.jsx}</IconButton></div>`);
             return;
           }
           usedKit.add("Button");
           kitInstanceCount++;
           if (icon) usedKit.add(icon);
           const lead = icon ? ` iconLeft={<${icon} size={16} />}` : "";
-          lines.push(`${pad}<div style=${sx(centerBox(n, px, py))}><Button variant="${v}" size="${szv}"${lead}>${escText(String(label))}</Button></div>`);
+          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><Button variant="${v}" size="${szv}"${lead}>${escText(String(label))}</Button></div>`);
           return;
         }
         case "Checkbox": {
           usedKit.add("Checkbox");
           kitInstanceCount++;
           const checked = p.Checked === "True" ? " defaultChecked" : "";
-          lines.push(`${pad}<div style=${sx(centerBox(n, px, py))}><Checkbox size="sm"${checked} /></div>`);
+          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><Checkbox size="sm"${checked} /></div>`);
           return;
         }
         case "Switch": {
           usedKit.add("Switch");
           kitInstanceCount++;
           const checked = p.Toggle === "True" ? " defaultChecked" : "";
-          lines.push(`${pad}<div style=${sx(centerBox(n, px, py))}><Switch${checked} /></div>`);
+          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><Switch${checked} /></div>`);
           return;
         }
         case "Tabs": {
@@ -692,7 +858,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
           const labels = visibleTexts(n).filter((t) => t.trim());
           const tabs = labels.length ? labels : ["Tab"];
           const trig = tabs.map((t) => `<Tabs.Trigger value=${JSON.stringify(t)}>${escText(t)}</Tabs.Trigger>`).join("");
-          lines.push(`${pad}<div style=${sx(centerBox(n, px, py))}><Tabs.Root defaultValue=${JSON.stringify(tabs[0])}><Tabs.List>${trig}</Tabs.List></Tabs.Root></div>`);
+          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><Tabs.Root defaultValue=${JSON.stringify(tabs[0])}><Tabs.List>${trig}</Tabs.List></Tabs.Root></div>`);
           return;
         }
         case "Badge":
@@ -701,17 +867,17 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
           kitInstanceCount++;
           const texts = visibleTexts(n).filter((t) => t.trim());
           const label = texts[0] ?? "";
-          lines.push(`${pad}<div style=${sx(centerBox(n, px, py))}><${k.kit}>${escText(label)}</${k.kit}></div>`);
+          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><${k.kit}>${escText(label)}</${k.kit}></div>`);
           return;
         }
         case "Avatar":
-          emitAvatar(n, px, py, pad);
+          emitAvatar(n, px, py, pad, flex);
           return;
         case "AccountAvatar":
-          emitAvatar(n, px, py, pad, { type: "account" });
+          emitAvatar(n, px, py, pad, flex, { type: "account" });
           return;
         case "ImageAvatar":
-          emitAvatar(n, px, py, pad);
+          emitAvatar(n, px, py, pad, flex);
           return;
         case "AvatarGroup": {
           usedKit.add("AvatarGroup");
@@ -743,7 +909,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
             usedKit.add("AvatarCount");
             cnt = `<AvatarCount count={${cm[1]}} size="md" />`;
           }
-          lines.push(`${pad}<div style=${sx(centerBox(n, px, py))}><AvatarGroup size="md">${inner.join("")}${cnt}</AvatarGroup></div>`);
+          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><AvatarGroup size="md">${inner.join("")}${cnt}</AvatarGroup></div>`);
           return;
         }
         default:
@@ -756,7 +922,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
     if (isGraphic(n, broken) && n.type !== "ELLIPSE") {
       const v = assetRef(n.id);
       if (v) {
-        const s = boxStyle(n, px, py);
+        const s = nodeBox(n, px, py, flex);
         delete s.background;
         delete s.boxShadow;
         lines.push(`${pad}<img src={${v}} style=${sx(s)} alt="" />`);
@@ -768,7 +934,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
     if (hasImageFill(n)) {
       const v = assetRef(n.id);
       if (v) {
-        const s = boxStyle(n, px, py);
+        const s = nodeBox(n, px, py, flex);
         delete s.background;
         s.objectFit = "cover";
         lines.push(`${pad}<img src={${v}} style=${sx(s)} alt="" />`);
@@ -786,7 +952,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
       const gid = glyphExportId(n, broken);
       const v = gid ? assetRef(gid) : null;
       if (v) {
-        const s = boxStyle(n, px, py);
+        const s = nodeBox(n, px, py, flex);
         delete s.background;
         delete s.boxShadow;
         lines.push(`${pad}<img src={${v}} style=${sx(s)} alt="" />`);
@@ -796,24 +962,44 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
     }
 
     if (n.type === "TEXT") {
-      const s = { ...boxStyle(n, px, py, tok), ...textStyle(n, tok) };
+      const s = { ...nodeBox(n, px, py, flex), ...textStyle(n, tok) };
       lines.push(`${pad}<div style=${sx(s)}>${escText(n.characters ?? "")}</div>`);
       return;
     }
 
     const kids = (n.children ?? []).filter((c: RawNode) => !hidden(c));
-    const s = boxStyle(n, px, py, tok);
+    // B2 — auto-layout → flexbox. If THIS node is a confident auto-layout frame,
+    // its OWN box stays in its parent's flow (nodeBox honors `flex`) but it
+    // becomes a flex container and its children FLOW (childCtx.inFlex=true) — no
+    // absolute positioning, no parent-origin subtraction. Otherwise it (and its
+    // children) keep the absolute path (childCtx = ABSOLUTE_CTX), unchanged.
+    const flexHere = shouldFlex(n, ctx, broken);
+    const s = flexHere
+      ? { ...nodeBox(n, px, py, flex), ...flexContainerStyle(n) }
+      : nodeBox(n, px, py, flex);
     if (!kids.length) {
       lines.push(`${pad}<div style=${sx(s)} />`);
       return;
     }
+    const childCtx: FlexCtx = flexHere
+      ? { inFlex: true, parentMode: n.layoutMode }
+      : ABSOLUTE_CTX;
     lines.push(`${pad}<div style=${sx(s)}>`);
-    for (const c of kids) emit(c, b.x ?? px, b.y ?? py, ind + 1);
+    for (const c of kids) emit(c, b.x ?? px, b.y ?? py, ind + 1, childCtx);
     lines.push(`${pad}</div>`);
   }
 
   const rb = doc.absoluteBoundingBox ?? { x: 0, y: 0, width: 1440, height: 900 };
-  for (const c of doc.children ?? []) emit(c, rb.x, rb.y, 2);
+  // B2 — the root document node may itself be auto-layout. If so, make the outer
+  // wrapper a flex container and start its children in flow; otherwise the root
+  // stays position:relative and children are absolute (today's behavior). The
+  // gate is the same shouldFlex confidence check.
+  const rootFlex = shouldFlex(doc, ctx, broken);
+  const rootChildCtx: FlexCtx = rootFlex
+    ? { inFlex: true, parentMode: doc.layoutMode }
+    : ABSOLUTE_CTX;
+  const rootFlexStyle = rootFlex ? flexContainerStyle(doc) : {};
+  for (const c of doc.children ?? []) emit(c, rb.x, rb.y, 2, rootChildCtx);
 
   const kitImports = [...usedKit].sort();
   const importLines: string[] = [];
@@ -823,12 +1009,24 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
   for (const [v, p] of assetImports) importLines.push(`import ${v} from "${p}";`);
 
   const name = opts.componentName ?? "FigmaImport";
+  // The outer wrapper is always position:relative + fixed frame size (so a
+  // non-flex root's absolute children anchor to it). When the root document is
+  // itself a confident auto-layout frame, its flex container props (direction /
+  // gap / padding / justify / align) merge in so its children flow. (B2)
+  const rootStyle: Style = {
+    position: "relative",
+    width: Math.round(rb.width),
+    height: Math.round(rb.height),
+    background: "#fff",
+    overflow: "hidden",
+    ...rootFlexStyle,
+  };
   const source = `import * as React from "react";
 ${importLines.join("\n")}
 
 export default function ${name}() {
   return (
-    <div style={{ position: "relative", width: ${Math.round(rb.width)}, height: ${Math.round(rb.height)}, background: "#fff", overflow: "hidden" }}>
+    <div style=${sx(rootStyle)}>
 ${lines.join("\n")}
     </div>
   );
