@@ -423,19 +423,25 @@ function isAbsoluteChild(c: RawNode): boolean {
  * Otherwise the absolute path is used (the safe default, favoring fidelity).
  */
 function shouldFlex(n: RawNode, ctx: EmitContext, broken: Set<string>): boolean {
-  if (!isFlexFrame(n)) return false;
-  const kids = (n.children ?? []).filter((c: RawNode) => !hidden(c));
-  if (!kids.length) return false;
-  if (kids.some(isAbsoluteChild)) return false;
-  // The node itself must not be one we flatten to a single graphic/image.
-  if (isGraphic(n, broken) || hasImageFill(n)) return false;
-  if (isUnmappedGlyph(n, ctx, broken)) return false;
-  // At least one child must survive as flowing markup (not absorbed into an
-  // exported asset). A frame whose every child flattens to a graphic gains
-  // nothing from flex.
-  const flowing = kids.some((c: RawNode) =>
-    !isGraphic(c, broken) && !isUnmappedGlyph(c, ctx, broken));
-  return flowing;
+  // B2 (auto-layout → flexbox) is DISABLED. A live visual check showed it
+  // drifted fidelity well past "small px-drift": 120 content-sized flex
+  // containers whose intrinsic size diverged a few px from Figma's fixed box,
+  // cascading to siblings (mean diff 4.2→7.7 vs the Figma, 3.6% structurally
+  // wrong pixels, sidebar 8× worse). The owner chose to keep pixel-exact
+  // absolute positioning. The flex machinery (flexContainerStyle/flexChildStyle/
+  // FlexCtx plumbing) is retained but inert behind this gate, so a future
+  // iteration that pins explicit width/height on flex containers (to stop the
+  // intrinsic-size drift) can re-enable it by restoring the gate below without
+  // re-threading every call site.
+  return false;
+  // Original confident gate (re-enable with explicit child sizing):
+  // if (!isFlexFrame(n)) return false;
+  // const kids = (n.children ?? []).filter((c: RawNode) => !hidden(c));
+  // if (!kids.length) return false;
+  // if (kids.some(isAbsoluteChild)) return false;
+  // if (isGraphic(n, broken) || hasImageFill(n)) return false;
+  // if (isUnmappedGlyph(n, ctx, broken)) return false;
+  // return kids.some((c) => !isGraphic(c, broken) && !isUnmappedGlyph(c, ctx, broken));
 }
 
 /** Container-side flex style for an auto-layout frame: display:flex plus
@@ -1116,14 +1122,6 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
     const childCtx: FlexCtx = flexHere
       ? { inFlex: true, parentMode: n.layoutMode }
       : ABSOLUTE_CTX;
-    // When THIS container is itself a flex child (flowing, not absolute) but is
-    // NOT a flex container, its own children take the absolute path — and they
-    // compute left/top relative to THIS node's origin. Without an explicit
-    // positioning context they would instead anchor to the nearest positioned
-    // ancestor (the root wrapper), landing offset by this node's bbox. Establish
-    // a positioning context so absolute descendants anchor here. (flex containers
-    // don't need this — their children flow, not absolute.)
-    if (flex.inFlex && !flexHere && kids.length) s.position = "relative";
     lines.push(`${pad}<div style=${sx(s)}>`);
     for (const c of kids) emit(c, b.x ?? px, b.y ?? py, ind + 1, childCtx);
     lines.push(`${pad}</div>`);
