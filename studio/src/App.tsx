@@ -4,7 +4,6 @@ import { FrameFontProxy } from "./frame/FrameFontProxy";
 import { HomePage } from "./routes/HomePage";
 import { ProjectDetail } from "./routes/ProjectDetail";
 import { StartupAuthGate } from "./components/feedback/StartupAuthGate";
-import { UpdateBanner } from "./components/feedback/UpdateBanner";
 import { useDeepLinkRoute, clearDeepLink } from "./hooks/useDeepLinkRoute";
 import { JoinSessionGate } from "./components/multiplayer/JoinSessionGate";
 
@@ -115,7 +114,6 @@ export function App() {
   return (
     <DevRevThemeProvider mode={studioMode}>
       <FrameFontProxy />
-      <UpdateBanner />
       <StartupAuthGate>
         {activeShared ? (
           <ProjectDetail
