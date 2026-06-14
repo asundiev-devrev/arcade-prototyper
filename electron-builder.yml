@@ -63,7 +63,9 @@ mac:
   category: public.app-category.developer-tools
   icon: electron/icon.icns
   target:
-    - target: dmg
+    - target: dmg     # human first-install
+      arch: arm64
+    - target: zip     # auto-update payload — electron-updater reads this + latest-mac.yml
       arch: arm64
   # electron-builder requires the identity name WITHOUT the "Developer ID
   # Application: " prefix — codesign adds that prefix back automatically

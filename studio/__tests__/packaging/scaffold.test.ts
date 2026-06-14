@@ -27,6 +27,16 @@ describe("electron-builder configuration", () => {
     expect(dmgEntry?.arch).toBe("arm64");
   });
 
+  it("targets ZIP for arm64 (auto-update payload)", () => {
+    const target = config.mac?.target;
+    expect(target).toBeDefined();
+    const zipEntry = Array.isArray(target)
+      ? target.find((t: { target: string }) => t.target === "zip")
+      : null;
+    expect(zipEntry).toBeDefined();
+    expect(zipEntry?.arch).toBe("arm64");
+  });
+
   it("uses hardened runtime + entitlements", () => {
     expect(config.mac?.hardenedRuntime).toBe(true);
     expect(config.mac?.entitlements).toBe("electron/entitlements.mac.plist");
