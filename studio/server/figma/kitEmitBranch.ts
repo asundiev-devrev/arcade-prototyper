@@ -19,17 +19,25 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { StudioEvent } from "../../src/lib/streamJson";
-import { frameDir } from "../paths";
+import { frameDir, figmaIngestRoot } from "../paths";
 import { appendHistory, nextFramePrefix } from "../projects";
 import {
   getNode as figmanageGetNode,
   exportNodeImageUrls,
   type BatchExportEntry,
 } from "../figmaCli";
+import { readPrefetchedRawNode } from "../figmaIngest";
 import { planAssets, emitKitFrame, type EmitResult } from "./kitEmit";
 
 export interface KitEmitBranchDeps {
   getNode?: (fileKey: string, nodeId: string) => Promise<any>;
+  /**
+   * Read a prefetched raw get-nodes dict from the ingest cache (warmed on URL
+   * paste), or undefined on miss. Defaults to the figmaIngest singleton's
+   * getRawNode. Tests inject this to assert the cache hit skips the live fetch
+   * without spinning up the real singleton.
+   */
+  getRaw?: (fileKey: string, nodeId: string) => any | undefined;
   exportUrls?: (
     fileKey: string,
     nodeIds: string[],
@@ -37,6 +45,12 @@ export interface KitEmitBranchDeps {
     scale?: number,
   ) => Promise<BatchExportEntry[]>;
   download?: (url: string) => Promise<Buffer>;
+  /**
+   * Root dir for the A2 cross-import asset cache. Defaults to
+   * figmaIngestRoot(). Tests point this at a tmp dir so cache files don't land
+   * in the real ~/Library scratch dir and so a hit/miss can be asserted.
+   */
+  cacheDir?: string;
 }
 
 export interface KitEmitBranchInput {
@@ -59,6 +73,38 @@ async function defaultDownload(url: string): Promise<Buffer> {
  *  `;` for nested-instance paths). */
 export function assetFileName(nodeId: string, ext: string): string {
   return `${nodeId.replace(/:/g, "-").replace(/;/g, "_")}.${ext}`;
+}
+
+/**
+ * Version token for the asset cache (A2). The get-nodes dict carries a
+ * top-level `lastModified` (preferred) and `version` (fallback) — both bump
+ * whenever the Figma file changes ANYWHERE, which over-invalidates slightly but
+ * is always safe: a changed file = a new cache folder, never a stale asset.
+ *
+ * Returns null when BOTH are absent — the caller then DISABLES the cache for
+ * that import (export fresh) rather than risk serving a wrong cached asset.
+ */
+export function assetCacheVersion(dict: any): string | null {
+  const lm = dict?.lastModified;
+  if (typeof lm === "string" && lm) return lm;
+  const v = dict?.version;
+  if (typeof v === "string" && v) return v;
+  if (typeof v === "number") return String(v);
+  return null;
+}
+
+/**
+ * Directory that holds cached exported assets for one (fileKey, version),
+ * under figmaIngestRoot(). The version folder is the whole invalidation
+ * mechanism: a changed Figma file lands in a new folder, leaving the old one
+ * orphaned (cheap to GC later, harmless if not). `version` is sanitized into a
+ * filesystem-safe token. Returns null when there is no usable version token.
+ */
+export function assetCacheDir(root: string, fileKey: string, version: string | null): string | null {
+  if (!version) return null;
+  const safeKey = fileKey.replace(/[^A-Za-z0-9_-]/g, "_");
+  const safeVer = version.replace(/[^A-Za-z0-9_-]/g, "_");
+  return path.join(root, "asset-cache", safeKey, safeVer);
 }
 
 function frameNameFromNode(nodeId: string): string {
@@ -94,20 +140,45 @@ export async function runFigmaKitEmitBranch(
   const getNode = input.deps?.getNode ?? figmanageGetNode;
   const exportUrls = input.deps?.exportUrls ?? exportNodeImageUrls;
   const download = input.deps?.download ?? defaultDownload;
+  // A1 — prefetch reuse: the /api/figma/ingest prefetch (fired on URL paste)
+  // already stashed the raw get-nodes dict. Read it first to skip the ~2s
+  // figmanage round-trip on the critical path. Falls through to a live getNode
+  // on any miss. The getRaw dep keeps unit tests hermetic; in a real run it's
+  // the figmaIngest singleton's getRawNode.
+  const getRaw =
+    input.deps?.getRaw ??
+    ((fk: string, nid: string) => {
+      // The ingest singleton is async to construct, but the raw layer is
+      // disk-only and synchronous — reading it directly avoids waiting on
+      // catalog load. On any miss/error this returns undefined and we fall
+      // through to the live fetch, so worst case is today's behavior.
+      try { return readPrefetchedRawNode(fk, nid); }
+      catch { return undefined; }
+    });
   const narrate = (text: string) => emit({ kind: "narration", text });
   const t0 = Date.now();
 
   narrate("Importing the Figma design (geometry from Figma, components from the kit)…");
 
   let dict: any;
-  try {
-    dict = await getNode(fileKey, nodeId);
-  } catch (err: any) {
-    const msg = `Couldn't read the Figma file: ${err?.message ?? String(err)}`;
-    narrate(msg);
-    return { ok: false, error: msg };
+  const cachedRaw = getRaw(fileKey, nodeId);
+  let entry = cachedRaw ? pickNodeEntry(cachedRaw, nodeId) : null;
+  if (cachedRaw && entry) {
+    dict = cachedRaw;
+    console.log(`[kitEmit] reused prefetched get-nodes payload for ${fileKey}:${nodeId} (skipped live fetch)`);
+  } else {
+    // No prefetched payload, or it didn't contain the node (stale/corrupt
+    // cache) — do the live fetch. The cache can never make a node fail that a
+    // live fetch would succeed on.
+    try {
+      dict = await getNode(fileKey, nodeId);
+    } catch (err: any) {
+      const msg = `Couldn't read the Figma file: ${err?.message ?? String(err)}`;
+      narrate(msg);
+      return { ok: false, error: msg };
+    }
+    entry = pickNodeEntry(dict, nodeId);
   }
-  const entry = pickNodeEntry(dict, nodeId);
   if (!entry) {
     const msg = "Figma returned no document for that node — check the link.";
     narrate(msg);
@@ -124,6 +195,52 @@ export async function runFigmaKitEmitBranch(
   const assetsDir = path.join(fdir, "assets");
   await fs.mkdir(assetsDir, { recursive: true });
 
+  // --- A2: asset cache across imports -------------------------------------
+  // Exported SVG/PNG bytes are immutable per file version. Cache them on disk
+  // keyed by fileKey:version:nodeId:format so a re-import of the same node
+  // skips the Figma export+download entirely. The version-keyed folder makes
+  // invalidation a no-op: a changed Figma file lands in a new folder.
+  const cacheRoot = input.deps?.cacheDir ?? figmaIngestRoot();
+  const cacheVersion = assetCacheVersion(dict);
+  const cacheDir = assetCacheDir(cacheRoot, fileKey, cacheVersion);
+  let cacheHits = 0;
+
+  /** Path of the cached file for (nodeId, format) under the version dir, or
+   *  null when the cache is disabled (no version token). */
+  const cachePathFor = (id: string, format: "svg" | "png"): string | null =>
+    cacheDir ? path.join(cacheDir, assetFileName(id, format)) : null;
+
+  /** Cache HIT: copy the cached bytes into the frame's assets/ dir and record
+   *  the file. Returns true when a valid, non-empty cache file was used. */
+  const tryCacheHit = async (id: string, format: "svg" | "png"): Promise<boolean> => {
+    const cp = cachePathFor(id, format);
+    if (!cp) return false;
+    try {
+      const st = await fs.stat(cp);
+      if (!st.isFile() || st.size === 0) return false; // corrupt/empty → miss
+      const file = assetFileName(id, format);
+      await fs.copyFile(cp, path.join(assetsDir, file));
+      assetFiles.set(id, file);
+      cacheHits++;
+      return true;
+    } catch {
+      return false; // not cached / unreadable → treat as miss, export fresh
+    }
+  };
+
+  /** Best-effort write of freshly-downloaded bytes into the version cache. A
+   *  failure here never aborts the turn (mirrors the ingest diskSet posture). */
+  const writeCache = async (id: string, format: "svg" | "png", bytes: Buffer): Promise<void> => {
+    const cp = cachePathFor(id, format);
+    if (!cp) return;
+    try {
+      await fs.mkdir(path.dirname(cp), { recursive: true });
+      await fs.writeFile(cp, bytes);
+    } catch (err: any) {
+      console.warn(`[kitEmit] asset cache write failed for ${id}.${format}: ${err?.message ?? err}`);
+    }
+  };
+
   // --- Asset export: plan → export → mark broken → re-plan (≤3 passes) ----
   const brokenIds = new Set<string>();
   const assetFiles = new Map<string, string>(); // nodeId -> filename
@@ -132,7 +249,15 @@ export async function runFigmaKitEmitBranch(
   const fetchBatch = async (ids: string[], format: "svg" | "png", scale: number): Promise<string[]> => {
     const pending = ids.filter((id) => !assetFiles.has(id));
     if (!pending.length) return [];
-    const entries = await exportUrls(fileKey, pending, format, scale);
+
+    // A2: serve from the version cache first; only export the ids that miss.
+    const toExport: string[] = [];
+    for (const id of pending) {
+      if (!(await tryCacheHit(id, format))) toExport.push(id);
+    }
+    if (!toExport.length) return [];
+
+    const entries = await exportUrls(fileKey, toExport, format, scale);
     const broken: string[] = [];
     await Promise.all(entries.map(async (e) => {
       if (!e.url) { broken.push(e.nodeId); return; }
@@ -141,6 +266,8 @@ export async function runFigmaKitEmitBranch(
         const file = assetFileName(e.nodeId, format);
         await fs.writeFile(path.join(assetsDir, file), bytes);
         assetFiles.set(e.nodeId, file);
+        // Populate the version cache so the next import is a hit.
+        await writeCache(e.nodeId, format, bytes);
       } catch (err: any) {
         downloadFailures.push(`${e.nodeId}: ${err?.message ?? String(err)}`);
       }
@@ -191,7 +318,7 @@ export async function runFigmaKitEmitBranch(
 
   // index.tsx LAST so the watcher's reload sees assets present.
   await fs.writeFile(path.join(fdir, "index.tsx"), result.source, "utf-8");
-  console.log(`[kitEmit] ${frameSlug}: ${result.kitInstanceCount} kit instances, ${result.assetRefs.length} assets, ${Date.now() - t0}ms`);
+  console.log(`[kitEmit] ${frameSlug}: ${result.kitInstanceCount} kit instances, ${result.assetRefs.length} assets (${cacheHits} from cache), ${Date.now() - t0}ms`);
 
   if (downloadFailures.length) {
     narrate(`⚠ ${downloadFailures.length} asset${downloadFailures.length === 1 ? "" : "s"} couldn't be downloaded and may render as plain boxes.`);
