@@ -5,6 +5,13 @@ import { app, dialog } from "electron";
 import electronUpdaterPkg from "electron-updater";
 const { autoUpdater } = electronUpdaterPkg;
 
+// The turn-aware apply decision lives in a standalone, electron-free module
+// so it is unit-testable under vitest (importing this file pulls in
+// electron-updater, which eagerly constructs MacUpdater and throws outside a
+// packaged runtime). Re-exported here so Task 4's glue can use it directly.
+export { decideApply, DEFER_CAP_MS } from "./applyDecision.js";
+export type { ApplyContext } from "./applyDecision.js";
+
 /**
  * Initializes electron-updater with the GitHub Releases provider.
  *
