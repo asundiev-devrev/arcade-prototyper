@@ -17,7 +17,11 @@ if (!zipPath || !ymlPath || !version) {
 const bytes = fs.readFileSync(zipPath);
 const sha512 = crypto.createHash("sha512").update(bytes).digest("base64");
 const size = bytes.length;
-const zipName = zipPath.split("/").pop();
+// electron-builder / electron-updater use the SPACE→DASH "safe" artifact name
+// in the manifest url; the file uploaded to the release MUST match it byte-for-
+// byte or the update download 404s. release.sh renames the file to this safe
+// name before uploading.
+const zipName = (zipPath.split("/").pop() ?? "").replace(/ /g, "-");
 
 const yml = `version: ${version}
 files:

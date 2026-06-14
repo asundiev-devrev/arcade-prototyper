@@ -55,20 +55,27 @@ echo "==> Re-zipping stapled .app…"
 rm -f "$ZIP"
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
 
+# Rename to the space→dash "safe" name electron-updater expects in the manifest
+# url. The uploaded asset, the on-disk file, and the manifest url must all be
+# byte-identical or the auto-update download 404s.
+SAFE_ZIP="$DIST/$(basename "$ZIP" | tr ' ' '-')"
+if [ "$ZIP" != "$SAFE_ZIP" ]; then mv -f "$ZIP" "$SAFE_ZIP"; fi
+
 # 4. Rewrite latest-mac.yml's sha512/size to match the re-zipped bytes.
 echo "==> Rewriting latest-mac.yml for the stapled zip…"
-node studio/packaging/scripts/rewrite-latest-mac.mjs "$ZIP" "$YML" "$VERSION"
+node studio/packaging/scripts/rewrite-latest-mac.mjs "$SAFE_ZIP" "$YML" "$VERSION"
 
 # 5. Notarize the (stapled-app) zip too.
 echo "==> Notarizing zip…"
-xcrun notarytool submit "$ZIP" --keychain-profile arcade-studio-notarize --wait
+xcrun notarytool submit "$SAFE_ZIP" --keychain-profile arcade-studio-notarize --wait
 
-# 6. Publish dmg + zip + latest-mac.yml to the mirror.
+# 6. Publish dmg + zip + latest-mac.yml to the mirror. The dmg keeps its on-disk
+#    space name as before — it's manual-install-only, not the auto-update payload.
 echo "==> Publishing v${VERSION} to ${MIRROR}…"
 NOTES_FILE="$(mktemp)"
 awk "/^## \\[${VERSION}\\]/{f=1;next} /^## \\[/{f=0} f" studio/CHANGELOG.md > "$NOTES_FILE" || true
 gh release create "v${VERSION}" \
-  "$DMG" "$ZIP" "$YML" \
+  "$DMG" "$SAFE_ZIP" "$YML" \
   --repo "$MIRROR" \
   --title "Arcade Studio ${VERSION}" \
   --notes-file "$NOTES_FILE" \

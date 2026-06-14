@@ -38,6 +38,8 @@ export function initUpdater(): void {
   });
 
   autoUpdater.on("update-downloaded", (info) => {
+    if (applying) return;
+    applying = true;
     void applyWhenIdle(info.version, 0);
   });
 
@@ -60,6 +62,12 @@ export function initUpdater(): void {
 
 /** Poll interval while waiting for an active turn to finish. */
 const POLL_MS = 15 * 1000;
+
+/** Guards against stacked apply chains: the periodic recheck re-emits
+ *  update-downloaded for the cached update, which would otherwise spawn a
+ *  second applyWhenIdle chain (resetting the defer cap + scheduling another
+ *  quit). Once we commit to applying, we never re-enter. */
+let applying = false;
 
 /** Ask the local server whether a generation turn is running. On any error
  *  (server not up, fetch failed) we treat the app as idle — a dead server has
@@ -103,6 +111,15 @@ async function applyWhenIdle(version: string, deferredMs: number): Promise<void>
       body: `Installing version ${version}…`,
     }).show();
   }
-  // Small delay so the notice paints before the app quits.
-  setTimeout(() => autoUpdater.quitAndInstall(), 1200);
+  // Re-check after the notice delay: a prompt submitted in this window would
+  // start a turn we must not kill. If so, resume waiting instead of quitting.
+  setTimeout(() => {
+    void (async () => {
+      if (await isTurnActive()) {
+        void applyWhenIdle(version, deferredMs + POLL_MS);
+      } else {
+        autoUpdater.quitAndInstall();
+      }
+    })();
+  }, 1200);
 }
