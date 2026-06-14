@@ -819,15 +819,16 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
     const b = n.absoluteBoundingBox ?? {};
     const k = kitForNode(n, ctx);
 
-    // C3 — classify every visible instance for coverage telemetry. A matched
-    // instance returns before recursing (the kit absorbs its subtree), so an
-    // absorbed inner instance is never counted; an unmatched instance recurses,
-    // and its nested instances are counted at their own depth. Tally on the
-    // instance NODE only — non-instance frames/vectors aren't "components".
+    // C3 — classify every visible instance for coverage telemetry. We only
+    // count an instance as "matched" when it ACTUALLY emits as a kit component
+    // (or icon), NOT merely when matchKit() returns a name. A mapped name with
+    // no emit case falls through the switch `default` to static markup — and
+    // would otherwise inflate the coverage metric while silently failing the
+    // "real kit components" bar. So tally totals + the unmatched backlog here,
+    // but defer the matched++ to the emit paths via markKitEmitted().
     if (n.type === "INSTANCE") {
       totalInstances++;
-      if (k) matchedInstances++;
-      else {
+      if (!k) {
         const { setName } = resolveIdentity(n.componentId, ctx.components, ctx.componentSets);
         const name = setName ?? "(unknown)";
         unmatchedSets[name] = (unmatchedSets[name] ?? 0) + 1;
@@ -837,6 +838,10 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
     if (k) {
       const p = instanceProps(n);
       const w = b.width ?? 16;
+      // Provisionally count this instance as kit-matched; the `default` branch
+      // (mapped name, no emit case → static markup) backs it out so the metric
+      // only credits instances that actually render as a kit component.
+      if (n.type === "INSTANCE") matchedInstances++;
 
       if (k.kind === "icon") {
         usedKit.add(k.kit);
@@ -1025,9 +1030,23 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
           lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><AvatarGroup size="md">${inner.join("")}${cnt}</AvatarGroup></div>`);
           return;
         }
+        case "ChatBubble": {
+          // 0.3 "Bubble". variant from Figma Type (Sender/Receiver); the bubble
+          // text is the instance's visible text; timestamp if a time-ish text is
+          // present. Children must be real text, so keep the message content.
+          usedKit.add("ChatBubble");
+          kitInstanceCount++;
+          const variant = /sender/i.test(String(p.Type ?? p.Variant ?? "")) ? "sender" : "receiver";
+          const texts = visibleTexts(n).filter((t) => t.trim());
+          const body = texts.length ? texts.join(" ") : "";
+          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><ChatBubble variant="${variant}">${escText(body)}</ChatBubble></div>`);
+          return;
+        }
         default:
-          // Mapped name without an emitter (future row) — fall through to
-          // static markup rather than fail.
+          // Mapped name without an emit case (future row) — fall through to
+          // faithful static markup rather than fail. Back out the provisional
+          // matched++ so coverage telemetry doesn't credit a non-kit render.
+          if (n.type === "INSTANCE") matchedInstances--;
           break;
       }
     }
@@ -1097,6 +1116,14 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
     const childCtx: FlexCtx = flexHere
       ? { inFlex: true, parentMode: n.layoutMode }
       : ABSOLUTE_CTX;
+    // When THIS container is itself a flex child (flowing, not absolute) but is
+    // NOT a flex container, its own children take the absolute path — and they
+    // compute left/top relative to THIS node's origin. Without an explicit
+    // positioning context they would instead anchor to the nearest positioned
+    // ancestor (the root wrapper), landing offset by this node's bbox. Establish
+    // a positioning context so absolute descendants anchor here. (flex containers
+    // don't need this — their children flow, not absolute.)
+    if (flex.inFlex && !flexHere && kids.length) s.position = "relative";
     lines.push(`${pad}<div style=${sx(s)}>`);
     for (const c of kids) emit(c, b.x ?? px, b.y ?? py, ind + 1, childCtx);
     lines.push(`${pad}</div>`);

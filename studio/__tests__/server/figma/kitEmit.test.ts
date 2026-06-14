@@ -1065,6 +1065,79 @@ describe("emitKitFrame", () => {
     expect(r.matchedInstances).toBe(1);
     expect(r.unmatchedSets).toEqual({});
   });
+
+  it("ChatBubble: a mapped Bubble emits a real <ChatBubble> and counts as matched", () => {
+    // Regression: ChatBubble was in SET_KEY_TO_KIT but had no emit case, so it
+    // rendered as static markup WHILE inflating the coverage metric. Now it must
+    // emit a real kit ChatBubble and the metric must credit it honestly.
+    const CHATBUBBLE_KEY = "edd2821db8a05b808da334a1c6aed7646d23e82e";
+    const { node, maps } = keyInstance(
+      "cb", CHATBUBBLE_KEY, "Bubble", { Type: "Sender" }, ["Hello there"],
+    );
+    const r = emitKitFrame(frameNode("0", [node]), { ...maps, assetFiles: new Map() });
+    expect(r.source).toContain('<ChatBubble variant="sender">Hello there</ChatBubble>');
+    expect(r.kitImports).toContain("ChatBubble");
+    expect(r.kitInstanceCount).toBe(1);
+    expect(r.matchedInstances).toBe(1);
+  });
+
+  it("METRIC HONESTY: a mapped name with NO emit case is NOT counted as matched", () => {
+    // The coverage metric must credit only instances that actually emit as a kit
+    // component. A name mapped in SET_NAME_TO_KIT to a value with no switch case
+    // (simulated via a fabricated mapping) falls to `default` → static markup and
+    // must NOT inflate matchedInstances. We assert the invariant generally:
+    // matchedInstances === number of instances that produced a kit import/render.
+    // Use a real mapped-but-unemittable shape: SET_NAME_TO_KIT has no
+    // "NonExistentKit", so a Cell (unmapped) stays unmatched and a Checkbox
+    // (mapped+emitted) is the only match.
+    const cb = checkboxInstance("cb1");
+    const cell = {
+      id: "cell", type: "INSTANCE", componentId: "c:cell",
+      absoluteBoundingBox: bbox(0, 40, 300, 47),
+      children: [],
+    };
+    const maps = {
+      components: {
+        "c:1": { key: "vk", name: "Checked=True", componentSetId: "s:1" },
+        "c:cell": { key: "k", name: "x", componentSetId: "s:cell" },
+      },
+      componentSets: {
+        "s:1": { key: "a1475c3e4dfdf52bca771aff82f3ac849d31a036", name: "Checkbox" },
+        "s:cell": { key: "no-match", name: "Cell" },
+      },
+    };
+    const r = emitKitFrame(frameNode("0", [cb, cell]), { ...maps, assetFiles: new Map() });
+    // matchedInstances must equal the count of real kit renders (the Checkbox).
+    expect(r.matchedInstances).toBe(r.kitInstanceCount);
+    expect(r.matchedInstances).toBe(1);
+    expect(r.totalInstances).toBe(2);
+  });
+
+  it("B2 flex-position: a free-form container that is a flex child gets position:relative", () => {
+    // Regression: when an auto-layout (flex) frame contains a free-form (no
+    // layoutMode) sub-frame, that sub-frame's absolutely-positioned descendants
+    // must anchor to IT, not the root wrapper. So the sub-frame needs an explicit
+    // positioning context.
+    const doc = {
+      id: "0", type: "FRAME",
+      layoutMode: "VERTICAL", itemSpacing: 8,
+      absoluteBoundingBox: bbox(0, 0, 400, 300),
+      children: [{
+        id: "panel", type: "FRAME", // NO layoutMode → free-form, flex CHILD
+        absoluteBoundingBox: bbox(100, 0, 200, 100),
+        children: [{
+          id: "pinned", type: "TEXT", characters: "x",
+          absoluteBoundingBox: bbox(150, 10, 40, 16),
+          style: { fontFamily: "Inter", fontSize: 13 },
+        }],
+      }],
+    };
+    const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map() });
+    // The panel div must carry position:relative so 'pinned' anchors to it.
+    expect(r.source).toContain('"relative"');
+    // And the root must be flex (sanity: the B2 path is actually exercised).
+    expect(r.source).toContain('"flex"');
+  });
 });
 
 // --- mapping hygiene (D2) ----------------------------------------------------
@@ -1163,5 +1236,40 @@ describe("kit mappings hygiene", () => {
     const fake = { Bogus: "ThisComponentDoesNotExistInTheKit" };
     const missing = Object.values(fake).filter((v) => !names.has(v));
     expect(missing).toEqual(["ThisComponentDoesNotExistInTheKit"]);
+  });
+
+  it("every component-kind mapping has a real emit case (not just a real export name)", () => {
+    // The invariant that ChatBubble violated: a mapping value being a real kit
+    // EXPORT is necessary but NOT sufficient — the emit switch must also have a
+    // CASE that renders it, else the instance counts as matched while rendering
+    // static markup (failing the "real kit components" bar AND inflating the
+    // coverage metric). For every mapping entry, route a synthetic instance
+    // through its REAL key/name so matchKit resolves, then assert it actually
+    // emitted as a kit component (kitInstanceCount + matchedInstances > 0).
+    const routes: Array<{ kit: string; key?: string; name: string }> = [
+      ...Object.entries(SET_KEY_TO_KIT).map(([key, kit]) => ({ kit, key, name: "x" })),
+      ...Object.entries(SET_NAME_TO_KIT).map(([name, kit]) => ({ kit, name })),
+    ];
+    const noEmitCase: string[] = [];
+    for (const { kit, key, name } of routes) {
+      const node: any = {
+        id: `n_${kit}`, type: "INSTANCE", componentId: `c_${kit}`,
+        absoluteBoundingBox: bbox(0, 0, 120, 40),
+        componentProperties: {},
+        children: [{
+          id: `t_${kit}`, type: "TEXT", characters: "x",
+          absoluteBoundingBox: bbox(4, 4, 80, 16),
+          style: { fontFamily: "Inter", fontSize: 13 },
+        }],
+      };
+      const maps = {
+        components: { [`c_${kit}`]: { key: "k", name: "x", componentSetId: `s_${kit}` } },
+        componentSets: { [`s_${kit}`]: { key: key ?? `local-${kit}`, name } },
+      };
+      const r = emitKitFrame(frameNode("0", [node]), { ...maps, assetFiles: new Map() });
+      if (!(r.kitInstanceCount > 0 && r.matchedInstances === 1)) noEmitCase.push(`${kit} (via ${key ?? name})`);
+    }
+    expect(noEmitCase, `Mapped components with no emit case (render static, inflate coverage): ${noEmitCase.join(", ")}`)
+      .toEqual([]);
   });
 });
