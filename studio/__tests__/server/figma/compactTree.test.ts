@@ -88,6 +88,79 @@ describe("compactTree (edge cases)", () => {
     expect(warnings.some((w) => /depth cap|node cap/.test(w))).toBe(true);
   });
 
+  it("does not truncate a realistic full-screen frame of ~300 nodes", () => {
+    // The SoR-nav failing case truncated at the old 200 cap (4-5x 'node cap
+    // reached'), starving the sidebar because a sibling section consumed the
+    // global budget first. A real precise-repro frame must fit without loss.
+    const children = Array.from({ length: 300 }, (_, i) => ({
+      id: `row-${i}`, type: "TEXT", characters: `row ${i}`,
+      absoluteBoundingBox: { x: 0, y: i * 10, width: 100, height: 10 },
+      style: { fontSize: 12, lineHeightPx: 16 },
+    }));
+    const { tree, warnings } = compactTree({
+      id: "root", type: "FRAME",
+      absoluteBoundingBox: { x: 0, y: 0, width: 240, height: 3000 },
+      fills: [{ type: "SOLID", color: { r: 1, g: 1, b: 1 } }],
+      children,
+    });
+    expect(warnings.some((w) => /node cap/.test(w))).toBe(false);
+    expect(tree.children).toHaveLength(300);
+  });
+
+  it("carries absolute geometry as bbox relative to the frame root", () => {
+    const { tree } = compactTree({
+      id: "root", type: "FRAME",
+      absoluteBoundingBox: { x: 100, y: 50, width: 240, height: 800 },
+      fills: [{ type: "SOLID", color: { r: 1, g: 1, b: 1 } }],
+      children: [{
+        id: "child", type: "TEXT", characters: "Home",
+        // absolute (130, 70) → relative to root origin (100, 50) = (30, 20)
+        absoluteBoundingBox: { x: 130, y: 70, width: 64, height: 16 },
+        style: { fontSize: 12, lineHeightPx: 16 },
+      }],
+    });
+    expect(tree.bbox).toEqual([0, 0, 240, 800]); // root at its own origin
+    expect(tree.children?.[0].bbox).toEqual([30, 20, 64, 16]);
+  });
+
+  it("carries instance component identity (name + variant props)", () => {
+    const { tree } = compactTree({
+      id: "root", type: "FRAME",
+      absoluteBoundingBox: { x: 0, y: 0, width: 240, height: 800 },
+      fills: [{ type: "SOLID", color: { r: 1, g: 1, b: 1 } }],
+      children: [{
+        id: "btn", type: "INSTANCE", name: "Navigation Button",
+        absoluteBoundingBox: { x: 0, y: 0, width: 200, height: 32 },
+        componentProperties: {
+          "State": { value: "Default", type: "VARIANT" },
+          "Has Icon": { value: "true", type: "BOOLEAN" },
+          "Label#1:0": { value: "My Work", type: "TEXT" },
+        },
+        children: [],
+      }],
+    });
+    const inst = tree.children?.[0];
+    expect(inst?.type).toBe("instance");
+    expect(inst?.component?.name).toBe("Navigation Button");
+    expect(inst?.component?.props).toEqual({ State: "Default", "Has Icon": "true", Label: "My Work" });
+  });
+
+  it("keeps a short instance name that the noise filter would otherwise drop", () => {
+    // "_Item" is 5 chars with no space — meaningfulName drops it for plain
+    // frames, but for an INSTANCE the name is load-bearing identity. Keep it.
+    const { tree } = compactTree({
+      id: "root", type: "FRAME",
+      absoluteBoundingBox: { x: 0, y: 0, width: 240, height: 800 },
+      fills: [{ type: "SOLID", color: { r: 1, g: 1, b: 1 } }],
+      children: [{
+        id: "row", type: "INSTANCE", name: "_Item",
+        absoluteBoundingBox: { x: 0, y: 0, width: 200, height: 32 },
+        children: [],
+      }],
+    });
+    expect(tree.children?.[0].component?.name).toBe("_Item");
+  });
+
   it("preserves auto-layout fields", () => {
     const { tree } = compactTree({
       id: "r", type: "FRAME",

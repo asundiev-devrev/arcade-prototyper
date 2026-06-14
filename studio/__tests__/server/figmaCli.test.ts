@@ -121,16 +121,32 @@ describe("figmaCli (figmanage bridge)", () => {
     );
   });
 
-  it("getVariables returns parsed JSON when figmanage exits 0", async () => {
-    spawnMock.mockImplementation(() => mockSpawn(JSON.stringify({ variables: { x: { name: "t" } } }), 0) as any);
+  it("getVariables calls `variables list-local` and hoists meta.variables", async () => {
+    // Figma's /variables/local nests under `meta`; getVariables hoists it to a
+    // flat `.variables`. The command MUST be `variables list-local` — the old
+    // `reading get-variables` was not a real subcommand (silent null → tokens
+    // never resolved, all colors fell back to hex).
+    spawnMock.mockImplementation(() => mockSpawn(JSON.stringify({ meta: { variables: { x: { name: "t" } } } }), 0) as any);
     const { getVariables } = await import("../../server/figmaCli");
     const r = await getVariables("AbC123");
     expect(r).toEqual({ variables: { x: { name: "t" } } });
     expect(spawnMock).toHaveBeenCalledWith(
       "figmanage",
-      ["reading", "get-variables", "AbC123", "--json"],
+      ["variables", "list-local", "AbC123", "--json"],
       expect.any(Object),
     );
+  });
+
+  it("getVariables also accepts an already-flat variables payload", async () => {
+    spawnMock.mockImplementation(() => mockSpawn(JSON.stringify({ variables: { y: { name: "u" } } }), 0) as any);
+    const { getVariables } = await import("../../server/figmaCli");
+    expect(await getVariables("AbC123")).toEqual({ variables: { y: { name: "u" } } });
+  });
+
+  it("getVariables returns null when no variables present (e.g. non-Enterprise plan)", async () => {
+    spawnMock.mockImplementation(() => mockSpawn(JSON.stringify({ error: "requires Figma Enterprise plan" }), 0) as any);
+    const { getVariables } = await import("../../server/figmaCli");
+    expect(await getVariables("AbC123")).toBeNull();
   });
 
   it("getVariables returns null on non-zero exit instead of throwing", async () => {

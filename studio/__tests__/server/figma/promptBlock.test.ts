@@ -60,4 +60,51 @@ describe("buildFigmaContextBlock", () => {
     const s = buildFigmaContextBlock({ ...result, composites: [] });
     expect(s).not.toContain("suggested_composites:");
   });
+
+  it("emits each node's bbox geometry", () => {
+    const s = buildFigmaContextBlock({
+      ...result,
+      tree: {
+        id: "0", type: "frame", name: "App", bbox: [0, 0, 240, 800],
+        children: [{ id: "0.0", type: "frame", name: "Sidebar", bbox: [0, 0, 240, 800] }],
+      },
+    });
+    expect(s).toContain("@[0,0,240,800]");
+  });
+
+  it("emits instance component identity and variant props", () => {
+    const s = buildFigmaContextBlock({
+      ...result,
+      tree: {
+        id: "0", type: "frame", name: "App", bbox: [0, 0, 240, 800],
+        children: [{
+          id: "0.0", type: "instance", bbox: [0, 0, 200, 32],
+          component: { name: "Navigation Button", props: { State: "Default", Label: "My Work" } },
+        }],
+      },
+    });
+    expect(s).toContain("Navigation Button");
+    expect(s).toContain("State=Default");
+    expect(s).toContain("Label=My Work");
+  });
+
+  it("surfaces a LOUD warning when token resolution failed (raw hex shipped)", () => {
+    const s = buildFigmaContextBlock({
+      ...result,
+      tokens: { colors: {}, typography: {}, spacing: {} },
+      diagnostics: { warnings: ["variables unavailable; styles left raw"] },
+    });
+    // The model must be told tokens didn't resolve so it maps hex → token itself.
+    expect(s).toMatch(/token resolution failed|map .* to the nearest/i);
+  });
+
+  it("states the reference PNG dimensions and source node size", () => {
+    const s = buildFigmaContextBlock({
+      ...result,
+      png: { path: "/p.png", widthPx: 600, heightPx: 2000 },
+      tree: { id: "0", type: "frame", name: "App", bbox: [0, 0, 240, 800] },
+    });
+    expect(s).toContain("600");
+    expect(s).toContain("2000");
+  });
 });

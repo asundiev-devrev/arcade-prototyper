@@ -38,10 +38,31 @@ export interface CompactText {
   style?: string;
 }
 
+/**
+ * A Figma component instance's identity, carried through compaction so the
+ * model can map a region onto a real kit component instead of guessing from
+ * geometry. `name` is the component's readable name (e.g. "Navigation Button",
+ * "_Item", "Icons/Window"); `props` is the resolved variant/text property map
+ * (e.g. { State: "Default", Label: "My Work" }).
+ */
+export interface CompactComponent {
+  name: string;
+  props?: Record<string, string>;
+}
+
 export interface CompactNode {
   id: string;
   type: NodeType;
   name?: string;
+  /**
+   * Absolute geometry as [x, y, width, height], in Figma px, expressed
+   * RELATIVE to the frame root's origin. Carried on every node so the model
+   * sees a real coordinate map rather than reconstructing layout from a
+   * thumbnail. Absent only when the raw node had no absoluteBoundingBox.
+   */
+  bbox?: [number, number, number, number];
+  /** Component identity for INSTANCE nodes (see CompactComponent). */
+  component?: CompactComponent;
   layout?: CompactLayout;
   style?: CompactStyle;
   text?: CompactText;
@@ -75,6 +96,14 @@ export interface IngestResult {
   tree: CompactNode;
   tokens: ResolvedTokens;
   composites: CompositeSuggestion[];
+  /**
+   * True once the phase-2 classifier has run. Distinguishes "classified, no
+   * composite matched" (composites=[] AND classified=true → a novel design)
+   * from "not classified yet" (composites=[] AND classified=false → phase 2
+   * still pending). Consumers gating behavior on the absence of a template
+   * match MUST check this, or they misfire on every first turn.
+   */
+  classified: boolean;
   diagnostics: { warnings: string[] };
 }
 

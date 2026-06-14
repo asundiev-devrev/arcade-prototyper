@@ -55,6 +55,32 @@ const VALIDATE_ARCADE_IMPORTS_HOOK = path.resolve(MODULE_DIR, "hooks", "validate
 const ARCADE_GEN_ROOT = process.env.ARCADE_GEN_ROOT
   ?? (process.env.HOME ? path.resolve(process.env.HOME, "arcade-gen") : "/__arcade_gen_unconfigured");
 
+/**
+ * Build the `/bin/sh -c` command string that runs a Studio hook script under
+ * a Node runtime that actually exists on the host.
+ *
+ * Why this is not just `node <path>`: the packaged DMG ships NO standalone
+ * `node` binary on PATH. Electron is the only Node-capable runtime, reachable
+ * by running its OWN executable (`process.execPath`) with
+ * `ELECTRON_RUN_AS_NODE=1` — the exact shim `electron/bin/figmanage` already
+ * uses. The previous hardcoded `node <path>` exited 127
+ * ("/bin/sh: node: command not found") on every tester machine, which made the
+ * claude CLI treat the PostToolUse hook as a non-blocking failure and run the
+ * Write/Edit anyway. Net effect: BOTH write-time guardrails — import
+ * validation (catches hallucinated `arcade/components` names → blank frames)
+ * and the image-reshape block — were silently OFF in production. A tester's
+ * "the agent invented an icon and broke the build" traces straight to this.
+ *
+ * In dev, `process.execPath` is the real `node` binary and the
+ * `ELECTRON_RUN_AS_NODE` flag is ignored, so the same string is correct in
+ * both worlds. Paths are JSON-quoted because the packaged executable lives
+ * under ".../Arcade Studio.app/..." (spaces) — an unquoted command would split
+ * on the space and fail to launch.
+ */
+function hookCommand(hookScriptPath: string): string {
+  return `ELECTRON_RUN_AS_NODE=1 ${JSON.stringify(process.execPath)} ${JSON.stringify(hookScriptPath)}`;
+}
+
 export interface RunTurnOptions {
   cwd: string;
   prompt: string;
@@ -184,16 +210,16 @@ export async function runClaudeTurn(opts: RunTurnOptions): Promise<void> {
       PreToolUse: [
         {
           matcher: "Bash",
-          // Quote the hook path — in the packaged app it lives under
-          // ".../Arcade Studio.app/..." (spaces), and an unquoted command
-          // would split on the space and fail to launch the hook.
-          hooks: [{ type: "command", command: `node ${JSON.stringify(BLOCK_IMAGE_RESHAPE_HOOK)}` }],
+          // Launch via the current Node-capable runtime (real node in dev,
+          // Electron-as-node in the packaged DMG) — see hookCommand(). A bare
+          // `node <path>` exited 127 in the DMG and disabled this hook.
+          hooks: [{ type: "command", command: hookCommand(BLOCK_IMAGE_RESHAPE_HOOK) }],
         },
       ],
       PostToolUse: [
         {
           matcher: "Write|Edit",
-          hooks: [{ type: "command", command: `node ${JSON.stringify(VALIDATE_ARCADE_IMPORTS_HOOK)}` }],
+          hooks: [{ type: "command", command: hookCommand(VALIDATE_ARCADE_IMPORTS_HOOK) }],
         },
       ],
     },

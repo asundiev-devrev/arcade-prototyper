@@ -1,15 +1,34 @@
 // @vitest-environment node
+//
+// Routing contract for Figma-URL prompts.
+//
+// HISTORY: until 2026-06-12 a Figma URL routed to the Claude generator with
+// an injected <figma_context> block, and a separate hi-fi-intent gate picked
+// a transpile branch. Both are gone: ANY prompt with a Figma URL (that isn't
+// a @Computer turn) now routes to the deterministic kit-emit branch
+// (server/figma/kitEmitBranch.ts) — no LLM, no Bedrock auth, no claude
+// subprocess. These tests pin that routing.
 import { describe, it, expect, beforeEach, afterEach, beforeAll, vi } from "vitest";
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
-import { chatMiddleware } from "../../../server/middleware/chat";
 import { createProject } from "../../../server/projects";
-import * as ingestModule from "../../../server/figmaIngest";
-import * as systemIngestModule from "../../../server/figmaSystemIngest";
 import { __resetTurnRegistryForTests } from "../../../server/turnRegistry";
+
+const kitEmitSpy = vi.hoisted(() =>
+  vi.fn(async (input: any) => {
+    input.emit({ kind: "narration", text: "Importing the Figma design (stub)…" });
+    return { ok: true };
+  }),
+);
+vi.mock("../../../server/figma/kitEmitBranch", () => ({
+  runFigmaKitEmitBranch: kitEmitSpy,
+}));
+
+// Import AFTER the mock so chat.ts binds the stub.
+import { chatMiddleware } from "../../../server/middleware/chat";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,10 +43,8 @@ beforeEach(async () => {
   process.env.ARCADE_STUDIO_ROOT = tmp;
   process.env.ARCADE_STUDIO_CLAUDE_BIN = FAKE;
   process.env.ARCADE_STUDIO_SKIP_SSO_CHECK = "1";
-  // Tee everything the fake claude receives into a file so the test can assert
-  // on prompt shape. The fake script is expected to write its argv to
-  // ARCADE_TEST_PROMPT_OUT.
   process.env.ARCADE_TEST_PROMPT_OUT = path.join(tmp, "last-prompt.txt");
+  kitEmitSpy.mockClear();
   __resetTurnRegistryForTests();
   server = http.createServer(chatMiddleware());
   await new Promise<void>((r) => server.listen(0, () => r()));
@@ -45,148 +62,70 @@ afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
-/** Drain the per-slug SSE stream so the subprocess completes before
- *  assertions read the prompt argv file. */
-async function drainStream(slug: string): Promise<void> {
+/** Drain the per-slug SSE stream so the turn completes before assertions. */
+async function drainStream(slug: string): Promise<string> {
   const r = await fetch(`http://localhost:${port}/api/chat/stream/${slug}`);
-  await r.text();
+  return r.text();
 }
 
-describe("/api/chat with Figma structured context", () => {
-  it("injects <figma_context> when an IngestResult is cached", async () => {
-    vi.spyOn(ingestModule, "getFigmaIngest").mockResolvedValue({
-      ingest: vi.fn(),
-      ingestPhase1: vi.fn(),
-      getCached: vi.fn().mockReturnValue({
-        source: { fileKey: "k", nodeId: "1:2", url: "u", fetchedAt: "t" },
-        png: null, tree: { id: "0", type: "frame", name: "App" },
-        tokens: { colors: {}, typography: {}, spacing: {} },
-        composites: [], diagnostics: { warnings: [] },
-      }),
-      getPhase1Pending: vi.fn().mockReturnValue(undefined),
-    });
+async function post(slug: string, prompt: string) {
+  return fetch(`http://localhost:${port}/api/chat`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ slug, prompt }),
+  });
+}
 
+describe("/api/chat Figma-URL routing (kit-emit branch)", () => {
+  it("routes ANY prompt with a Figma URL to the kit-emit branch — no claude spawn", async () => {
     const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
-    const res = await fetch(`http://localhost:${port}/api/chat`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        slug: p.slug,
-        prompt: "build this https://www.figma.com/design/k/x?node-id=1-2",
-      }),
-    });
+    const res = await post(p.slug, "build this https://www.figma.com/design/k/x?node-id=1-2");
     expect(res.status).toBe(202);
     await drainStream(p.slug);
-    const sent = fs.readFileSync(process.env.ARCADE_TEST_PROMPT_OUT!, "utf-8");
-    expect(sent).toContain("<figma_context");
-    expect(sent).toContain("</figma_context>");
-    expect(sent).toContain("App");
+
+    expect(kitEmitSpy).toHaveBeenCalledTimes(1);
+    const input = kitEmitSpy.mock.calls[0][0];
+    expect(input.fileKey).toBe("k");
+    expect(input.nodeId).toBe("1:2");
+    expect(input.slug).toBe(p.slug);
+    // The claude subprocess never ran: the fake bin writes its argv to
+    // ARCADE_TEST_PROMPT_OUT, which must not exist.
+    expect(fs.existsSync(process.env.ARCADE_TEST_PROMPT_OUT!)).toBe(false);
   });
 
-  it("proceeds without <figma_context> when phase 1 fails", async () => {
-    vi.spyOn(ingestModule, "getFigmaIngest").mockResolvedValue({
-      ingest: vi.fn(),
-      // Simulate phase 1 failure (figmanage down, auth missing, etc.) —
-      // chat turn should fall through cleanly and generate without context.
-      ingestPhase1: vi.fn().mockResolvedValue({
-        ok: false,
-        reason: "figmanage unavailable",
-        source: { fileKey: "k", nodeId: "1:2", url: "u" },
-      }),
-      getCached: vi.fn().mockReturnValue(undefined),
-      getPhase1Pending: vi.fn().mockReturnValue(undefined),
-    });
+  it("does NOT require hi-fi phrasing — a bare URL is enough", async () => {
     const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
-    const res = await fetch(`http://localhost:${port}/api/chat`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        slug: p.slug,
-        prompt: "build this https://www.figma.com/design/k/x?node-id=1-2",
-      }),
-    });
+    const res = await post(p.slug, "https://www.figma.com/design/abc/file?node-id=3-4");
     expect(res.status).toBe(202);
     await drainStream(p.slug);
-    const sent = fs.readFileSync(process.env.ARCADE_TEST_PROMPT_OUT!, "utf-8");
-    expect(sent).not.toContain("<figma_context");
+    expect(kitEmitSpy).toHaveBeenCalledTimes(1);
+    expect(kitEmitSpy.mock.calls[0][0].nodeId).toBe("3:4");
   });
 
-  it("main claude turn does not block on the design-system sync", async () => {
-    // Regression: before 2026-05-12, runClaudeBranch awaited the seeder in
-    // Promise.all alongside enrichPromptWithFigmaContext, so a slow
-    // getFigmaSystemIngest().ingest() (minutes on large files) kept the
-    // claude subprocess from being spawned at all. Beta tester saw "Working…
-    // 10m 6s" with no output. Now the seeder fires and forgets.
-    vi.spyOn(ingestModule, "getFigmaIngest").mockResolvedValue({
-      ingest: vi.fn(),
-      ingestPhase1: vi.fn(),
-      getCached: vi.fn().mockReturnValue({
-        source: { fileKey: "k", nodeId: "1:2", url: "u", fetchedAt: "t" },
-        png: null, tree: { id: "0", type: "frame", name: "App" },
-        tokens: { colors: {}, typography: {}, spacing: {} },
-        composites: [], diagnostics: { warnings: [] },
-      }),
-      getPhase1Pending: vi.fn().mockReturnValue(undefined),
-    });
-    // Install a design-system ingest that never resolves. If the main turn
-    // awaited it (old behavior), the assertions below would time out.
-    vi.spyOn(systemIngestModule, "getFigmaSystemIngest").mockResolvedValue({
-      ingest: vi.fn().mockImplementation(() => new Promise(() => { /* hang forever */ })),
-      getCached: vi.fn().mockReturnValue(undefined),
-      getPending: vi.fn().mockReturnValue(undefined),
-    });
-
+  it("skips Bedrock auth pre-check for kit-emit turns (no LLM involved)", async () => {
+    // Without SKIP_SSO_CHECK the Claude path would fail fast on missing
+    // Bedrock auth; the kit-emit branch must not be gated on it.
+    delete process.env.ARCADE_STUDIO_SKIP_SSO_CHECK;
     const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
-    const res = await fetch(`http://localhost:${port}/api/chat`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        slug: p.slug,
-        prompt: "build this https://www.figma.com/design/k/x?node-id=1-2",
-      }),
-    });
+    const res = await post(p.slug, "import https://www.figma.com/design/k/x?node-id=1-2");
     expect(res.status).toBe(202);
-    // Draining completes only when the fake-claude subprocess finishes. If
-    // the seeder blocked the turn, this would hang and vitest's per-test
-    // timeout would fire instead of this assertion.
-    await drainStream(p.slug);
-    const sent = fs.readFileSync(process.env.ARCADE_TEST_PROMPT_OUT!, "utf-8");
-    // Main-turn side effects happened despite the stalled seeder.
-    expect(sent).toContain("<figma_context");
+    const stream = await drainStream(p.slug);
+    expect(kitEmitSpy).toHaveBeenCalledTimes(1);
+    expect(stream).not.toContain("No Bedrock auth detected");
   });
 
-  it("injects phase-1-only context (composites=[]) when phase 2 is still pending", async () => {
-    // Simulate the realistic case: user pastes URL, prefetch runs phase 1
-    // (3–8s) and caches it with composites=[], then hits Send before phase 2
-    // (~30s classifier) has finished. Turn should still attach the context —
-    // just without composite hints — rather than falling through to the miss
-    // path as 0.4.1 did with its 10s combined budget.
-    vi.spyOn(ingestModule, "getFigmaIngest").mockResolvedValue({
-      ingest: vi.fn(),
-      ingestPhase1: vi.fn(),
-      getCached: vi.fn().mockReturnValue({
-        source: { fileKey: "k", nodeId: "1:2", url: "u", fetchedAt: "t" },
-        png: null, tree: { id: "0", type: "frame", name: "Sidebar" },
-        tokens: { colors: {}, typography: {}, spacing: {} },
-        composites: [],
-        diagnostics: { warnings: ["variables unavailable; styles left raw"] },
-      }),
-      getPhase1Pending: vi.fn().mockReturnValue(undefined),
-    });
-
+  it("prompt WITHOUT a Figma URL still takes the claude branch", async () => {
     const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
-    const res = await fetch(`http://localhost:${port}/api/chat`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        slug: p.slug,
-        prompt: "build this https://www.figma.com/design/k/x?node-id=1-2",
-      }),
-    });
+    const res = await post(p.slug, "build a settings page");
     expect(res.status).toBe(202);
     await drainStream(p.slug);
-    const sent = fs.readFileSync(process.env.ARCADE_TEST_PROMPT_OUT!, "utf-8");
-    expect(sent).toContain("<figma_context");
-    expect(sent).toContain("Sidebar");
-    // No suggested_composites section because composites=[] — buildFigmaContextBlock
-    // omits it entirely. Just confirm it's absent so we know we're getting
-    // phase-1-only content.
-    expect(sent).not.toContain("suggested_composites:");
+    expect(kitEmitSpy).not.toHaveBeenCalled();
+    expect(fs.existsSync(process.env.ARCADE_TEST_PROMPT_OUT!)).toBe(true);
+  });
+
+  it("kit-emit narration is forwarded on the SSE stream", async () => {
+    const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
+    await post(p.slug, "https://www.figma.com/design/k/x?node-id=1-2");
+    const stream = await drainStream(p.slug);
+    expect(stream).toContain("Importing the Figma design (stub)");
   });
 });

@@ -3,6 +3,7 @@ import type {
 } from "./figma/types";
 import { compactTree } from "./figma/compactTree";
 import { resolveTokens } from "./figma/resolveTokens";
+import { computeExportScale } from "./figma/exportScale";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs/promises";
@@ -21,7 +22,17 @@ const __dirname = path.dirname(__filename);
 export interface IngestDeps {
   getNode: (fileKey: string, nodeId: string) => Promise<any>;
   getVariables: (fileKey: string) => Promise<any | null>;
-  exportPng: (fileKey: string, nodeId: string) => Promise<{ path: string; widthPx: number; heightPx: number } | null>;
+  /**
+   * Export a PNG of the node. `srcSize` is the node's bbox in Figma px, used
+   * to pick an export scale that lands the longest edge near ~2000px (instead
+   * of a flat 2x that left small nodes too coarse to trace). The returned
+   * widthPx/heightPx are the REAL exported dimensions, not placeholders.
+   */
+  exportPng: (
+    fileKey: string,
+    nodeId: string,
+    srcSize?: { width: number; height: number },
+  ) => Promise<{ path: string; widthPx: number; heightPx: number } | null>;
   classify: (tree: CompactNode, composites: string[]) => Promise<{ composites: IngestResult["composites"]; warnings: string[] }>;
   now?: () => number;
 }
@@ -45,6 +56,18 @@ export interface FigmaIngest {
    * wait the full wall-clock (tests; explicit "give me everything" callers).
    */
   ingest(fileKey: string, nodeId: string, url: string): Promise<IngestOutcome>;
+  /**
+   * The raw figmanage get-nodes dict for (fileKey, nodeId) IF a prefetch
+   * already fetched it and it's still within TTL. This is the same payload
+   * the kit-emit branch needs; reusing it means the 2s figmanage round-trip is
+   * paid while the user is still typing/reviewing instead of after Send.
+   *
+   * Disk-only by design: the raw dict is 6–13MB; an in-memory LRU of 32 of
+   * them would be ~200–400MB of heap. A disk read of a big JSON is far cheaper
+   * than the 2s network round-trip and avoids the blowup. Returns undefined on
+   * miss / stale / read error — the caller falls through to a live fetch.
+   */
+  getRawNode(fileKey: string, nodeId: string): any | undefined;
   /**
    * Phase-1 ingest — returns as soon as tree + tokens + PNG are ready,
    * typically 3–8s. Phase 2 (classifier) runs in the background afterward and
@@ -89,6 +112,14 @@ export function createFigmaIngest(deps: IngestDeps, cfg: IngestConfig): FigmaIng
     // key is `${fileKey}:${nodeId}` — sanitize for a filename.
     const safe = key.replace(/[^A-Za-z0-9_-]/g, "_");
     return path.join(diskDir, `${safe}.ingest.json`);
+  }
+
+  /** Disk path for the raw get-nodes payload — a twin of the .ingest.json
+   *  file. Lives in the same diskDir so it shares the cache lifecycle. */
+  function rawDiskPathFor(key: string): string | null {
+    if (!diskDir) return null;
+    const safe = key.replace(/[^A-Za-z0-9_-]/g, "_");
+    return path.join(diskDir, `${safe}.raw.json`);
   }
 
   function cacheGet(key: string): IngestResult | undefined {
@@ -140,6 +171,39 @@ export function createFigmaIngest(deps: IngestDeps, cfg: IngestConfig): FigmaIng
     }
   }
 
+  /** Read the persisted raw get-nodes dict from disk, honoring diskTtlMs. Sync
+   *  like diskGet — the kit-emit branch calls this once at turn start, off any
+   *  hot loop, and a sync read keeps the API non-async. The dict is big (6–13MB)
+   *  but a JSON.parse of it is still far cheaper than the 2s figmanage refetch.
+   *  Any error / staleness → undefined → caller falls through to a live fetch. */
+  function rawDiskGet(key: string): any | undefined {
+    const p = rawDiskPathFor(key);
+    if (!p) return undefined;
+    try {
+      const raw = fsSync.readFileSync(p, "utf-8");
+      const parsed = JSON.parse(raw) as { savedAt: number; value: any };
+      if (!parsed?.savedAt || now() - parsed.savedAt > diskTtlMs) return undefined;
+      return parsed.value;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Persist the raw get-nodes dict to disk. Best-effort, fire-and-forget;
+   *  mirrors diskSet. A write failure never blocks or breaks the turn. */
+  function rawDiskSet(key: string, value: any): void {
+    const p = rawDiskPathFor(key);
+    if (!p) return;
+    let payload: string;
+    try { payload = JSON.stringify({ savedAt: now(), value }); }
+    catch { return; } // unserializable dict — skip silently, live fetch covers it
+    void fs.mkdir(path.dirname(p), { recursive: true })
+      .then(() => fs.writeFile(p, payload))
+      .catch((err) => {
+        console.warn(`[figmaIngest] raw cache write failed for ${key}: ${err?.message ?? err}`);
+      });
+  }
+
   /** Persist an IngestResult to disk. Best-effort, fire-and-forget; a write
    *  failure never blocks or breaks the turn. */
   function diskSet(key: string, value: IngestResult): void {
@@ -180,7 +244,13 @@ export function createFigmaIngest(deps: IngestDeps, cfg: IngestConfig): FigmaIng
       return { ok: false, reason, source: { fileKey, nodeId, url } };
     }
 
-    const { tree: compacted, warnings: compactWarnings } = compactTree(rawDoc);
+    // Stash the raw get-nodes dict (disk-only) so the kit-emit branch can reuse
+    // it instead of re-paying the 2s figmanage round-trip. The prefetch fires
+    // on URL paste, so by Send-time this is usually already warm. Best-effort;
+    // a write failure just means the branch does a live fetch.
+    rawDiskSet(cacheKey(fileKey, nodeId), rawDict);
+
+    const { tree: compacted, warnings: compactWarnings, rawById } = compactTree(rawDoc);
     warnings.push(...compactWarnings);
 
     // getVariables (token JSON) and exportPng (rendered screenshot) are two
@@ -189,11 +259,15 @@ export function createFigmaIngest(deps: IngestDeps, cfg: IngestConfig): FigmaIng
     // was doubling the network wait on the cold path (the single biggest
     // contributor to fresh-Figma turn-start latency). resolveTokens still
     // waits on getVariables, but the PNG fetch overlaps it.
+    const bbox = rawDoc?.absoluteBoundingBox;
+    const srcSize = bbox && typeof bbox.width === "number" && typeof bbox.height === "number"
+      ? { width: bbox.width, height: bbox.height }
+      : undefined;
     const [varsPayload, png] = await Promise.all([
       deps.getVariables(fileKey).catch(() => null),
-      deps.exportPng(fileKey, nodeId).catch(() => null),
+      deps.exportPng(fileKey, nodeId, srcSize).catch(() => null),
     ]);
-    const { tree: tokenedTree, tokens, warnings: tokenWarnings } = resolveTokens(compacted, rawDoc, varsPayload);
+    const { tree: tokenedTree, tokens, warnings: tokenWarnings } = resolveTokens(compacted, rawById, varsPayload);
     warnings.push(...tokenWarnings);
 
     if (!png) warnings.push("png export failed");
@@ -204,6 +278,7 @@ export function createFigmaIngest(deps: IngestDeps, cfg: IngestConfig): FigmaIng
       tree: tokenedTree,
       tokens,
       composites: [],
+      classified: false,
       diagnostics: { warnings },
     };
     cacheSet(cacheKey(fileKey, nodeId), result);
@@ -246,6 +321,7 @@ export function createFigmaIngest(deps: IngestDeps, cfg: IngestConfig): FigmaIng
     const upgraded: IngestResult = {
       ...current,
       composites: classifier.composites,
+      classified: true,
       diagnostics: {
         warnings: [...current.diagnostics.warnings, ...classifier.warnings],
       },
@@ -305,6 +381,7 @@ export function createFigmaIngest(deps: IngestDeps, cfg: IngestConfig): FigmaIng
     ingestPhase1,
     getCached(fileKey, nodeId) { return cacheGet(cacheKey(fileKey, nodeId)); },
     getPhase1Pending(fileKey, nodeId) { return phase1Pending.get(cacheKey(fileKey, nodeId)); },
+    getRawNode(fileKey, nodeId) { return rawDiskGet(cacheKey(fileKey, nodeId)); },
   };
 }
 
@@ -336,6 +413,34 @@ function pickDocument(dict: any, nodeId: string): any | null {
   return null;
 }
 
+/** Disk TTL for the production ingest layers (IngestResult + raw payload).
+ *  Shared between the singleton's config and the standalone raw reader so the
+ *  two never drift on staleness. */
+const PROD_DISK_TTL_MS = 60 * 60_000;
+
+/**
+ * Read the prefetched raw get-nodes dict written by the production ingest
+ * prefetch (`/api/figma/ingest`). Standalone (no singleton) so the kit-emit
+ * branch can read it synchronously without awaiting the async singleton
+ * construction. Reads the same `.raw.json` file in `figmaIngestRoot()` that
+ * `createFigmaIngest`'s rawDiskSet wrote, honoring the same TTL.
+ *
+ * Returns undefined on miss / stale / parse error — the caller falls through
+ * to a live figmanage fetch, so worst case is today's behavior.
+ */
+export function readPrefetchedRawNode(fileKey: string, nodeId: string): any | undefined {
+  const safe = `${fileKey}:${nodeId}`.replace(/[^A-Za-z0-9_-]/g, "_");
+  const p = path.join(figmaIngestRoot(), `${safe}.raw.json`);
+  try {
+    const raw = fsSync.readFileSync(p, "utf-8");
+    const parsed = JSON.parse(raw) as { savedAt: number; value: any };
+    if (!parsed?.savedAt || Date.now() - parsed.savedAt > PROD_DISK_TTL_MS) return undefined;
+    return parsed.value;
+  } catch {
+    return undefined;
+  }
+}
+
 let singleton: FigmaIngest | null = null;
 let cataloging: Promise<string[]> | null = null;
 
@@ -347,13 +452,17 @@ export async function getFigmaIngest(): Promise<FigmaIngest> {
     {
       getNode: (fileKey, nodeId) => figmanageGetNode(fileKey, nodeId),
       getVariables: (fileKey) => figmanageGetVariables(fileKey),
-      exportPng: async (fileKey, nodeId) => {
+      exportPng: async (fileKey, nodeId, srcSize) => {
         const dir = figmaIngestRoot();
         await fs.mkdir(dir, { recursive: true });
         const out = path.join(dir, `${fileKey}_${nodeId.replace(/:/g, "-")}.png`);
+        const { scale, widthPx, heightPx } = computeExportScale(
+          srcSize?.width ?? 0,
+          srcSize?.height ?? 0,
+        );
         try {
-          const filepath = await exportNodePng(fileKey, nodeId, out, 2);
-          return { path: filepath, widthPx: 0, heightPx: 0 };
+          const filepath = await exportNodePng(fileKey, nodeId, out, scale);
+          return { path: filepath, widthPx, heightPx };
         } catch { return null; }
       },
       classify: (tree, names) => classifyComposites(tree, names),
@@ -365,7 +474,7 @@ export async function getFigmaIngest(): Promise<FigmaIngest> {
       // Persist beside the PNG exports so reopening a Figma frame in a new
       // session is a cache hit instead of a 3–8s re-fetch.
       diskDir: figmaIngestRoot(),
-      diskTtlMs: 60 * 60_000,
+      diskTtlMs: PROD_DISK_TTL_MS,
     },
   );
   return singleton;

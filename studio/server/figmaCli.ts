@@ -158,6 +158,44 @@ export async function exportNodePng(
   return outFile;
 }
 
+export interface BatchExportEntry {
+  nodeId: string;
+  /** Temporary Figma CDN URL, or null when Figma refuses to render the node
+   *  standalone (the kit-emit engine recurses into children for these). */
+  url: string | null;
+}
+
+/**
+ * Export many nodes in one figmanage call. Tolerates null URLs (Figma
+ * returns them for nodes it can't render in isolation) — callers decide how
+ * to degrade. Chunked at 25 ids per call to stay under arg-length limits.
+ */
+export async function exportNodeImageUrls(
+  fileKey: string,
+  nodeIds: string[],
+  format: "svg" | "png",
+  scale = 1,
+): Promise<BatchExportEntry[]> {
+  const out: BatchExportEntry[] = [];
+  for (let i = 0; i < nodeIds.length; i += 25) {
+    const chunk = nodeIds.slice(i, i + 25);
+    const r = await runFigmanage(
+      ["export", "nodes", fileKey, ...chunk, "--format", format, "--scale", String(scale), "--json"],
+      { timeoutMs: 120_000 },
+    );
+    if (r.code !== 0) throw new Error(`figmanage export batch failed (${r.code}): ${r.stderr}`);
+    let parsed: any;
+    try { parsed = JSON.parse(r.stdout); }
+    catch { throw new Error(`figmanage export returned unparseable JSON: ${r.stdout.slice(0, 200)}`); }
+    if (Array.isArray(parsed)) {
+      for (const e of parsed) {
+        out.push({ nodeId: e?.node_id, url: typeof e?.url === "string" ? e.url : null });
+      }
+    }
+  }
+  return out;
+}
+
 /**
  * Clear figmanage's stored credentials (PAT + any cached cookies).
  * Used by the "Remove" button in Settings. Non-zero exit surfaces the
@@ -243,16 +281,37 @@ export async function figmaLoginWithPat(pat: string): Promise<{ ok: boolean; mes
 }
 
 /**
- * Fetch the Figma file's local variable definitions. Returns `null` rather
- * than throwing on figmanage failure — variables are best-effort input to
- * token resolution. A missing response degrades to "tokens left raw" and
- * does not block ingest.
+ * Fetch the Figma file's local variable definitions, normalized to
+ * `{ variables: { <id>: { name, ... } } }` — the shape resolveTokens and the
+ * kit-emit token resolver consume.
+ *
+ * The correct figmanage command is `variables list-local` (NOT the former
+ * `reading get-variables`, which is not a real subcommand — that typo made
+ * every call a silent null, so design-token resolution never fired and all
+ * colors fell back to raw hex). Figma's /variables/local response nests under
+ * `meta.variables`; we hoist that so callers see a flat `.variables`.
+ *
+ * NOTE: the Variables REST API is Figma ENTERPRISE-only. On standard plans
+ * figmanage returns a "requires Figma Enterprise plan" error → we return null
+ * and token resolution degrades to raw hex (same rendered color, just not
+ * theme-reactive / not lift-as-token). Returns `null` on any failure rather
+ * than throwing — variables are best-effort input and must never block ingest.
  */
 export async function getVariables(fileKey: string): Promise<any | null> {
-  const r = await runFigmanage(["reading", "get-variables", fileKey, "--json"]);
+  const r = await runFigmanage(["variables", "list-local", fileKey, "--json"]);
   if (r.code !== 0) return null;
-  try { return JSON.parse(r.stdout); }
-  catch { return null; }
+  try {
+    const parsed = JSON.parse(r.stdout);
+    // Normalize: Figma nests variables under `meta`; some figmanage builds
+    // hoist them. Accept either and always hand back a flat `.variables`.
+    const variables = parsed?.variables ?? parsed?.meta?.variables ?? null;
+    if (!variables) return null;
+    const collections =
+      parsed?.variableCollections ?? parsed?.meta?.variableCollections ?? undefined;
+    return collections ? { variables, variableCollections: collections } : { variables };
+  } catch {
+    return null;
+  }
 }
 
 /**

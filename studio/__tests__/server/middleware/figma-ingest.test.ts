@@ -19,6 +19,7 @@ beforeEach(async () => {
     ingestPhase1: vi.fn().mockResolvedValue(phase1Result),
     getCached: vi.fn().mockReturnValue(undefined),
     getPhase1Pending: vi.fn().mockReturnValue(undefined),
+    getRawNode: vi.fn().mockReturnValue(undefined),
   });
   server = http.createServer(figmaMiddleware());
   await new Promise<void>((r) => server.listen(0, () => r()));

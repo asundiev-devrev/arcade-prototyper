@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Modal, Button, IconButton, CrossSmall } from "@xorkavi/arcade-gen";
 import type { Frame } from "../../../server/types";
 import { wrapManifestWithPrompt } from "../../lift/wrapPrompt";
-import { wrapFigmaExportPrompt } from "../../export/figma/wrapFigmaExportPrompt";
+import { serializeFrameForExport } from "../../lib/serializeFrameForExport";
 import { track } from "../../lib/telemetry/renderer";
 
 interface ShareModalProps {
@@ -53,7 +53,8 @@ export function ShareModal({
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [manifestCopied, setManifestCopied] = useState(false);
-  const [figmaCopied, setFigmaCopied] = useState(false);
+  const [figmaPhase, setFigmaPhase] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [figmaError, setFigmaError] = useState<string | null>(null);
   const probeAbort = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -84,20 +85,41 @@ export function ShareModal({
     }
   }
 
-  async function handleCopyFigmaExport() {
+  async function handleExportToFigma() {
     if (!selectedFrame) return;
+    const frameObj = frames.find((f) => f.slug === selectedFrame);
+    setFigmaPhase("running");
+    setFigmaError(null);
     try {
-      // Hand the user a ready prompt to run the hybrid Figma export in a
-      // Claude session with the figma-console Bridge — the swap writes real
-      // component instances into Figma, which needs the desktop plugin Bridge
-      // the app itself can't reach. Mirrors "Copy Lift Manifest".
-      const payload = wrapFigmaExportPrompt({ frameSlug: selectedFrame, projectSlug });
-      await navigator.clipboard.writeText(payload);
-      track({ name: "figma_export_copied", props: { frame_count: frames.length } });
-      setFigmaCopied(true);
-      setTimeout(() => setFigmaCopied(false), 2000);
+      // 1. Produce a fresh SLJ from the frame's live render (hidden iframe).
+      //    exportFrameToSlj POSTs it, so the server has a current SLJ.json.
+      await serializeFrameForExport({
+        projectSlug,
+        frameSlug: selectedFrame,
+        width: frameObj ? frameObj.size : 1280,
+        mode: "light",
+      });
+      // 2. Run the build over the Bridge (Studio impersonates the MCP server;
+      //    the Figma Desktop Bridge plugin eval's our script in Figma).
+      const res = await fetch(`/api/projects/${projectSlug}/export/${selectedFrame}/to-figma`, { method: "POST" });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setFigmaPhase("done");
+        track({ name: "figma_export_run", props: { outcome: "ok", instance_count: data.summary?.made?.instances, failure_count: data.summary?.made?.fail } });
+        setTimeout(() => setFigmaPhase("idle"), 2500);
+      } else {
+        const code = data.error?.code;
+        const msg = code === "no_bridge"
+          ? "Open the Arcade export plugin in Figma, then try again."
+          : (data.error?.message ?? "Export failed.") + " Check Figma is on the Arcade UI Kit library.";
+        setFigmaError(msg);
+        setFigmaPhase("error");
+        track({ name: "figma_export_run", props: { outcome: code === "no_bridge" ? "no_bridge" : "error" } });
+      }
     } catch (err: any) {
-      setError(err.message);
+      setFigmaError(err?.message ?? "Export failed.");
+      setFigmaPhase("error");
+      track({ name: "figma_export_run", props: { outcome: "error" } });
     }
   }
 
@@ -192,7 +214,8 @@ export function ShareModal({
     setError(null);
     setCopied(false);
     setManifestCopied(false);
-    setFigmaCopied(false);
+    setFigmaPhase("idle");
+    setFigmaError(null);
     setPhase("idle");
     onClose();
   }
@@ -328,7 +351,7 @@ export function ShareModal({
                 </div>
               )}
 
-              {error && (
+              {(error || figmaError) && (
                 <div
                   role="alert"
                   style={{
@@ -339,7 +362,7 @@ export function ShareModal({
                     fontSize: 13,
                   }}
                 >
-                  {error}
+                  {error || figmaError}
                 </div>
               )}
             </div>
@@ -370,10 +393,10 @@ export function ShareModal({
               </Button>
               <Button
                 variant="secondary"
-                onClick={handleCopyFigmaExport}
-                disabled={!selectedFrame || loading || frames.length === 0}
+                onClick={handleExportToFigma}
+                disabled={!selectedFrame || loading || figmaPhase === "running" || frames.length === 0}
               >
-                {figmaCopied ? "Copied!" : "Export to Figma"}
+                {figmaPhase === "running" ? "Exporting…" : figmaPhase === "done" ? "Opened in Figma ✓" : "Export to Figma"}
               </Button>
               <Button
                 variant="primary"

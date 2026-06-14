@@ -11,13 +11,17 @@ export interface ResolveResult {
  * Figma variable with the variable's name (e.g. "surface/default"). Raw
  * values stay in place when there is no binding.
  *
- * The raw figmanage node tree (`rawRoot`) is walked in parallel so we can
- * read `boundVariables` — we could not preserve them through compactTree
- * without inflating every CompactNode.
+ * `rawById` comes straight from compactTree and maps each emitted node id to
+ * the raw figmanage node it carries. We use that instead of re-deriving paths
+ * over the raw tree: compactTree drops zero-size nodes (shifting sibling
+ * indices) and collapses passthrough wrappers (the kept raw node is a
+ * descendant), so an independent path rebuild silently diverges and leaves
+ * bound styles un-tokenized — the cause of frames shipping raw off-palette
+ * hex even when variable resolution succeeded.
  */
 export function resolveTokens(
   tree: CompactNode,
-  rawRoot: any,
+  rawById: Map<string, any>,
   variablesPayload: any | null,
 ): ResolveResult {
   const tokens: ResolvedTokens = { colors: {}, typography: {}, spacing: {} };
@@ -29,15 +33,8 @@ export function resolveTokens(
     return { tree, tokens, warnings };
   }
 
-  // Cross-walk trees by path. The raw tree may have different structure
-  // (passthrough groups were collapsed), so we instead build an index of
-  // raw nodes keyed by a synthetic path that matches compactTree's
-  // convention when no collapsing happened. When the paths diverge, we
-  // fall back to best-effort lookup by node name.
-  const rawByPath = indexRaw(rawRoot);
-
   function recur(node: CompactNode): CompactNode {
-    const raw = rawByPath.get(node.id);
+    const raw = rawById.get(node.id);
     const nextStyle = { ...node.style } as NonNullable<CompactNode["style"]>;
 
     if (raw?.fills && nextStyle.fill) {
@@ -74,22 +71,16 @@ export function resolveTokens(
   return { tree: nextTree, tokens, warnings };
 }
 
-function readColorVar(paints: any[], vars: Record<string, any>): string | undefined {
+/**
+ * The Figma variable NAME bound to the first visible solid paint's color, or
+ * undefined when no paint is bound. Shared with the kit-emit engine
+ * (kitEmit.ts) so both color paths read the same binding — the kit-emit branch
+ * borrows ONLY this reader and does its own name → kit-token transform, rather
+ * than re-running the compacted-tree rewrite above (which kit-emit doesn't use).
+ */
+export function readColorVar(paints: any[], vars: Record<string, any>): string | undefined {
   const solid = paints.find((p) => p?.type === "SOLID" && p.visible !== false);
   const aliasId = solid?.boundVariables?.color?.id;
   if (!aliasId) return undefined;
   return vars[aliasId]?.name;
-}
-
-function indexRaw(root: any): Map<string, any> {
-  const out = new Map<string, any>();
-  function recur(n: any, pathId: string, depth: number): void {
-    if (!n || typeof n !== "object") return;
-    if (depth > 20) return;
-    out.set(pathId, n);
-    const kids: any[] = Array.isArray(n.children) ? n.children : [];
-    kids.forEach((k, i) => recur(k, `${pathId}.${i}`, depth + 1));
-  }
-  recur(root, "0", 0);
-  return out;
 }

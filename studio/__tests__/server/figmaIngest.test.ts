@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createFigmaIngest } from "../../server/figmaIngest";
+import { createFigmaIngest, readPrefetchedRawNode } from "../../server/figmaIngest";
 import type { IngestResult } from "../../server/figma/types";
 
 function simpleNode() {
@@ -208,6 +208,119 @@ describe("figmaIngest (disk persistence)", () => {
     expect(hit?.png).toBeNull(); // dead path dropped, not handed to the agent
 
     fs.rmSync(diskDir, { recursive: true, force: true });
+  });
+});
+
+describe("figmaIngest (A1 — raw payload reuse)", () => {
+  it("stashes the raw get-nodes dict on prefetch and serves it via getRawNode", async () => {
+    const fs = await import("node:fs");
+    const os = await import("node:os");
+    const path = await import("node:path");
+    const diskDir = fs.mkdtempSync(path.join(os.tmpdir(), "arcade-raw-"));
+    const url = "https://figma.com/design/file?node-id=1-2";
+
+    const rawDict = { "1:2": { document: simpleNode() }, lastModified: "2026-06-14T00:00:00Z" };
+    const deps = makeDeps({ getNode: vi.fn().mockResolvedValue(rawDict) });
+    const ingest = createFigmaIngest(deps, { composites: [], diskDir });
+
+    // Before any prefetch there is nothing cached.
+    expect(ingest.getRawNode("file", "1:2")).toBeUndefined();
+
+    await ingest.ingestPhase1("file", "1:2", url);
+    // The fire-and-forget raw-disk write must settle before we read it back.
+    await new Promise((r) => setTimeout(r, 30));
+
+    const got = ingest.getRawNode("file", "1:2");
+    expect(got).toBeDefined();
+    // It is the EXACT raw dict the branch needs — not the compacted tree.
+    expect(got["1:2"].document.id).toBe("1:2");
+    expect(got.lastModified).toBe("2026-06-14T00:00:00Z");
+
+    fs.rmSync(diskDir, { recursive: true, force: true });
+  });
+
+  it("getRawNode is a miss with no diskDir (memory-free, never blows the heap)", async () => {
+    const rawDict = { "1:2": { document: simpleNode() } };
+    const deps = makeDeps({ getNode: vi.fn().mockResolvedValue(rawDict) });
+    const ingest = createFigmaIngest(deps, { composites: [] }); // no diskDir
+    await ingest.ingestPhase1("file", "1:2", "https://figma.com/design/file?node-id=1-2");
+    await new Promise((r) => setTimeout(r, 10));
+    // Raw layer is disk-only by design; without a diskDir there's nothing to read.
+    expect(ingest.getRawNode("file", "1:2")).toBeUndefined();
+  });
+
+  it("getRawNode honors the disk TTL (stale entry → miss)", async () => {
+    const fs = await import("node:fs");
+    const os = await import("node:os");
+    const path = await import("node:path");
+    const diskDir = fs.mkdtempSync(path.join(os.tmpdir(), "arcade-raw-ttl-"));
+    const url = "https://figma.com/design/file?node-id=1-2";
+
+    let clock = 1_000_000;
+    const rawDict = { "1:2": { document: simpleNode() } };
+    const deps = makeDeps({ getNode: vi.fn().mockResolvedValue(rawDict), now: () => clock });
+    // 1h disk TTL.
+    const ingest = createFigmaIngest(deps, { composites: [], diskDir, diskTtlMs: 60 * 60_000 });
+    await ingest.ingestPhase1("file", "1:2", url);
+    await new Promise((r) => setTimeout(r, 30));
+
+    // Within TTL → hit.
+    clock += 30 * 60_000; // +30min
+    expect(ingest.getRawNode("file", "1:2")).toBeDefined();
+    // Past TTL → miss (forces a fresh fetch, never serves a stale node).
+    clock += 40 * 60_000; // now +70min > 60min TTL
+    expect(ingest.getRawNode("file", "1:2")).toBeUndefined();
+
+    fs.rmSync(diskDir, { recursive: true, force: true });
+  });
+
+  it("does not stash a raw payload when the node has no document (failed pick)", async () => {
+    const fs = await import("node:fs");
+    const os = await import("node:os");
+    const path = await import("node:path");
+    const diskDir = fs.mkdtempSync(path.join(os.tmpdir(), "arcade-raw-nodoc-"));
+    // getNode resolves but with nothing pickDocument can find.
+    const deps = makeDeps({ getNode: vi.fn().mockResolvedValue({ nodes: {} }) });
+    const ingest = createFigmaIngest(deps, { composites: [], diskDir });
+    const outcome = await ingest.ingestPhase1("file", "9:9", "https://figma.com/design/file?node-id=9-9");
+    expect(outcome.ok).toBe(false);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(ingest.getRawNode("file", "9:9")).toBeUndefined();
+    fs.rmSync(diskDir, { recursive: true, force: true });
+  });
+});
+
+describe("readPrefetchedRawNode (standalone reader used by kit-emit branch)", () => {
+  it("reads the same .raw.json a prefetch wrote, honoring TTL", async () => {
+    const fs = await import("node:fs");
+    const os = await import("node:os");
+    const path = await import("node:path");
+    // The standalone reader reads from figmaIngestRoot(), which derives from
+    // ARCADE_STUDIO_ROOT — point it at a tmp dir so we don't touch ~/Library.
+    const prevRoot = process.env.ARCADE_STUDIO_ROOT;
+    const studioRoot = fs.mkdtempSync(path.join(os.tmpdir(), "arcade-studio-root-"));
+    process.env.ARCADE_STUDIO_ROOT = studioRoot;
+    try {
+      const { figmaIngestRoot } = await import("../../server/paths");
+      const diskDir = figmaIngestRoot();
+      const url = "https://figma.com/design/file?node-id=1-2";
+      const rawDict = { "1:2": { document: simpleNode() }, lastModified: "2026-06-14" };
+      // Use the production disk TTL (60m) so the standalone reader's TTL matches.
+      const deps = makeDeps({ getNode: vi.fn().mockResolvedValue(rawDict), now: () => Date.now() });
+      const ingest = createFigmaIngest(deps, { composites: [], diskDir, diskTtlMs: 60 * 60_000 });
+      await ingest.ingestPhase1("file", "1:2", url);
+      await new Promise((r) => setTimeout(r, 40));
+
+      const got = readPrefetchedRawNode("file", "1:2");
+      expect(got).toBeDefined();
+      expect(got["1:2"].document.id).toBe("1:2");
+      // A node that was never prefetched is a clean miss.
+      expect(readPrefetchedRawNode("file", "404:404")).toBeUndefined();
+    } finally {
+      if (prevRoot === undefined) delete process.env.ARCADE_STUDIO_ROOT;
+      else process.env.ARCADE_STUDIO_ROOT = prevRoot;
+      fs.rmSync(studioRoot, { recursive: true, force: true });
+    }
   });
 });
 

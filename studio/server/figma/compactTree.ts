@@ -1,20 +1,43 @@
-import type { CompactLayout, CompactNode, CompactStyle, CompactText, NodeType, SizeAxis } from "./types";
+import type { CompactComponent, CompactLayout, CompactNode, CompactStyle, CompactText, NodeType, SizeAxis } from "./types";
 
 // Real Figma frames are routinely 9–11 deep (nested auto-layout frames + groups
 // that survive compactTree's passthrough-collapse pass). 8 was too aggressive
 // — the live smoke showed the sidebar hitting cap at depth 10 and dropping
 // content the classifier then couldn't see.
 export const DEPTH_CAP = 12;
-export const MAX_NODES = 200;
+// A full-screen precise-repro frame (e.g. the SoR nav: chrome + several
+// sections + footer) runs 250–400 renderable nodes. The old 200 cap silently
+// truncated those — the live SoR-nav failure warned "node cap reached" 4–5×,
+// starving the sidebar because a sibling section consumed the global budget
+// first. 500 fits a real full screen with headroom; it is still a backstop
+// against a pathological tree blowing out the prompt, not a target.
+export const MAX_NODES = 500;
 
 interface CompactResult {
   tree: CompactNode;
   warnings: string[];
+  /**
+   * Maps each emitted CompactNode `id` back to the raw figmanage node whose
+   * visuals it carries. Built during the same pass that assigns final ids, so
+   * it stays correct across dropped zero-size siblings (which shift indices)
+   * and collapsed passthrough wrappers (where the kept raw node is a
+   * descendant, not the node at that path). Downstream stages — notably
+   * resolveTokens — MUST use this instead of re-deriving paths over the raw
+   * tree, which silently diverges and drops token bindings.
+   */
+  rawById: Map<string, any>;
 }
 
 export function compactTree(raw: any): CompactResult {
   const warnings: string[] = [];
+  const rawById = new Map<string, any>();
   let count = 0;
+
+  // Frame-root origin: every node's bbox is expressed relative to this so the
+  // model reads a clean coordinate map instead of raw Figma canvas offsets.
+  const rootBox = raw?.absoluteBoundingBox;
+  const originX = typeof rootBox?.x === "number" ? rootBox.x : 0;
+  const originY = typeof rootBox?.y === "number" ? rootBox.y : 0;
 
   function recur(n: any, pathId: string, depth: number): CompactNode | null {
     if (!n || typeof n !== "object") return null;
@@ -39,6 +62,8 @@ export function compactTree(raw: any): CompactResult {
     const layout = readLayout(n);
     const style = readStyle(n);
     const text = readText(n, type);
+    const bbox = readBbox(n, originX, originY);
+    const component = readComponent(n, type);
 
     const kids: CompactNode[] = [];
     let childIdx = 0;
@@ -50,10 +75,22 @@ export function compactTree(raw: any): CompactResult {
       }
     }
 
+    // Record the raw node under this node's FINAL id. For a passthrough the
+    // recursion above already recorded the kept descendant under `pathId`, so
+    // we only reach here for nodes we actually emit.
+    rawById.set(pathId, n);
+
+    // An instance's name lives in `component.name`; keep `name` only when it's
+    // meaningful AND not already captured as component identity, to avoid
+    // duplicating it on every row.
+    const keepName = meaningfulName(n.name) && !component;
+
     const node: CompactNode = {
       id: pathId,
       type,
-      ...(meaningfulName(n.name) ? { name: n.name } : {}),
+      ...(keepName ? { name: n.name } : {}),
+      ...(bbox ? { bbox } : {}),
+      ...(component ? { component } : {}),
       ...(layout ? { layout } : {}),
       ...(style ? { style } : {}),
       ...(text ? { text } : {}),
@@ -65,9 +102,9 @@ export function compactTree(raw: any): CompactResult {
   const tree = recur(raw, "0", 0);
   if (!tree) {
     // Root was unrenderable — return a minimal empty frame so callers don't crash.
-    return { tree: { id: "0", type: "frame" }, warnings: warnings.concat("root node was empty") };
+    return { tree: { id: "0", type: "frame" }, warnings: warnings.concat("root node was empty"), rawById };
   }
-  return { tree, warnings };
+  return { tree, warnings, rawById };
 }
 
 function mapType(t: string): NodeType {
@@ -98,6 +135,40 @@ function isPassthrough(n: any, type: NodeType): boolean {
     if (n.layoutMode && n.layoutMode !== "NONE") return false;
   }
   return true;
+}
+
+function readBbox(n: any, originX: number, originY: number): [number, number, number, number] | undefined {
+  const b = n.absoluteBoundingBox;
+  if (!b || typeof b.width !== "number" || typeof b.height !== "number") return undefined;
+  const x = typeof b.x === "number" ? b.x - originX : 0;
+  const y = typeof b.y === "number" ? b.y - originY : 0;
+  return [Math.round(x), Math.round(y), Math.round(b.width), Math.round(b.height)];
+}
+
+/**
+ * Extract component identity for INSTANCE nodes. The name is the readable
+ * component name; props is the resolved variant/text property map with Figma's
+ * disambiguation suffixes stripped (e.g. "Label#1:0" → "Label") so the model
+ * sees clean keys.
+ */
+function readComponent(n: any, type: NodeType): CompactComponent | undefined {
+  if (type !== "instance") return undefined;
+  const name = typeof n.name === "string" && n.name.trim() ? n.name.trim() : undefined;
+  if (!name) return undefined;
+  const comp: CompactComponent = { name };
+
+  const cp = n.componentProperties;
+  if (cp && typeof cp === "object") {
+    const props: Record<string, string> = {};
+    for (const [rawKey, entry] of Object.entries(cp)) {
+      const value = (entry as any)?.value;
+      if (value === undefined || value === null) continue;
+      const key = rawKey.split("#")[0]; // strip "#1:0" disambiguation suffix
+      props[key] = String(value);
+    }
+    if (Object.keys(props).length) comp.props = props;
+  }
+  return comp;
 }
 
 function readLayout(n: any): CompactLayout | undefined {
