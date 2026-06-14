@@ -8,7 +8,13 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-## [0.31.1] — 2026-06-10
+### Added
+- **Paste a Figma link and get a faithful prototype built from real kit components — no LLM, in a few seconds.** Any prompt with a Figma URL now imports the design deterministically: exact geometry, colors, and text come straight from Figma's data, and every element that exists both as a Figma component and in the Arcade kit (buttons, checkboxes, avatars, tabs, icons…) is rendered as the real interactive component, not a look-alike box. Icons, vectors, and photos are exported as local files so nothing expires. Everything without a kit equivalent stays as faithful static markup. You then iterate on the imported frame with normal follow-up messages.
+
+## [0.31.2] — 2026-06-10
+
+### Fixed
+- **The "invented an icon → blank frame" safety net now actually runs in the installed app.** Studio has a guardrail that catches made-up component and icon names the instant the agent writes them and forces a correction — but it was silently switched off in the packaged app, because it was launched with a `node` command that doesn't exist inside the bundle (every run failed with "node: command not found" and was ignored). It now launches through the app's own runtime, the same way the Figma reader already does. This is the root cause behind frames that fail to load with "does not provide an export named …" reaching beta testers. The image-reshape guardrail was off for the same reason and is now live too.
 
 ### Fixed
 - **The "lift to production" handoff now verifies itself by actually rendering the result.** When you copy a lift manifest and hand it to a Claude session, the instructions now make it build the translated frame, open it live in Storybook, and check the real on-screen colors — instead of just eyeballing the code. This caught bugs a code-only check misses: a chat bubble that rendered invisible, a delete-confirmation modal using a component shape that doesn't exist in production. When it finishes it leaves Storybook running and hands over a clickable link so you can inspect the result yourself.

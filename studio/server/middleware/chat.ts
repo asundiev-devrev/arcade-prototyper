@@ -18,6 +18,8 @@ import { extractFigmaUrl } from "../../src/lib/figmaUrl";
 import { parseFigmaUrl } from "../figmaCli";
 import { getFigmaIngest } from "../figmaIngest";
 import { buildFigmaContextBlock } from "../figma/promptBlock";
+import { shouldUseHiFi, buildHiFiDirective } from "../figma/fidelityDirective";
+import { runFigmaKitEmitBranch } from "../figma/kitEmitBranch";
 import { getFigmaSystemIngest, type FigmaSystemIngest } from "../figmaSystemIngest";
 import { renderDesignMd } from "../figma/systemRender";
 import { designMdPath } from "../paths";
@@ -180,12 +182,23 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
 
   const isComputerTurn = COMPUTER_MENTION.test(prompt);
 
+  // Figma kit-emit turn: ANY prompt with a Figma URL (that isn't a @Computer
+  // turn) imports the design deterministically — exact geometry from Figma's
+  // REST data, real arcade-gen components where the curated mapping matches.
+  // NO LLM, so it needs neither Bedrock auth nor the Claude subprocess. The
+  // designer iterates on the imported frame with normal follow-up prompts
+  // (which carry no URL and so take the Claude branch). See
+  // server/figma/kitEmitBranch.ts.
+  const figmaUrl = isComputerTurn ? null : extractFigmaUrl(prompt);
+  const figmaParsed = figmaUrl ? parseFigmaUrl(figmaUrl) : null;
+  const isKitEmitTurn = Boolean(figmaParsed);
+
   // Bedrock-auth pre-check applies only to Claude (Bedrock) turns; the
-  // Computer agent uses the DevRev PAT. We pass when either (a) a bearer
-  // token is exported for claude CLI to use, or (b) SigV4 credentials
-  // resolve via `aws sts get-caller-identity`. Otherwise we fail fast
-  // instead of spawning claude into a silent hang.
-  if (!isComputerTurn && !(await hasBedrockAuth())) {
+  // Computer agent uses the DevRev PAT, and kit-emit turns use no LLM at all.
+  // We pass when either (a) a bearer token is exported for claude CLI to use,
+  // or (b) SigV4 credentials resolve via `aws sts get-caller-identity`.
+  // Otherwise we fail fast instead of spawning claude into a silent hang.
+  if (!isComputerTurn && !isKitEmitTurn && !(await hasBedrockAuth())) {
     track({ name: "generation_failed", props: { project_slug_hash: hashSlug(slug), error_kind: "bedrock_auth" } });
     const turn = startTurn(slug, {
       prompt,
@@ -255,7 +268,16 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
             end(result);
           }
         : end;
-      const task = isComputerTurn
+      const task = isKitEmitTurn
+        ? runFigmaKitEmitBranch({
+            emit: wrappedEmit,
+            slug,
+            fileKey: figmaParsed!.fileId,
+            nodeId: figmaParsed!.nodeId,
+            project,
+            signal,
+          })
+        : isComputerTurn
         ? runComputerBranch({ emit: wrappedEmit, slug, prompt, project, signal })
         : runClaudeBranch({ emit: wrappedEmit, slug, prompt, images, project, signal });
       task.then(
@@ -467,9 +489,27 @@ async function enrichPromptWithFigmaContext(
   if (result.diagnostics.warnings.length) {
     parts.push(`${result.diagnostics.warnings.length} diagnostic${result.diagnostics.warnings.length > 1 ? "s" : ""}`);
   }
+
+  // High-fidelity mode: append a directive that suspends the speed shortcuts
+  // and forces a real tree read + PNG-as-ground-truth + self-review. Fires on
+  // explicit precise-implementation intent OR on a novel design (classifier
+  // ran and found no high-confidence template to iterate on) — the latter is
+  // the "exploring a new direction" case that otherwise churns to Cursor.
+  // Ordinary "sketch me X" prompts that DO match a template keep the fast path.
+  const hasHighConfidenceComposite = result.composites.some((c) => c.confidence === "high");
+  let block2 = block;
+  if (shouldUseHiFi(prompt, { classified: result.classified, hasHighConfidenceComposite })) {
+    parts.push("high-fidelity mode");
+    block2 = `${block}\n\n${buildHiFiDirective({
+      fileKey: parsed.fileId,
+      nodeId: parsed.nodeId,
+      hasReferencePng: Boolean(result.png),
+    })}`;
+  }
+
   onNarration?.(parts.join(" · "));
 
-  return { prompt: `${prompt}\n\n${block}`, images: nextImages };
+  return { prompt: `${prompt}\n\n${block2}`, images: nextImages };
 }
 
 export interface SeedDesignMdInput {

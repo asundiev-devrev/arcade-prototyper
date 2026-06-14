@@ -1,0 +1,765 @@
+<frame id="10:4289" name="Frame 2147224022" x="407" y="-10" width="1697" height="900">
+  <frame id="10:3508" name="Option_2_Interim_reduced(June)" x="0" y="0" width="240" height="900">
+    <frame id="10:3509" name="Frame 2147224018" x="0" y="0" width="240" height="780">
+      <frame id="10:3510" name="Frame 2147224017" x="0" y="0" width="240" height="656">
+        <frame id="10:5150" name="Frame 2147224017" x="0" y="0" width="240" height="48">
+          <instance id="10:5153" name="Icon Button" x="12" y="10" width="28" height="28">
+            <slot id="0:1145" name="Icon" x="6" y="0" width="16" height="28">
+              <instance id="0:1146" name="Icons/Dot.in.left.window" x="0" y="6" width="16" height="16" />
+            </slot>
+            <instance id="0:1148" name="_Focus Ring" x="0" y="0" width="27" height="28" hidden="true" />
+          </instance>
+          <frame id="10:5154" name="Frame 2147224015" x="162" y="10" width="66" height="28">
+            <instance id="10:5157" name="Icon Button" x="0" y="0" width="28" height="28">
+              <slot id="0:643" name="Icon" x="6" y="0" width="16" height="28">
+                <instance id="0:644" name="Icons/Plus" x="0" y="6" width="16" height="16" />
+              </slot>
+              <instance id="0:646" name="_Focus Ring" x="0" y="0" width="28" height="28" hidden="true" />
+            </instance>
+            <instance id="10:5160" name="Icon Button" x="38" y="0" width="28" height="28">
+              <slot id="0:1106" name="Icon" x="6" y="0" width="16" height="28">
+                <instance id="0:1107" name="Icons/Magnifying.glass" x="0" y="6" width="16" height="16" />
+              </slot>
+              <instance id="0:1109" name="_Focus Ring" x="0" y="0" width="28" height="28" hidden="true" />
+            </instance>
+          </frame>
+        </frame>
+        <frame id="10:5177" name="Frame 2147224018" x="0" y="54" width="240" height="36">
+          <frame id="10:5178" name="Frame 2147224021" x="12" y="0" width="216" height="36">
+            <frame id="10:5179" name="Navigation Button" x="0" y="0" width="216" height="36">
+              <instance id="10:5180" name="Computer/Logo" x="69.02178955078125" y="11" width="77.95642852783203" height="13.999999046325684" />
+              <frame id="10:5181" name="Trailing" x="79" y="0" width="16" height="28" hidden="true">
+                <instance id="10:5182" name="Trailing Icon" x="0" y="6" width="16" height="16" />
+              </frame>
+              <instance id="10:5183" name="_Focus Ring" x="0" y="0" width="202" height="36" hidden="true" />
+            </frame>
+          </frame>
+        </frame>
+        <instance id="10:3530" name="_Item" x="0" y="96" width="240" height="28">
+          <slot id="0:948" name="Leading" x="16" y="4" width="20" height="20">
+            <instance id="0:949" name="Icons/Window" x="2" y="2" width="16" height="16" />
+          </slot>
+          <text id="0:951" name="Item" x="42" y="6" width="148" height="16" />
+          <slot id="0:952" name="Trailing" x="196" y="4" width="28" height="20" />
+        </instance>
+        <instance id="10:3550" name="_Group" x="0" y="130" width="240" height="182">
+          <instance id="0:1149" name="_Group Label" x="0" y="6" width="240" height="20">
+            <frame id="0:1153" name="Label" x="10" y="0" width="50" height="20">
+              <text id="0:1155" name="My Work" x="6" y="2" width="38" height="16" />
+            </frame>
+            <rounded-rectangle id="0:1156" name="Spacer" x="66" y="8" width="164" height="4" />
+            <slot id="0:1157" name="Trailing" x="206" y="0" width="44" height="20" hidden="true" />
+          </instance>
+          <slot id="0:1158" name="Items" x="0" y="28" width="240" height="148">
+            <frame id="0:1159" name="_Item" x="0" y="0" width="240" height="28">
+              <frame id="0:1160" name="two.human.silhouttes" x="16" y="4" width="20" height="20">
+                <vector id="0:1161" name="Vector" x="3.0999999046325684" y="3.2003884315490723" width="13.800000190734863" height="13.599223136901855" />
+              </frame>
+              <text id="0:1162" name="Foundations" x="42" y="6" width="148" height="16" />
+              <frame id="0:1163" name="Trailing" x="196" y="4" width="28" height="20">
+                <instance id="0:1164" name="Icons/Chevron.down" x="6" y="2" width="16" height="16" />
+              </frame>
+            </frame>
+            <instance id="0:1166" name="_Item" x="0" y="30" width="240" height="28">
+              <slot id="0:1167" name="Leading" x="16" y="4" width="20" height="20">
+                <instance id="0:1168" name="Icons/Window" x="2" y="2" width="16" height="16" />
+              </slot>
+              <text id="0:1170" name="Item" x="42" y="6" width="148" height="16" />
+              <slot id="0:1171" name="Trailing" x="196" y="4" width="28" height="20" />
+            </instance>
+            <instance id="0:1172" name="_Item" x="0" y="60" width="240" height="28">
+              <slot id="0:1173" name="Leading" x="16" y="4" width="20" height="20">
+                <instance id="0:1174" name="Icons/Window" x="2" y="2" width="16" height="16" />
+              </slot>
+              <text id="0:1176" name="Item" x="42" y="6" width="148" height="16" />
+              <slot id="0:1177" name="Trailing" x="196" y="4" width="28" height="20" />
+            </instance>
+            <instance id="0:1178" name="_Item" x="0" y="90" width="240" height="28">
+              <slot id="0:1179" name="Leading" x="16" y="4" width="20" height="20">
+                <instance id="0:1180" name="Icons/Window" x="2" y="2" width="16" height="16" />
+              </slot>
+              <text id="0:1182" name="Item" x="42" y="6" width="148" height="16" />
+              <slot id="0:1183" name="Trailing" x="196" y="4" width="28" height="20" />
+            </instance>
+            <instance id="0:1184" name="_Item" x="0" y="120" width="240" height="28">
+              <slot id="0:1185" name="Leading" x="16" y="4" width="20" height="20">
+                <instance id="0:1186" name="Icons/Window" x="2" y="2" width="16" height="16" />
+              </slot>
+              <text id="0:1188" name="Item" x="42" y="6" width="148" height="16" />
+              <slot id="0:1189" name="Trailing" x="196" y="4" width="28" height="20" />
+            </instance>
+          </slot>
+        </instance>
+        <frame id="10:3551" name="Items" x="0" y="318" width="240" height="28">
+          <frame id="10:3552" name="_Item" x="0" y="0" width="240" height="28">
+            <frame id="10:3553" name="two.human.silhouttes" x="16" y="4" width="20" height="20">
+              <vector id="10:3554" name="Vector" x="3.0999999046325684" y="3.2003884315490723" width="13.800000190734863" height="13.599223136901855" />
+            </frame>
+            <text id="10:3555" name="Experience Foundations" x="42" y="6" width="148" height="16" />
+            <frame id="10:3556" name="Trailing" x="196" y="4" width="28" height="20">
+              <instance id="10:3557" name="Icons/Chevron.right" x="6" y="2" width="16" height="16" />
+            </frame>
+          </frame>
+        </frame>
+        <instance id="10:3565" name="_Group" x="0" y="352" width="240" height="92">
+          <instance id="0:1190" name="_Group Label" x="0" y="6" width="240" height="20">
+            <frame id="0:1191" name="Label" x="10" y="0" width="46" height="20">
+              <text id="0:1192" name="My Work" x="6" y="2" width="34" height="16" />
+            </frame>
+            <rounded-rectangle id="0:1193" name="Spacer" x="62" y="8" width="168" height="4" />
+            <slot id="0:1194" name="Trailing" x="206" y="0" width="44" height="20" hidden="true" />
+          </instance>
+          <slot id="0:1195" name="Items" x="0" y="28" width="240" height="58">
+            <instance id="0:1196" name="_Item" x="0" y="0" width="240" height="28">
+              <slot id="0:1197" name="Leading" x="16" y="4" width="20" height="20">
+                <instance id="0:1198" name="Icons/Window" x="2" y="2" width="16" height="16" />
+              </slot>
+              <text id="0:1200" name="Item" x="42" y="6" width="148" height="16" />
+              <slot id="0:1201" name="Trailing" x="196" y="4" width="28" height="20" />
+            </instance>
+            <instance id="0:1202" name="_Item" x="0" y="30" width="240" height="28">
+              <slot id="0:1203" name="Leading" x="16" y="4" width="20" height="20">
+                <instance id="0:1204" name="Icons/Window" x="2" y="2" width="16" height="16" />
+              </slot>
+              <text id="0:1206" name="Item" x="42" y="6" width="148" height="16" />
+              <slot id="0:1207" name="Trailing" x="196" y="4" width="28" height="20" />
+            </instance>
+          </slot>
+        </instance>
+      </frame>
+      <instance id="10:3577" name="_Group" x="0" y="660" width="240" height="120">
+        <instance id="0:1121" name="_Group Label" x="0" y="6" width="240" height="20" hidden="true" />
+        <slot id="0:1122" name="Items" x="0" y="28" width="240" height="118" hidden="true" />
+      </instance>
+    </frame>
+    <frame id="10:3578" name="Items" x="0" y="784" width="240" height="116">
+      <instance id="10:3581" name="_Item" x="0" y="0" width="240" height="28">
+        <slot id="0:1084" name="Leading" x="16" y="4" width="20" height="20">
+          <instance id="0:1085" name="Icons/Bell" x="2" y="2" width="16" height="16" />
+        </slot>
+        <text id="0:1087" name="Item" x="42" y="6" width="148" height="16" />
+        <slot id="0:1088" name="Trailing" x="196" y="4" width="28" height="20" />
+      </instance>
+      <instance id="10:3584" name="_Item" x="0" y="30" width="240" height="28">
+        <slot id="0:988" name="Leading" x="16" y="4" width="20" height="20">
+          <instance id="0:989" name="Icons/Magnifying.glass.in.square" x="2" y="2" width="16" height="16" />
+        </slot>
+        <text id="0:991" name="Item" x="42" y="6" width="148" height="16" />
+        <slot id="0:992" name="Trailing" x="196" y="4" width="28" height="20" />
+      </instance>
+      <frame id="10:3585" name="Frame 1321317198" x="0" y="60" width="240" height="36">
+        <instance id="10:5195" name="User Avatar" x="16" y="4" width="28" height="28" />
+        <frame id="10:3587" name="Frame 1321317195" x="52" y="0" width="136" height="36">
+          <frame id="10:3588" name="Frame 1321317196" x="12" y="6" width="112" height="24">
+            <text id="10:3589" name="Content" x="0" y="0" width="78" height="24" />
+            <instance id="10:3590" name="Icon Wrapper" x="96" y="4" width="16" height="16" />
+          </frame>
+        </frame>
+        <frame id="10:3591" name="--" x="196" y="4" width="28" height="28">
+          <instance id="10:3592" name="Chat" x="6.22265625" y="6.22265625" width="15.55555534362793" height="15.55555534362793" />
+        </frame>
+      </frame>
+    </frame>
+  </frame>
+  <frame id="10:3058" name="Collapsed" x="240" y="0" width="416" height="900">
+    <frame id="10:3059" name="_Sidebar" x="0" y="0" width="60" height="894" hidden="true">
+      <frame id="10:3060" name="_Actions" x="0" y="48" width="60" height="239">
+        <frame id="10:3061" name="_History Action" x="10" y="4" width="40" height="40">
+          <instance id="10:3062" name="Icons / Bubble.Plus" x="10" y="10" width="20" height="20" />
+        </frame>
+        <instance id="10:3063" name="_History Action" x="10" y="50" width="40" height="40" />
+        <frame id="10:3064" name="Progressive Seperator" x="42.5" y="96" width="25.00000004371134" height="1.0000010927847143">
+          <frame id="10:3065" name="Seperator" x="0" y="-3" width="31.000000923899847" height="21.136365338207327" />
+        </frame>
+        <frame id="10:3068" name="_History Action" x="10" y="103" width="40" height="40">
+          <instance id="10:3069" name="Icons/Computer" x="10" y="10" width="20" height="20" />
+        </frame>
+        <frame id="10:3070" name="_History Action" x="10" y="149" width="40" height="40">
+          <instance id="10:3071" name="Icons/Computer" x="-1" y="10" width="20" height="20" hidden="true" />
+          <instance id="10:3072" name="Icons/Chat.bubbles" x="10" y="10" width="20" height="20" />
+        </frame>
+        <frame id="10:3073" name="_History Action" x="10" y="195" width="40" height="40">
+          <instance id="10:3074" name="Icons/Computer" x="-1" y="10" width="20" height="20" hidden="true" />
+          <instance id="10:3075" name="Icons/Chat.bubbles" x="-4" y="10" width="20" height="20" hidden="true" />
+          <instance id="10:3076" name="Icons/Agent.studio" x="11" y="11" width="18" height="18" />
+        </frame>
+      </frame>
+      <frame id="10:3077" name="_Actions" x="0" y="287" width="60" height="451">
+        <frame id="10:3078" name="Group 2147223729" x="0" y="0" width="0" height="0" hidden="true" />
+        <frame id="10:3112" name="Nav.List.Group" x="12" y="5.000000953674316" width="36" height="198.5" hidden="true">
+          <frame id="10:3113" name="Nav.List.Section.Header" x="4" y="6" width="28" height="25" hidden="true">
+            <frame id="10:3114" name="Nav.Background" x="58.248046875" y="0" width="0" height="0" />
+            <frame id="10:3116" name="Leading" x="0" y="5" width="21" height="15">
+              <instance id="10:3117" name="Messages, Chat/Messages, Chat" x="3" y="0" width="15" height="15" />
+            </frame>
+            <frame id="10:3118" name="Content" x="27" y="5" width="1" height="15">
+              <text id="10:3119" name="Chats" x="0" y="0" width="34" height="15" />
+            </frame>
+            <frame id="10:3120" name=" " x="34" y="0" width="25" height="25">
+              <frame id="10:3121" name="Interface, Essential/dots-menu" x="5" y="5" width="15" height="15" />
+            </frame>
+            <frame id="10:3127" name="Trailing" x="194" y="10" width="20" height="20" hidden="true">
+              <frame id="10:3128" name="Content" x="2" y="0" width="16" height="16">
+                <text id="10:3129" name="5" x="4.5" y="1" width="7" height="14" />
+              </frame>
+            </frame>
+          </frame>
+          <frame id="10:3130" name="Nav.SubGroup" x="7.5" y="6" width="21" height="186.5">
+            <frame id="10:3131" name="Nav.List.Item" x="0" y="0" width="21" height="24.5">
+              <frame id="10:3132" name="Leading" x="0" y="4" width="21" height="16.5">
+                <frame id="10:3133" name="Leading" x="9.5367431640625e-7" y="-2.2499990463256836" width="20.999998092651367" height="20.999998092651367">
+                  <instance id="10:3134" name="User avatars" x="0" y="0" width="20.999998092651367" height="20.999998092651367" />
+                </frame>
+              </frame>
+              <frame id="10:3135" name="Content" x="27" y="4" width="1" height="17" hidden="true">
+                <text id="10:3136" name="Tim" x="0" y="0" width="1" height="17" />
+              </frame>
+              <frame id="10:3137" name="Trailing" x="194" y="4" width="20" height="20" hidden="true">
+                <frame id="10:3138" name="Badge" x="2" y="0" width="16" height="16">
+                  <text id="10:3139" name="5" x="4.5" y="1" width="7" height="14" />
+                </frame>
+              </frame>
+            </frame>
+            <frame id="10:3140" name="Nav.List.Item" x="0" y="26.5" width="21" height="25">
+              <frame id="10:3141" name="Leading" x="0" y="4.25" width="21" height="16.5">
+                <frame id="10:3142" name="Leading" x="9.5367431640625e-7" y="-2.2499990463256836" width="20.999998092651367" height="20.999998092651367">
+                  <instance id="10:3143" name="User avatars" x="0" y="0" width="20.999998092651367" height="20.999998092651367" />
+                </frame>
+              </frame>
+              <frame id="10:3144" name="Content" x="27" y="4" width="1" height="17">
+                <text id="10:3145" name="Steve" x="0" y="0" width="1" height="17" />
+              </frame>
+              <frame id="10:3146" name="Trailing" x="194" y="4" width="20" height="20" hidden="true">
+                <frame id="10:3147" name="Badge" x="2" y="0" width="16" height="16">
+                  <text id="10:3148" name="5" x="4.5" y="1" width="7" height="14" />
+                </frame>
+              </frame>
+            </frame>
+            <frame id="10:3149" name="Nav.List.Item" x="0" y="53.5" width="21" height="25">
+              <frame id="10:3150" name="Leading" x="0" y="4.25" width="21" height="16.5">
+                <frame id="10:3151" name="Leading" x="9.5367431640625e-7" y="-2.2499990463256836" width="20.999998092651367" height="20.999998092651367">
+                  <instance id="10:3152" name="User avatars" x="0" y="0" width="20.999998092651367" height="20.999998092651367" />
+                </frame>
+              </frame>
+              <frame id="10:3153" name="Content" x="27" y="4" width="1" height="17">
+                <text id="10:3154" name="Nuska" x="0" y="0" width="1" height="17" />
+              </frame>
+              <frame id="10:3155" name="Trailing" x="194" y="4" width="20" height="20" hidden="true">
+                <frame id="10:3156" name="Badge" x="2" y="0" width="16" height="16">
+                  <text id="10:3157" name="5" x="4.5" y="1" width="7" height="14" />
+                </frame>
+              </frame>
+            </frame>
+            <frame id="10:3158" name="Nav.List.Item" x="0" y="80.5" width="21" height="25">
+              <frame id="10:3159" name="Leading" x="0" y="4.25" width="21" height="16.5">
+                <frame id="10:3160" name="Emails/mailbox-inbox-download" x="0" y="-2.25" width="21" height="21">
+                  <frame id="10:3161" name="MailBox" x="0" y="0" width="20.999998092651367" height="20.999998092651367">
+                    <frame id="10:3162" name="Group" x="0" y="0" width="21" height="21">
+                      <rounded-rectangle id="10:3163" name="Rectangle" x="0" y="0" width="20.999998092651367" height="20.999998092651367" />
+                      <boolean-operation id="10:3164" name="Subtract" x="0" y="0" width="21" height="21" />
+                      <text id="10:3166" name="5" x="6.499999046325684" y="3.4999990463256836" width="8" height="15" />
+                    </frame>
+                  </frame>
+                </frame>
+              </frame>
+              <frame id="10:3167" name="Content" x="27" y="4" width="1" height="17">
+                <text id="10:3168" name="Nuska, Tim, Steve and 3 more" x="0" y="0" width="1" height="17" />
+              </frame>
+              <frame id="10:3169" name="Trailing" x="194" y="4" width="20" height="20" hidden="true">
+                <frame id="10:3170" name="Badge" x="2" y="0" width="16" height="16">
+                  <text id="10:3171" name="5" x="4.5" y="1" width="7" height="14" />
+                </frame>
+              </frame>
+            </frame>
+            <frame id="10:3172" name="Nav.List.Item" x="0" y="107.5" width="21" height="25">
+              <frame id="10:3173" name="Leading" x="0" y="4.25" width="21" height="16.5">
+                <frame id="10:3174" name="Leading" x="9.5367431640625e-7" y="-2.2499990463256836" width="20.999998092651367" height="20.999998092651367">
+                  <instance id="10:3175" name="User avatars" x="0" y="0" width="20.999998092651367" height="20.999998092651367" />
+                </frame>
+              </frame>
+              <frame id="10:3176" name="Content" x="27" y="4" width="1" height="17" />
+              <frame id="10:3177" name="Trailing" x="194" y="4" width="20" height="20" hidden="true">
+                <frame id="10:3178" name="Badge" x="2" y="0" width="16" height="16">
+                  <text id="10:3179" name="5" x="4.5" y="1" width="7" height="14" />
+                </frame>
+              </frame>
+            </frame>
+            <frame id="10:3180" name="Nav.List.Item" x="0" y="134.5" width="21" height="25">
+              <frame id="10:3181" name="Leading" x="0" y="4.25" width="21" height="16.5">
+                <frame id="10:3182" name="Leading" x="9.5367431640625e-7" y="-2.2499990463256836" width="20.999998092651367" height="20.999998092651367">
+                  <instance id="10:3183" name="User avatars" x="0" y="0" width="20.999998092651367" height="20.999998092651367" />
+                </frame>
+              </frame>
+              <frame id="10:3184" name="Content" x="27" y="4" width="1" height="17" />
+              <frame id="10:3185" name="Trailing" x="194" y="4" width="20" height="20" hidden="true">
+                <frame id="10:3186" name="Badge" x="2" y="0" width="16" height="16">
+                  <text id="10:3187" name="5" x="4.5" y="1" width="7" height="14" />
+                </frame>
+              </frame>
+            </frame>
+            <frame id="10:3188" name="Nav.List.Item" x="0" y="161.5" width="21" height="25">
+              <frame id="10:3189" name="Leading" x="0" y="4.25" width="21" height="16.5">
+                <frame id="10:3190" name="Emails/mailbox-inbox-download" x="0" y="-2.25" width="21" height="21">
+                  <frame id="10:3191" name="MailBox" x="0" y="0" width="20.999998092651367" height="20.999998092651367">
+                    <frame id="10:3192" name="Group" x="0" y="0" width="21" height="21">
+                      <rounded-rectangle id="10:3193" name="Rectangle" x="0" y="0" width="20.999998092651367" height="20.999998092651367" />
+                      <boolean-operation id="10:3194" name="Subtract" x="0" y="0" width="21" height="21" />
+                      <text id="10:3196" name="2" x="6.499999046325684" y="3.4999990463256836" width="8" height="15" hidden="true" />
+                      <instance id="10:3197" name="Icons/Chat.bubbles" x="4.5" y="4.5" width="12" height="12" />
+                    </frame>
+                  </frame>
+                </frame>
+              </frame>
+              <frame id="10:3198" name="Content" x="27" y="4" width="1" height="17" />
+              <frame id="10:3199" name="Trailing" x="194" y="4" width="20" height="20" hidden="true">
+                <frame id="10:3200" name="Badge" x="2" y="0" width="16" height="16">
+                  <text id="10:3201" name="5" x="4.5" y="1" width="7" height="14" />
+                </frame>
+              </frame>
+            </frame>
+          </frame>
+        </frame>
+        <frame id="10:3202" name="40x40 Nav Items" x="10" y="202.5" width="40" height="40" hidden="true">
+          <frame id="10:3203" name="User + Account Avatar" x="2" y="14" width="36" height="12">
+            <instance id="10:3204" name="User Avatar" x="-7" y="0" width="28" height="28" hidden="true" />
+            <instance id="10:3205" name="Icons/Chat.bubbles" x="12" y="0" width="12" height="12" />
+          </frame>
+        </frame>
+      </frame>
+      <instance id="10:3206" name="Progressive Divider" x="59" y="48" width="1" height="846" />
+      <frame id="10:3207" name="Headers / _Sidebar Computer" x="0" y="738" width="60" height="156">
+        <frame id="10:3208" name="Chrome Actions" x="12" y="12" width="40" height="40">
+          <frame id="10:3209" name="Trailling" x="0" y="6" width="40" height="28">
+            <instance id="10:3212" name="Icon Button" x="6" y="0" width="28" height="28" hidden="true" />
+          </frame>
+        </frame>
+        <frame id="10:3213" name="Chrome Actions" x="12" y="58" width="40" height="40">
+          <frame id="10:3214" name="Trailling" x="0" y="6" width="40" height="28">
+            <instance id="10:3217" name="Icon Button" x="6" y="0" width="28" height="28" />
+          </frame>
+        </frame>
+        <frame id="10:3218" name="User + Account Avatar" x="12" y="104" width="36" height="40">
+          <instance id="10:3219" name="User Avatar" x="4" y="6" width="28" height="28" />
+        </frame>
+      </frame>
+    </frame>
+    <frame id="10:3220" name="Headers / _Sidebar Chrome" x="0" y="0" width="118" height="48" hidden="true">
+      <frame id="10:3221" name="Traffic Lights" x="16" y="16" width="62" height="16" hidden="true">
+        <instance id="10:3222" name="Window Controls/Standard" x="0" y="0" width="62" height="16" hidden="true" />
+      </frame>
+      <frame id="10:3223" name="Chrome Actions" x="16" y="10" width="94" height="28">
+        <instance id="10:3226" name="Icon Button" x="0" y="0" width="28" height="28" />
+        <frame id="10:3227" name="Controls" x="32" y="0" width="62" height="28">
+          <instance id="10:3230" name="Icon Button" x="0" y="0" width="28" height="28" />
+          <instance id="10:3233" name="Icon Button" x="32" y="0" width="28" height="28" />
+        </frame>
+      </frame>
+    </frame>
+    <frame id="10:3234" name="Chat Header" x="0" y="0" width="416" height="48">
+      <instance id="10:6040" name="Button" x="16" y="10" width="28" height="28">
+        <slot id="0:970" name="Leading" x="6" y="0" width="16" height="28">
+          <instance id="0:971" name="Icons/Cross" x="0" y="6" width="16" height="16" />
+        </slot>
+        <frame id="0:973" name="Contents" x="22" y="0" width="58" height="28" hidden="true" />
+        <slot id="0:974" name="Trailing" x="79" y="0" width="16" height="28" hidden="true" />
+        <instance id="0:975" name="_Focus Ring" x="0" y="0" width="27" height="28" hidden="true" />
+      </instance>
+      <frame id="10:3237" name="Frame 2147223751" x="55" y="16" width="242" height="16">
+        <frame id="10:3238" name="chat.bubbles" x="0" y="0" width="16" height="16" hidden="true" />
+        <text id="10:3240" name="Prepare marketting presentations" x="0" y="0" width="224" height="16" />
+        <instance id="10:3241" name="Icons / Chevron.Down" x="230" y="2" width="12" height="12" />
+      </frame>
+      <frame id="10:3242" name="Frame 2147223750" x="308" y="10" width="92" height="28">
+        <instance id="10:3245" name="Icon Button" x="0" y="0" width="28" height="28" hidden="true" />
+        <instance id="10:3248" name="Icon Button" x="0" y="0" width="28" height="28">
+          <slot id="0:1123" name="Icon" x="4" y="-2" width="20" height="32">
+            <instance id="0:1124" name="Icons / Bubble.Plus" x="0" y="6" width="20" height="20" />
+          </slot>
+          <instance id="0:1126" name="_Focus Ring" x="0" y="0" width="27" height="28" hidden="true" />
+        </instance>
+        <instance id="10:3251" name="Icon Button" x="32" y="0" width="28" height="28">
+          <slot id="0:957" name="Icon" x="4" y="-2" width="20" height="32">
+            <instance id="0:958" name="Icons / Clock" x="0" y="6" width="20" height="20" />
+          </slot>
+          <instance id="0:960" name="_Focus Ring" x="0" y="0" width="27" height="28" hidden="true" />
+        </instance>
+        <instance id="10:3254" name="Icon Button" x="64" y="0" width="28" height="28">
+          <slot id="0:953" name="Icon" x="6" y="0" width="16" height="28">
+            <instance id="0:954" name="Icons/Dot.in.right.window" x="0" y="6" width="16" height="16" />
+          </slot>
+          <instance id="0:956" name="_Focus Ring" x="0" y="0" width="27" height="28" hidden="true" />
+        </instance>
+      </frame>
+    </frame>
+    <instance id="10:3255" name="Input" x="0" y="836" width="416" height="64">
+      <frame id="0:1054" name="Frame 2147223746" x="16" y="19" width="281" height="26">
+        <frame id="0:1055" name="Leading" x="0" y="1" width="24" height="24">
+          <frame id="0:1056" name="Leading" x="0" y="0" width="24" height="24">
+            <instance id="0:1057" name="Computer/Logomark/Animated" x="0" y="0" width="24" height="24" />
+          </frame>
+        </frame>
+        <frame id="0:1062" name="Frame 2147223712" x="28" y="0" width="253" height="26">
+          <rounded-rectangle id="0:1063" name="Rectangle 3477064" x="0" y="0" width="2" height="26" />
+          <text id="0:1064" name="Ask anything" x="2" y="1" width="98" height="24" />
+        </frame>
+      </frame>
+      <frame id="0:1065" name="Frame 2147223747" x="313" y="12" width="87" height="40">
+        <frame id="0:1066" name="Optical Alignment" x="0" y="0" width="40" height="40">
+          <frame id="0:1067" name="Leading" x="8" y="0" width="24" height="40">
+            <frame id="0:1068" name="plus.small" x="0" y="8" width="24" height="24" />
+          </frame>
+          <frame id="0:1070" name="Label" x="31.427804946899414" y="0.000812530517578125" width="81.42791748046875" height="39.99967575073242" hidden="true" />
+          <frame id="0:1071" name="Trailing" x="112.85572052001953" y="0.000812530517578125" width="22.856958389282227" height="39.99967575073242" hidden="true" />
+        </frame>
+        <instance id="0:1072" name="Icon Button" x="46" y="0" width="41" height="40">
+          <frame id="0:1074" name="Optical Alignment" x="0.5" y="0" width="40" height="40">
+            <slot id="0:1076" name="Icon" x="8" y="0" width="24" height="40">
+              <instance id="0:1077" name="Icons / Arrow.Up" x="0" y="8" width="24" height="24" />
+            </slot>
+          </frame>
+        </instance>
+      </frame>
+      <instance id="0:1079" name="Progressive Divider" x="0" y="0" width="416" height="0" />
+    </instance>
+    <instance id="10:3256" name="[WIP]Bubble" x="164" y="72" width="234" height="40" />
+    <frame id="10:3257" name="Frame 2147223752" x="21" y="136" width="395" height="108">
+      <frame id="10:3258" name="Frame 2147223714" x="0" y="0" width="395" height="28">
+        <frame id="10:3259" name="Leading" x="0" y="4" width="24" height="24">
+          <frame id="10:3260" name="Leading" x="0" y="0" width="24" height="24">
+            <instance id="10:3261" name="Computer/Logomark/Animated" x="0" y="0" width="24" height="24" />
+          </frame>
+        </frame>
+        <frame id="10:3262" name="Frame 2147223713" x="32" y="0" width="111" height="28">
+          <boolean-operation id="10:3263" name="Union" x="-10.024140357971191" y="0" width="123.74679565429688" height="28.146156311035156" />
+          <text id="10:3270" name="Thought for 2s" x="6" y="6" width="83" height="16" />
+          <frame id="10:3271" name="chevron.right.small" x="89" y="6" width="16" height="16" />
+        </frame>
+      </frame>
+      <text id="10:3273" name="Placeholder" x="0" y="36" width="378" height="72" />
+    </frame>
+  </frame>
+  <frame id="10:3274" name="--" x="656" y="0" width="1041" height="900">
+    <frame id="10:3275" name="Frame 1321317329" x="0" y="0" width="1041" height="900">
+      <frame id="10:3276" name="Frame 1321317331" x="0" y="0" width="1041" height="900">
+        <frame id="10:3277" name="Canvas.Header" x="0" y="0" width="1041" height="48">
+          <frame id="10:3278" name="Breadcrumb" x="20" y="12" width="72" height="24">
+            <frame id="10:3279" name="Breadcrumb.Item" x="0" y="0" width="72" height="24">
+              <frame id="10:3280" name="Breadcrumb.Item" x="0" y="0" width="72" height="24">
+                <frame id="10:3281" name="Wrapper" x="0" y="0" width="68" height="24">
+                  <frame id="10:3282" name="Left Icon" x="0" y="0" width="24" height="24">
+                    <instance id="10:3283" name="Icon" x="4" y="4" width="16" height="16" />
+                  </frame>
+                  <frame id="10:3284" name="Icon Wrapper" x="6" y="6" width="16" height="16" hidden="true">
+                    <frame id="10:3285" name="Placeholder" x="0" y="0" width="16" height="16" />
+                  </frame>
+                  <text id="10:3287" name="Issues" x="28" y="3.5" width="40" height="17" />
+                  <frame id="10:3288" name="Badge" x="93" y="6" width="20" height="16" hidden="true">
+                    <text id="10:3289" name="Number" x="6" y="2" width="8" height="15" />
+                  </frame>
+                  <frame id="10:3290" name="Chevron" x="117" y="6" width="16" height="16" hidden="true" />
+                </frame>
+              </frame>
+            </frame>
+          </frame>
+          <frame id="10:3292" name="Spacer" x="96" y="21" width="657" height="6" />
+          <frame id="10:3293" name="container" x="757" y="8" width="232" height="32">
+            <frame id="10:3294" name="actions" x="0" y="4" width="148" height="24">
+              <frame id="10:3295" name="Frame" x="0" y="0" width="24" height="24">
+                <frame id="10:3296" name="Group" x="6.666655540466309" y="6.614335060119629" width="10.666688919067383" height="10.771329879760742" />
+              </frame>
+              <frame id="10:3298" name="Frame 1321315415" x="32" y="0" width="24" height="24">
+                <instance id="10:3299" name="Arrows, Diagrams/Arrange, Filter, Sort" x="4" y="4" width="16" height="16" />
+              </frame>
+              <frame id="10:3300" name="Table/Filter" x="64" y="0" width="24" height="24">
+                <vector id="10:3301" name="Vector" x="7" y="8" width="10" height="7.999999523162842" />
+              </frame>
+              <frame id="10:3302" name="Frame 1321315417" x="96" y="0" width="24" height="24">
+                <instance id="10:3303" name="Music, Audio/Filter, Settings, Sort" x="4" y="4" width="16" height="16" />
+              </frame>
+              <instance id="10:3304" name="Elipsis" x="128" y="2" width="20" height="20" />
+            </frame>
+            <instance id="10:3305" name="Button" x="160" y="0" width="72" height="32" />
+          </frame>
+          <instance id="10:6673" name="Icon Button" x="993" y="10" width="28" height="28">
+            <slot id="0:917" name="Icon" x="6" y="0" width="16" height="28">
+              <instance id="0:918" name="Icons/Three.dots.vertical" x="0" y="6" width="16" height="16" />
+            </slot>
+            <instance id="0:920" name="_Focus Ring" x="0" y="0" width="27" height="28" hidden="true" />
+          </instance>
+        </frame>
+        <frame id="10:3307" name="Header" x="0" y="48" width="1041" height="52">
+          <frame id="10:3308" name="Frame 1321316731" x="20" y="8" width="178" height="28">
+            <instance id="10:6269" name="Tabs" x="0" y="0" width="146" height="28">
+              <slot id="0:906" name="Child" x="0" y="0" width="146" height="28">
+                <instance id="0:907" name="_Tab Item" x="0" y="0" width="66" height="28">
+                  <slot id="0:908" name="Leading" x="6" y="0" width="16" height="28" hidden="true" />
+                  <frame id="0:909" name="Label" x="6" y="0" width="54" height="28">
+                    <text id="0:910" name="Tab Item" x="6" y="6" width="42" height="16" />
+                  </frame>
+                  <slot id="0:911" name="Trailing" x="91" y="0" width="16" height="28" hidden="true" />
+                </instance>
+                <instance id="0:912" name="_Tab Item" x="70" y="0" width="76" height="28">
+                  <slot id="0:913" name="Leading" x="6" y="0" width="16" height="28" hidden="true" />
+                  <frame id="0:914" name="Label" x="6" y="0" width="64" height="28">
+                    <text id="0:915" name="Tab Item" x="6" y="6" width="52" height="16" />
+                  </frame>
+                  <slot id="0:916" name="Trailing" x="91" y="0" width="16" height="28" hidden="true" />
+                </instance>
+              </slot>
+            </instance>
+            <instance id="10:6692" name="Icon Button" x="158" y="4" width="20" height="20">
+              <slot id="0:902" name="Icon" x="4" y="4" width="12" height="12">
+                <instance id="0:903" name="Icons/Plus" x="0" y="0" width="12" height="12" />
+              </slot>
+              <instance id="0:905" name="_Focus Ring" x="0" y="0" width="20" height="20" hidden="true" />
+            </instance>
+          </frame>
+          <frame id="10:3317" name="container" x="797" y="8" width="224" height="28">
+            <frame id="10:3318" name="actions" x="0" y="0" width="136" height="28">
+              <instance id="10:6290" name="Icon Button" x="0" y="0" width="28" height="28">
+                <slot id="0:928" name="Icon" x="6" y="0" width="16" height="28">
+                  <instance id="0:929" name="Icons/Magnifying.glass" x="0" y="6" width="16" height="16" />
+                </slot>
+                <instance id="0:931" name="_Focus Ring" x="0" y="0" width="27" height="28" hidden="true" />
+              </instance>
+              <instance id="10:6617" name="Icon Button" x="36" y="0" width="28" height="28">
+                <slot id="0:984" name="Icon" x="6" y="0" width="16" height="28">
+                  <instance id="0:985" name="Icons/Arrows.up.and.down" x="0" y="6" width="16" height="16" />
+                </slot>
+                <instance id="0:987" name="_Focus Ring" x="0" y="0" width="27" height="28" hidden="true" />
+              </instance>
+              <instance id="10:6636" name="Icon Button" x="72" y="0" width="28" height="28">
+                <slot id="0:898" name="Icon" x="6" y="0" width="16" height="28">
+                  <instance id="0:899" name="Icons/Three.bars.horizontal" x="0" y="6" width="16" height="16" />
+                </slot>
+                <instance id="0:901" name="_Focus Ring" x="0" y="0" width="27" height="28" hidden="true" />
+              </instance>
+              <instance id="10:6653" name="Icon Button" x="108" y="0" width="28" height="28">
+                <slot id="0:993" name="Icon" x="6" y="0" width="16" height="28">
+                  <instance id="0:994" name="Icons/Horizontal.lines.with.circles" x="0" y="6" width="16" height="16" />
+                </slot>
+                <instance id="0:996" name="_Focus Ring" x="0" y="0" width="27" height="28" hidden="true" />
+              </instance>
+            </frame>
+            <instance id="10:3328" name="Button" x="148" y="0" width="76" height="28">
+              <frame id="0:1127" name="Optical Alignment" x="0.5" y="0" width="75" height="28">
+                <slot id="0:1128" name="Leading" x="6" y="0" width="16" height="28">
+                  <instance id="0:1129" name="Icons / Plus" x="0" y="6" width="16" height="16" />
+                </slot>
+                <frame id="0:1132" name="Contents" x="22" y="0" width="47" height="28">
+                  <text id="0:1133" name="Button" x="6" y="6" width="35" height="16" />
+                </frame>
+                <slot id="0:1134" name="Trailing" x="79" y="0" width="16" height="28" hidden="true" />
+              </frame>
+            </instance>
+          </frame>
+        </frame>
+        <frame id="10:3329" name="table core" x="0" y="100" width="1041" height="800">
+          <frame id="10:3330" name="header" x="0" y="0" width="1041" height="32">
+            <frame id="10:3331" name="lead header" x="0" y="0" width="131" height="32">
+              <instance id="10:3332" name="Cell/Header" x="0" y="0" width="20" height="32" />
+              <instance id="10:3333" name="Cell/Header" x="20" y="0" width="111" height="32" />
+            </frame>
+            <instance id="10:3334" name="Cell/Header" x="131" y="0" width="597" height="32" />
+            <instance id="10:3335" name="Cell/Header" x="728" y="0" width="112" height="32" />
+            <instance id="10:3336" name="Cell/Header" x="840" y="0" width="194" height="32" />
+            <instance id="10:3337" name="Cell/Header" x="1034" y="0" width="154" height="32" />
+          </frame>
+          <frame id="10:3338" name="container" x="0" y="32" width="1041" height="751">
+            <frame id="10:3339" name="rows" x="0" y="0" width="1026" height="751">
+              <frame id="10:3340" name="row" x="0" y="0" width="1443" height="48">
+                <frame id="10:3341" name="lead cell" x="0" y="0" width="134" height="48">
+                  <rounded-rectangle id="10:3342" name="Rectangle 18" x="0" y="0" width="20" height="48" />
+                  <frame id="10:3343" name="Cell" x="20" y="0" width="114" height="48">
+                    <frame id="10:3344" name="Checkbox" x="4" y="14" width="20" height="20">
+                      <instance id="10:3345" name="Checkbox" x="2" y="2" width="16" height="16" />
+                    </frame>
+                    <frame id="10:3346" name="Left Slot" x="32" y="14" width="66" height="20">
+                      <instance id="10:6902" name="Object ID" x="0" y="0" width="66" height="20" />
+                    </frame>
+                    <frame id="10:3355" name="Content" x="36" y="12" width="84" height="24" hidden="true">
+                      <text id="10:3356" name="Column Item" x="0" y="0" width="83" height="23" />
+                    </frame>
+                    <frame id="10:3357" name="Right Slot" x="160" y="12" width="24" height="24" hidden="true">
+                      <instance id="10:3358" name="Col/_Slot" x="0" y="0" width="24" height="24" />
+                    </frame>
+                  </frame>
+                </frame>
+                <instance id="10:3359" name="Cell" x="134" y="0.5" width="574" height="47" />
+                <frame id="10:3360" name="Cell" x="708" y="0" width="112" height="48">
+                  <frame id="10:3361" name="Frame 1000011960" x="16" y="12.5" width="14" height="23">
+                    <text id="10:3362" name="P1" x="0" y="0" width="14" height="23" />
+                  </frame>
+                </frame>
+                <frame id="10:3363" name="Cell" x="820" y="0.5" width="194" height="47">
+                  <instance id="10:3364" name="Interface, Essential/clock-time" x="16" y="14.5" width="18" height="18" />
+                  <text id="10:3365" name="Triage" x="42" y="12" width="39" height="23" />
+                </frame>
+                <instance id="10:3366" name="Cell" x="1014" y="0" width="429" height="48" />
+              </frame>
+              <frame id="10:3367" name="row" x="0" y="48" width="1443" height="48">
+                <frame id="10:3368" name="lead cell" x="0" y="0" width="134" height="48">
+                  <rounded-rectangle id="10:3369" name="Rectangle 18" x="0" y="0" width="20" height="48" />
+                  <frame id="10:3370" name="Cell" x="20" y="0" width="114" height="48">
+                    <frame id="10:3371" name="Checkbox" x="4" y="14" width="20" height="20">
+                      <instance id="10:3372" name="Checkbox" x="2" y="2" width="16" height="16" />
+                    </frame>
+                    <frame id="10:3373" name="Left Slot" x="32" y="14" width="66" height="20">
+                      <instance id="10:6905" name="Object ID" x="0" y="0" width="66" height="20" />
+                    </frame>
+                    <frame id="10:3382" name="Content" x="36" y="12" width="84" height="24" hidden="true">
+                      <text id="10:3383" name="Column Item" x="0" y="0" width="83" height="23" />
+                    </frame>
+                    <frame id="10:3384" name="Right Slot" x="160" y="12" width="24" height="24" hidden="true">
+                      <instance id="10:3385" name="Col/_Slot" x="0" y="0" width="24" height="24" />
+                    </frame>
+                  </frame>
+                </frame>
+                <instance id="10:3386" name="Cell" x="134" y="0.5" width="574" height="47" />
+                <frame id="10:3387" name="Cell" x="708" y="0" width="112" height="48">
+                  <frame id="10:3388" name="Frame 1000011960" x="16" y="12.5" width="14" height="23">
+                    <text id="10:3389" name="P1" x="0" y="0" width="14" height="23" />
+                  </frame>
+                </frame>
+                <frame id="10:3390" name="Cell" x="820" y="0.5" width="194" height="47">
+                  <instance id="10:3391" name="Interface, Essential/clock-time" x="16" y="14.5" width="18" height="18" />
+                  <text id="10:3392" name="Triage" x="42" y="12" width="39" height="23" />
+                </frame>
+                <instance id="10:3393" name="Cell" x="1014" y="0" width="429" height="48" />
+              </frame>
+              <frame id="10:3394" name="row" x="0" y="96" width="1443" height="48">
+                <frame id="10:3395" name="lead cell" x="0" y="0" width="134" height="48">
+                  <rounded-rectangle id="10:3396" name="Rectangle 18" x="0" y="0" width="20" height="48" />
+                  <frame id="10:3397" name="Cell" x="20" y="0" width="114" height="48">
+                    <frame id="10:3398" name="Checkbox" x="4" y="14" width="20" height="20">
+                      <instance id="10:3399" name="Checkbox" x="2" y="2" width="16" height="16" />
+                    </frame>
+                    <frame id="10:3400" name="Left Slot" x="32" y="14" width="66" height="20">
+                      <instance id="10:6908" name="Object ID" x="0" y="0" width="66" height="20" />
+                    </frame>
+                    <frame id="10:3409" name="Content" x="36" y="12" width="84" height="24" hidden="true">
+                      <text id="10:3410" name="Column Item" x="0" y="0" width="83" height="23" />
+                    </frame>
+                    <frame id="10:3411" name="Right Slot" x="160" y="12" width="24" height="24" hidden="true">
+                      <instance id="10:3412" name="Col/_Slot" x="0" y="0" width="24" height="24" />
+                    </frame>
+                  </frame>
+                </frame>
+                <instance id="10:3413" name="Cell" x="134" y="0.5" width="574" height="47" />
+                <frame id="10:3414" name="Cell" x="708" y="0" width="112" height="48">
+                  <frame id="10:3415" name="Frame 1000011960" x="16" y="12.5" width="14" height="23">
+                    <text id="10:3416" name="P1" x="0" y="0" width="14" height="23" />
+                  </frame>
+                </frame>
+                <frame id="10:3417" name="Cell" x="820" y="0.5" width="194" height="47">
+                  <instance id="10:3418" name="Interface, Essential/clock-time" x="16" y="14.5" width="18" height="18" />
+                  <text id="10:3419" name="Triage" x="42" y="12" width="39" height="23" />
+                </frame>
+                <instance id="10:3420" name="Cell" x="1014" y="0" width="429" height="48" />
+              </frame>
+              <frame id="10:3421" name="row" x="0" y="144" width="1443" height="48">
+                <frame id="10:3422" name="lead cell" x="0" y="0" width="134" height="48">
+                  <rounded-rectangle id="10:3423" name="Rectangle 18" x="0" y="0" width="20" height="48" />
+                  <frame id="10:3424" name="Cell" x="20" y="0" width="114" height="48">
+                    <frame id="10:3425" name="Checkbox" x="4" y="14" width="20" height="20">
+                      <instance id="10:3426" name="Checkbox" x="2" y="2" width="16" height="16" />
+                    </frame>
+                    <frame id="10:3427" name="Left Slot" x="32" y="14" width="66" height="20">
+                      <instance id="10:6911" name="Object ID" x="0" y="0" width="66" height="20" />
+                    </frame>
+                    <frame id="10:3436" name="Content" x="36" y="12" width="84" height="24" hidden="true">
+                      <text id="10:3437" name="Column Item" x="0" y="0" width="83" height="23" />
+                    </frame>
+                    <frame id="10:3438" name="Right Slot" x="160" y="12" width="24" height="24" hidden="true">
+                      <instance id="10:3439" name="Col/_Slot" x="0" y="0" width="24" height="24" />
+                    </frame>
+                  </frame>
+                </frame>
+                <instance id="10:3440" name="Cell" x="134" y="0.5" width="574" height="47" />
+                <frame id="10:3441" name="Cell" x="708" y="0" width="112" height="48">
+                  <frame id="10:3442" name="Frame 1000011960" x="16" y="12.5" width="14" height="23">
+                    <text id="10:3443" name="P1" x="0" y="0" width="14" height="23" />
+                  </frame>
+                </frame>
+                <frame id="10:3444" name="Cell" x="820" y="0.5" width="194" height="47">
+                  <instance id="10:3445" name="Interface, Essential/clock-time" x="16" y="14.5" width="18" height="18" />
+                  <text id="10:3446" name="Triage" x="42" y="12" width="39" height="23" />
+                </frame>
+                <instance id="10:3447" name="Cell" x="1014" y="0" width="429" height="48" />
+              </frame>
+              <frame id="10:3448" name="row" x="0" y="192" width="1443" height="48">
+                <frame id="10:3449" name="lead cell" x="0" y="0" width="134" height="48">
+                  <rounded-rectangle id="10:3450" name="Rectangle 18" x="0" y="0" width="20" height="48" />
+                  <frame id="10:3451" name="Cell" x="20" y="0" width="114" height="48">
+                    <frame id="10:3452" name="Checkbox" x="4" y="14" width="20" height="20">
+                      <instance id="10:3453" name="Checkbox" x="2" y="2" width="16" height="16" />
+                    </frame>
+                    <frame id="10:3454" name="Left Slot" x="32" y="14" width="66" height="20">
+                      <instance id="10:6914" name="Object ID" x="0" y="0" width="66" height="20" />
+                    </frame>
+                    <frame id="10:3463" name="Content" x="36" y="12" width="84" height="24" hidden="true">
+                      <text id="10:3464" name="Column Item" x="0" y="0" width="83" height="23" />
+                    </frame>
+                    <frame id="10:3465" name="Right Slot" x="160" y="12" width="24" height="24" hidden="true">
+                      <instance id="10:3466" name="Col/_Slot" x="0" y="0" width="24" height="24" />
+                    </frame>
+                  </frame>
+                </frame>
+                <instance id="10:3467" name="Cell" x="134" y="0.5" width="574" height="47" />
+                <frame id="10:3468" name="Cell" x="708" y="0" width="112" height="48">
+                  <frame id="10:3469" name="Frame 1000011960" x="16" y="12.5" width="14" height="23">
+                    <text id="10:3470" name="P1" x="0" y="0" width="14" height="23" />
+                  </frame>
+                </frame>
+                <frame id="10:3471" name="Cell" x="820" y="0.5" width="194" height="47">
+                  <instance id="10:3472" name="Interface, Essential/clock-time" x="16" y="14.5" width="18" height="18" />
+                  <text id="10:3473" name="Triage" x="42" y="12" width="39" height="23" />
+                </frame>
+                <instance id="10:3474" name="Cell" x="1014" y="0" width="429" height="48" />
+              </frame>
+              <frame id="10:3475" name="row" x="0" y="240" width="1443" height="48">
+                <frame id="10:3476" name="lead cell" x="0" y="0" width="134" height="48">
+                  <rounded-rectangle id="10:3477" name="Rectangle 18" x="0" y="0" width="20" height="48" />
+                  <frame id="10:3478" name="Cell" x="20" y="0" width="114" height="48">
+                    <frame id="10:3479" name="Checkbox" x="4" y="14" width="20" height="20">
+                      <instance id="10:3480" name="Checkbox" x="2" y="2" width="16" height="16" />
+                    </frame>
+                    <frame id="10:3481" name="Left Slot" x="32" y="14" width="66" height="20">
+                      <instance id="10:6917" name="Object ID" x="0" y="0" width="66" height="20" />
+                    </frame>
+                    <frame id="10:3490" name="Content" x="36" y="12" width="84" height="24" hidden="true">
+                      <text id="10:3491" name="Column Item" x="0" y="0" width="83" height="23" />
+                    </frame>
+                    <frame id="10:3492" name="Right Slot" x="160" y="12" width="24" height="24" hidden="true">
+                      <instance id="10:3493" name="Col/_Slot" x="0" y="0" width="24" height="24" />
+                    </frame>
+                  </frame>
+                </frame>
+                <instance id="10:3494" name="Cell" x="134" y="0.5" width="574" height="47" />
+                <frame id="10:3495" name="Cell" x="708" y="0" width="112" height="48">
+                  <frame id="10:3496" name="Frame 1000011960" x="16" y="12.5" width="14" height="23">
+                    <text id="10:3497" name="P1" x="0" y="0" width="14" height="23" />
+                  </frame>
+                </frame>
+                <frame id="10:3498" name="Cell" x="820" y="0.5" width="194" height="47">
+                  <instance id="10:3499" name="Interface, Essential/clock-time" x="16" y="14.5" width="18" height="18" />
+                  <text id="10:3500" name="Triage" x="42" y="12" width="39" height="23" />
+                </frame>
+                <instance id="10:3501" name="Cell" x="1014" y="0" width="429" height="48" />
+              </frame>
+            </frame>
+            <frame id="10:3502" name="vscroll" x="1026" y="0" width="15" height="751">
+              <rounded-rectangle id="10:3503" name="handle" x="4.000004291534424" y="4" width="7.000008587309367" height="200.0000001008142" />
+            </frame>
+          </frame>
+          <frame id="10:3504" name="hscroll" x="0" y="783" width="1041" height="17">
+            <rounded-rectangle id="10:3505" name="divider" x="130" y="0.5" width="1.0147371292114258" height="16" />
+            <frame id="10:3506" name="track" x="131.01473999023438" y="0" width="930.8661499023438" height="17">
+              <rounded-rectangle id="10:3507" name="handle" x="927" y="4.000040054321289" width="923.0000003545938" height="8.00007984228614" />
+            </frame>
+          </frame>
+        </frame>
+      </frame>
+    </frame>
+  </frame>
+</frame>

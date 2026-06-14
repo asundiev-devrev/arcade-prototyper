@@ -3,6 +3,7 @@ import type {
 } from "./figma/types";
 import { compactTree } from "./figma/compactTree";
 import { resolveTokens } from "./figma/resolveTokens";
+import { computeExportScale } from "./figma/exportScale";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs/promises";
@@ -21,7 +22,17 @@ const __dirname = path.dirname(__filename);
 export interface IngestDeps {
   getNode: (fileKey: string, nodeId: string) => Promise<any>;
   getVariables: (fileKey: string) => Promise<any | null>;
-  exportPng: (fileKey: string, nodeId: string) => Promise<{ path: string; widthPx: number; heightPx: number } | null>;
+  /**
+   * Export a PNG of the node. `srcSize` is the node's bbox in Figma px, used
+   * to pick an export scale that lands the longest edge near ~2000px (instead
+   * of a flat 2x that left small nodes too coarse to trace). The returned
+   * widthPx/heightPx are the REAL exported dimensions, not placeholders.
+   */
+  exportPng: (
+    fileKey: string,
+    nodeId: string,
+    srcSize?: { width: number; height: number },
+  ) => Promise<{ path: string; widthPx: number; heightPx: number } | null>;
   classify: (tree: CompactNode, composites: string[]) => Promise<{ composites: IngestResult["composites"]; warnings: string[] }>;
   now?: () => number;
 }
@@ -180,7 +191,7 @@ export function createFigmaIngest(deps: IngestDeps, cfg: IngestConfig): FigmaIng
       return { ok: false, reason, source: { fileKey, nodeId, url } };
     }
 
-    const { tree: compacted, warnings: compactWarnings } = compactTree(rawDoc);
+    const { tree: compacted, warnings: compactWarnings, rawById } = compactTree(rawDoc);
     warnings.push(...compactWarnings);
 
     // getVariables (token JSON) and exportPng (rendered screenshot) are two
@@ -189,11 +200,15 @@ export function createFigmaIngest(deps: IngestDeps, cfg: IngestConfig): FigmaIng
     // was doubling the network wait on the cold path (the single biggest
     // contributor to fresh-Figma turn-start latency). resolveTokens still
     // waits on getVariables, but the PNG fetch overlaps it.
+    const bbox = rawDoc?.absoluteBoundingBox;
+    const srcSize = bbox && typeof bbox.width === "number" && typeof bbox.height === "number"
+      ? { width: bbox.width, height: bbox.height }
+      : undefined;
     const [varsPayload, png] = await Promise.all([
       deps.getVariables(fileKey).catch(() => null),
-      deps.exportPng(fileKey, nodeId).catch(() => null),
+      deps.exportPng(fileKey, nodeId, srcSize).catch(() => null),
     ]);
-    const { tree: tokenedTree, tokens, warnings: tokenWarnings } = resolveTokens(compacted, rawDoc, varsPayload);
+    const { tree: tokenedTree, tokens, warnings: tokenWarnings } = resolveTokens(compacted, rawById, varsPayload);
     warnings.push(...tokenWarnings);
 
     if (!png) warnings.push("png export failed");
@@ -204,6 +219,7 @@ export function createFigmaIngest(deps: IngestDeps, cfg: IngestConfig): FigmaIng
       tree: tokenedTree,
       tokens,
       composites: [],
+      classified: false,
       diagnostics: { warnings },
     };
     cacheSet(cacheKey(fileKey, nodeId), result);
@@ -246,6 +262,7 @@ export function createFigmaIngest(deps: IngestDeps, cfg: IngestConfig): FigmaIng
     const upgraded: IngestResult = {
       ...current,
       composites: classifier.composites,
+      classified: true,
       diagnostics: {
         warnings: [...current.diagnostics.warnings, ...classifier.warnings],
       },
@@ -347,13 +364,17 @@ export async function getFigmaIngest(): Promise<FigmaIngest> {
     {
       getNode: (fileKey, nodeId) => figmanageGetNode(fileKey, nodeId),
       getVariables: (fileKey) => figmanageGetVariables(fileKey),
-      exportPng: async (fileKey, nodeId) => {
+      exportPng: async (fileKey, nodeId, srcSize) => {
         const dir = figmaIngestRoot();
         await fs.mkdir(dir, { recursive: true });
         const out = path.join(dir, `${fileKey}_${nodeId.replace(/:/g, "-")}.png`);
+        const { scale, widthPx, heightPx } = computeExportScale(
+          srcSize?.width ?? 0,
+          srcSize?.height ?? 0,
+        );
         try {
-          const filepath = await exportNodePng(fileKey, nodeId, out, 2);
-          return { path: filepath, widthPx: 0, heightPx: 0 };
+          const filepath = await exportNodePng(fileKey, nodeId, out, scale);
+          return { path: filepath, widthPx, heightPx };
         } catch { return null; }
       },
       classify: (tree, names) => classifyComposites(tree, names),

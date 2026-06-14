@@ -59,6 +59,50 @@ describe("runClaudeTurn", () => {
     }
   });
 
+  it("launches write-time hooks via the runtime executable, never a bare `node` (DMG has no node on PATH)", async () => {
+    // Regression: the packaged DMG ships no standalone `node`. A hardcoded
+    // `node <hook>.mjs` command exited 127 ("node: command not found") and
+    // the claude CLI treated the PostToolUse hook as a non-blocking failure,
+    // silently disabling import validation + image-reshape blocking on every
+    // tester machine. The hook command must invoke the current Node-capable
+    // runtime (process.execPath) with ELECTRON_RUN_AS_NODE=1 instead.
+    const spy = path.join(__dirname, "../fixtures/fake-claude-hooks-spy.sh");
+    const logFile = path.join(os.tmpdir(), `claude-hooks-${Date.now()}.log`);
+    // Print each arg on its own line so the JSON `--settings` value survives
+    // intact (echo "$@" would flatten spaces inside the JSON).
+    fs.writeFileSync(
+      spy,
+      `#!/usr/bin/env bash\nprintf '%s\\n' "$@" >> ${logFile}\nprintf '{"type":"result","subtype":"success"}\\n'\n`,
+      { mode: 0o755 },
+    );
+    fs.writeFileSync(logFile, "");
+    try {
+      await runClaudeTurn({ cwd: os.tmpdir(), prompt: "hi", bin: spy, onEvent: () => {} });
+      const lines = fs.readFileSync(logFile, "utf-8").split("\n");
+      const settingsIdx = lines.indexOf("--settings");
+      expect(settingsIdx).toBeGreaterThanOrEqual(0);
+      const settings = JSON.parse(lines[settingsIdx + 1]);
+      const commands: string[] = [
+        ...settings.hooks.PreToolUse.flatMap((m: any) => m.hooks.map((h: any) => h.command)),
+        ...settings.hooks.PostToolUse.flatMap((m: any) => m.hooks.map((h: any) => h.command)),
+      ];
+      expect(commands.length).toBe(2);
+      for (const cmd of commands) {
+        // Never a bare `node` invocation — that's the bug.
+        expect(cmd).not.toMatch(/^node\s/);
+        // Must route through the current runtime in node mode.
+        expect(cmd).toContain("ELECTRON_RUN_AS_NODE=1");
+        expect(cmd).toContain(JSON.stringify(process.execPath));
+      }
+      // Both guardrail scripts are still wired.
+      expect(commands.some((c) => c.includes("blockImageReshape.mjs"))).toBe(true);
+      expect(commands.some((c) => c.includes("validateArcadeImports.mjs"))).toBe(true);
+    } finally {
+      fs.rmSync(spy, { force: true });
+      fs.rmSync(logFile, { force: true });
+    }
+  });
+
   it("defaults --model to sonnet (does not inherit the user's global Opus pin)", async () => {
     const spy = path.join(__dirname, "../fixtures/fake-claude-model-spy.sh");
     const logFile = path.join(os.tmpdir(), `claude-model-${Date.now()}.log`);
