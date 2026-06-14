@@ -1,9 +1,10 @@
-import { app, dialog } from "electron";
+import { app, Notification } from "electron";
 // electron-updater ships as CommonJS. Under ESM, named imports of
 // `autoUpdater` fail at runtime ("Named export 'autoUpdater' not
 // found"). Default-import the package and destructure.
 import electronUpdaterPkg from "electron-updater";
 const { autoUpdater } = electronUpdaterPkg;
+import { decideApply } from "./applyDecision.js";
 
 // The turn-aware apply decision lives in a standalone, electron-free module
 // so it is unit-testable under vitest (importing this file pulls in
@@ -37,21 +38,7 @@ export function initUpdater(): void {
   });
 
   autoUpdater.on("update-downloaded", (info) => {
-    void dialog
-      .showMessageBox({
-        type: "info",
-        title: "Update available",
-        message: `Arcade Studio ${info.version} is ready to install.`,
-        detail: "The update will be applied when you quit. Quit now to install immediately.",
-        buttons: ["Quit and install", "Later"],
-        defaultId: 0,
-        cancelId: 1,
-      })
-      .then((result) => {
-        if (result.response === 0) {
-          autoUpdater.quitAndInstall();
-        }
-      });
+    void applyWhenIdle(info.version, 0);
   });
 
   // Kick off the check. electron-updater handles fetching the
@@ -59,4 +46,63 @@ export function initUpdater(): void {
   autoUpdater.checkForUpdates().catch((err) => {
     console.error("[updater] checkForUpdates failed:", err);
   });
+
+  // Re-check every 30 minutes so a long-lived session still picks up a release
+  // published after launch. unref so the timer never keeps the app alive.
+  const RECHECK_MS = 30 * 60 * 1000;
+  const timer = setInterval(() => {
+    autoUpdater.checkForUpdates().catch((err) => {
+      console.error("[updater] periodic checkForUpdates failed:", err);
+    });
+  }, RECHECK_MS);
+  timer.unref?.();
+}
+
+/** Poll interval while waiting for an active turn to finish. */
+const POLL_MS = 15 * 1000;
+
+/** Ask the local server whether a generation turn is running. On any error
+ *  (server not up, fetch failed) we treat the app as idle — a dead server has
+ *  no active turn, so restarting is safe. The Vite server always runs on 5556
+ *  (see electron/viteRunner.ts VITE_PORT). */
+async function isTurnActive(): Promise<boolean> {
+  try {
+    const res = await fetch("http://127.0.0.1:5556/api/turns/active");
+    if (!res.ok) return false;
+    const body = (await res.json()) as { active?: boolean };
+    return body.active === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Apply the downloaded update, deferring the restart while a turn is running.
+ *  Decision delegated to the pure decideApply(); this function is the Electron
+ *  glue (notice + quitAndInstall + polling). */
+async function applyWhenIdle(version: string, deferredMs: number): Promise<void> {
+  const turnActive = await isTurnActive();
+  const decision = decideApply({ turnActive, deferredMs });
+
+  if (decision === "wait") {
+    setTimeout(() => void applyWhenIdle(version, deferredMs + POLL_MS), POLL_MS);
+    return;
+  }
+
+  if (decision === "force") {
+    // A turn outlasted the cap — stop waiting. autoInstallOnAppQuit (set in
+    // initUpdater) means the update still applies on the next quit.
+    console.log(`[updater] ${version} deferred past cap; will apply on quit`);
+    return;
+  }
+
+  // decision === "restart": idle → apply now with a brief notice, then relaunch.
+  console.log(`[updater] applying ${version} now`);
+  if (Notification.isSupported()) {
+    new Notification({
+      title: "Updating Arcade Studio",
+      body: `Installing version ${version}…`,
+    }).show();
+  }
+  // Small delay so the notice paints before the app quits.
+  setTimeout(() => autoUpdater.quitAndInstall(), 1200);
 }
