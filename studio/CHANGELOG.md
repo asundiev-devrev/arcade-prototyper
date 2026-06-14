@@ -8,8 +8,14 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.32.0] — 2026-06-14
+
 ### Added
 - **Paste a Figma link and get a faithful prototype built from real kit components — no LLM, in a few seconds.** Any prompt with a Figma URL now imports the design deterministically: exact geometry, colors, and text come straight from Figma's data, and every element that exists both as a Figma component and in the Arcade kit (buttons, checkboxes, avatars, tabs, icons…) is rendered as the real interactive component, not a look-alike box. Icons, vectors, and photos are exported as local files so nothing expires. Everything without a kit equivalent stays as faithful static markup. You then iterate on the imported frame with normal follow-up messages.
+- **Studio updates itself now — no more downloading a new .dmg by hand.** When a new version is published, Studio downloads it in the background and installs it automatically. The required restart waits until you're not mid-generation, so an in-progress prototype is never interrupted; you'll see a brief "Updating…" notice and the app reopens on the new version. The old "a new version is available — download" banner is gone.
+
+### Changed
+- The in-app update path is now fully automatic; the manual download banner and its version-check endpoint were removed (the Settings footer still shows your current version).
 
 ## [0.31.2] — 2026-06-10
 
