@@ -119,6 +119,27 @@ function frameNameFromNode(nodeId: string): string {
   return `figma-${nodeId.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase()}`;
 }
 
+/**
+ * C3 — coverage telemetry line for the dev console. Turns the emitter's raw
+ * counts into "N of M instances are real kit components (P%)" plus the top
+ * unmatched set names — the curation backlog (the highest-count names are the
+ * best next mappings to add). `topN` caps the backlog list so a huge board
+ * doesn't spam the log. Pure + exported so it's unit-testable.
+ */
+export function formatCoverage(
+  result: { totalInstances: number; matchedInstances: number; unmatchedSets: Record<string, number> },
+  topN = 5,
+): string {
+  const { totalInstances, matchedInstances, unmatchedSets } = result;
+  const pct = totalInstances > 0 ? Math.round((matchedInstances / totalInstances) * 100) : 0;
+  const top = Object.entries(unmatchedSets)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, topN)
+    .map(([name, count]) => `${name} ×${count}`);
+  const backlog = top.length ? ` — top unmatched: ${top.join(", ")}` : "";
+  return `${matchedInstances}/${totalInstances} instances are real kit components (${pct}%)${backlog}`;
+}
+
 /** Pull the document for a node out of figmanage's get-nodes response. */
 export function pickNodeEntry(dict: any, nodeId: string): {
   document: any;
@@ -343,6 +364,10 @@ export async function runFigmaKitEmitBranch(
   // index.tsx LAST so the watcher's reload sees assets present.
   await fs.writeFile(path.join(fdir, "index.tsx"), result.source, "utf-8");
   console.log(`[kitEmit] ${frameSlug}: ${result.kitInstanceCount} kit instances, ${result.assetRefs.length} assets (${cacheHits} from cache), ${result.tokenizedColors} tokens / ${result.hexColors} hex, ${Date.now() - t0}ms`);
+  // C3 — per-import kit-coverage telemetry. Turns "coverage" from a guess into a
+  // tracked number; the unmatched list is the curation backlog (which set names
+  // to map next). Logged unconditionally so every import leaves a trail.
+  console.log(`[kitEmit] ${frameSlug} coverage: ${formatCoverage(result)}`);
   if (result.hexColors > 0) {
     // Unbound (or non-kit-resolvable) colors stay literal hex — fidelity-safe,
     // but each is a coverage gap. Count them so we can grow the mapping.

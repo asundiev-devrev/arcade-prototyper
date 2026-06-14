@@ -8,6 +8,7 @@ import {
   pickNodeEntry,
   assetCacheVersion,
   assetCacheDir,
+  formatCoverage,
 } from "../../../server/figma/kitEmitBranch";
 
 vi.mock("../../../server/paths", () => ({
@@ -277,6 +278,42 @@ describe("runFigmaKitEmitBranch", () => {
     const r = await runFigmaKitEmitBranch(input as any);
     expect(r.ok).toBe(false);
     expect(r.error).toBe("cancelled");
+  });
+});
+
+describe("formatCoverage (C3)", () => {
+  it("renders matched/total + pct and the top unmatched sets by count", () => {
+    const line = formatCoverage({
+      totalInstances: 10,
+      matchedInstances: 4,
+      unmatchedSets: { Cell: 3, Row: 2, Footer: 1 },
+    });
+    expect(line).toBe(
+      "4/10 instances are real kit components (40%) — top unmatched: Cell ×3, Row ×2, Footer ×1",
+    );
+  });
+
+  it("caps the backlog list at topN, highest count first", () => {
+    const line = formatCoverage(
+      {
+        totalInstances: 20,
+        matchedInstances: 0,
+        unmatchedSets: { A: 1, B: 5, C: 4, D: 3, E: 2, F: 6 },
+      },
+      3,
+    );
+    // F(6), B(5), C(4) — only the top 3 by count.
+    expect(line).toContain("top unmatched: F ×6, B ×5, C ×4");
+    expect(line).not.toContain("D ×");
+    expect(line).not.toContain("E ×");
+  });
+
+  it("handles a fully-matched import (no backlog) and avoids divide-by-zero", () => {
+    expect(formatCoverage({ totalInstances: 3, matchedInstances: 3, unmatchedSets: {} }))
+      .toBe("3/3 instances are real kit components (100%)");
+    // Zero instances → 0% rather than NaN.
+    expect(formatCoverage({ totalInstances: 0, matchedInstances: 0, unmatchedSets: {} }))
+      .toBe("0/0 instances are real kit components (0%)");
   });
 });
 

@@ -31,6 +31,17 @@ export const SET_KEY_TO_KIT: Record<string, string> = {
   "367267f81839b123664fa8b1304b16ee6006b37a": "Badge", // 0.3 "Counter"
   "3067f69c7f76e7c43815148ce843654e36081bed": "Tag", // 0.3 "Chip"
   edd2821db8a05b808da334a1c6aed7646d23e82e: "ChatBubble", // 0.3 "Bubble"
+  // C1 — coverage, Tier-1 only (safe to emit standalone, no Radix portal):
+  c4ff2f34e04a5c0f5b0c94733b157e512a871ec7: "Input", // 0.3 "Input/Text field"
+  "93bc12b8c36c35f775f3a71d4821f4541e32dc79": "Select", // 0.3 "Select" (trigger-only)
+  "0ecf3d67728cfd4196e964bbfb3795f540a0c70b": "Breadcrumb", // 0.3 "Breadcrumbs" (plain HTML)
+  // DELIBERATELY OMITTED (kept as faithful static markup — a wrong component is
+  // worse than the current default): Menu (0375c0ba…), Modal Content
+  // (8122e871…), Popover (6a9dc99a…) are Radix-portal compounds whose VALUE is
+  // the open panel — emitting the shell requires a live open-context and would
+  // either throw or portal into nothing (blank frame), AND would absorb/lose the
+  // panel's rich subtree. Tooltip (758e0e9d…) needs a `children` trigger +
+  // `content` a bare instance never carries. See the plan's Phase C RISK 1–3.
 };
 
 /**
@@ -148,6 +159,36 @@ export const SIZE_VALUE_MAP: Record<string, string> = {
   Small: "sm",
   Default: "md",
   Large: "lg",
+};
+
+// C2 — variant-axis translation beyond Variant/Size. Each map reverses the
+// `valueMap` recorded in src/export/figma/componentEntries.ts (arcade-gen prop
+// value → Figma option) so the EMITTER can go the other way (Figma option →
+// arcade-gen prop value). An unmapped Figma value falls through to the
+// component's own default — never a wrong/throwing prop.
+
+/** Badge `Variant` axis → arcade-gen Badge `variant`. 0.3 "Counter" only
+ *  exposes Emphasis / Neutral; the kit's BadgeVariant is neutral | info |
+ *  intelligence. Emphasis maps to the kit's emphatic `info`. */
+export const BADGE_VARIANT_MAP: Record<string, string> = {
+  Neutral: "neutral",
+  Emphasis: "info",
+};
+
+/** Tag (0.3 "Chip") `Type` axis → arcade-gen Tag `intent`. */
+export const TAG_INTENT_MAP: Record<string, string> = {
+  Neutral: "neutral",
+  Alert: "alert",
+  Success: "success",
+  Warning: "warning",
+  Info: "info",
+  Intelligence: "intelligence",
+};
+
+/** Tag (0.3 "Chip") `Appearance` axis → arcade-gen Tag `appearance`. */
+export const TAG_APPEARANCE_MAP: Record<string, string> = {
+  Tinted: "tinted",
+  Filled: "filled",
 };
 
 /** Nearest arcade-gen Avatar size for a px width. */

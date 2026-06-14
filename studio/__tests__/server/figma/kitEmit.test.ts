@@ -11,6 +11,9 @@ import {
   SET_KEY_TO_KIT,
   SET_NAME_TO_KIT,
   PSEUDO_KIT_RENDERS,
+  BADGE_VARIANT_MAP,
+  TAG_INTENT_MAP,
+  TAG_APPEARANCE_MAP,
 } from "../../../server/figma/kitMappings";
 import {
   kitExportNames,
@@ -850,6 +853,218 @@ describe("emitKitFrame", () => {
     const headingLine = r.source.split("\n").find((l) => l.includes("Heading"))!;
     expect(headingLine).not.toContain('position: "absolute"');
   });
+
+  // --- C1: coverage — Input / Select / Breadcrumb emit cases ---------------
+  //
+  // Tier-1 only: components that render STANDALONE with no Radix open-context
+  // (no portal). Menu/Modal/Popover (portal panels) and Tooltip (needs a
+  // trigger) are deliberately NOT mapped — they stay faithful static markup, a
+  // wrong/throwing component being worse than the current default.
+
+  /** A key-matched INSTANCE for an arbitrary set key, with variant props +
+   *  optional child text nodes. */
+  function keyInstance(
+    id: string,
+    setKey: string,
+    setName: string,
+    props: Record<string, any> = {},
+    texts: string[] = [],
+    bboxArgs: [number, number, number, number] = [0, 0, 200, 32],
+  ): { node: any; maps: any } {
+    const node: any = {
+      id, type: "INSTANCE", componentId: `c:${id}`,
+      absoluteBoundingBox: bbox(...bboxArgs),
+      componentProperties: Object.fromEntries(
+        Object.entries(props).map(([k, v]) => [k, { value: v, type: "VARIANT" }]),
+      ),
+      children: texts.map((t, i) => ({
+        id: `${id}-t${i}`, type: "TEXT", characters: t,
+        absoluteBoundingBox: bbox(4, 4, 100, 16),
+        style: { fontFamily: "Inter", fontSize: 13 },
+      })),
+    };
+    const maps = {
+      components: { [`c:${id}`]: { key: "k", name: "x", componentSetId: `s:${id}` } },
+      componentSets: { [`s:${id}`]: { key: setKey, name: setName } },
+    };
+    return { node, maps };
+  }
+
+  const INPUT_KEY = "c4ff2f34e04a5c0f5b0c94733b157e512a871ec7";
+  const SELECT_KEY = "93bc12b8c36c35f775f3a71d4821f4541e32dc79";
+  const BREADCRUMB_KEY = "0ecf3d67728cfd4196e964bbfb3795f540a0c70b";
+
+  it("C1: emits a kit Input for a key-matched Input/Text field, with its value", () => {
+    const { node, maps } = keyInstance("in1", INPUT_KEY, "Input/Text field", {}, ["acme@corp.com"]);
+    const r = emitKitFrame(frameNode("0", [node]), { ...maps, assetFiles: new Map() });
+    expect(r.kitImports).toContain("Input");
+    expect(r.source).toContain('<Input defaultValue="acme@corp.com" />');
+    expect(r.kitInstanceCount).toBe(1);
+  });
+
+  it("C1: Input State=Error → error prop; State=Disabled → disabled", () => {
+    const err = keyInstance("in2", INPUT_KEY, "Input/Text field", { State: "Error" }, ["bad"]);
+    const re = emitKitFrame(frameNode("0", [err.node]), { ...err.maps, assetFiles: new Map() });
+    expect(re.source).toContain('error="Invalid"');
+
+    const dis = keyInstance("in3", INPUT_KEY, "Input/Text field", { State: "Disabled" }, ["x"]);
+    const rd = emitKitFrame(frameNode("0", [dis.node]), { ...dis.maps, assetFiles: new Map() });
+    expect(rd.source).toContain("disabled");
+  });
+
+  it("C1: an empty Input emits a placeholder, never an empty value prop", () => {
+    const { node, maps } = keyInstance("in4", INPUT_KEY, "Input/Text field", {}, []);
+    const r = emitKitFrame(frameNode("0", [node]), { ...maps, assetFiles: new Map() });
+    // placeholder="" is harmless; defaultValue="" must NOT be emitted.
+    expect(r.source).toContain('<Input placeholder="" />');
+    expect(r.source).not.toContain("defaultValue");
+  });
+
+  it("C1: emits Select.Root/Trigger/Value (trigger-only, no Content portal)", () => {
+    const { node, maps } = keyInstance("sel1", SELECT_KEY, "Select", {}, ["Choose a team"]);
+    const r = emitKitFrame(frameNode("0", [node]), { ...maps, assetFiles: new Map() });
+    expect(r.kitImports).toContain("Select");
+    expect(r.source).toContain('<Select.Root><Select.Trigger><Select.Value placeholder="Choose a team" /></Select.Trigger></Select.Root>');
+    // No Content portal (would need a live open Root) and never value="" (Radix
+    // forbids it — studio/CLAUDE.md).
+    expect(r.source).not.toContain("Select.Content");
+    expect(r.source).not.toContain('value=""');
+    expect(r.kitInstanceCount).toBe(1);
+  });
+
+  it("C1: emits a Breadcrumb.Root with ordered items, separators, last current", () => {
+    const { node, maps } = keyInstance(
+      "bc1", BREADCRUMB_KEY, "Breadcrumbs", {}, ["Home", "Reports", "Q2"],
+    );
+    const r = emitKitFrame(frameNode("0", [node]), { ...maps, assetFiles: new Map() });
+    expect(r.kitImports).toContain("Breadcrumb");
+    // Home + Reports are links; Q2 is the current page (no link).
+    expect(r.source).toContain('<Breadcrumb.Link href="#">Home</Breadcrumb.Link>');
+    expect(r.source).toContain('<Breadcrumb.Link href="#">Reports</Breadcrumb.Link>');
+    expect(r.source).toContain("<Breadcrumb.Item current>Q2</Breadcrumb.Item>");
+    // Two separators between three crumbs (one after each non-last item).
+    expect(r.source.match(/<Breadcrumb\.Separator \/>/g)?.length).toBe(2);
+    expect(r.kitInstanceCount).toBe(1);
+  });
+
+  it("C1: a mapped Input instance ABSORBS its subtree (no stray asset exports)", () => {
+    // The field carries an inner vector (e.g. a search glyph). Because the kit
+    // component absorbs its subtree, planAssets must NOT queue that vector — the
+    // kit renders its own chrome. Mirrors the checkbox absorption test.
+    const { node, maps } = keyInstance("in5", INPUT_KEY, "Input/Text field", {}, ["q"]);
+    node.children.push({ id: "in5-icon", type: "VECTOR", absoluteBoundingBox: bbox(4, 4, 12, 12) });
+    const plan = planAssets(frameNode("0", [node]), maps);
+    expect(plan.svgIds).toEqual([]);
+    expect(plan.pngIds).toEqual([]);
+  });
+
+  it("C1: Menu/Modal/Popover/Tooltip stay STATIC markup (not mapped, no kit import)", () => {
+    // Deliberately omitted from SET_KEY_TO_KIT (Radix portal / trigger risk).
+    // A real published instance of each must fall through to faithful static
+    // markup — no kit component, no thrown render.
+    const omitted: Array<[string, string]> = [
+      ["0375c0bad6187274768f512c0422719a7493749d", "Menu"],
+      ["8122e8716d61125d19bb89de69b4525fa45311bf", "Modal Content"],
+      ["6a9dc99a75e632b481f5c0ac0c1fd7ba7ae03ebb", "Popover"],
+      ["758e0e9d40787c3ac9b206afe70020ba8b885548", "Tooltip"],
+    ];
+    for (const [key, name] of omitted) {
+      const { node, maps } = keyInstance(`o-${name}`, key, name, {}, ["panel text"]);
+      const r = emitKitFrame(frameNode("0", [node]), { ...maps, assetFiles: new Map() });
+      expect(r.kitInstanceCount, `${name} must not be a kit instance`).toBe(0);
+      expect(r.source, `${name} must not import a kit component`).not.toContain("Menu.Content");
+      // Its text content still renders as faithful static markup.
+      expect(r.source).toContain("panel text");
+    }
+  });
+
+  // --- C2: variant-axis translation for Badge / Tag ------------------------
+
+  const BADGE_KEY = "367267f81839b123664fa8b1304b16ee6006b37a";
+  const TAG_KEY = "3067f69c7f76e7c43815148ce843654e36081bed";
+
+  it("C2: Badge Variant=Emphasis → variant=\"info\"; Neutral → variant=\"neutral\"", () => {
+    const emph = keyInstance("bg1", BADGE_KEY, "Counter", { Variant: "Emphasis" }, ["12"]);
+    const re = emitKitFrame(frameNode("0", [emph.node]), { ...emph.maps, assetFiles: new Map() });
+    expect(re.source).toContain('<Badge variant="info">12</Badge>');
+
+    const neu = keyInstance("bg2", BADGE_KEY, "Counter", { Variant: "Neutral" }, ["3"]);
+    const rn = emitKitFrame(frameNode("0", [neu.node]), { ...neu.maps, assetFiles: new Map() });
+    expect(rn.source).toContain('<Badge variant="neutral">3</Badge>');
+  });
+
+  it("C2: an unmapped Badge variant value falls through to no variant prop (kit default)", () => {
+    const { node, maps } = keyInstance("bg3", BADGE_KEY, "Counter", { Variant: "Wat" }, ["9"]);
+    const r = emitKitFrame(frameNode("0", [node]), { ...maps, assetFiles: new Map() });
+    expect(r.source).toContain("<Badge>9</Badge>"); // no variant=, never a wrong value
+  });
+
+  it("C2: Tag translates Type→intent and Appearance→appearance", () => {
+    const { node, maps } = keyInstance(
+      "tg1", TAG_KEY, "Chip", { Type: "Success", Appearance: "Filled" }, ["Done"],
+    );
+    const r = emitKitFrame(frameNode("0", [node]), { ...maps, assetFiles: new Map() });
+    expect(r.source).toContain('<Tag intent="success" appearance="filled">Done</Tag>');
+  });
+
+  it("C2: Tag with only an intent axis emits just intent (appearance defaults)", () => {
+    const { node, maps } = keyInstance("tg2", TAG_KEY, "Chip", { Type: "Alert" }, ["Late"]);
+    const r = emitKitFrame(frameNode("0", [node]), { ...maps, assetFiles: new Map() });
+    expect(r.source).toContain('<Tag intent="alert">Late</Tag>');
+    expect(r.source).not.toContain("appearance=");
+  });
+
+  // --- C3: per-import coverage telemetry -----------------------------------
+
+  it("C3: counts total / matched instances and tallies unmatched set names", () => {
+    const { components: cbComp, componentSets: cbSet } = checkboxMaps();
+    // One matched checkbox + two unmatched "Cell" instances + one unmatched "Row".
+    const cell = (id: string) => ({
+      id, type: "INSTANCE", componentId: `c:${id}`,
+      absoluteBoundingBox: bbox(0, 0, 300, 40),
+      children: [{ id: `${id}-t`, type: "TEXT", characters: "x",
+        absoluteBoundingBox: bbox(0, 0, 100, 16), style: { fontFamily: "Inter" } }],
+    });
+    const doc = frameNode("0", [
+      checkboxInstance("cb1", true),
+      cell("cell1"), cell("cell2"), cell("row1"),
+    ]);
+    const maps = {
+      components: {
+        ...cbComp,
+        "c:cell1": { key: "k", name: "x", componentSetId: "s:cell" },
+        "c:cell2": { key: "k", name: "x", componentSetId: "s:cell" },
+        "c:row1": { key: "k", name: "x", componentSetId: "s:row" },
+      },
+      componentSets: {
+        ...cbSet,
+        "s:cell": { key: "no-match-cell", name: "Cell" },
+        "s:row": { key: "no-match-row", name: "Row" },
+      },
+    };
+    const r = emitKitFrame(doc, { ...maps, assetFiles: new Map() });
+    expect(r.totalInstances).toBe(4);
+    expect(r.matchedInstances).toBe(1); // only the checkbox
+    expect(r.unmatchedSets).toEqual({ Cell: 2, Row: 1 });
+  });
+
+  it("C3: an instance ABSORBED by a kit ancestor is not counted as unmatched", () => {
+    // A mapped Input with an inner unmapped icon instance: the Input absorbs its
+    // subtree, so the inner instance must NOT inflate totalInstances or appear in
+    // the unmatched backlog.
+    const { node, maps } = keyInstance("in6", INPUT_KEY, "Input/Text field", {}, ["q"]);
+    node.children.push({
+      id: "in6-glyph", type: "INSTANCE", componentId: "c:in6-glyph",
+      absoluteBoundingBox: bbox(4, 4, 12, 12),
+      children: [{ id: "in6-gv", type: "VECTOR", absoluteBoundingBox: bbox(4, 4, 12, 12) }],
+    });
+    maps.components["c:in6-glyph"] = { key: "k", name: "x", componentSetId: "s:in6-glyph" };
+    maps.componentSets["s:in6-glyph"] = { key: "no-match", name: "Icons/Whatever" };
+    const r = emitKitFrame(frameNode("0", [node]), { ...maps, assetFiles: new Map() });
+    expect(r.totalInstances).toBe(1); // just the Input; the inner glyph is absorbed
+    expect(r.matchedInstances).toBe(1);
+    expect(r.unmatchedSets).toEqual({});
+  });
 });
 
 // --- mapping hygiene (D2) ----------------------------------------------------
@@ -921,6 +1136,24 @@ describe("kit mappings hygiene", () => {
       .filter((v) => !names.has(v));
     expect(missing, `Name mappings pointing at non-existent kit exports: ${missing.join(", ")}`)
       .toEqual([]);
+  });
+
+  it("C2 reverse maps invert the curated componentEntries valueMaps (Figma→kit)", () => {
+    // The C2 maps must be the exact reverse of the canonical valueMaps recorded
+    // in src/export/figma/componentEntries.ts (kit value → Figma option). If the
+    // curated table changes, this catches the desync rather than silently
+    // dropping a state. Badge "Counter" Variant: {neutral:Neutral, info:Emphasis,
+    // intelligence:Emphasis} — both info & intelligence map FROM Emphasis, so the
+    // reverse picks one (info); we assert the round-trip for the canonical keys.
+    expect(BADGE_VARIANT_MAP.Neutral).toBe("neutral");
+    expect(BADGE_VARIANT_MAP.Emphasis).toBe("info");
+    // Tag "Chip" Type (intent) + Appearance — full round-trip.
+    const tagIntent = { neutral: "Neutral", alert: "Alert", success: "Success", warning: "Warning", info: "Info", intelligence: "Intelligence" };
+    for (const [kit, figma] of Object.entries(tagIntent)) {
+      expect(TAG_INTENT_MAP[figma]).toBe(kit);
+    }
+    expect(TAG_APPEARANCE_MAP.Tinted).toBe("tinted");
+    expect(TAG_APPEARANCE_MAP.Filled).toBe("filled");
   });
 
   it("a deliberately bad mapping value would be caught (negative control)", () => {

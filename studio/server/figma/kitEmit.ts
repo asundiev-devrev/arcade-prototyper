@@ -21,7 +21,16 @@
  * and passes back the resolved asset map. Nodes Figma refuses to export
  * (null URL) are fed back via `brokenIds`, and analysis recurses past them.
  */
-import { matchKit, avatarSizeForPx, VARIANT_VALUE_MAP, SIZE_VALUE_MAP, ICON_SET_NAME_TO_KIT } from "./kitMappings";
+import {
+  matchKit,
+  avatarSizeForPx,
+  VARIANT_VALUE_MAP,
+  SIZE_VALUE_MAP,
+  BADGE_VARIANT_MAP,
+  TAG_INTENT_MAP,
+  TAG_APPEARANCE_MAP,
+  ICON_SET_NAME_TO_KIT,
+} from "./kitMappings";
 import { readColorVar } from "./resolveTokens";
 import { resolveKitTokenVar, type ColorProperty } from "./kitTokens";
 
@@ -708,6 +717,19 @@ export interface EmitResult {
   tokenizedColors: number;
   /** Colors emitted as literal hex (unbound, or bound but not kit-resolvable). */
   hexColors: number;
+  // --- C3: per-import coverage telemetry -----------------------------------
+  /** Total visible INSTANCE nodes encountered (the denominator for kit %). An
+   *  instance ABSORBED by a kit component — e.g. an icon inside an IconButton —
+   *  is not double-counted; the walk stops at the matched ancestor. */
+  totalInstances: number;
+  /** Visible instances whose component-set identity matched the curated kit
+   *  table (the numerator). Equals the number of kit COMPONENT instances; kit
+   *  icons are counted here too. May differ from kitInstanceCount, which also
+   *  includes derived sub-instances (e.g. AvatarCount). */
+  matchedInstances: number;
+  /** Set NAME → count for instances that did NOT match any kit mapping. The
+   *  curation backlog: the highest-count names are the best next mappings. */
+  unmatchedSets: Record<string, number>;
 }
 
 export interface EmitOptions extends EmitContext {
@@ -737,6 +759,11 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
   const assetImports = new Map<string, string>(); // var -> rel path
   const lines: string[] = [];
   let kitInstanceCount = 0;
+  // C3 — coverage telemetry. Counted in emit() (the single place every visible
+  // instance is classified) so the numbers track exactly what shipped.
+  let totalInstances = 0;
+  let matchedInstances = 0;
+  const unmatchedSets: Record<string, number> = {};
   const tok = makeTokenResolver(opts.variables ?? null);
 
   const assetRef = (nodeId: string): string | null => {
@@ -791,6 +818,21 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
     const pad = "  ".repeat(ind);
     const b = n.absoluteBoundingBox ?? {};
     const k = kitForNode(n, ctx);
+
+    // C3 — classify every visible instance for coverage telemetry. A matched
+    // instance returns before recursing (the kit absorbs its subtree), so an
+    // absorbed inner instance is never counted; an unmatched instance recurses,
+    // and its nested instances are counted at their own depth. Tally on the
+    // instance NODE only — non-instance frames/vectors aren't "components".
+    if (n.type === "INSTANCE") {
+      totalInstances++;
+      if (k) matchedInstances++;
+      else {
+        const { setName } = resolveIdentity(n.componentId, ctx.components, ctx.componentSets);
+        const name = setName ?? "(unknown)";
+        unmatchedSets[name] = (unmatchedSets[name] ?? 0) + 1;
+      }
+    }
 
     if (k) {
       const p = instanceProps(n);
@@ -861,13 +903,84 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
           lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><Tabs.Root defaultValue=${JSON.stringify(tabs[0])}><Tabs.List>${trig}</Tabs.List></Tabs.Root></div>`);
           return;
         }
-        case "Badge":
-        case "Tag": {
-          usedKit.add(k.kit);
+        case "Input": {
+          // C1 — single forwardRef component, no portal: safe to emit standalone.
+          // The field's own text content is its value/placeholder; State=Error /
+          // Disabled drive the matching props (C2). Label/helper TEXT usually
+          // live OUTSIDE the field box as siblings, so we only absorb the text
+          // inside the instance — the kit renders its own field chrome.
+          usedKit.add("Input");
+          kitInstanceCount++;
+          const texts = visibleTexts(n).filter((t) => t.trim() && t.trim() !== "Slot");
+          const value = texts[0];
+          const state = String(p.State ?? "");
+          const attrs = [
+            value ? `defaultValue=${JSON.stringify(value)}` : `placeholder=${JSON.stringify(value ?? "")}`,
+            state === "Error" ? `error="Invalid"` : "",
+            state === "Disabled" ? "disabled" : "",
+          ].filter(Boolean).join(" ");
+          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><Input ${attrs} /></div>`);
+          return;
+        }
+        case "Select": {
+          // C1 — closed-state instance = the trigger only. We emit Root+Trigger+
+          // Value (a plain button, NO Content portal) so there's no open-context
+          // requirement and nothing portals into nothing. The trigger text is the
+          // placeholder/value. Radix Select forbids value="" (studio/CLAUDE.md),
+          // so we only ever pass a non-empty placeholder, never a value prop.
+          usedKit.add("Select");
+          kitInstanceCount++;
+          const texts = visibleTexts(n).filter((t) => t.trim() && t.trim() !== "Slot");
+          const placeholder = texts[0] ?? "Select…";
+          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><Select.Root><Select.Trigger><Select.Value placeholder=${JSON.stringify(placeholder)} /></Select.Trigger></Select.Root></div>`);
+          return;
+        }
+        case "Breadcrumb": {
+          // C1 — plain HTML compound (NOT Radix, no portal): safe standalone.
+          // Collect the visible crumb labels in order; the last is `current`.
+          // Separators self-render the chevron, so we interleave one between
+          // items. Links need an href; we use "#" (a prototype anchor).
+          usedKit.add("Breadcrumb");
+          kitInstanceCount++;
+          const crumbs = visibleTexts(n).filter((t) => t.trim());
+          const items = crumbs.length ? crumbs : ["Home"];
+          const parts: string[] = [];
+          items.forEach((t, i) => {
+            const last = i === items.length - 1;
+            if (last) {
+              parts.push(`<Breadcrumb.Item current>${escText(t)}</Breadcrumb.Item>`);
+            } else {
+              parts.push(`<Breadcrumb.Item><Breadcrumb.Link href="#">${escText(t)}</Breadcrumb.Link></Breadcrumb.Item>`);
+              parts.push(`<Breadcrumb.Separator />`);
+            }
+          });
+          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><Breadcrumb.Root>${parts.join("")}</Breadcrumb.Root></div>`);
+          return;
+        }
+        case "Badge": {
+          usedKit.add("Badge");
           kitInstanceCount++;
           const texts = visibleTexts(n).filter((t) => t.trim());
           const label = texts[0] ?? "";
-          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><${k.kit}>${escText(label)}</${k.kit}></div>`);
+          // C2 — Badge `Variant` axis (Counter: Emphasis/Neutral) → kit variant.
+          const variant = BADGE_VARIANT_MAP[p.Variant ?? ""];
+          const va = variant ? ` variant="${variant}"` : "";
+          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><Badge${va}>${escText(label)}</Badge></div>`);
+          return;
+        }
+        case "Tag": {
+          usedKit.add("Tag");
+          kitInstanceCount++;
+          const texts = visibleTexts(n).filter((t) => t.trim());
+          const label = texts[0] ?? "";
+          // C2 — Tag `Type` (intent) + `Appearance` axes → kit props. Unmapped
+          // Figma values fall through to the component's own defaults.
+          const intent = TAG_INTENT_MAP[p.Type ?? ""];
+          const appearance = TAG_APPEARANCE_MAP[p.Appearance ?? ""];
+          const attrs =
+            (intent ? ` intent="${intent}"` : "") +
+            (appearance ? ` appearance="${appearance}"` : "");
+          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><Tag${attrs}>${escText(label)}</Tag></div>`);
           return;
         }
         case "Avatar":
@@ -1040,5 +1153,8 @@ ${lines.join("\n")}
     assetRefs: [...assetImports.values()],
     tokenizedColors: tok?.tokenized ?? 0,
     hexColors: tok?.hexFallbacks ?? 0,
+    totalInstances,
+    matchedInstances,
+    unmatchedSets,
   };
 }
