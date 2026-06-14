@@ -201,6 +201,41 @@ M panels"), never silently. **Effort:** S. **Impact:** honesty on big imports.
 
 ---
 
+## EXECUTION OUTCOME (2026-06-14)
+
+Ran via background workflow (scout → sequential implement → adversarial verify),
+then orchestrator review + live visual check. Commits on
+`feat/figma-export-one-click` since engine base `5a3d75c`:
+
+- `aa12c2b` **A1+A2 speed** — SHIPPED. Raw-payload prefetch reuse + version-keyed
+  on-disk asset cache. Both transparent (miss → live fetch/export).
+- `63273f8` **B1 tokens** — SHIPPED (code), but INERT on this account. Emits kit
+  CSS vars (`var(--bg-...)`) for variable-bound colors, hex fallback otherwise.
+  Blocked by a real constraint: **the Figma Variables REST API is Enterprise-only**;
+  this account is standard, so `getVariables` returns null and every color stays
+  hex. Works on Enterprise files. (Also fixed `aefbebe`: getVariables was calling
+  a non-existent `reading get-variables` command — corrected to `variables
+  list-local` + meta.variables hoist. The typo had silently disabled token
+  resolution for BOTH this engine and the old generator path.)
+- `54bd021` **D1+D2 robustness** — SHIPPED. Generalized SVG-glyph fallback (no
+  icon ever blank); mapping-hygiene test now validates against the real kit barrel.
+- `3e16fc9` **B2 flexbox** — IMPLEMENTED then `3c49b6f` **DISABLED**. Live visual
+  diff showed it drifted fidelity past "small": mean diff vs Figma 4.2→7.7, 3.6%
+  structurally-wrong px (sidebar 8×), from 120 content-sized flex containers whose
+  intrinsic size diverged from Figma's fixed boxes and cascaded. Owner chose
+  pixel-exact absolute. Machinery retained inert behind `shouldFlex()===false`;
+  re-enable needs explicit child sizing to stop the drift. Fidelity re-measured
+  back to baseline (4.26, 1.88% structural).
+- `450dfcd` **C1+C2+C3 coverage** — SHIPPED. Input/Select/Breadcrumb emit cases,
+  Badge/Tag variant axes, coverage telemetry. `f3ef4c5` fixed a metric-honesty bug
+  the verify surfaced: ChatBubble was mapped but had no emit case → counted as kit
+  while rendering static. Added ChatBubble emit + a structural test that every
+  mapped component has a real emit case.
+
+Net: 4 of 5 levers live; B2 reverted on a measured fidelity call; B1 correct but
+gated by the Enterprise-plan constraint. Full suite green except the two known
+pre-existing failures (hero-prompt-input, wsServer port flake).
+
 ## Recommended sequencing
 
 1. **A1 + A2** (speed) — small, low-risk, gets to ~2.5s. Ship first; immediate
