@@ -71,7 +71,14 @@ export function resolveTokens(
   return { tree: nextTree, tokens, warnings };
 }
 
-function readColorVar(paints: any[], vars: Record<string, any>): string | undefined {
+/**
+ * The Figma variable NAME bound to the first visible solid paint's color, or
+ * undefined when no paint is bound. Shared with the kit-emit engine
+ * (kitEmit.ts) so both color paths read the same binding — the kit-emit branch
+ * borrows ONLY this reader and does its own name → kit-token transform, rather
+ * than re-running the compacted-tree rewrite above (which kit-emit doesn't use).
+ */
+export function readColorVar(paints: any[], vars: Record<string, any>): string | undefined {
   const solid = paints.find((p) => p?.type === "SOLID" && p.visible !== false);
   const aliasId = solid?.boundVariables?.color?.id;
   if (!aliasId) return undefined;

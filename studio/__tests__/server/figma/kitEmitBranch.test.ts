@@ -60,6 +60,9 @@ function versionedPayload(lastModified = "2026-06-14T00:00:00Z") {
 function makeDeps(overrides: any = {}) {
   return {
     getNode: vi.fn(async () => payload()),
+    // Inject a no-variables stub so tests stay hermetic — without it the branch
+    // would fall through to the real figmanage getVariables subprocess.
+    getVariables: vi.fn(async () => null),
     exportUrls: vi.fn(async (_f: string, ids: string[]) =>
       ids.map((nodeId) => ({ nodeId, url: `https://cdn/${nodeId}` })),
     ),
@@ -179,6 +182,90 @@ describe("runFigmaKitEmitBranch", () => {
     expect(r.ok).toBe(true);
     const narrations = events.filter((e) => e.kind === "narration").map((e) => e.text);
     expect(narrations.some((t: string) => t.includes("couldn't be downloaded"))).toBe(true);
+  });
+
+  it("fetches variables and emits a kit token for a bound fill (B1)", async () => {
+    // A frame whose background fill is bound to a Figma variable that maps to a
+    // real kit token (--bg-neutral-soft). The branch must fetch getVariables and
+    // pass it into the emitter, which then emits var(--bg-neutral-soft).
+    const boundDoc = {
+      nodes: {
+        "1:1": {
+          document: {
+            id: "1:1", type: "FRAME", absoluteBoundingBox: bbox(0, 0, 200, 100),
+            children: [{
+              id: "panel", type: "FRAME", absoluteBoundingBox: bbox(0, 0, 200, 100),
+              fills: [{
+                type: "SOLID", color: { r: 0.1, g: 0.1, b: 0.1, a: 1 },
+                boundVariables: { color: { id: "VariableID:bgsoft" } },
+              }],
+              children: [],
+            }],
+          },
+          components: {}, componentSets: {},
+        },
+      },
+    };
+    const getVariables = vi.fn(async () => ({
+      variables: { "VariableID:bgsoft": { name: "bg/neutral/soft" } },
+    }));
+    const deps = makeDeps({
+      getNode: vi.fn(async () => boundDoc),
+      getVariables,
+    });
+    const { input } = makeInput(deps);
+    const r = await runFigmaKitEmitBranch(input as any);
+    expect(r.ok).toBe(true);
+    expect(getVariables).toHaveBeenCalledWith("FILE");
+
+    const fdir = path.join(tmpRoot, "proj", "frames", "01-figma-1-1");
+    const src = await fs.readFile(path.join(fdir, "index.tsx"), "utf-8");
+    expect(src).toContain("var(--bg-neutral-soft)");
+    expect(src).not.toContain("#1a1a1a"); // the baked hex was replaced by the token
+  });
+
+  it("emits raw hex (not a wrong color) when getVariables returns null", async () => {
+    // figmanage variable fetch failed (null) → token resolution off → the
+    // bound fill keeps its honest baked hex; the turn still succeeds.
+    const boundDoc = {
+      nodes: {
+        "1:1": {
+          document: {
+            id: "1:1", type: "FRAME", absoluteBoundingBox: bbox(0, 0, 200, 100),
+            children: [{
+              id: "panel", type: "FRAME", absoluteBoundingBox: bbox(0, 0, 200, 100),
+              fills: [{
+                type: "SOLID", color: { r: 0.1, g: 0.1, b: 0.1, a: 1 },
+                boundVariables: { color: { id: "VariableID:bgsoft" } },
+              }],
+              children: [],
+            }],
+          },
+          components: {}, componentSets: {},
+        },
+      },
+    };
+    const deps = makeDeps({
+      getNode: vi.fn(async () => boundDoc),
+      getVariables: vi.fn(async () => null),
+    });
+    const { input } = makeInput(deps);
+    const r = await runFigmaKitEmitBranch(input as any);
+    expect(r.ok).toBe(true);
+    const fdir = path.join(tmpRoot, "proj", "frames", "01-figma-1-1");
+    const src = await fs.readFile(path.join(fdir, "index.tsx"), "utf-8");
+    expect(src).not.toContain("var(--");
+    expect(src).toContain("#1a1a1a");
+  });
+
+  it("does not fail the turn when getVariables throws", async () => {
+    // A thrown getVariables must be swallowed (best-effort), not crash the turn.
+    const deps = makeDeps({
+      getVariables: vi.fn(async () => { throw new Error("variables boom"); }),
+    });
+    const { input } = makeInput(deps);
+    const r = await runFigmaKitEmitBranch(input as any);
+    expect(r.ok).toBe(true);
   });
 
   it("respects the abort signal", async () => {

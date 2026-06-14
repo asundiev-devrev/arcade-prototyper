@@ -23,6 +23,7 @@ import { frameDir, figmaIngestRoot } from "../paths";
 import { appendHistory, nextFramePrefix } from "../projects";
 import {
   getNode as figmanageGetNode,
+  getVariables as figmanageGetVariables,
   exportNodeImageUrls,
   type BatchExportEntry,
 } from "../figmaCli";
@@ -31,6 +32,13 @@ import { planAssets, emitKitFrame, type EmitResult } from "./kitEmit";
 
 export interface KitEmitBranchDeps {
   getNode?: (fileKey: string, nodeId: string) => Promise<any>;
+  /**
+   * Fetch the file's Figma variable definitions (B1 design tokens). Defaults to
+   * figmaCli.getVariables. Returns null on any failure — token resolution then
+   * degrades to "all colors as hex" (today's behavior), never blocks the turn.
+   * Tests inject this to assert a bound fill emits its kit token.
+   */
+  getVariables?: (fileKey: string) => Promise<any | null>;
   /**
    * Read a prefetched raw get-nodes dict from the ingest cache (warmed on URL
    * paste), or undefined on miss. Defaults to the figmaIngest singleton's
@@ -138,6 +146,7 @@ export async function runFigmaKitEmitBranch(
 ): Promise<{ ok: boolean; error?: string }> {
   const { emit, slug, fileKey, nodeId, project, signal } = input;
   const getNode = input.deps?.getNode ?? figmanageGetNode;
+  const getVariables = input.deps?.getVariables ?? figmanageGetVariables;
   const exportUrls = input.deps?.exportUrls ?? exportNodeImageUrls;
   const download = input.deps?.download ?? defaultDownload;
   // A1 — prefetch reuse: the /api/figma/ingest prefetch (fired on URL paste)
@@ -159,6 +168,16 @@ export async function runFigmaKitEmitBranch(
   const t0 = Date.now();
 
   narrate("Importing the Figma design (geometry from Figma, components from the kit)…");
+
+  // B1 — design tokens: fetch the file's variable definitions concurrently with
+  // the node fetch/export below (it's a separate, ~free figmanage call). Bound
+  // color paints will emit kit `var(--x)` tokens instead of baked hex. Resolve
+  // null on any failure so token resolution degrades to "all colors hex"
+  // (today's behavior) rather than blocking the turn — we await it just before
+  // emit, by which point the (longer) node fetch + asset export have run.
+  const variablesPromise = Promise.resolve()
+    .then(() => getVariables(fileKey))
+    .catch(() => null);
 
   let dict: any;
   const cachedRaw = getRaw(fileKey, nodeId);
@@ -301,6 +320,10 @@ export async function runFigmaKitEmitBranch(
   if (signal.aborted) return { ok: false, error: "cancelled" };
 
   // --- Emit + write -------------------------------------------------------
+  // The variables fetch was kicked off at the top; it has had the whole node
+  // fetch + asset export to complete, so this await is effectively free.
+  const variables = await variablesPromise;
+
   let result: EmitResult;
   try {
     result = emitKitFrame(doc, {
@@ -308,6 +331,7 @@ export async function runFigmaKitEmitBranch(
       componentSets,
       brokenIds,
       assetFiles,
+      variables,
       componentName: "FigmaImport",
     });
   } catch (err: any) {
@@ -318,7 +342,12 @@ export async function runFigmaKitEmitBranch(
 
   // index.tsx LAST so the watcher's reload sees assets present.
   await fs.writeFile(path.join(fdir, "index.tsx"), result.source, "utf-8");
-  console.log(`[kitEmit] ${frameSlug}: ${result.kitInstanceCount} kit instances, ${result.assetRefs.length} assets (${cacheHits} from cache), ${Date.now() - t0}ms`);
+  console.log(`[kitEmit] ${frameSlug}: ${result.kitInstanceCount} kit instances, ${result.assetRefs.length} assets (${cacheHits} from cache), ${result.tokenizedColors} tokens / ${result.hexColors} hex, ${Date.now() - t0}ms`);
+  if (result.hexColors > 0) {
+    // Unbound (or non-kit-resolvable) colors stay literal hex — fidelity-safe,
+    // but each is a coverage gap. Count them so we can grow the mapping.
+    console.warn(`[kitEmit] ${frameSlug}: ${result.hexColors} color${result.hexColors === 1 ? "" : "s"} emitted as raw hex (no kit token binding); ${result.tokenizedColors} resolved to design tokens.`);
+  }
 
   if (downloadFailures.length) {
     narrate(`⚠ ${downloadFailures.length} asset${downloadFailures.length === 1 ? "" : "s"} couldn't be downloaded and may render as plain boxes.`);

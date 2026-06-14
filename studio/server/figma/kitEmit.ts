@@ -22,6 +22,8 @@
  * (null URL) are fed back via `brokenIds`, and analysis recurses past them.
  */
 import { matchKit, avatarSizeForPx, VARIANT_VALUE_MAP, SIZE_VALUE_MAP, ICON_SET_NAME_TO_KIT } from "./kitMappings";
+import { readColorVar } from "./resolveTokens";
+import { resolveKitTokenVar, type ColorProperty } from "./kitTokens";
 
 // ---------------------------------------------------------------------------
 // Raw-node helpers
@@ -183,7 +185,50 @@ function paintCss(p: any): string | null {
 
 type Style = Record<string, string | number>;
 
-function boxStyle(n: RawNode, px: number, py: number): Style {
+// ---------------------------------------------------------------------------
+// Design-token resolution (B1)
+//
+// When a paint is bound to a Figma variable that maps to a real kit token (for
+// the right CSS property), emit `var(--x)` instead of the baked hex — same
+// rendered color, but theme-correct and lift-able. Hex stays the fallback for
+// unbound paints and bound-but-unresolvable ones; the resolver counts misses so
+// the caller can surface coverage. All of this is OPT-IN: with no variables
+// payload the resolver is null and every color stays exactly today's hex.
+
+export interface TokenResolver {
+  /**
+   * For a paint array + CSS property + the hex the emitter would otherwise
+   * bake, return a kit `var(--x)` when the paint is bound to a resolvable token
+   * for that property, else the hex unchanged. Increments coverage counters.
+   */
+  colorFor(paints: any[] | undefined, property: ColorProperty, hex: string): string;
+  /** Count of paints bound to a kit token and emitted as var() (coverage). */
+  tokenized: number;
+  /** Count of colors left as hex (unbound, or bound but not kit-resolvable). */
+  hexFallbacks: number;
+}
+
+function makeTokenResolver(variables: any | null): TokenResolver | null {
+  const vars = variables?.variables;
+  if (!vars || typeof vars !== "object") return null;
+  const r: TokenResolver = {
+    tokenized: 0,
+    hexFallbacks: 0,
+    colorFor(paints, property, hex) {
+      const figmaName = paints ? readColorVar(paints, vars) : undefined;
+      const tokenVar = resolveKitTokenVar(figmaName, property);
+      if (tokenVar) {
+        r.tokenized++;
+        return tokenVar;
+      }
+      r.hexFallbacks++;
+      return hex;
+    },
+  };
+  return r;
+}
+
+function boxStyle(n: RawNode, px: number, py: number, tok?: TokenResolver | null): Style {
   const b = n.absoluteBoundingBox ?? {};
   const s: Style = {
     position: "absolute",
@@ -196,14 +241,22 @@ function boxStyle(n: RawNode, px: number, py: number): Style {
   if (n.type !== "TEXT") {
     for (const f of n.fills ?? []) {
       const v = paintCss(f);
-      if (v) { s.background = v; break; }
+      if (v) {
+        // SOLID fills can map to a kit token; gradients can't (no single var).
+        s.background = f.type === "SOLID" && tok ? tok.colorFor(n.fills, "background", v) : v;
+        break;
+      }
     }
   }
   const shadows: string[] = [];
   const sw = n.strokeWeight ?? 1;
   for (const st of n.strokes ?? []) {
     const v = paintCss(st);
-    if (v && st.type === "SOLID") { shadows.push(`inset 0 0 0 ${sw}px ${v}`); break; }
+    if (v && st.type === "SOLID") {
+      const color = tok ? tok.colorFor(n.strokes, "stroke", v) : v;
+      shadows.push(`inset 0 0 0 ${sw}px ${color}`);
+      break;
+    }
   }
   for (const e of n.effects ?? []) {
     if (e.type === "DROP_SHADOW" && e.visible !== false) {
@@ -220,7 +273,7 @@ function boxStyle(n: RawNode, px: number, py: number): Style {
   return s;
 }
 
-function textStyle(n: RawNode): Style {
+function textStyle(n: RawNode, tok?: TokenResolver | null): Style {
   const st = n.style ?? {};
   const s: Style = {
     fontFamily: `'${st.fontFamily ?? "Inter"}', -apple-system, sans-serif`,
@@ -231,7 +284,11 @@ function textStyle(n: RawNode): Style {
   if (st.letterSpacing) s.letterSpacing = `${st.letterSpacing.toFixed(2)}px`;
   s.textAlign = ({ LEFT: "left", CENTER: "center", RIGHT: "right", JUSTIFIED: "justify" } as any)[st.textAlignHorizontal] ?? "left";
   for (const f of n.fills ?? []) {
-    if (f.type === "SOLID" && f.visible !== false) { s.color = rgba(f.color, f.opacity ?? 1); break; }
+    if (f.type === "SOLID" && f.visible !== false) {
+      const hex = rgba(f.color, f.opacity ?? 1);
+      s.color = tok ? tok.colorFor(n.fills, "color", hex) : hex;
+      break;
+    }
   }
   if (st.textTruncation === "ENDING") {
     s.whiteSpace = "nowrap"; s.overflow = "hidden"; s.textOverflow = "ellipsis";
@@ -258,19 +315,26 @@ function centerBox(n: RawNode, px: number, py: number): Style {
 }
 
 /** First visible solid fill/stroke on a vector descendant → icon color (kit
- *  icons inherit currentColor). */
-function vectorColor(n: RawNode): string | null {
+ *  icons inherit currentColor). When the paint is bound to a kit `--fg-*`
+ *  token, emit the token (icon color is foreground); else the literal hex. */
+function vectorColor(n: RawNode, tok?: TokenResolver | null): string | null {
   if (hidden(n)) return null;
   if (GRAPHIC_TYPES.has(n.type)) {
     for (const f of n.fills ?? []) {
-      if (f.type === "SOLID" && f.visible !== false) return rgba(f.color, f.opacity ?? 1);
+      if (f.type === "SOLID" && f.visible !== false) {
+        const hex = rgba(f.color, f.opacity ?? 1);
+        return tok ? tok.colorFor(n.fills, "color", hex) : hex;
+      }
     }
     for (const st of n.strokes ?? []) {
-      if (st.type === "SOLID" && st.visible !== false) return rgba(st.color, st.opacity ?? 1);
+      if (st.type === "SOLID" && st.visible !== false) {
+        const hex = rgba(st.color, st.opacity ?? 1);
+        return tok ? tok.colorFor(n.strokes, "color", hex) : hex;
+      }
     }
   }
   for (const c of n.children ?? []) {
-    const r = vectorColor(c);
+    const r = vectorColor(c, tok);
     if (r) return r;
   }
   return null;
@@ -393,6 +457,10 @@ export interface EmitResult {
   kitInstanceCount: number;
   /** Asset files referenced (relative paths under the frame dir). */
   assetRefs: string[];
+  /** Colors emitted as a kit design token (B1 coverage). */
+  tokenizedColors: number;
+  /** Colors emitted as literal hex (unbound, or bound but not kit-resolvable). */
+  hexColors: number;
 }
 
 export interface EmitOptions extends EmitContext {
@@ -402,6 +470,13 @@ export interface EmitOptions extends EmitContext {
    *  plain box). */
   assetFiles: Map<string, string>;
   componentName?: string;
+  /**
+   * The figmanage get-variables payload (B1). When present, color paints bound
+   * to a Figma variable that maps to a real kit token emit `var(--x)` instead
+   * of baked hex. Absent / null → every color stays literal hex (today's
+   * behavior); never a wrong color either way.
+   */
+  variables?: any | null;
 }
 
 function safeVar(id: string): string {
@@ -415,6 +490,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
   const assetImports = new Map<string, string>(); // var -> rel path
   const lines: string[] = [];
   let kitInstanceCount = 0;
+  const tok = makeTokenResolver(opts.variables ?? null);
 
   const assetRef = (nodeId: string): string | null => {
     const file = opts.assetFiles.get(nodeId);
@@ -469,7 +545,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
         usedKit.add(k.kit);
         kitInstanceCount++;
         const s = centerBox(n, px, py);
-        const col = vectorColor(n);
+        const col = vectorColor(n, tok);
         if (col) s.color = col;
         lines.push(`${pad}<div style=${sx(s)}><${k.kit} size={${Math.round(Math.min(w, b.height ?? 16))}} /></div>`);
         return;
@@ -612,13 +688,13 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
     }
 
     if (n.type === "TEXT") {
-      const s = { ...boxStyle(n, px, py), ...textStyle(n) };
+      const s = { ...boxStyle(n, px, py, tok), ...textStyle(n, tok) };
       lines.push(`${pad}<div style=${sx(s)}>${escText(n.characters ?? "")}</div>`);
       return;
     }
 
     const kids = (n.children ?? []).filter((c: RawNode) => !hidden(c));
-    const s = boxStyle(n, px, py);
+    const s = boxStyle(n, px, py, tok);
     if (!kids.length) {
       lines.push(`${pad}<div style=${sx(s)} />`);
       return;
@@ -656,5 +732,7 @@ ${lines.join("\n")}
     kitImports,
     kitInstanceCount,
     assetRefs: [...assetImports.values()],
+    tokenizedColors: tok?.tokenized ?? 0,
+    hexColors: tok?.hexFallbacks ?? 0,
   };
 }

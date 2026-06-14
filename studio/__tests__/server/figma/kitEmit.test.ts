@@ -347,6 +347,109 @@ describe("emitKitFrame", () => {
     expect(r.source).not.toContain("DotInRightWindow"); // hidden glyph not used
   });
 
+  // --- design tokens (B1) --------------------------------------------------
+
+  // The emitter validates a transformed var name against the REAL kit
+  // tokens.css set, so these tests use Figma var names that flatten to tokens
+  // the kit actually defines (--bg-neutral-soft, --fg-neutral-prominent).
+  const variablesPayload = (entries: Record<string, string>) => ({
+    variables: Object.fromEntries(
+      Object.entries(entries).map(([id, name]) => [id, { name }]),
+    ),
+  });
+
+  function boundFillFrame(): any {
+    return frameNode("0", [
+      {
+        id: "panel", type: "FRAME",
+        absoluteBoundingBox: bbox(0, 0, 200, 100),
+        fills: [{
+          type: "SOLID", color: { r: 0.1, g: 0.1, b: 0.1, a: 1 },
+          boundVariables: { color: { id: "VariableID:bgsoft" } },
+        }],
+        children: [{
+          id: "t1", type: "TEXT", characters: "Hi",
+          absoluteBoundingBox: bbox(8, 8, 100, 16),
+          style: { fontFamily: "Inter", fontSize: 13 },
+          fills: [{
+            type: "SOLID", color: { r: 0.2, g: 0.2, b: 0.2, a: 1 },
+            boundVariables: { color: { id: "VariableID:fgprom" } },
+          }],
+        }],
+      },
+    ]);
+  }
+
+  it("emits a kit design token for a fill bound to a kit variable", () => {
+    const r = emitKitFrame(boundFillFrame(), {
+      components: {}, componentSets: {}, assetFiles: new Map(),
+      variables: variablesPayload({
+        "VariableID:bgsoft": "bg/neutral/soft",
+        "VariableID:fgprom": "fg/neutral-prominent",
+      }),
+    });
+    // bound background fill → var() instead of baked hex
+    expect(r.source).toContain('background: "var(--bg-neutral-soft)"');
+    // bound text color → --fg-* var() (namespace matches the `color` property)
+    expect(r.source).toContain('color: "var(--fg-neutral-prominent)"');
+    expect(r.tokenizedColors).toBe(2);
+    expect(r.hexColors).toBe(0);
+  });
+
+  it("falls back to literal hex for an UNBOUND fill (no variable binding)", () => {
+    // Same tree, but no variables payload → every color stays exactly today's
+    // baked hex; nothing tokenized.
+    const r = emitKitFrame(boundFillFrame(), {
+      components: {}, componentSets: {}, assetFiles: new Map(),
+    });
+    expect(r.source).not.toContain("var(--");
+    expect(r.source).toContain('background: "#1a1a1a"');
+    expect(r.tokenizedColors).toBe(0);
+    expect(r.hexColors).toBe(0); // no resolver at all → no coverage tracking
+  });
+
+  it("falls back to hex (not a wrong color) when a bound var has no kit token", () => {
+    // surface/default flattens to --surface-default, which the kit does NOT
+    // define (it has --surface-shallow/overlay/backdrop). The fill must keep
+    // its honest hex, never emit a dead var() that would paint nothing.
+    const doc = frameNode("0", [{
+      id: "panel", type: "FRAME", absoluteBoundingBox: bbox(0, 0, 100, 100),
+      fills: [{
+        type: "SOLID", color: { r: 1, g: 0, b: 0, a: 1 },
+        boundVariables: { color: { id: "VariableID:surf" } },
+      }],
+    }]);
+    const r = emitKitFrame(doc, {
+      components: {}, componentSets: {}, assetFiles: new Map(),
+      variables: variablesPayload({ "VariableID:surf": "surface/default" }),
+    });
+    expect(r.source).not.toContain("var(--");
+    expect(r.source).toContain('background: "#ff0000"');
+    expect(r.tokenizedColors).toBe(0);
+    expect(r.hexColors).toBe(1); // counted as a coverage gap
+  });
+
+  it("falls back to hex when a bound var's namespace contradicts the property", () => {
+    // A --bg-* token bound to a TEXT color (the documented bubble bug). Emitting
+    // it as `color` would flip wrong in dark mode → keep the literal hex.
+    const doc = frameNode("0", [{
+      id: "t1", type: "TEXT", characters: "Label",
+      absoluteBoundingBox: bbox(0, 0, 100, 16),
+      style: { fontFamily: "Inter", fontSize: 13 },
+      fills: [{
+        type: "SOLID", color: { r: 0, g: 0.5, b: 0, a: 1 },
+        boundVariables: { color: { id: "VariableID:bg" } },
+      }],
+    }]);
+    const r = emitKitFrame(doc, {
+      components: {}, componentSets: {}, assetFiles: new Map(),
+      variables: variablesPayload({ "VariableID:bg": "bg/neutral/prominent" }),
+    });
+    expect(r.source).not.toContain("var(--");
+    expect(r.source).toContain('color: "#008000"');
+    expect(r.hexColors).toBe(1);
+  });
+
   it("skips mask nodes (alpha channels, not paint)", () => {
     const doc = frameNode("0", [{
       id: "m1", type: "RECTANGLE", isMask: true,
