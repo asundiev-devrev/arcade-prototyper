@@ -45,34 +45,22 @@ package.json#version     Single source of truth for the build version (read by m
 1. Bump the top-level `package.json#version` (semver, `0.x.y`). This is the single source of truth — electron-builder reads it for the bundle and the `/api/version` middleware reads it at runtime.
 2. Add an entry at the top of `studio/CHANGELOG.md` — keep-a-changelog style (`## [0.x.0] — YYYY-MM-DD` + Added / Fixed / Changed bullets).
 3. `pnpm run studio:pack` — runs `fetch-cli-deps.sh` then electron-builder; DMG lands in `dist/` at the repo root and auto-picks up the new version. The .app + DMG are codesigned but **not notarized** — electron-builder 25 only accepts `APPLE_ID` + `APPLE_APP_SPECIFIC_PASSWORD` env vars for notarize, while our credentials live in the `arcade-studio-notarize` keychain profile (set up via `xcrun notarytool store-credentials`). So `notarize: false` in `electron-builder.yml` and we notarize manually below.
-4. Notarize + staple manually:
+4. **Cut the release with the scripted command:**
    ```
-   xcrun notarytool submit "dist/Arcade Studio-0.x.y-arm64.dmg" \
-     --keychain-profile arcade-studio-notarize --wait
-   xcrun stapler staple "dist/mac-arm64/Arcade Studio.app"
-   pnpm exec electron-builder --mac dmg \
-     --prepackaged "dist/mac-arm64/Arcade Studio.app" \
-     --config electron-builder.yml --publish never
+   bash studio/packaging/scripts/release.sh
    ```
-   The submit-then-staple-then-rewrap dance is required because `stapler` only works post-acceptance, and the DMG must wrap a stapled `.app` for offline launches to satisfy Gatekeeper.
-5. Commit + push.
-6. Publish a release to the **public mirror** repo so beta testers see
-   the "update available" banner in the app. The mirror is
-   `asundiev-devrev/arcade-studio-releases` — a separate, public repo
-   that carries only DMG artifacts; source stays in this private repo.
+   Builds dmg + zip + latest-mac.yml, notarizes both artifacts, staples the
+   .app, rewrites the manifest sha512 to match the stapled zip, and publishes
+   all three to the public mirror (asundiev-devrev/arcade-studio-releases). The
+   zip + latest-mac.yml are what the in-app auto-updater consumes; the dmg is
+   for first-install. Reads the version from package.json#version and notes from
+   the matching studio/CHANGELOG.md section.
 
-   From this repo, run:
-   ```
-   gh release create v0.x.y "dist/Arcade Studio-0.x.y-arm64.dmg" \
-     --repo asundiev-devrev/arcade-studio-releases \
-     --title "Arcade Studio 0.x.y" \
-     --notes-file <(awk '/^## \[0\.x\.y\]/{f=1;next} /^## \[/{f=0} f' studio/CHANGELOG.md) \
-     --latest
-   ```
+   `pnpm run studio:release` is still NOT safe (it skips manual notarize) — use
+   the script above.
 
-   `pnpm run studio:release` is **not** safe right now: it runs the full
-   electron-builder publish pipeline, which skips manual notarize. Use
-   `gh release create` after the manual notarize+staple+rewrap above.
+   The mirror `asundiev-devrev/arcade-studio-releases` is a separate, public
+   repo that carries only release artifacts; source stays in this private repo.
 
    The app polls `https://api.github.com/repos/asundiev-devrev/arcade-studio-releases/releases/latest`
    once per launch and caches the response for an hour.

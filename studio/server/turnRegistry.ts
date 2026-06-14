@@ -176,6 +176,19 @@ export function getTurn(slug: string): Turn | undefined {
   return turns.get(slug);
 }
 
+/**
+ * Registry-wide check: is ANY project's turn currently running? Used by the
+ * Electron auto-updater (over /api/turns/active) to defer an update restart
+ * while a generation is in flight. The `turns` map is module-private, so this
+ * read must live here.
+ */
+export function hasActiveTurn(): boolean {
+  for (const turn of turns.values()) {
+    if (turn.status === "running") return true;
+  }
+  return false;
+}
+
 export function cancelTurn(slug: string): boolean {
   const turn = turns.get(slug);
   if (!turn || turn.status !== "running") return false;
