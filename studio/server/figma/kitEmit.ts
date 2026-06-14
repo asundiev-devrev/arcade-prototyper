@@ -117,6 +117,71 @@ function containsVector(n: RawNode): boolean {
   return (n.children ?? []).some(containsVector);
 }
 
+/** Does this subtree contain a kit-mappable INSTANCE (icon or component)?
+ *  Used to guarantee the generalized SVG-glyph fallback (D1) never collapses a
+ *  subtree that holds a real kit component into one flat image. Hidden nodes are
+ *  skipped — a hidden alt-glyph must not block flattening of its visible sibling. */
+function containsKitMatch(n: RawNode, ctx: EmitContext): boolean {
+  if (hidden(n)) return false;
+  if (n.type === "INSTANCE") {
+    const { setKey, setName } = resolveIdentity(n.componentId, ctx.components, ctx.componentSets);
+    if (matchKit(setKey, setName)) return true;
+  }
+  return (n.children ?? []).some((c: RawNode) => containsKitMatch(c, ctx));
+}
+
+/** Does this subtree carry visible TEXT with real content? Text must stay live
+ *  (selectable, theme-able) markup — never be flattened into an exported SVG —
+ *  so the generalized glyph fallback (D1) refuses to collapse any subtree that
+ *  contains it. */
+function containsText(n: RawNode): boolean {
+  if (hidden(n)) return false;
+  if (n.type === "TEXT" && (n.characters ?? "").trim()) return true;
+  return (n.children ?? []).some(containsText);
+}
+
+/** Does this subtree carry an IMAGE fill anywhere (a photo/raster)? Such fills
+ *  export as PNG on their own node; the generalized glyph fallback (D1) must not
+ *  flatten a subtree containing one into a single SVG and lose the photo. */
+function containsImageFill(n: RawNode): boolean {
+  if (hidden(n)) return false;
+  if (hasImageFill(n)) return true;
+  return (n.children ?? []).some(containsImageFill);
+}
+
+/** Icon-scale cap for the generalized glyph fallback: matches isGraphic's and
+ *  innerGraphicId's 48px ceiling so only genuine icon/glyph subtrees flatten —
+ *  never a large layout frame that merely happens to contain a stray vector. */
+const GLYPH_MAX_PX = 48;
+
+/**
+ * D1 — generalized SVG-glyph fallback. An UNMAPPED node is a pure icon/vector
+ * subtree we should flatten to one exported SVG (rather than recurse into and
+ * render its vector leaves as blank boxes) when it:
+ *   - is not itself a kit match (caller checks) and not an ELLIPSE/IMAGE/TEXT,
+ *   - is at icon scale (≤48px each side) so we never collapse a layout frame,
+ *   - contains drawable vector content,
+ *   - contains NO kit-mappable instance (else we'd swallow a real component),
+ *   - contains NO IMAGE fill (else we'd lose a photo that PNG-exports on its own),
+ *   - contains NO live text (else we'd rasterize selectable copy).
+ * This is the IconButton/Button glyph rule, lifted to ANY context — no unmapped
+ * glyph ever silently vanishes, regardless of mapping coverage.
+ */
+function isUnmappedGlyph(n: RawNode, ctx: EmitContext, broken: Set<string>): boolean {
+  if (hidden(n)) return false;
+  if (broken.has(n.id)) return false; // Figma refused to export it standalone — recurse instead
+  if (n.type === "TEXT") return false;
+  if (n.type === "ELLIPSE") return false; // ellipses round-trip as CSS, not SVG
+  if (hasImageFill(n)) return false;
+  const b = n.absoluteBoundingBox ?? {};
+  if ((b.width ?? 0) > GLYPH_MAX_PX || (b.height ?? 0) > GLYPH_MAX_PX) return false;
+  if (!containsVector(n)) return false;
+  if (containsText(n)) return false;
+  if (containsImageFill(n)) return false;
+  if (containsKitMatch(n, ctx)) return false;
+  return true;
+}
+
 /** Glyph subtree id to export when an IconButton/Button's glyph has no
  *  kit-icon match — we export the original SVG rather than render a blank
  *  button. Skips hidden/mask nodes and the focus-ring decoration, then
@@ -153,6 +218,19 @@ function innerGraphicId(n: RawNode, broken: Set<string>): string | null {
     if (r) return r;
   }
   return null;
+}
+
+/** Node id to export when flattening an unmapped glyph subtree (D1). Prefers
+ *  the tight inner glyph (descending through wrapper slots so we don't export a
+ *  loose, distorting bbox); falls back to the node itself when it has no
+ *  exportable child but is itself an exportable graphic (a bare icon-scale
+ *  group/vector). Never returns a broken id. */
+function glyphExportId(n: RawNode, broken: Set<string>): string | null {
+  const inner = innerGraphicId(n, broken);
+  if (inner) return inner;
+  if (broken.has(n.id)) return null;
+  if (n.type === "ELLIPSE") return null;
+  return n.id;
 }
 
 // ---------------------------------------------------------------------------
@@ -425,7 +503,7 @@ export function planAssets(doc: RawNode, ctx: EmitContext): AssetPlan {
       // export the original glyph as an SVG so the button isn't blank.
       if (k.kind === "component" && (k.kit === "IconButton" || k.kit === "Button")) {
         if (!innerIcon(n, ctx.components, ctx.componentSets)) {
-          const g = innerGraphicId(n, broken);
+          const g = glyphExportId(n, broken);
           if (g) svgIds.push(g);
         }
       }
@@ -438,6 +516,17 @@ export function planAssets(doc: RawNode, ctx: EmitContext): AssetPlan {
     if (hasImageFill(n)) {
       pngIds.push(n.id);
       return;
+    }
+    // D1 — generalized SVG-glyph fallback. An unmapped icon/vector subtree that
+    // holds no kit component and no live text flattens to one exported SVG, so
+    // its vector leaves never render as blank boxes. Gated by isUnmappedGlyph so
+    // we never swallow a mappable instance or rasterize selectable text.
+    if (isUnmappedGlyph(n, ctx, broken)) {
+      const g = glyphExportId(n, broken);
+      if (g) {
+        svgIds.push(g);
+        return;
+      }
     }
     for (const c of n.children ?? []) walk(c);
   }
@@ -525,7 +614,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
   function buttonGlyph(n: RawNode, size = 16): { jsx: string; kit: string | null } {
     const icon = innerIcon(n, ctx.components, ctx.componentSets);
     if (icon) return { jsx: `<${icon} size={${size}} />`, kit: icon };
-    const gid = innerGraphicId(n, broken);
+    const gid = glyphExportId(n, broken);
     const v = gid ? assetRef(gid) : null;
     if (v) return { jsx: `<img src={${v}} width={${size}} height={${size}} alt="" />`, kit: null };
     return { jsx: "<span />", kit: null };
@@ -685,6 +774,25 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
         lines.push(`${pad}<img src={${v}} style=${sx(s)} alt="" />`);
         return;
       }
+    }
+
+    // D1 — generalized SVG-glyph fallback (mirrors planAssets). An unmapped
+    // icon/vector subtree with no kit component and no live text renders as the
+    // exported SVG, positioned at the node's own box, so its vector content is
+    // never lost to a blank container. The asset is keyed by the tight glyph id
+    // (glyphExportId), which may be a descendant; we still size the <img> to the
+    // node's box. Falls through to the container path if the export is missing.
+    if (isUnmappedGlyph(n, ctx, broken)) {
+      const gid = glyphExportId(n, broken);
+      const v = gid ? assetRef(gid) : null;
+      if (v) {
+        const s = boxStyle(n, px, py);
+        delete s.background;
+        delete s.boxShadow;
+        lines.push(`${pad}<img src={${v}} style=${sx(s)} alt="" />`);
+        return;
+      }
+      // Export missing — fall through to the container/box path below.
     }
 
     if (n.type === "TEXT") {

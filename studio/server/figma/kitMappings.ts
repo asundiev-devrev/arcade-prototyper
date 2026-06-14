@@ -50,6 +50,20 @@ export const SET_NAME_TO_KIT: Record<string, string> = {
   Button: "Button",
 };
 
+/**
+ * Pseudo-kit routing keys → the REAL arcade-gen component the emitter renders
+ * for them. A few mapping values aren't direct kit exports; they're emit-switch
+ * routes that render an existing component with extra props (e.g. an avatar
+ * whose visual is a photo, or an account avatar). The mapping-hygiene test (D2)
+ * validates each value against the real barrel by first resolving it through
+ * this table, so these legitimately-non-exported routes don't false-fail — while
+ * still asserting the component they ACTUALLY render (`Avatar`) exists.
+ */
+export const PSEUDO_KIT_RENDERS: Record<string, string> = {
+  ImageAvatar: "Avatar", // Avatar with src = exported photo PNG
+  AccountAvatar: "Avatar", // Avatar type="account" shape="square"
+};
+
 /** Figma icon set name → arcade-gen icon export. Every value must exist in
  *  the kit barrel (test-enforced against arcade-components exports). */
 export const ICON_SET_NAME_TO_KIT: Record<string, string> = {

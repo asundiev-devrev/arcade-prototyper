@@ -9,7 +9,13 @@ import {
   avatarSizeForPx,
   ICON_SET_NAME_TO_KIT,
   SET_KEY_TO_KIT,
+  SET_NAME_TO_KIT,
+  PSEUDO_KIT_RENDERS,
 } from "../../../server/figma/kitMappings";
+import {
+  kitExportNames,
+  parseBarrelExportNames,
+} from "../../../server/figma/kitBarrel";
 
 // --- minimal tree builders -------------------------------------------------
 
@@ -296,6 +302,118 @@ describe("emitKitFrame", () => {
     expect(r.source).not.toContain("<span />");
   });
 
+  // --- D1: generalized SVG-glyph fallback (any unmapped leaf glyph) --------
+
+  /** An unmapped icon instance NOT inside a button, carrying the documented
+   *  stray fill-less hit-area rectangle that breaks the strict all-children-
+   *  graphic check. Without the generalized fallback its vector renders blank. */
+  function standaloneUnmappedIcon(id: string, w = 24, h = 24): any {
+    return {
+      id, type: "INSTANCE", componentId: `c:${id}`,
+      absoluteBoundingBox: bbox(0, 0, w, h),
+      children: [
+        { id: `${id}-rect`, type: "RECTANGLE", absoluteBoundingBox: bbox(0, 0, w, h) }, // hit area, no fill
+        { id: `${id}-v`, type: "VECTOR", absoluteBoundingBox: bbox(4, 4, w - 8, h - 8),
+          fills: [{ type: "SOLID", color: { r: 0, g: 0, b: 0, a: 1 } }] },
+      ],
+    };
+  }
+  const unmappedIconMaps = (id: string) => ({
+    components: { [`c:${id}`]: { key: "k", name: "x", componentSetId: `s:${id}` } },
+    componentSets: { [`s:${id}`]: { key: "no-match", name: "Icons/TotallyUnmapped" } },
+  });
+
+  it("D1: exports a standalone unmapped icon's glyph as SVG (never a blank box)", () => {
+    const maps = unmappedIconMaps("ic");
+    const doc = frameNode("0", [standaloneUnmappedIcon("ic")]);
+
+    // planAssets must queue the tight glyph (the vector child), not the loose
+    // instance bbox — innerGraphicId descends past the hit-area rect.
+    const plan = planAssets(doc, maps);
+    expect(plan.svgIds).toContain("ic-v");
+
+    const r = emitKitFrame(doc, { ...maps, assetFiles: new Map([["ic-v", "ic-v.svg"]]) });
+    expect(r.source).toContain("<img src={a_ic_v}");
+    // The bare vector must NOT also be emitted as a separate plain box.
+    expect(r.source).not.toContain('<div style={{position: "absolute", left: "4px", top: "4px"');
+  });
+
+  it("D1: degrades to a box (no crash) when the unmapped glyph's export is missing", () => {
+    const maps = unmappedIconMaps("ic");
+    const doc = frameNode("0", [standaloneUnmappedIcon("ic")]);
+    // No asset file resolved → fall through to the container path, never throw.
+    const r = emitKitFrame(doc, { ...maps, assetFiles: new Map() });
+    expect(r.source).not.toContain("<img");
+    expect(r.source).toContain("<div");
+  });
+
+  it("D1: skips a hidden unmapped glyph (respects visibility/mask)", () => {
+    const maps = unmappedIconMaps("ic");
+    const icon = standaloneUnmappedIcon("ic");
+    icon.visible = false;
+    const doc = frameNode("0", [icon]);
+    const plan = planAssets(doc, maps);
+    expect(plan.svgIds).toEqual([]);
+  });
+
+  it("D1: does NOT flatten a subtree that contains a kit-mappable instance", () => {
+    // A small container holding a vector AND a real kit checkbox: flattening it
+    // to one SVG would swallow the checkbox. The container has a filled
+    // RECTANGLE so the strict isGraphic check declines (forcing the decision
+    // through the generalized fallback), which must ALSO decline on the kit
+    // match and let recursion emit the real component.
+    const { components: cbComp, componentSets: cbSet } = checkboxMaps();
+    const doc = frameNode("0", [{
+      id: "wrap", type: "GROUP", absoluteBoundingBox: bbox(0, 0, 40, 20),
+      children: [
+        { id: "wbg", type: "RECTANGLE", absoluteBoundingBox: bbox(0, 0, 40, 20),
+          fills: [{ type: "SOLID", color: { r: 1, g: 1, b: 1, a: 1 } }] }, // filled → not graphic
+        { id: "wv", type: "VECTOR", absoluteBoundingBox: bbox(0, 0, 16, 16),
+          fills: [{ type: "SOLID", color: { r: 0, g: 0, b: 0, a: 1 } }] },
+        checkboxInstance("cb"),
+      ],
+    }]);
+    const maps = { components: cbComp, componentSets: cbSet };
+    const plan = planAssets(doc, maps);
+    // The whole wrap is NOT exported as one SVG (it holds a kit component); the
+    // lone vector still exports, the kit checkbox is left for the emitter.
+    expect(plan.svgIds).not.toContain("wrap");
+    expect(plan.svgIds).toContain("wv");
+
+    const r = emitKitFrame(doc, { ...maps, assetFiles: new Map([["wv", "wv.svg"]]) });
+    expect(r.source).toContain("<Checkbox");
+    expect(r.kitInstanceCount).toBe(1);
+  });
+
+  it("D1: does NOT flatten a subtree that contains live text", () => {
+    // An icon + label group: flattening would rasterize the (selectable) text.
+    const doc = frameNode("0", [{
+      id: "row", type: "GROUP", absoluteBoundingBox: bbox(0, 0, 48, 20),
+      children: [
+        { id: "rv", type: "VECTOR", absoluteBoundingBox: bbox(0, 0, 16, 16),
+          fills: [{ type: "SOLID", color: { r: 0, g: 0, b: 0, a: 1 } }] },
+        { id: "rt", type: "TEXT", characters: "Label",
+          absoluteBoundingBox: bbox(20, 2, 24, 16),
+          style: { fontFamily: "Inter", fontSize: 12 } },
+      ],
+    }]);
+    const plan = planAssets(doc, { components: {}, componentSets: {} });
+    expect(plan.svgIds).not.toContain("row");
+    expect(plan.svgIds).toContain("rv"); // the bare vector still exports
+    const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map([["rv", "rv.svg"]]) });
+    expect(r.source).toContain("Label"); // text stays live, not rasterized
+  });
+
+  it("D1: does NOT flatten a large layout frame that merely contains a vector", () => {
+    const doc = frameNode("0", [{
+      id: "panel", type: "FRAME", absoluteBoundingBox: bbox(0, 0, 300, 200),
+      children: [{ id: "pv", type: "VECTOR", absoluteBoundingBox: bbox(0, 0, 16, 16) }],
+    }]);
+    const plan = planAssets(doc, { components: {}, componentSets: {} });
+    expect(plan.svgIds).not.toContain("panel");
+    expect(plan.svgIds).toContain("pv");
+  });
+
   it("ignores a hidden alt-glyph in an IconButton slot and exports the visible one", () => {
     // Real designs park an alternate (hidden) icon in the slot beside the
     // visible glyph. innerIcon must skip the hidden one; since the visible
@@ -462,7 +580,14 @@ describe("emitKitFrame", () => {
   });
 });
 
-// --- mapping hygiene ---------------------------------------------------------
+// --- mapping hygiene (D2) ----------------------------------------------------
+//
+// Shape checks (regex) catch typos in form; the real guard is asserting every
+// mapping VALUE is an actual export of @xorkavi/arcade-gen. A mapping pointing
+// at a renamed/removed/typo'd component would otherwise build a frame that
+// imports a non-existent name and crashes on a tester's machine — this fails it
+// in CI instead. Validation reads the kit's own published declaration (no
+// hardcoded list), so a kit version bump keeps the allow-list current.
 
 describe("kit mappings hygiene", () => {
   it("icon map values are PascalCase identifiers (kit exports)", () => {
@@ -474,5 +599,64 @@ describe("kit mappings hygiene", () => {
     for (const k of Object.keys(SET_KEY_TO_KIT)) {
       expect(k).toMatch(/^[0-9a-f]{40}$/);
     }
+  });
+
+  it("the kit barrel export surface resolves and is non-trivial", () => {
+    // Guard against a vacuous pass: if the package can't be resolved/parsed the
+    // set is empty and every assertion below would falsely "pass" because the
+    // membership check is never exercised. Assert we read a real surface first.
+    const names = kitExportNames();
+    expect(names.size).toBeGreaterThan(50);
+    expect(names.has("Button")).toBe(true);
+    expect(names.has("AvatarCount")).toBe(true);
+  });
+
+  it("parseBarrelExportNames keeps values, drops type-only re-exports", () => {
+    const set = parseBarrelExportNames(
+      'export { Button, Avatar as Av, type ButtonProps, type Mode as M, Bell };',
+    );
+    expect([...set].sort()).toEqual(["Av", "Bell", "Button"]);
+    expect(set.has("ButtonProps")).toBe(false); // type-only re-export excluded
+    expect(set.has("M")).toBe(false); // `type X as Y` excluded
+  });
+
+  it("every ICON_SET_NAME_TO_KIT value is a real arcade-gen export", () => {
+    const names = kitExportNames();
+    const missing = [...new Set(Object.values(ICON_SET_NAME_TO_KIT))].filter(
+      (v) => !names.has(v),
+    );
+    expect(missing, `Icon mappings pointing at non-existent kit exports: ${missing.join(", ")}`)
+      .toEqual([]);
+  });
+
+  it("every SET_KEY_TO_KIT value resolves to a real arcade-gen export", () => {
+    const names = kitExportNames();
+    const missing = [...new Set(Object.values(SET_KEY_TO_KIT))]
+      .map((v) => PSEUDO_KIT_RENDERS[v] ?? v) // pseudo-kits render a real component
+      .filter((v) => !names.has(v));
+    expect(missing, `Key mappings pointing at non-existent kit exports: ${missing.join(", ")}`)
+      .toEqual([]);
+  });
+
+  it("every SET_NAME_TO_KIT value resolves to a real arcade-gen export", () => {
+    // Some values are pseudo-kits (ImageAvatar/AccountAvatar) routed through the
+    // emit switch to a real component — resolve those before the membership
+    // check so they don't false-fail, while still asserting the component they
+    // actually render exists.
+    const names = kitExportNames();
+    const missing = [...new Set(Object.values(SET_NAME_TO_KIT))]
+      .map((v) => PSEUDO_KIT_RENDERS[v] ?? v)
+      .filter((v) => !names.has(v));
+    expect(missing, `Name mappings pointing at non-existent kit exports: ${missing.join(", ")}`)
+      .toEqual([]);
+  });
+
+  it("a deliberately bad mapping value would be caught (negative control)", () => {
+    // Proves the membership check actually bites: a fabricated component name
+    // must be reported as missing.
+    const names = kitExportNames();
+    const fake = { Bogus: "ThisComponentDoesNotExistInTheKit" };
+    const missing = Object.values(fake).filter((v) => !names.has(v));
+    expect(missing).toEqual(["ThisComponentDoesNotExistInTheKit"]);
   });
 });
