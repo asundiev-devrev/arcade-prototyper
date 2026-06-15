@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "main": "electron/dist/main.js",
-  "version": "0.34.0",
+  "version": "0.34.1",
   "scripts": {
     "studio": "vite --config studio/vite.config.ts",
     "studio:electron": "concurrently --kill-others --names vite,electron \"ARCADE_STUDIO_OPEN_BROWSER=0 pnpm run studio\" \"pnpm exec tsc -p electron/tsconfig.json && pnpm exec electron .\"",
@@ -32,6 +32,7 @@
     "posthog-js": "^1.382.0",
     "posthog-node": "^5.36.4",
     "react": "^19.0.0",
+    "react-day-picker": "^9.14.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.1.0",
     "tailwindcss": "^4.3.0",

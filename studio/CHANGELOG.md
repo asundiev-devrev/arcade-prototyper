@@ -8,6 +8,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.34.1] — 2026-06-15
+
+### Fixed
+- **Hotfix for 0.34.0, which failed to open with a red error screen.** The 0.34.0 cleanup removed a dependency (`react-day-picker`) that looked unused but is required by the component library under the hood — so the packaged app couldn't load any frame. Restored it. If you landed on 0.34.0, this update fixes it automatically.
+
 ## [0.34.0] — 2026-06-15
 
 ### Changed
