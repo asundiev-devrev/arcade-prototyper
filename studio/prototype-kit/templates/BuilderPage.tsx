@@ -52,7 +52,13 @@ import { TitleBar } from "../composites/TitleBar.js";
 type BuilderPageProps = {
   sidebar: ReactNode;
   actions?: ReactNode;
+  /** Breadcrumb row above the tab bar (leading). Pass a composed Breadcrumb. */
+  breadcrumb?: ReactNode;
+  /** Trailing cluster on the breadcrumb row (e.g. an agent-status chip + icon). */
+  headerActions?: ReactNode;
   tabs?: ReactNode;
+  /** Trailing toolbar inline with the tab bar (e.g. a "Publish" pill button). */
+  toolbar?: ReactNode;
   title?: ReactNode;
   subtitle?: ReactNode;
   children: ReactNode;
@@ -61,7 +67,10 @@ type BuilderPageProps = {
 export function BuilderPage({
   sidebar,
   actions,
+  breadcrumb,
+  headerActions,
   tabs,
+  toolbar,
   title,
   subtitle,
   children,
@@ -69,9 +78,20 @@ export function BuilderPage({
   return (
     <AppShell titleBar={<TitleBar trailingActions={actions} />} sidebar={sidebar}>
       <div className="flex h-full flex-col overflow-y-auto">
+        {(breadcrumb || headerActions) && (
+          <div className="flex h-11 shrink-0 items-center justify-between px-6">
+            <div className="min-w-0">{breadcrumb}</div>
+            {headerActions && (
+              <div className="flex shrink-0 items-center gap-1.5">{headerActions}</div>
+            )}
+          </div>
+        )}
         {tabs && (
-          <div className="border-b border-(--stroke-neutral-subtle) px-6">
-            {tabs}
+          <div className="flex items-center justify-between border-b border-(--stroke-neutral-subtle) px-6">
+            <div className="min-w-0">{tabs}</div>
+            {toolbar && (
+              <div className="flex shrink-0 items-center gap-2">{toolbar}</div>
+            )}
           </div>
         )}
         <div className="mx-auto w-full max-w-[720px] px-6 py-10">

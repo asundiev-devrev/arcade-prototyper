@@ -33,10 +33,10 @@ export { FormModal } from "./composites/FormModal.js";
 export { FormField } from "./composites/FormField.js";
 export { EntityCard } from "./composites/EntityCard.js";
 export { CardGrid } from "./composites/CardGrid.js";
+export { SkillCard } from "./composites/SkillCard.js";
 export { PickerModal } from "./composites/PickerModal.js";
 export { DetailModal } from "./composites/DetailModal.js";
 export { CapabilitySection } from "./composites/CapabilitySection.js";
-export { MobileFrame } from "./composites/MobileFrame.js";
 
 // Templates
 export { SettingsPage } from "./templates/SettingsPage.js";

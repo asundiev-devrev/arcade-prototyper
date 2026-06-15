@@ -51,6 +51,10 @@ type SettingsPageProps = {
   pageActions?: ReactNode;
   title?: ReactNode;
   subtitle?: ReactNode;
+  /** Primary CTA aligned inline with the page title (e.g. "Add custom
+   *  connector"). Prefer this over `pageActions` for the page's main action —
+   *  Figma places it next to the heading, not in the breadcrumb bar. */
+  titleAction?: ReactNode;
   children: ReactNode;
 };
 
@@ -61,6 +65,7 @@ export function SettingsPage({
   pageActions,
   title,
   subtitle,
+  titleAction,
   children,
 }: SettingsPageProps) {
   return (
@@ -71,7 +76,7 @@ export function SettingsPage({
         <BreadcrumbBar breadcrumb={breadcrumb} actions={pageActions} />
       }
     >
-      <PageBody title={title} subtitle={subtitle}>
+      <PageBody title={title} subtitle={subtitle} titleAction={titleAction}>
         {children}
       </PageBody>
     </AppShell>

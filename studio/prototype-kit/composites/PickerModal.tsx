@@ -59,6 +59,9 @@ type PickerModalProps = {
   tabs: PickerTab[];
   searchPlaceholder?: string;
   onSearch?: (value: string) => void;
+  /** Optional filter control rendered between the tabs and the search field
+   *  (e.g. an "All categories" Select). Matches the Figma header row. */
+  filter?: ReactNode;
 };
 
 export function PickerModal({
@@ -69,6 +72,7 @@ export function PickerModal({
   tabs,
   searchPlaceholder = "Search",
   onSearch,
+  filter,
 }: PickerModalProps) {
   const first = tabs[0]?.value;
   return (
@@ -89,12 +93,15 @@ export function PickerModal({
                   </Tabs.Trigger>
                 ))}
               </Tabs.List>
-              <div className="w-[200px] shrink-0">
-                <Input
-                  placeholder={searchPlaceholder}
-                  iconLeft={<MagnifyingGlass size={16} />}
-                  onChange={(e) => onSearch?.(e.currentTarget.value)}
-                />
+              <div className="flex shrink-0 items-center gap-2">
+                {filter}
+                <div className="w-[200px]">
+                  <Input
+                    placeholder={searchPlaceholder}
+                    iconLeft={<MagnifyingGlass size={16} />}
+                    onChange={(e) => onSearch?.(e.currentTarget.value)}
+                  />
+                </div>
               </div>
             </div>
             {tabs.map((t) => (
