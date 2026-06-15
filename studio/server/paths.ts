@@ -38,10 +38,6 @@ export function projectJsonPath(projectSlug: string): string {
   return path.join(projectDir(projectSlug), "project.json");
 }
 
-export function frameThumbnailPath(projectSlug: string, frameSlug: string): string {
-  return path.join(projectDir(projectSlug), "thumbnails", `${requireSlug(frameSlug)}.png`);
-}
-
 export function lastErrorLogPath(projectSlug: string): string {
   return path.join(projectDir(projectSlug), "last-error.log");
 }
@@ -112,58 +108,3 @@ export function projectMemoryDir(projectSlug: string): string {
   return path.join(projectDir(projectSlug), "memory");
 }
 
-/**
- * Per-project shared-state file written by the host's Share panel. Contains
- * the projectShareId and the current `shared_with` list. Recipients never
- * see this file — it lives in the host's project dir alongside `project.json`
- * and is rewritten on every share/unshare.
- */
-export function multiplayerJsonPath(projectSlug: string): string {
-  return path.join(projectDir(projectSlug), "multiplayer.json");
-}
-
-/**
- * Root folder for Studio multiplayer session state. Sibling of `projects/`.
- * Holds `sessions.json` (persisted session metadata) plus any future
- * per-session artifacts.
- */
-export function multiplayerRoot(): string {
-  return path.join(studioRoot(), "multiplayer");
-}
-
-/**
- * Single JSON file holding all known multiplayer session metadata. Read at
- * startup, rewritten atomically on every change. SQLite is overkill for the
- * expected session count in v1.
- */
-export function sessionsJsonPath(): string {
-  return path.join(multiplayerRoot(), "sessions.json");
-}
-
-/**
- * Plan 2b shared-project state: one entry per (hostDevu, projectSlug) pair,
- * with the list of `shared_with` recipients. Replaces the v1 per-session
- * model. Read at startup; rewritten on every share/unshare.
- */
-export function projectsJsonPath(): string {
-  return path.join(multiplayerRoot(), "projects.json");
-}
-
-/**
- * Root folder for the GUEST-side on-disk mirror of shared projects.
- * Sibling of `projects/` and `multiplayer/`. Each entry is an opaque
- * shared-project id (not a slug) — recipients receive these from invite
- * payloads and must not be subject to the `requireSlug` constraints.
- */
-export function sharedProjectsRoot(): string {
-  return path.join(studioRoot(), "shared-projects");
-}
-
-/**
- * Per-shared-project mirror directory on the GUEST side. Holds
- * `metadata.json`, `chat-history.json`, and a `frames/` subdir with
- * last-seen frame content keyed by frame path.
- */
-export function sharedProjectDir(id: string): string {
-  return path.join(sharedProjectsRoot(), id);
-}

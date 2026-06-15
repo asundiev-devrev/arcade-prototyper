@@ -3,8 +3,7 @@ import { transformWithEsbuild } from "vite";
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import path from "node:path";
-import { frameDir, projectDir, projectJsonPath, sharedProjectDir, sharedProjectsRoot } from "../paths";
-import { resolveFrameFsPath, sanitizeFramePathForFs } from "../sharedProjects/cache";
+import { frameDir, projectDir, projectJsonPath } from "../paths";
 
 function readProjectMode(slug: string): "light" | "dark" {
   try {
@@ -14,16 +13,6 @@ function readProjectMode(slug: string): "light" | "dark" {
     return "light";
   }
 }
-
-/**
- * Whitelist for the spectator `:id` URL segment. `projectShareId` values are
- * `randomUUID()` outputs (lowercase hex with dashes), but mirrors created out
- * of band may use slightly different casings — keep the allowed set narrow
- * (alphanumeric, `-`, `_`) so attackers can't smuggle `..`, `/`, dots, or
- * encoded slashes that would escape `shared-projects/` once handed to
- * `sharedProjectDir(id)` → `path.join(root, id)`.
- */
-const SHARED_PROJECT_ID = /^[a-zA-Z0-9_-]+$/;
 
 /**
  * HTML-escape user-controlled values rendered into the frame shell. Title and
@@ -45,26 +34,9 @@ function escapeHtml(s: string): string {
 }
 
 /**
- * Defense-in-depth check: even after the regex passes, confirm that the
- * resolved on-disk path stays inside the spectator mirror root. Returns
- * true if `sharedProjectDir(id)` resolves to a child of `shared-projects/`.
- */
-function isSharedIdSafe(id: string): boolean {
-  if (!SHARED_PROJECT_ID.test(id)) return false;
-  const root = path.resolve(sharedProjectsRoot());
-  const resolved = path.resolve(sharedProjectDir(id));
-  return resolved === root || resolved.startsWith(root + path.sep);
-}
-
-/**
- * Build the HTML shell used by both the host and spectator frame mount
- * endpoints. Same DevRev theme + arcade-gen styles + error shim — only the
- * `bootstrapUrl` differs, which decides which virtual TSX module Vite
- * compiles.
- *
- * Centralising this here keeps spectators rendering identical to hosts;
- * any future tweak to the host frame shell propagates to spectators for
- * free.
+ * Build the HTML shell used by the host frame mount endpoint. DevRev theme +
+ * arcade-gen styles + error shim; the `bootstrapUrl` decides which virtual TSX
+ * module Vite compiles.
  */
 function renderFrameShellHtml(opts: {
   title: string;
@@ -189,63 +161,6 @@ export function frameMountPlugin(): Plugin {
   return {
     name: "arcade-studio-frame-mount",
     configureServer(server) {
-      // Spectator frame compile — `/api/shared-projects/:id/frame/:framePath`.
-      // Mirrors the host endpoint below, only the file source differs: TSX
-      // is read from the guest-side mirror cache instead of `projects/`.
-      // Registered before the host route so the more specific URL matches
-      // first.
-      server.middlewares.use(async (req, res, next) => {
-        const m = req.url?.match(
-          /^\/api\/shared-projects\/([^/?]+)\/frame\/([^/?]+)(?:\?.*)?$/,
-        );
-        if (!m) return next();
-        const id = decodeURIComponent(m[1]);
-        const framePath = decodeURIComponent(m[2]);
-        // Reject path traversal BEFORE any disk access. The route regex
-        // `[^/?]+` permits dots / encoded slashes / `..` once
-        // decodeURIComponent runs, so we have to gate it here. Bouncing
-        // requests before resolveFrameFsPath() ensures `path.join(root,
-        // id)` can't escape `shared-projects/` even on weird filesystems.
-        if (!isSharedIdSafe(id)) {
-          res.writeHead(400);
-          res.end("Invalid shared project id");
-          return;
-        }
-        // The frame path is sanitized into a filesystem-safe filename by
-        // `sanitizeFramePathForFs`; reject anything that would change once
-        // sanitized, since that signals a traversal attempt rather than a
-        // legitimate slug.
-        if (sanitizeFramePathForFs(framePath) !== framePath) {
-          res.writeHead(400);
-          res.end("Invalid frame path");
-          return;
-        }
-        const absFrame = await resolveFrameFsPath(id, framePath);
-        if (!absFrame) {
-          res.writeHead(404);
-          res.end("Frame not found");
-          return;
-        }
-
-        // Spectators don't have a `project.json` for theme — default to
-        // light. The host sends the active mode via `presence_state` /
-        // chat events; threading it here is a future polish (Plan 2c).
-        const mode: "light" | "dark" = "light";
-        const bootstrapUrl =
-          `/@id/virtual:arcade-studio-shared-frame.tsx?` +
-          `id=${encodeURIComponent(id)}&path=${encodeURIComponent(framePath)}` +
-          `&mode=${mode}&t=${Date.now()}`;
-        const html = renderFrameShellHtml({
-          title: `${id}/${framePath}`,
-          mode,
-          overridesUrl: null,
-          bootstrapUrl,
-          errorScopeJson: { slug: id, frame: framePath },
-        });
-        res.writeHead(200, { "Content-Type": "text/html" });
-        res.end(html);
-      });
-
       server.middlewares.use(async (req, res, next) => {
         const m = req.url?.match(/^\/api\/frames\/([a-z0-9-]+)\/([a-z0-9-]+)(?:\?.*)?$/);
         if (!m) return next();
@@ -275,7 +190,6 @@ export function frameMountPlugin(): Plugin {
     },
     resolveId(id) {
       if (id.startsWith("virtual:arcade-studio-frame.tsx")) return "\0" + id;
-      if (id.startsWith("virtual:arcade-studio-shared-frame.tsx")) return "\0" + id;
       return null;
     },
     async load(id) {
@@ -294,50 +208,14 @@ export function frameMountPlugin(): Plugin {
           frame,
         });
       }
-      if (id.startsWith("\0virtual:arcade-studio-shared-frame.tsx")) {
-        // Spectator: TSX lives under `<studioRoot>/shared-projects/<id>/frames/`
-        // (mirror cache). We resolve the on-disk path via the cache helper —
-        // it handles the modern `.tsx` filename and the legacy
-        // extension-less fallback.
-        const q = new URLSearchParams(id.split("?")[1] ?? "");
-        const sharedId = q.get("id")!;
-        const framePath = q.get("path")!;
-        const queryMode = q.get("mode");
-        const mode = queryMode === "dark" ? "dark" : "light";
-        // The HTTP middleware validates these before constructing the
-        // bootstrap URL, but Vite also resolves virtual modules from
-        // direct `/@id/...` requests — re-check here so the load path is
-        // safe on its own. A `throw` short-circuits the import with an
-        // error visible in the spectator's red screen.
-        if (!isSharedIdSafe(sharedId) || sanitizeFramePathForFs(framePath) !== framePath) {
-          const msg = `Invalid spectator frame request: ${sharedId}/${framePath}`;
-          return `throw new Error(${JSON.stringify(msg)});`;
-        }
-        const absFrame = await resolveFrameFsPath(sharedId, framePath);
-        if (!absFrame) {
-          // Vite expects `load` to throw or return null/source. Returning
-          // an explicit module that calls the parent error shim gives the
-          // spectator a useful red screen rather than a silent blank.
-          const msg = `Spectator frame not found: ${sharedId}/${framePath}`;
-          return `throw new Error(${JSON.stringify(msg)});`;
-        }
-        return await compileFrameBootstrap({
-          virtualId: id,
-          absFrame,
-          mode,
-          slug: sharedId,
-          frame: framePath,
-        });
-      }
       return null;
     },
   };
 }
 
 /**
- * Build + esbuild-transform the frame bootstrap module. Shared by host and
- * spectator paths: the only difference is `absFrame` (the user's TSX file
- * to import) and `slug`/`frame` for error-boundary scoping.
+ * Build + esbuild-transform the frame bootstrap module: `absFrame` (the user's
+ * TSX file to import) plus `slug`/`frame` for error-boundary scoping.
  */
 async function compileFrameBootstrap(opts: {
   virtualId: string;

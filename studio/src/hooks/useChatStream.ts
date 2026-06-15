@@ -108,8 +108,7 @@ export function useChatStream(
 
   /** Apply a StudioEvent to the stream state. Replayed and live events go
    *  through the same reducer so a reconnect reconstructs the exact same UI.
-   *  Reducer logic lives in `./chatStreamReducer` so the spectator hook can
-   *  drive the same state shape from `agent_event` payloads. */
+   *  Reducer logic lives in `./chatStreamReducer`. */
   const applyEvent = useCallback((ev: StudioEvent) => {
     safeSetState((s) => applyStudioEvent(s, ev, framesRef.current));
   }, [safeSetState]);

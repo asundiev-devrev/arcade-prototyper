@@ -1,10 +1,9 @@
 /**
  * Resolve a DevRev PAT to a devu identity by calling `dev-users.self`.
  *
- * Used at WebSocket connect time (relay/wsServer.ts) and at session-create
- * time (middleware/multiplayer.ts). Returns null for any failure path —
- * callers distinguish "not authenticated" from "other error" based on
- * context, not this function's return value.
+ * Used to resolve the operator's email for telemetry identity. Returns null
+ * for any failure path — callers distinguish "not authenticated" from "other
+ * error" based on context, not this function's return value.
  */
 
 export interface DevuIdentity {

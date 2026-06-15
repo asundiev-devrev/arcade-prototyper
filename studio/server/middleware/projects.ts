@@ -176,7 +176,7 @@ export function projectsMiddleware() {
       }
 
       // Unrecognized subresource under /api/projects/... — hand off to the
-      // next middleware (liftMiddleware, thumbnailsMiddleware, share, etc.)
+      // next middleware (liftMiddleware, share, etc.)
       // rather than returning project.json as a fallback.
       return next?.();
     } catch (err: any) {

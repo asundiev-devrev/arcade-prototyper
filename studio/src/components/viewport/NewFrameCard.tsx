@@ -1,17 +1,10 @@
 export function NewFrameCard({
   onClick,
   busy,
-  // Defense-in-depth: callers (Viewport) already gate this card off in
-  // spectator mode, but rendering it here when `readonly` is true would
-  // be a regression. Return null so any future caller that forgets to
-  // gate at the call site still keeps spectators safe.
-  readonly: isReadonly = false,
 }: {
   onClick: () => void;
   busy?: boolean;
-  readonly?: boolean;
 }) {
-  if (isReadonly) return null;
   return (
     <div style={{ flex: "none" }}>
       <div

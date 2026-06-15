@@ -112,7 +112,6 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
   try {
     await fs.mkdir(path.join(dir, "frames"), { recursive: true });
     await fs.mkdir(path.join(dir, "shared"), { recursive: true });
-    await fs.mkdir(path.join(dir, "thumbnails"), { recursive: true });
     await fs.writeFile(projectJsonPath(slug), JSON.stringify(project, null, 2));
     await fs.writeFile(path.join(dir, "theme-overrides.css"), "/* Local theme overrides */\n");
     await fs.writeFile(path.join(dir, "CLAUDE.md"), renderTemplate(tpl, {
@@ -486,7 +485,6 @@ async function reconcileFramesInner(slug: string): Promise<Frame[]> {
   entries.sort();
 
   const discovered: Frame[] = [];
-  const newFrames: string[] = [];
   for (const name of entries) {
     const idx = path.join(framesDir, name, "index.tsx");
     try { await fs.access(idx); } catch { continue; }
@@ -496,9 +494,6 @@ async function reconcileFramesInner(slug: string): Promise<Frame[]> {
     // for. Once edited (by the user or the agent), it surfaces normally.
     if (await isUnmodifiedReferenceFrame(slug, name)) continue;
     const prior = project.frames.find((f) => f.slug === name);
-    if (!prior) {
-      newFrames.push(name);
-    }
     discovered.push(prior ?? {
       slug: name,
       name: titleCase(name),
@@ -511,37 +506,7 @@ async function reconcileFramesInner(slug: string): Promise<Frame[]> {
   if (JSON.stringify(discovered) === JSON.stringify(prevSorted)) return project.frames;
   const next = await updateProject(slug, { frames: discovered });
 
-  // Fire-and-forget thumbnail capture for new frames
-  if (newFrames.length > 0) {
-    enqueueThumbnailCapture(slug, newFrames).catch((err) => {
-      console.warn(`[projects] thumbnail capture failed for ${slug}:`, err);
-    });
-  }
-
   return next.frames;
-}
-
-async function enqueueThumbnailCapture(slug: string, framesSlugs: string[]): Promise<void> {
-  try {
-    const { captureFrameThumbnail } = await import("./thumbnails/capture");
-    const project = await getProject(slug);
-    if (!project) return;
-
-    for (const frameSlug of framesSlugs) {
-      const thumbnailPath = await captureFrameThumbnail(slug, frameSlug);
-      if (thumbnailPath) {
-        const frames = project.frames.map((f) =>
-          f.slug === frameSlug ? { ...f, thumbnail: thumbnailPath } : f
-        );
-        await updateProject(slug, {
-          frames,
-          coverThumbnail: project.coverThumbnail || thumbnailPath,
-        });
-      }
-    }
-  } catch (err) {
-    console.warn(`[projects] enqueueThumbnailCapture failed:`, err);
-  }
 }
 
 function titleCase(slug: string): string {

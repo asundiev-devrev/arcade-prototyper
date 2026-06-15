@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { IconButton, Tooltip } from "@xorkavi/arcade-gen";
 import { Viewport } from "../components/viewport/Viewport";
 import { ChatPane } from "../components/chat/ChatPane";
 import { DevModePanel } from "../components/devmode/DevModePanel";
@@ -9,38 +8,13 @@ import { ShareButton } from "../components/shell/ShareButton";
 import { CanvasToggle } from "../components/shell/CanvasToggle";
 import { ChatToggle } from "../components/shell/ChatToggle";
 import { ProjectPicker } from "../components/shell/ProjectPicker";
-import { BackButton } from "../components/shell/BackButton";
-import { SharePanel } from "../components/multiplayer/SharePanel";
-import { PresenceStrip } from "../components/multiplayer/PresenceStrip";
 import { ChatStreamProvider } from "../hooks/chatStreamContext";
 import { TargetSelectionProvider } from "../hooks/targetSelectionContext";
-import { useProjectFromHost, type ProjectShellSource } from "../hooks/useProjectFromHost";
+import { useProjectFromHost } from "../hooks/useProjectFromHost";
 import type { Project, ChimeIn } from "../../server/types";
-import { useProjectFromMirror } from "../hooks/useProjectFromMirror";
 import { takePendingPrompt, peekPendingPrompt } from "../lib/pendingPrompt";
 import { decoratePromptWithFigma } from "../lib/figmaUrl";
 import { api } from "../lib/api";
-
-function TeammatesIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-    </svg>
-  );
-}
 
 const CHAT_OPEN_STORAGE_KEY = "studio:chatPaneOpen";
 const CHAT_WIDTH_STORAGE_KEY = "studio:chatPaneWidth";
@@ -52,72 +26,13 @@ const FRAME_WIDTH_DEFAULT = 1440;
 const ZOOM_STORAGE_PREFIX = "studio:zoom:";
 const ZOOM_DEFAULT = 1.0;
 
-/**
- * `ProjectDetail` is the single authoring shell that hosts (`mode="author"`)
- * and spectators (`mode="spectator"`) both render through. Two modes pull
- * from different data sources but share JSX:
- *
- *   - Author:    `useProjectFromHost(slug)`  — host fetch + chat SSE.
- *   - Spectator: `useProjectFromMirror(id)`  — mirror cache + relay SSE.
- *
- * Both hooks return the same `ProjectShellSource` shape, so the inner
- * `ProjectDetailShell` stays mode-agnostic. Spectator-only gates here:
- *
- *   - `readonly` flag threaded into Viewport + ChatPane (Tasks 5/6 wire
- *     the actual readonly behaviour into those children; Task 4 just
- *     plumbs the prop).
- *   - Host-only chrome (ProjectPicker, ShareButton, SharePanel toggle,
- *     DevModePanel toggle, ThemeToggle) is hidden in spectator mode —
- *     those mutate host state a guest can't drive.
- *
- * The wrapper-per-mode shape is deliberate: each wrapper calls exactly
- * one data hook so we never spin up the unused hook's fetch + SSE just
- * to discard it. Mode does not change for the lifetime of an instance
- * (App.tsx renders a fresh tree on route swap), so the wrapper split
- * doesn't lose any behaviour.
- */
-export type ProjectDetailProps =
-  | {
-      mode: "author";
-      slug: string;
-      onBack: () => void;
-      onOpenProject: (slug: string) => void;
-    }
-  | {
-      mode: "spectator";
-      id: string;
-      onBack: () => void;
-      onOpenProject: (slug: string) => void;
-    };
-
-export function ProjectDetail(props: ProjectDetailProps) {
-  if (props.mode === "spectator") {
-    return (
-      <ProjectDetailSpectator
-        id={props.id}
-        onBack={props.onBack}
-        onOpenProject={props.onOpenProject}
-      />
-    );
-  }
-  return (
-    <ProjectDetailAuthor
-      slug={props.slug}
-      onBack={props.onBack}
-      onOpenProject={props.onOpenProject}
-    />
-  );
-}
-
-function ProjectDetailAuthor({
-  slug,
-  onBack,
-  onOpenProject,
-}: {
+export interface ProjectDetailProps {
   slug: string;
   onBack: () => void;
   onOpenProject: (slug: string) => void;
-}) {
+}
+
+export function ProjectDetail({ slug, onBack, onOpenProject }: ProjectDetailProps) {
   const source = useProjectFromHost(slug);
   const send = source.send;
   const consumedRef = useRef(false);
@@ -159,7 +74,6 @@ function ProjectDetailAuthor({
 
   return (
     <ProjectDetailShell
-      mode="author"
       routeKey={slug}
       source={source}
       onBack={onBack}
@@ -168,59 +82,18 @@ function ProjectDetailAuthor({
   );
 }
 
-function ProjectDetailSpectator({
-  id,
-  onBack,
-  onOpenProject,
-}: {
-  id: string;
-  onBack: () => void;
-  onOpenProject: (slug: string) => void;
-}) {
-  const source = useProjectFromMirror(id);
-  // Spectator iframes hit the shared-projects compile endpoint — host's
-  // `/api/frames/:slug/:frame` 404s for guests because the TSX lives in
-  // the mirror cache, not under `projects/`. Memoize keyed on `id` so
-  // child memoized iframes don't see a fresh function identity each render
-  // and re-mount unnecessarily.
-  const frameSrcOverride = useCallback(
-    (slug: string) =>
-      `/api/shared-projects/${encodeURIComponent(id)}/frame/${encodeURIComponent(slug)}`,
-    [id],
-  );
-  return (
-    <ProjectDetailShell
-      mode="spectator"
-      routeKey={id}
-      source={source}
-      onBack={onBack}
-      onOpenProject={onOpenProject}
-      frameSrcOverride={frameSrcOverride}
-    />
-  );
-}
-
 function ProjectDetailShell({
-  mode,
   routeKey,
   source,
   onBack,
   onOpenProject,
-  frameSrcOverride,
 }: {
-  mode: "author" | "spectator";
   routeKey: string;
-  source: ProjectShellSource;
+  source: ReturnType<typeof useProjectFromHost>;
   onBack: () => void;
   onOpenProject: (slug: string) => void;
-  frameSrcOverride?: (frameSlug: string) => string;
 }) {
-  const isSpectator = mode === "spectator";
-  // Optimistic local override for the theme toggle. Author-only path:
-  // spectators never call `toggleProjectMode`, so the override stays null
-  // for them. Kept here (rather than nested in the author wrapper) to
-  // avoid re-mounting state on a hypothetical future mode-flip — and to
-  // keep one shared shell.
+  // Optimistic local override for the theme toggle.
   const [localModeOverride, setLocalModeOverride] =
     useState<"light" | "dark" | null>(null);
   // Hero-handoff cold start: when the user submits from the home page we
@@ -233,10 +106,9 @@ function ProjectDetailShell({
   // If a pending hero prompt exists for this slug, synthesize an optimistic
   // placeholder project so the shell + ChatPane mount immediately and the
   // optimistic "Working…" row paints at once. The real record replaces it
-  // a beat later when the fetch lands. Author route only — spectators never
-  // have a pending prompt.
+  // a beat later when the fetch lands.
   const optimisticProject: Project | null =
-    !isSpectator && !source.project && peekPendingPrompt(routeKey)
+    !source.project && peekPendingPrompt(routeKey)
       ? {
           name: routeKey,
           slug: routeKey,
@@ -254,18 +126,14 @@ function ProjectDetailShell({
       ? { ...baseProject, mode: localModeOverride }
       : baseProject
     : null;
-  const { presence, refresh: refreshProject, chatStream, chatHistory, postComment } = source;
-  const { host, guests } = presence;
+  const { refresh: refreshProject, chatStream, chatHistory } = source;
 
   // Chime-ins: product-truth notes the Computer raised about generated
-  // frames. Author-mode only — spectators are read-only and never trigger
-  // generation. Poll while mounted so a background drift check (which lands
-  // a few seconds after a turn ends) surfaces without a manual refresh.
+  // frames. Poll while mounted so a background drift check (which lands a
+  // few seconds after a turn ends) surfaces without a manual refresh.
   const [chimeIns, setChimeIns] = useState<ChimeIn[]>([]);
-  const isAuthor = mode === "author";
 
   const refreshChimeIns = useCallback(async () => {
-    if (!isAuthor) return;
     try {
       const r = await fetch(`/api/projects/${routeKey}/chime-ins`);
       // Only trust a genuine JSON array. During a Vite middleware restart the
@@ -279,14 +147,13 @@ function ProjectDetailShell({
     } catch {
       /* best-effort — leave existing notes untouched */
     }
-  }, [isAuthor, routeKey]);
+  }, [routeKey]);
 
   useEffect(() => {
-    if (!isAuthor) return;
     void refreshChimeIns();
     const id = window.setInterval(() => void refreshChimeIns(), 5000);
     return () => window.clearInterval(id);
-  }, [isAuthor, refreshChimeIns]);
+  }, [refreshChimeIns]);
 
   const handleApplyChimeIn = useCallback(
     async (c: ChimeIn) => {
@@ -342,7 +209,6 @@ function ProjectDetailShell({
   const [resizing, setResizing] = useState(false);
   const resizeStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const seedChatRef = useRef<((text: string) => void) | null>(null);
-  const [showShare, setShowShare] = useState(false);
 
   useEffect(() => {
     window.localStorage.setItem(CHAT_OPEN_STORAGE_KEY, String(chatOpen));
@@ -397,10 +263,7 @@ function ProjectDetailShell({
   }
 
   async function toggleProjectMode() {
-    // Theme toggle is a host-only mutation (`PATCH /api/projects/:slug`);
-    // the spectator UI never renders ThemeToggle, so this guard is
-    // belt-and-suspenders.
-    if (!project || isSpectator) return;
+    if (!project) return;
     const previous = project.mode;
     const next = previous === "dark" ? "light" : "dark";
     setLocalModeOverride(next);
@@ -446,46 +309,22 @@ function ProjectDetailShell({
         title={
           <>
             <ChatToggle active={chatOpen} onToggle={() => setChatOpen((o) => !o)} />
-            {!isSpectator ? (
-              <ProjectPicker
-                project={project}
-                onHome={onBack}
-                onOpenProject={onOpenProject}
-                onRenamed={() => refreshProject()}
-              />
-            ) : (
-              <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <BackButton onClick={onBack} />
-                <span>{project.name}</span>
-              </span>
-            )}
+            <ProjectPicker
+              project={project}
+              onHome={onBack}
+              onOpenProject={onOpenProject}
+              onRenamed={() => refreshProject()}
+            />
           </>
         }
         right={
           <>
-            <PresenceStrip host={host} guests={guests} />
-            {!isSpectator && (
-              <>
-                <ThemeToggle mode={project.mode} onToggle={toggleProjectMode} />
-                <Tooltip content="Share with teammates">
-                  <IconButton
-                    aria-label="Share with teammates"
-                    variant={showShare ? "primary" : "tertiary"}
-                    onClick={() => setShowShare((s) => !s)}
-                  >
-                    <TeammatesIcon />
-                  </IconButton>
-                </Tooltip>
-                <ShareButton project={project} />
-                <CanvasToggle active={devOpen} onToggle={() => setDevOpen((o) => !o)} />
-              </>
-            )}
+            <ThemeToggle mode={project.mode} onToggle={toggleProjectMode} />
+            <ShareButton project={project} />
+            <CanvasToggle active={devOpen} onToggle={() => setDevOpen((o) => !o)} />
           </>
         }
       />
-      {!isSpectator && showShare && (
-        <SharePanel slug={project.slug} onClose={() => setShowShare(false)} />
-      )}
       <div
         style={{
           display: "grid",
@@ -511,8 +350,6 @@ function ProjectDetailShell({
             projectSlug={project.slug}
             history={chatHistory}
             seedRef={seedChatRef}
-            readonly={isSpectator}
-            postComment={postComment}
             chimeIns={chimeIns}
             onApplyChimeIn={handleApplyChimeIn}
             onDismissChimeIn={handleDismissChimeIn}
@@ -557,12 +394,10 @@ function ProjectDetailShell({
             zoom={zoom}
             onZoomChange={setZoom}
             onSeedChat={(text) => seedChatRef.current?.(text)}
-            readonly={isSpectator}
-            frameSrcOverride={frameSrcOverride}
             phase={chatStream.state.phase}
           />
         </main>
-        {!isSpectator && devOpen && <DevModePanel slug={project.slug} />}
+        {devOpen && <DevModePanel slug={project.slug} />}
       </div>
     </div>
     </TargetSelectionProvider>

@@ -31,14 +31,10 @@ import {
   hasAnyChange,
   NO_CHANGES_TRAILER,
 } from "../frameChangeContract";
-import { recordChatEventForReplay, type ProjectRef } from "./chatRelayMirror";
 import { recordTurnMetric } from "../metrics";
 import { track } from "../../src/lib/telemetry/server";
 import { hashSlug, truncate } from "../../src/lib/telemetry/redact";
 import type { GenerationErrorKind } from "../../src/lib/telemetry/events";
-import { resolveDevuFromPat } from "../relay/auth";
-import { getDevRevPat } from "../secrets/keychain";
-import type { RelayEvent } from "../relay/types";
 
 // @Computer mention anywhere in the prompt routes to the DevRev agent. The
 // mention is stripped before the prompt is sent to the agent. Per-turn switch:
@@ -225,52 +221,12 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
     createdAt: new Date().toISOString(),
   });
 
-  // Resolve the host devu once per turn so we can mirror events into the
-  // multiplayer relay. If the PAT can't be resolved, the mirror simply
-  // becomes a no-op — the host's own SSE flow is unaffected.
-  let projectRef: ProjectRef | null = null;
-  try {
-    const pat = (await getDevRevPat()) ?? "";
-    if (pat) {
-      const host = await resolveDevuFromPat(pat);
-      if (host) projectRef = { hostDevu: host.id, projectSlug: slug };
-    }
-  } catch {
-    // Mirror is best-effort — never block a turn on the relay bridge.
-  }
-
-  // Late-bound turn id holder: startTurn calls init.run synchronously, so we
-  // can't read turn.id from inside the run callback unless we stash it on a
-  // shared object that's mutated immediately after startTurn returns.
-  const turnIdHolder: { id: string } = { id: "" };
-
   const turn = startTurn(slug, {
     prompt,
     run: ({ emit, end, signal }) => {
-      const wrappedEmit = projectRef
-        ? (ev: StudioEvent) => {
-            emit(ev);
-            if (!turnIdHolder.id) return;
-            const relayEv = mapStudioEventToRelayEvent(ev, turnIdHolder.id);
-            if (relayEv) recordChatEventForReplay(projectRef!, relayEv);
-          }
-        : emit;
-      const wrappedEnd = projectRef
-        ? (result: { ok: boolean; error?: string }) => {
-            if (turnIdHolder.id) {
-              recordChatEventForReplay(projectRef!, {
-                type: "turn_ended",
-                turnId: turnIdHolder.id,
-                ok: result.ok,
-                error: result.error,
-              });
-            }
-            end(result);
-          }
-        : end;
       const task = isKitEmitTurn
         ? runFigmaKitEmitBranch({
-            emit: wrappedEmit,
+            emit,
             slug,
             fileKey: figmaParsed!.fileId,
             nodeId: figmaParsed!.nodeId,
@@ -278,43 +234,14 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
             signal,
           })
         : isComputerTurn
-        ? runComputerBranch({ emit: wrappedEmit, slug, prompt, project, signal })
-        : runClaudeBranch({ emit: wrappedEmit, slug, prompt, images, project, signal });
+        ? runComputerBranch({ emit, slug, prompt, project, signal })
+        : runClaudeBranch({ emit, slug, prompt, images, project, signal });
       task.then(
-        (result) => wrappedEnd(result),
-        (err) => wrappedEnd({ ok: false, error: err?.message ?? String(err) }),
+        (result) => end(result),
+        (err) => end({ ok: false, error: err?.message ?? String(err) }),
       );
     },
   });
-  turnIdHolder.id = turn.id;
-
-  // Mirror the prompt_started marker after startTurn returns so we have a
-  // turn id to attach. Guests joining mid-turn see this in cache_replay.
-  if (projectRef) {
-    recordChatEventForReplay(projectRef, {
-      type: "prompt_started",
-      turnId: turn.id,
-      byDevu: projectRef.hostDevu,
-      text: prompt,
-    });
-
-    // Mirror cancel-by-user: cancelTurn() finalizes the registry directly,
-    // bypassing wrappedEnd. Subscribe to the turn's terminator so guests
-    // still see turn_ended with cancelled:true in their replay.
-    const capturedRef = projectRef;
-    const sub = subscribe(slug, () => {}, () => {
-      const final = getTurn(slug);
-      if (!final || !final.cancelled) return;
-      recordChatEventForReplay(capturedRef, {
-        type: "turn_ended",
-        turnId: turn.id,
-        ok: false,
-        error: final.error,
-        cancelled: true,
-      });
-    });
-    void sub;
-  }
 
   res.writeHead(202, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ turnId: turn.id, slug }));
@@ -929,50 +856,4 @@ async function runComputerBranch(ctx: {
   }
 
   return endResult;
-}
-
-/**
- * Adapt a StudioEvent (chat middleware's internal event shape) to a RelayEvent
- * (multiplayer wire shape). Returns null for events that don't have a clean
- * mapping — broadcasting only schema-valid events is safer than emitting
- * bogus ones that guests can't parse.
- *
- * - `narration` / `tool_call` / `tool_result` / `session` / `origin` /
- *   `agent_cursor` / `tool_call_started` / `tool_input_partial` /
- *   `tool_input_complete` → `agent_event` with the original StudioEvent
- *   embedded under `event`. Spectators replay these verbatim, so adding a
- *   new event kind upstream auto-propagates here without a separate path.
- * - `end` is handled by the wrapper around the registry's `end` callback,
- *   which translates it to `turn_ended` and includes the result; we return
- *   null here so it's not double-emitted.
- *
- * Frame writes/deletes happen via the host's filesystem (not the chat event
- * stream) so they're not mirrored here. They only flow through the relay
- * when a remote driver issues a `frame_write` command directly.
- */
-export function mapStudioEventToRelayEvent(ev: StudioEvent, turnId: string): RelayEvent | null {
-  switch (ev.kind) {
-    case "narration":
-    case "journey":
-    case "tool_call":
-    case "tool_result":
-    case "session":
-    case "origin":
-    case "agent_cursor":
-    case "tool_call_started":
-    case "tool_input_partial":
-    case "tool_input_complete":
-      return { type: "agent_event", turnId, event: ev };
-    case "end":
-      // Translated to turn_ended by the wrapper; don't double-emit.
-      return null;
-    case "turn_metrics":
-      // Host-side telemetry only — not mirrored to spectators.
-      return null;
-    default: {
-      const _exhaustive: never = ev;
-      void _exhaustive;
-      return null;
-    }
-  }
 }

@@ -48,7 +48,7 @@ export async function emitLiftForFrame(slug: string, frame: string): Promise<voi
     frameSource: source,
     intentSummary: intent,
     figmaUrl: undefined,
-    screenshotUrl: `/api/projects/${slug}/thumbnails/${frame}.png`,
+    screenshotUrl: undefined,
   });
 
   const dir = path.dirname(fPath);
