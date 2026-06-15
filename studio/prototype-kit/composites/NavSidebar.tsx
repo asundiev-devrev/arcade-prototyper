@@ -36,7 +36,7 @@
  * @counterexample Do not pass `workspace=""` to hide the brand header. Composites check truthiness; the empty string counts as "present but empty". Omit the prop entirely.
  */
 import { forwardRef, type ReactNode } from "react";
-import { ChevronDownSmall, ArrowLeftSmall, AgentStudio } from "@xorkavi/arcade-gen";
+import { ChevronDownSmall, ArrowLeftSmall, AgentStudio, DotInLeftWindow } from "@xorkavi/arcade-gen";
 
 /* ─── Root ──────────────────────────────────────────────────────────────── */
 
@@ -75,36 +75,79 @@ function Root({
 
 /* ─── Settings-style header & footer (slottable variants) ───────────────── */
 
-function BackHeader({ title, onBack }: { title: ReactNode; onBack?: () => void }) {
+function TrafficLights() {
   return (
-    <div className="flex items-center gap-2 px-3 h-11 shrink-0">
-      <button
-        type="button"
-        onClick={onBack}
-        aria-label="Back"
-        className="flex h-6 w-6 items-center justify-center rounded-square text-(--fg-neutral-medium) hover:bg-(--control-bg-neutral-subtle-hover)"
-      >
-        <ArrowLeftSmall size={16} />
-      </button>
-      <span className="text-body-large-bold text-(--fg-neutral-prominent)">
-        {title}
-      </span>
+    <span className="flex items-center gap-2">
+      <span className="h-3 w-3 rounded-full bg-[#FF5F57]" />
+      <span className="h-3 w-3 rounded-full bg-[#FEBC2E]" />
+      <span className="h-3 w-3 rounded-full bg-[#28C840]" />
+    </span>
+  );
+}
+
+function BackHeader({
+  title,
+  onBack,
+  windowControls = false,
+}: {
+  title: ReactNode;
+  onBack?: () => void;
+  /** When true, render the mac window controls + collapse row above the title
+   *  (6.5 — the sidebar spans the full window height including the top-left). */
+  windowControls?: boolean;
+}) {
+  return (
+    <div className="shrink-0">
+      {windowControls && (
+        <div className="flex h-[52px] items-center justify-between px-4">
+          <TrafficLights />
+          <span className="flex h-6 w-6 items-center justify-center rounded-square text-(--fg-neutral-medium)">
+            <DotInLeftWindow size={18} />
+          </span>
+        </div>
+      )}
+      <div className="flex items-center gap-2 px-3 h-11">
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label="Back"
+          className="flex h-6 w-6 items-center justify-center rounded-square text-(--fg-neutral-medium) hover:bg-(--control-bg-neutral-subtle-hover)"
+        >
+          <ArrowLeftSmall size={16} />
+        </button>
+        <span className="text-body-large-bold text-(--fg-neutral-prominent)">
+          {title}
+        </span>
+      </div>
     </div>
   );
 }
 
 function AppFooter({
   label = "Agent Studio",
+  avatar,
   trailing,
 }: {
   label?: ReactNode;
+  /** User avatar shown in a bottom row (6.6). When set, the footer renders the
+   *  Agent Studio link on one row and an avatar + `trailing` row below it,
+   *  matching the Settings sidenav. */
+  avatar?: ReactNode;
   trailing?: ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-2 h-10 px-3 shrink-0">
-      <AgentStudio size={16} className="text-(--fg-neutral-medium)" />
-      <span className="flex-1 text-system text-(--fg-neutral-subtle)">{label}</span>
-      {trailing}
+    <div className="shrink-0 pb-2">
+      <div className="flex items-center gap-2 h-10 px-3">
+        <AgentStudio size={16} className="text-(--fg-neutral-medium)" />
+        <span className="flex-1 text-system text-(--fg-neutral-medium)">{label}</span>
+        {!avatar && trailing}
+      </div>
+      {avatar && (
+        <div className="flex items-center justify-between px-3 pt-1">
+          {avatar}
+          {trailing}
+        </div>
+      )}
     </div>
   );
 }
@@ -137,7 +180,10 @@ function Section({ title, children }: SectionProps) {
   return (
     <div className="py-2">
       {title && (
-        <div className="px-3 pb-1 text-caption text-(--fg-neutral-subtle)">
+        // Title aligns with item labels: items live in a px-2 wrapper and each
+        // item has px-2, so the label text starts 16px from the edge. The title
+        // matches that (px-4) — NO extra indent (6.2).
+        <div className="px-4 pb-1 text-caption text-(--fg-neutral-subtle)">
           {title}
         </div>
       )}
@@ -183,8 +229,11 @@ const Item = forwardRef<HTMLDivElement, ItemProps>(function Item(
         "flex items-center gap-2 py-1 rounded-square text-system cursor-pointer select-none",
         indent ? "pl-8 pr-2" : "px-2",
         active
-          ? "bg-(--control-bg-neutral-subtle-active) text-(--fg-neutral-prominent)"
-          : "text-(--fg-neutral-subtle) hover:bg-(--control-bg-neutral-subtle-hover) hover:text-(--fg-neutral-prominent)",
+          ? // 6.4: real selected-state bg (the -subtle-active token is fully
+            // transparent in the shipped theme, so it showed no selection).
+            "bg-(--bg-neutral-subtle) text-(--fg-neutral-prominent) font-medium"
+          : // 6.3: idle items are medium (dark), not subtle (gray).
+            "text-(--fg-neutral-medium) hover:bg-(--control-bg-neutral-subtle-hover) hover:text-(--fg-neutral-prominent)",
       ].join(" ")}
     >
       {icon ? (

@@ -60,7 +60,13 @@ Slots:
 type BuilderPageProps = {
   sidebar: ReactNode;
   actions?: ReactNode;
+  /** Breadcrumb row above the tab bar (leading). Pass a composed Breadcrumb. */
+  breadcrumb?: ReactNode;
+  /** Trailing cluster on the breadcrumb row (e.g. an agent-status chip + icon). */
+  headerActions?: ReactNode;
   tabs?: ReactNode;
+  /** Trailing toolbar inline with the tab bar (e.g. a "Publish" pill button). */
+  toolbar?: ReactNode;
   title?: ReactNode;
   subtitle?: ReactNode;
   children: ReactNode;
@@ -201,6 +207,10 @@ type SettingsPageProps = {
   pageActions?: ReactNode;
   title?: ReactNode;
   subtitle?: ReactNode;
+  /** Primary CTA aligned inline with the page title (e.g. "Add custom
+   *  connector"). Prefer this over `pageActions` for the page's main action —
+   *  Figma places it next to the heading, not in the breadcrumb bar. */
+  titleAction?: ReactNode;
   children: ReactNode;
 }
 ```
@@ -901,6 +911,9 @@ type DetailModalProps = {
   hero?: ReactNode;
   title: ReactNode;
   byline?: ReactNode;
+  /** Author/source row under the byline — typically a small logo + name
+   *  (e.g. the DevRev mark + "DevRev"). Matches the Figma author line. */
+  author?: ReactNode;
   action?: ReactNode;
   children?: ReactNode;
 }
@@ -1202,59 +1215,6 @@ type MarkdownProps = {
 }
 ```
 
-## MobileFrame (composite)
-_source: `composites/MobileFrame.tsx`_
-
-MobileFrame — iOS device chrome wrapper for mobile prototype screens.
-
-Matches the Figma "iPhone" frame chrome used across Computer chat and
-Onboarding (Home Indicator + Status bar - iPhone): a 402×874 device viewport
-with a status bar (time left, signal/wifi/battery right) at top and a home
-indicator pill at the bottom. The screen content sits between them.
-
-  ┌─────────────────────────────┐
-  │  9:41          ▴ 􀙇 􀛨         │  ← status bar
-  │                             │
-  │        children             │  ← screen content
-  │                             │
-  │          ────                │  ← home indicator
-  └─────────────────────────────┘
-
-Intentional opinions:
-- Fixed 402px width (iPhone 16 Pro logical width), the Figma mobile artboard.
-- Status bar is 54px tall with the canonical "9:41" time; the right cluster
-  is the signal/wifi/battery glyph row. Time/glyphs are presentational.
-- Home indicator is the 5px rounded bar in a 34px safe-area band.
-- Content area scrolls between the two bars; pass a full mobile screen as
-  `children`. Use `bg` to set the screen background (default surface-overlay).
-
-Slots:
-- `children` — the mobile screen content.
-- `time` — status-bar time (default "9:41").
-- `bg` — screen background token class (default `bg-(--surface-overlay)`).
-
-
-```ts
-type MobileFrameProps = {
-  children: ReactNode;
-  time?: string;
-  bg?: string;
-}
-```
-
-**When NOT to use this:**
-- Do NOT draw your own status bar or home indicator inside
-  `children` — this wrapper renders both. Double chrome is the #1 mobile bug.
-- Do NOT set a custom width — the frame is fixed to the iPhone
-  logical width so multiple mobile frames line up.
-
-**Tokens commonly needed inside this composite's user slot:**
-
-| Element | Token |
-| Status bar text/glyphs | `--fg-neutral-prominent` |
-| Home indicator | `--fg-neutral-prominent` |
-| Screen bg | `--surface-overlay` (override via `bg`) |
-
 ## NavSidebar (composite)
 _source: `composites/NavSidebar.tsx`_
 
@@ -1318,6 +1278,9 @@ Intentional opinions:
 Slots:
 - `title` (optional) — hero page title (string, or any node).
 - `subtitle` (optional) — description under the title.
+- `titleAction` (optional) — a CTA aligned to the right of the title row
+  (e.g. "Add custom connector"). Matches the Figma page-header layout where
+  the primary action sits inline with the heading, NOT in the breadcrumb bar.
 - `children` — the page body sections (typically a stack of SettingsCards).
 
 
@@ -1325,6 +1288,7 @@ Slots:
 type PageBodyProps = {
   title?: ReactNode;
   subtitle?: ReactNode;
+  titleAction?: ReactNode;
   children: ReactNode;
 }
 ```
@@ -1390,6 +1354,9 @@ type PickerModalProps = {
   tabs: PickerTab[];
   searchPlaceholder?: string;
   onSearch?: (value: string) => void;
+  /** Optional filter control rendered between the tabs and the search field
+   *  (e.g. an "All categories" Select). Matches the Figma header row. */
+  filter?: ReactNode;
 }
 ```
 
@@ -1480,6 +1447,69 @@ type SettingsRowProps = {
   control?: ReactNode;
 }
 ```
+
+## SkillCard (composite)
+_source: `composites/SkillCard.tsx`_
+
+SkillCard — vertical capability/skill card for picker grids.
+
+Matches the Figma "Cards" / "Skill Card" used inside the Agent Capabilities
+picker (AS-MCP, node 9793:16889): a 271×172 vertical card with an icon chip
+and a trailing action/status in the top row, a title + 2-line description in
+the middle, and a status footer (dot + label) at the bottom.
+
+  ┌───────────────────────────────┐
+  │  ◇                        +    │  ← top row: icon chip + trailing action
+  │                               │
+  │  Notion                        │  ← title
+  │  Your docs and wikis, finally  │  ← description (2 lines)
+  │  findable.                     │
+  │                               │
+  │  ● Connected                   │  ← status footer (optional)
+  └───────────────────────────────┘
+
+Intentional opinions:
+- Vertical layout, radius `rounded-square-x2` (8px), 15px padding, 16px gap —
+  the Figma card geometry. Distinct from `EntityCard` (the horizontal row
+  card used on settings/connectors list pages).
+- The `icon` sits in a 40px rounded chip. `action` is a trailing top-right
+  slot (e.g. a tertiary "+" IconButton, or a selection checkbox).
+- `status` renders the bottom dot + label row (e.g. ● Connected). Omit when
+  the card isn't a connection.
+- Description clamps to 2 lines so cards stay equal height in the grid.
+
+Slots:
+- `icon` — leading icon element (40px chip).
+- `action` — top-right trailing node (IconButton / checkbox).
+- `title` / `description` — name + 2-line supporting text.
+- `status` — bottom status node (e.g. `<CardStatus>Connected</CardStatus>`),
+  or pass your own dot+label.
+
+
+```ts
+type SkillCardProps = {
+  icon?: ReactNode;
+  action?: ReactNode;
+  title: ReactNode;
+  description?: ReactNode;
+  status?: ReactNode;
+}
+```
+
+**When NOT to use this:**
+- Do NOT use this for a settings list row — that's `EntityCard`
+  (horizontal). This is the vertical picker/gallery card.
+- Do NOT put the title in the top row with the icon. Title sits
+  in the middle block, below the icon row (Figma layout).
+
+**Tokens commonly needed inside this composite's user slot:**
+
+| Element | Token |
+| Card surface | `--surface-overlay` |
+| Card border | `--stroke-neutral-subtle` |
+| Icon chip bg | `--surface-shallow` |
+| Title | `--fg-neutral-prominent` |
+| Description / status | `--fg-neutral-subtle` |
 
 ## TitleBar (composite)
 _source: `composites/TitleBar.tsx`_

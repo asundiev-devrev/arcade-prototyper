@@ -57,6 +57,9 @@ type DetailModalProps = {
   hero?: ReactNode;
   title: ReactNode;
   byline?: ReactNode;
+  /** Author/source row under the byline — typically a small logo + name
+   *  (e.g. the DevRev mark + "DevRev"). Matches the Figma author line. */
+  author?: ReactNode;
   action?: ReactNode;
   children?: ReactNode;
 };
@@ -67,27 +70,37 @@ export function DetailModal({
   hero,
   title,
   byline,
+  author,
   action,
   children,
 }: DetailModalProps) {
   return (
     <Modal.Root open={open} onOpenChange={onOpenChange}>
       <Modal.Content size="md" className="overflow-hidden p-0">
-        <div className="relative h-[220px] w-full overflow-hidden bg-(--surface-shallow)">
+        <div className="relative h-[200px] w-full overflow-hidden bg-(--surface-shallow)">
           {hero}
           <Modal.Close />
         </div>
-        <div className="flex flex-col gap-5 p-5">
-          <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-6 p-5">
+          <div className="flex flex-col gap-2.5">
             <Modal.Title className="text-title-2 text-(--fg-neutral-prominent)">
               {title}
             </Modal.Title>
-            {byline && (
-              <Modal.Description className="text-body-medium text-(--fg-neutral-subtle)">
-                {byline}
-              </Modal.Description>
+            {(byline || author) && (
+              <div className="flex flex-col gap-1.5">
+                {byline && (
+                  <Modal.Description className="text-body-medium text-(--fg-neutral-subtle)">
+                    {byline}
+                  </Modal.Description>
+                )}
+                {author && (
+                  <div className="flex items-center gap-1.5 text-body-small text-(--fg-neutral-subtle)">
+                    {author}
+                  </div>
+                )}
+              </div>
             )}
-            {action && <div className="pt-1">{action}</div>}
+            {action && <div className="pt-1.5">{action}</div>}
           </div>
           {children && (
             <>

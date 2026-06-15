@@ -17,6 +17,9 @@
  * Slots:
  * - `title` (optional) — hero page title (string, or any node).
  * - `subtitle` (optional) — description under the title.
+ * - `titleAction` (optional) — a CTA aligned to the right of the title row
+ *   (e.g. "Add custom connector"). Matches the Figma page-header layout where
+ *   the primary action sits inline with the heading, NOT in the breadcrumb bar.
  * - `children` — the page body sections (typically a stack of SettingsCards).
  *
  * @counterexample Do NOT invent `title` / `subtitle` when Figma doesn't show them. Omit the props — the hero block is suppressed automatically.
@@ -38,24 +41,28 @@ import type { ReactNode } from "react";
 type PageBodyProps = {
   title?: ReactNode;
   subtitle?: ReactNode;
+  titleAction?: ReactNode;
   children: ReactNode;
 };
 
-export function PageBody({ title, subtitle, children }: PageBodyProps) {
+export function PageBody({ title, subtitle, titleAction, children }: PageBodyProps) {
   return (
     <div className="mx-auto w-full max-w-[832px] px-6 pt-12 pb-16">
       {(title || subtitle) && (
-        <div className="mb-10">
-          {title && (
-            <h1 className="text-title-large text-(--fg-neutral-prominent)">
-              {title}
-            </h1>
-          )}
-          {subtitle && (
-            <p className="mt-1 text-body text-(--fg-neutral-subtle)">
-              {subtitle}
-            </p>
-          )}
+        <div className="mb-10 flex items-start justify-between gap-4">
+          <div>
+            {title && (
+              <h1 className="text-title-large text-(--fg-neutral-prominent)">
+                {title}
+              </h1>
+            )}
+            {subtitle && (
+              <p className="mt-1 text-body text-(--fg-neutral-subtle)">
+                {subtitle}
+              </p>
+            )}
+          </div>
+          {titleAction && <div className="shrink-0 pt-1">{titleAction}</div>}
         </div>
       )}
       <div className="flex flex-col gap-12">{children}</div>
