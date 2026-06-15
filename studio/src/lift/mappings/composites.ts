@@ -322,4 +322,129 @@ export const COMPOSITE_MAPPINGS: MappingEntry[] = [
     judgmentNote:
       "FrameLink is a prototype-only primitive for inter-frame navigation (multi-frame flows). In production, this becomes either a react-router Link/navigate call or a button with onClick handler. Replace with the appropriate routing primitive for the target app.",
   },
+
+  // --- Dialogs (built on the production Modal) --------------------------
+  {
+    studio: { source: "arcade-prototypes", name: "FormModal" },
+    production: { source: rawDs("Modal"), name: "Modal" },
+    propDeltas: [
+      { from: "open", to: "open" },
+      { from: "onOpenChange", to: "onOpenChange" },
+      { from: "onSubmit", to: "onSubmit", note: "Wire to the footer primary button's onClick at the call site." },
+    ],
+    slotNotes: [
+      "FormModal is a thin wrapper over the production Modal. Unroll it: <Modal open onOpenChange><Modal.Content><Modal.Header><Modal.Header.Title>{title}</Modal.Header.Title>… </Modal.Header><Modal.Body>{fields}</Modal.Body><Modal.Footer>{cancel + submit buttons}</Modal.Footer></Modal.Content></Modal>. There is NO production Modal.Root.",
+      "The composite's `icon` chip + `subtitle` go in Modal.Header (Header.Title + a description line). `submitLabel`/`cancelLabel` become two Buttons in Modal.Footer (tertiary Cancel + primary submit).",
+      "Body field children (FormField-wrapped Inputs/Selects) carry over as-is; map each control via its own primitive mapping (Input → TextInput, etc.).",
+    ],
+    translationClass: "structural",
+    priorArt: [
+      {
+        path: "libs/commerce/features/your-plan/src/components/switch-plan-confirm-dialog.tsx",
+        covers: "Canonical Modal open/onOpenChange + Header.Title/Body/Footer shape.",
+      },
+    ],
+  },
+  {
+    studio: { source: "arcade-prototypes", name: "FormField" },
+    production: { source: "n/a", name: "n/a" },
+    propDeltas: [],
+    slotNotes: [
+      "FormField wraps a label + required-asterisk around a label-less control. Production raw-design-system controls (TextInput, TextArea, SingleSelect) render their own `label` + `required` props — so DROP the FormField wrapper and pass `label`/`required` directly to the production control.",
+    ],
+    translationClass: "judgment",
+    judgmentNote:
+      "FormField only exists because Studio's arcade Input renders no required asterisk. Production controls own their label/required, so the wrapper has no production equivalent — fold its label + required into the control's props.",
+  },
+  {
+    studio: { source: "arcade-prototypes", name: "PickerModal" },
+    production: { source: rawDs("Modal"), name: "Modal" },
+    propDeltas: [
+      { from: "open", to: "open" },
+      { from: "onOpenChange", to: "onOpenChange" },
+    ],
+    slotNotes: [
+      "PickerModal = production Modal + a Tabs row (with a filter Select + search TextInput) + a per-tab card grid. Unroll to <Modal><Modal.Content><Modal.Header><Modal.Header.Title/></Modal.Header><Modal.Body><Tabs>…</Tabs></Modal.Body></Modal.Content></Modal>.",
+      "The `tabs` array → Tabs.List/Tabs.Trigger + Tabs.Content per entry. `filter` and search are the production Select + TextInput. Card grid content is per-feature (see SkillCard note).",
+    ],
+    translationClass: "judgment",
+    judgmentNote:
+      "The Modal/Tabs/Select/TextInput pieces map mechanically, but the picker as a whole (capability-selection grid with add actions) is assembled per-feature in production — no single PickerModal component. Decide the card/selection model with the reviewer.",
+  },
+  {
+    studio: { source: "arcade-prototypes", name: "DetailModal" },
+    production: { source: rawDs("Modal"), name: "Modal" },
+    propDeltas: [
+      { from: "open", to: "open" },
+      { from: "onOpenChange", to: "onOpenChange" },
+    ],
+    slotNotes: [
+      "DetailModal = production Modal with a full-bleed hero region above the title. Production Modal.Header/Body do not have a built-in hero; render the hero as the first child inside Modal.Content (full width, before Modal.Header) or in a custom Modal.Body block.",
+      "`title`/`byline` → Modal.Header.Title + a description line. `author` (logo + name) and `action` (primary button) sit in the body. The `children` detail section follows a Separator.",
+    ],
+    translationClass: "judgment",
+    judgmentNote:
+      "The hero-banner detail dialog has no single production equivalent — the hero illustration + author row are composed per-feature. Lift the Modal scaffold mechanically and assemble the hero/author/detail body at the call site.",
+  },
+
+  // --- Cards & grids ----------------------------------------------------
+  {
+    studio: { source: "arcade-prototypes", name: "EntityCard" },
+    production: { source: rawDs("Card"), name: "Card" },
+    propDeltas: [],
+    slotNotes: [
+      "EntityCard is a horizontal row-card (icon + title + optional description + trailing status/action). Production has a Card primitive; compose icon/title/status inside it, OR use a list-row pattern if the feature renders these in a list rather than a grid.",
+      "The `status` slot is typically a production Tag/Chip (e.g. a success 'Connected'); map via the Tag primitive mapping.",
+    ],
+    translationClass: "judgment",
+    judgmentNote:
+      "Entity/connector cards are composed per-feature in production from Card + Tag + icon. Decide whether the target is a Card grid or a list-row layout with the reviewer.",
+  },
+  {
+    studio: { source: "arcade-prototypes", name: "SkillCard" },
+    production: { source: rawDs("Card"), name: "Card" },
+    propDeltas: [],
+    slotNotes: [
+      "SkillCard is a vertical gallery card (icon chip + trailing action top, title + 2-line description, status footer). Compose inside the production Card with a vertical flex layout.",
+    ],
+    translationClass: "judgment",
+    judgmentNote:
+      "Vertical capability/skill cards are assembled per-feature from Card + Tag + icon. No single SkillCard export in production.",
+  },
+  {
+    studio: { source: "arcade-prototypes", name: "CardGrid" },
+    production: { source: "n/a", name: "n/a" },
+    propDeltas: [],
+    slotNotes: [
+      "CardGrid is a responsive N-column grid wrapper. In production this is a plain CSS grid (`display:grid; grid-template-columns: repeat(N, 1fr); gap`) or the feature's existing grid utility — there is no CardGrid component.",
+    ],
+    translationClass: "judgment",
+    judgmentNote:
+      "Pure layout wrapper — replace with the feature's grid utility or an inline grid div. Nothing to import.",
+  },
+
+  // --- Agent builder ----------------------------------------------------
+  {
+    studio: { source: "arcade-prototypes", name: "CapabilitySection" },
+    production: { source: "n/a", name: "n/a" },
+    propDeltas: [],
+    slotNotes: [
+      "A titled capability group (icon + title + description + trailing Add action + item rows). Composed per-feature in production from a heading row + a list of rows; no single component.",
+    ],
+    translationClass: "judgment",
+    judgmentNote:
+      "CapabilitySection is a Studio convenience for the agent-editor layout. Production builds each capability group inline; lift it as a heading + Add button + row list and decide the row component with the reviewer.",
+  },
+  {
+    studio: { source: "arcade-prototypes", name: "BuilderPage" },
+    production: { source: rawDs("Page"), name: "Page" },
+    propDeltas: [],
+    slotNotes: [
+      "BuilderPage = AppShell + a breadcrumb row + a tab bar (with a trailing toolbar) + a centered editor column. Lift the chrome to <Page> + <Page.Header> (breadcrumb + tabs + toolbar) and render the editor column as <Page.Content> with a max-width wrapper.",
+      "The centered max-w-[720px] editor column has no production component — it's a styled container. CapabilitySection children lift per their own (judgment) mapping.",
+    ],
+    translationClass: "judgment",
+    judgmentNote:
+      "The agent-builder page is bespoke. Lift the Page/Page.Header chrome mechanically; assemble the centered editor column + capability sections per-feature with the reviewer.",
+  },
 ];
