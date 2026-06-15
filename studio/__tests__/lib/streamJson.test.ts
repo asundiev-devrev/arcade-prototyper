@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseStreamLine, parseStreamLineAll, type StudioEvent } from "../../src/lib/streamJson";
+import { parseStreamLine, parseStreamLineAll, createStreamParser, type StudioEvent } from "../../src/lib/streamJson";
 
 describe("parseStreamLine", () => {
   it("ignores blank lines", () => {
@@ -198,5 +198,63 @@ describe("parseStreamLineAll: agent_cursor", () => {
     }));
     expect(events.find((e) => e.kind === "agent_cursor")).toBeUndefined();
     expect(events.find((e) => e.kind === "narration")).toBeDefined();
+  });
+});
+
+describe("createStreamParser: per-turn isolation", () => {
+  const blockStart = (index: number, id: string, name: string) =>
+    JSON.stringify({
+      type: "stream_event",
+      event: { type: "content_block_start", index, content_block: { type: "tool_use", id, name } },
+    });
+  const blockDelta = (index: number, partial: string) =>
+    JSON.stringify({
+      type: "stream_event",
+      event: { type: "content_block_delta", index, delta: { type: "input_json_delta", partial_json: partial } },
+    });
+
+  it("does not cross-talk partial tool input between two parsers on the same block index", () => {
+    const a = createStreamParser();
+    const b = createStreamParser();
+
+    // Both turns open a Write tool at block index 0 — the shared-global bug
+    // had them clobbering each other's buffer.
+    a.parseLine(blockStart(0, "tool-a", "Write"));
+    b.parseLine(blockStart(0, "tool-b", "Write"));
+
+    a.parseLine(blockDelta(0, '{"file_path":"/p/frames/a/index.tsx","content":"AAA'));
+    const bEvents = b.parseLine(blockDelta(0, '{"file_path":"/p/frames/b/index.tsx","content":"BBB'));
+
+    const bPartial = bEvents.find((e) => e.kind === "tool_input_partial");
+    expect(bPartial).toMatchObject({
+      kind: "tool_input_partial",
+      toolUseId: "tool-b",
+      filePath: "/p/frames/b/index.tsx",
+      partialContent: "BBB",
+    });
+
+    // Parser A's next delta must still reflect ONLY A's accumulated buffer.
+    const aEvents = a.parseLine(blockDelta(0, 'AAA"}'));
+    const aPartial = aEvents.find((e) => e.kind === "tool_input_partial");
+    expect(aPartial).toMatchObject({
+      kind: "tool_input_partial",
+      toolUseId: "tool-a",
+      filePath: "/p/frames/a/index.tsx",
+      partialContent: "AAAAAA",
+    });
+  });
+
+  it("one parser's result event does not clear another parser's in-flight buffer", () => {
+    const a = createStreamParser();
+    const b = createStreamParser();
+    a.parseLine(blockStart(0, "tool-a", "Write"));
+    a.parseLine(blockDelta(0, '{"file_path":"/p/frames/a/index.tsx","content":"hello'));
+
+    // Turn B terminates — its result event must not wipe A's buffer.
+    b.parseLine(JSON.stringify({ type: "result", subtype: "success" }));
+
+    const aEvents = a.parseLine(blockDelta(0, ' world'));
+    const aPartial = aEvents.find((e) => e.kind === "tool_input_partial");
+    expect(aPartial).toMatchObject({ partialContent: "hello world" });
   });
 });

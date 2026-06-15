@@ -236,11 +236,6 @@ type PartialBufferEntry = {
   toolName: string;
   buffer: string;
 };
-const partialBuffers = new Map<number, PartialBufferEntry>();
-
-export function _resetPartialBuffer(): void {
-  partialBuffers.clear();
-}
 
 /**
  * Extract a string field's value from a possibly-incomplete JSON buffer.
@@ -324,12 +319,55 @@ function extractTurnMetrics(ev: any): StudioEvent {
   };
 }
 
+export interface StreamParser {
+  /** Parse one NDJSON line into zero or more StudioEvents. */
+  parseLine(line: string): StudioEvent[];
+  /** Drop any in-flight partial tool-input buffers (e.g. on turn teardown). */
+  reset(): void;
+}
+
+/**
+ * Create an isolated stream parser. Each turn MUST own its own parser:
+ * `partialBuffers` is keyed by the stream's content-block index (0, 1, 2…),
+ * and concurrent turns from different projects both start at index 0. A shared
+ * module-global buffer would cross-talk their live tool-input streams and let
+ * one turn's `result` event clear the other's in-flight buffers.
+ */
+export function createStreamParser(): StreamParser {
+  const partialBuffers = new Map<number, PartialBufferEntry>();
+
+  function parseLine(line: string): StudioEvent[] {
+    return parseStreamLineWithBuffers(line, partialBuffers);
+  }
+
+  return {
+    parseLine,
+    reset: () => partialBuffers.clear(),
+  };
+}
+
+// A shared default instance backs the legacy module-level functions, which
+// remain for tests and any single-stream caller. New per-turn code should use
+// `createStreamParser()` instead so concurrent turns stay isolated.
+const defaultParser = createStreamParser();
+
 export function parseStreamLine(line: string): StudioEvent | null {
   const events = parseStreamLineAll(line);
   return events.length > 0 ? events[0] : null;
 }
 
 export function parseStreamLineAll(line: string): StudioEvent[] {
+  return defaultParser.parseLine(line);
+}
+
+export function _resetPartialBuffer(): void {
+  defaultParser.reset();
+}
+
+function parseStreamLineWithBuffers(
+  line: string,
+  partialBuffers: Map<number, PartialBufferEntry>,
+): StudioEvent[] {
   const trimmed = line.trim();
   if (!trimmed) return [];
   let ev: any;

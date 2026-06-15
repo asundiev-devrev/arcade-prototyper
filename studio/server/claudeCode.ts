@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseStreamLineAll, type StudioEvent } from "../src/lib/streamJson";
+import { createStreamParser, type StudioEvent } from "../src/lib/streamJson";
 import { globalMemoryDir } from "./paths";
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -273,6 +273,9 @@ export async function runClaudeTurn(opts: RunTurnOptions): Promise<void> {
   }
 
   return new Promise<void>((resolve, reject) => {
+    // One parser per turn: its partial-tool-input buffers are keyed by stream
+    // block index, so a shared instance would cross-talk concurrent turns.
+    const parser = createStreamParser();
     const cleanEnv: Record<string, string> = {};
     for (const [k, v] of Object.entries(process.env)) {
       if (v === undefined) continue;
@@ -353,7 +356,7 @@ export async function runClaudeTurn(opts: RunTurnOptions): Promise<void> {
       while ((idx = stdoutBuf.indexOf("\n")) !== -1) {
         const line = stdoutBuf.slice(0, idx);
         stdoutBuf = stdoutBuf.slice(idx + 1);
-        for (const ev of parseStreamLineAll(line)) opts.onEvent(ev);
+        for (const ev of parser.parseLine(line)) opts.onEvent(ev);
       }
     });
 
@@ -396,7 +399,7 @@ export async function runClaudeTurn(opts: RunTurnOptions): Promise<void> {
       cleanup();
       opts.signal?.removeEventListener("abort", abortHandler);
       if (stdoutBuf.trim()) {
-        for (const ev of parseStreamLineAll(stdoutBuf)) opts.onEvent(ev);
+        for (const ev of parser.parseLine(stdoutBuf)) opts.onEvent(ev);
       }
       if (stalled) {
         // Stalls are recoverable via retry — do NOT emit a terminal `end`

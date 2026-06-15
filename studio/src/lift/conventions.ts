@@ -94,9 +94,11 @@ export const OVERLAY_CONVENTION: Convention = {
   rule:
     "Frames that hand-roll an overlay (fixed inset-0 backdrop + centered " +
     "card) should be lifted to <Modal> from " +
-    "'@devrev-web/design-system/shared/raw-design-system', NOT preserved as " +
-    "raw divs. Studio's generator prefers authoring overlays by hand because " +
-    "arcade-gen doesn't expose a Modal composite, but production has one.",
+    "'@devrev-web-internal/design-system-shared-raw-design-system/components/modal', " +
+    "NOT preserved as raw divs. Studio's generator prefers authoring overlays " +
+    "by hand because arcade-gen doesn't expose a Modal composite, but " +
+    "production has one. (raw-design-system is per-component subpaths, kebab-" +
+    "cased — see mappings/rawDs.ts.)",
   lookup:
     "Modal composes as: <Modal onOpenChange={...} open={...} size='...'>" +
     "<Modal.Content><Modal.Header><Modal.Header.Title/>" +
@@ -205,9 +207,11 @@ export const DEFAULT_MAPPING_CONVENTION: Convention = {
   tag: "default_mapping_convention",
   rule:
     "For any arcade primitive with no explicit mapping entry, the default " +
-    "assumption is that the same symbol is exported from " +
-    "'@devrev-web/design-system/shared/raw-design-system'. Verify by grep; " +
-    "if absent, surface to the reviewer.",
+    "assumption is that the same symbol is exported from raw-design-system, " +
+    "imported via its per-component kebab-cased subpath " +
+    "'@devrev-web-internal/design-system-shared-raw-design-system/components/<kebab-name>' " +
+    "(e.g. Switch → .../components/switch). Verify by grep; if absent, surface " +
+    "to the reviewer.",
   lookup:
     "From a devrev-web checkout: " +
     "grep -rE \"^export .*\\b<Name>\\b\" libs/design-system/shared/raw-design-system/src/components. " +

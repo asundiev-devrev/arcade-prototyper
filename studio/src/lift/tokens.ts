@@ -45,6 +45,20 @@ export const TOKEN_PATCHES: Patch[] = [
     reason:
       "devrev-web renamed to --bg-surface-overlay during the 2026 token sweep; arcade-gen not yet caught up.",
   },
+  {
+    studio: "--surface-shallow",
+    production: "--bg-surface-shallow",
+    sunset_if_absent_from: "dist/tokens.css",
+    reason:
+      "Same 2026 --bg-surface-* rename as --surface-overlay. KIT-MANIFEST tells generators to use --surface-shallow for sidebar surfaces, so it lands in frame slots and must be patched on lift.",
+  },
+  {
+    studio: "--surface-backdrop",
+    production: "--bg-surface-backdrop",
+    sunset_if_absent_from: "dist/tokens.css",
+    reason:
+      "Same 2026 --bg-surface-* rename as --surface-overlay. KIT-MANIFEST tells generators to use --surface-backdrop for window backdrops, so it lands in frame slots and must be patched on lift.",
+  },
 ];
 
 /**

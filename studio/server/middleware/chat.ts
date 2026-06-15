@@ -142,6 +142,26 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
   }
   const { slug, prompt, images } = body;
 
+  // Validate the body shape before any field is read (track() touches
+  // prompt.length below). A valid-JSON POST missing/mistyping these fields
+  // would otherwise throw an unhandled TypeError → 500 with no SSE + no
+  // telemetry, which reads as a silent dead turn on the client.
+  if (typeof slug !== "string" || !slug) {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "bad_request", message: "slug is required" } }));
+    return;
+  }
+  if (typeof prompt !== "string" || !prompt) {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "bad_request", message: "prompt is required" } }));
+    return;
+  }
+  if (images !== undefined && (!Array.isArray(images) || images.some((p) => typeof p !== "string"))) {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "bad_request", message: "images must be an array of strings" } }));
+    return;
+  }
+
   const project = await getProject(slug);
   if (!project) {
     res.writeHead(404, { "Content-Type": "application/json" });
