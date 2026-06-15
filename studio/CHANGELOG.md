@@ -8,7 +8,17 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-## [0.32.0] — 2026-06-14
+## [0.33.0] — 2026-06-15
+
+### Added
+- **Nine new building blocks the generator can drop in, mined from the designs your team actually uses most.** We looked at the most-active DevRev Figma files over the last month and pulled out the layouts designers rebuild by hand again and again, then rebuilt each one against its Figma original until it matched. New pieces: a **form dialog** (create/configure modal with labelled, required-aware fields), a **picker dialog** (tabbed, searchable, filter-by-category grid of selectable cards), a **detail dialog** (hero banner + title + author + action), **connector/skill cards** and a **card grid**, an **agent-builder page** (breadcrumb + tabs + toolbar over a capabilities editor), and a **capability section** (Knowledge / Skills / Guardrails groups with add actions). Prompts that match these shapes now produce them directly instead of approximating.
+- Each new block carries a production hand-off mapping, so a prototype built from them can be lifted toward real devrev-web code with guidance on what each piece becomes.
+
+### Changed
+- The Settings-style sidebar now renders with the correct DevRev chrome — Mac window controls, a subtle (not bright-blue) selected row, properly aligned section labels, and a user-avatar footer — and the page header places its primary action inline with the heading.
+
+### Fixed
+- Studio recovers on its own from a stale dev server on port 5556 after an update, instead of leaving a windowless shell behind.
 
 ### Added
 - **Paste a Figma link and get a faithful prototype built from real kit components — no LLM, in a few seconds.** Any prompt with a Figma URL now imports the design deterministically: exact geometry, colors, and text come straight from Figma's data, and every element that exists both as a Figma component and in the Arcade kit (buttons, checkboxes, avatars, tabs, icons…) is rendered as the real interactive component, not a look-alike box. Icons, vectors, and photos are exported as local files so nothing expires. Everything without a kit equivalent stays as faithful static markup. You then iterate on the imported frame with normal follow-up messages.
