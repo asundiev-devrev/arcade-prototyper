@@ -663,17 +663,26 @@ async function runClaudeBranch(ctx: {
   }
 
   const endResult = pendingEnd ?? { ok: false, error: "Claude turn exited without reporting a result." };
-  // Telemetry: classify the turn (build/edit/none) + measure the frame it
-  // touched. Computed from the file snapshot regardless of narration so even a
-  // silent build is counted. Cheap (snapshot is ~1-2ms; one frame read).
-  let turnType: "build" | "edit" | "none" = "none";
-  let frameLines: number | undefined;
+  // Snapshot the project files ONCE for a successful turn and reuse the diff
+  // for both the metrics classification (below) and the no-change contract
+  // check (further down). Each snapshot is a full recursive directory walk, so
+  // computing it twice per turn was pure waste.
+  let afterDiff: ReturnType<typeof diffSnapshots> | null = null;
   if (endResult.ok) {
     try {
-      const afterForMetrics = await snapshotProjectFiles(projectDir(slug));
-      const d = diffSnapshots(beforeSnapshot, afterForMetrics);
-      const addedFrame = d.added.find((p) => /^frames\//.test(p));
-      const changedFrame = d.changed.find((p) => /^frames\//.test(p));
+      const afterSnapshot = await snapshotProjectFiles(projectDir(slug));
+      afterDiff = diffSnapshots(beforeSnapshot, afterSnapshot);
+    } catch { /* snapshot is best-effort — leave afterDiff null */ }
+  }
+  // Telemetry: classify the turn (build/edit/none) + measure the frame it
+  // touched. Computed from the file snapshot regardless of narration so even a
+  // silent build is counted.
+  let turnType: "build" | "edit" | "none" = "none";
+  let frameLines: number | undefined;
+  if (endResult.ok && afterDiff) {
+    try {
+      const addedFrame = afterDiff.added.find((p) => /^frames\//.test(p));
+      const changedFrame = afterDiff.changed.find((p) => /^frames\//.test(p));
       if (addedFrame) turnType = "build";
       else if (changedFrame) turnType = "edit";
       const touched = addedFrame ?? changedFrame;
@@ -751,9 +760,8 @@ async function runClaudeBranch(ctx: {
     // returns an error when `old_string` doesn't match uniquely, and the
     // agent sometimes responds by paraphrasing what it "would have done"
     // instead of retrying.
-    if (joined) {
-      const afterSnapshot = await snapshotProjectFiles(projectDir(slug));
-      const diff = diffSnapshots(beforeSnapshot, afterSnapshot);
+    if (joined && afterDiff) {
+      const diff = afterDiff;
       if (!hasAnyChange(diff)) {
         emit({ kind: "narration", text: NO_CHANGES_TRAILER.trimStart() });
         narrationTexts.push(NO_CHANGES_TRAILER.trimStart());
