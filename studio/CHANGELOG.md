@@ -8,6 +8,20 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.34.0] — 2026-06-15
+
+### Changed
+- **A big internal cleanup — leaner, more reliable, no change to how you use it.** We removed a large amount of dead and half-finished code that had built up: an old, unused way of pushing frames into Figma; a thumbnail feature that never actually worked; and the early live-sharing/spectator feature, which we're rebuilding properly from scratch. Everything you use day to day — generating frames, the `@Computer` agent, Figma import, sharing a frame to a web link — is untouched and still here.
+
+### Fixed
+- **Generating in two projects at once no longer mixes up their live progress.** Previously, if two projects were generating at the same time, the "writing…" preview from one could bleed into the other. Each generation now stays cleanly in its own lane.
+- **A malformed request can no longer cause a silent stuck turn.** A bad submission now returns a clear error instead of failing invisibly and leaving the chat pane frozen.
+- **Production hand-off (Lift) now points at the correct DevRev import paths.** Two cases were emitting an old path that no longer resolves, which quietly broke the hand-off for unmapped components and overlays. Also added the two surface tokens (sidebar + window backdrop) the generator is told to use, so they translate correctly on lift.
+- **Figma export now uses the correct badge style options**, instead of options that didn't exist on the component.
+
+### Removed
+- The legacy live-sharing/spectator feature and the older Figma-export path (both slated for a proper rebuild). No effect on current workflows.
+
 ## [0.33.0] — 2026-06-15
 
 ### Added
