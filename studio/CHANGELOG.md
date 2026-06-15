@@ -8,7 +8,12 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-## [0.34.1] — 2026-06-15
+## [0.35.0] — 2026-06-15
+
+### Fixed
+- **Figma import now reproduces multi-color titles and the right fonts.** When a single text layer mixed colors — like the OAuth title where “next meeting.” is red and the rest is purple — import used to flatten the whole line to one color and drop the accent. It now carries each colored run through exactly, so partial highlights land where the design has them.
+- **Headings keep their font after you recolor text.** Imported headings used the “Chip” display/body fonts written as an inline style; a later edit (e.g. changing a color) could mangle that and the text would silently fall back to a plain system font. Fonts now ride on a stable style that edits can’t corrupt, so the right typeface stays put.
+- **Imported text keeps its line breaks.** Hard line breaks inside a text layer were collapsing to a space on import; they’re now preserved.
 
 ### Fixed
 - **Hotfix for 0.34.0, which failed to open with a red error screen.** The 0.34.0 cleanup removed a dependency (`react-day-picker`) that looked unused but is required by the component library under the hood — so the packaged app couldn't load any frame. Restored it. If you landed on 0.34.0, this update fixes it automatically.

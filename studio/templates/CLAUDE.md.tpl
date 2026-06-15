@@ -535,6 +535,14 @@ Read this preamble literally:
 - **`Write`** rewrites the whole file. Use it when the change is sweeping (more than ~30% of the file changes), when you can't find a unique anchor for `Edit`, or when the file is short enough that a clean rewrite is easier to reason about than a surgical edit.
 - Never invent a third path. There is no "explain the change in the chat and let the user apply it" — the user expects code to move.
 
+### Preserve existing inline styles on edits
+
+When you edit an element, change ONLY the property the prompt asks for and carry every other existing attribute through unchanged. The single most common regression here: the user asks to recolor text, and the rewritten element drops the `fontFamily` it had.
+
+- A frame imported from Figma uses inline `style={{ position: "absolute", … , fontFamily: "'Chip Display Variable', -apple-system, sans-serif", color: "#4700ab" }}`. To recolor it, change `color` and leave everything else — **including the whole `fontFamily` string** — byte-for-byte identical.
+- Never strip `fontFamily`, `fontSize`, `fontWeight`, `lineHeight`, `letterSpacing`, positions, or sizes from an element you're editing for an unrelated reason. Dropping `fontFamily` makes the text fall back to the system font (the "Chip font disappeared after I changed the color" bug).
+- Do NOT convert an existing inline `style` prop to Tailwind utility classes as a side effect of an edit. The no-inline-font / no-arbitrary-brackets rules apply to code you author fresh, not to faithful imports you are tweaking. Preserve the inline style; touch only the one value being changed.
+
 ### When `Edit` fails (it will, sometimes)
 
 Claude's `Edit` tool fails when `old_string` matches zero times or more than once. Both failures appear in the tool result; neither is acceptable to ignore.
@@ -593,6 +601,8 @@ If the user asks for a "mobile" or "desktop" design specifically, design for tha
 | Shadow / elevation | `shadow-elevation-01`…`04` | `shadow-[0_1px_2px_...]` |
 | Gutter / section padding | `p-gutter`, `px-gutter`, `py-gutter-sm` (also `gap-control-gap-sm/md/lg`) | `px-[17px] py-[48px]` |
 | Font family | `font-display`, `font-text`, `font-mono` | inline font-family |
+
+**These rules govern code you WRITE FROM SCRATCH. They are NOT a license to rewrite existing inline styles you find in a frame.** Frames imported from Figma are authored with exact inline `style={{…}}` props (positions, sizes, and `fontFamily: "'Chip Display Variable', …"` / `"'Chip Text Variable', …"`). When you edit such a frame, leave those inline styles intact (see "Preserve existing inline styles on edits" under Modifying existing frames) — do not "fix" them into utility classes.
 
 Additional rules:
 - **Never hardcode hex, rgb, or hsl.** Colors come from tokens defined in `{{ARCADE}}/src/tokens/generated/light.css` and `dark.css`.

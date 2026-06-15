@@ -115,6 +115,9 @@ describe("runFigmaKitEmitBranch", () => {
     const { input, events } = makeInput(deps);
     const r = await runFigmaKitEmitBranch(input as any);
     expect(r.ok).toBe(true);
+    // The branch must report the slug it wrote so the chat middleware can run a
+    // follow-up refine pass targeting that exact frame (import-then-refine).
+    expect(r.frameSlug).toBe("01-figma-1-1");
 
     const fdir = path.join(tmpRoot, "proj", "frames", "01-figma-1-1");
     const src = await fs.readFile(path.join(fdir, "index.tsx"), "utf-8");

@@ -266,6 +266,66 @@ describe("emitKitFrame", () => {
     expect(r.source).toContain('"nowrap"');
   });
 
+  it("emits a kit font as a class, not an inline fontFamily string", () => {
+    // Regression: an imported title used inline fontFamily: "'Chip Display
+    // Variable', …"; a follow-up edit smart-quoted the family ('→’) and the
+    // heading fell back to system font. A class has no quotes to corrupt.
+    const doc = frameNode("0", [{
+      id: "t1", type: "TEXT", characters: "Heading",
+      absoluteBoundingBox: bbox(0, 0, 200, 80),
+      style: { fontFamily: "Chip Display Variable", fontSize: 72, fontWeight: 650 },
+      fills: [{ type: "SOLID", color: { r: 0.27, g: 0, b: 0.67, a: 1 } }],
+    }]);
+    const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map() });
+    expect(r.source).toContain('className="font-display"');
+    expect(r.source).not.toContain("Chip Display Variable");
+  });
+
+  it("keeps an inline fontFamily for a non-kit font", () => {
+    const doc = frameNode("0", [{
+      id: "t1", type: "TEXT", characters: "Body",
+      absoluteBoundingBox: bbox(0, 0, 100, 16),
+      style: { fontFamily: "Inter", fontSize: 13 },
+    }]);
+    const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map() });
+    expect(r.source).not.toContain("font-display");
+    expect(r.source).toContain("'Inter', -apple-system, sans-serif");
+  });
+
+  it("emits per-character style runs (accent color) as <span> (no prose needed)", () => {
+    // The real OAuth title: chars 23–35 ("next meeting.") carry a red fill via
+    // characterStyleOverrides → styleOverrideTable[108]. The whole layer's base
+    // fill is purple. The accent run must come through as a colored <span>.
+    const characters = "Let’s prepare\nfor your next meeting.";
+    const overrides = Array.from(characters).map((_, i) => (i >= 23 ? 108 : 0));
+    const doc = frameNode("0", [{
+      id: "title", type: "TEXT", characters,
+      absoluteBoundingBox: bbox(0, 0, 600, 192),
+      style: { fontFamily: "Chip Display Variable", fontSize: 72, fontWeight: 650 },
+      fills: [{ type: "SOLID", color: { r: 0.27, g: 0, b: 0.67, a: 1 } }],
+      characterStyleOverrides: overrides,
+      styleOverrideTable: {
+        "108": { fills: [{ type: "SOLID", color: { r: 0.82, g: 0, b: 0, a: 1 } }] },
+      },
+    }]);
+    const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map() });
+    // The accent run is wrapped and colored; the exact boundary is "next
+    // meeting." (not just "meeting."), which the prose-driven LLM got wrong.
+    expect(r.source).toMatch(/<span style=\{\{color: "#d10000"\}\}>next meeting\.<\/span>/);
+    expect(r.source).toContain("for your "); // base run stays unwrapped
+  });
+
+  it("preserves hard line breaks in imported text", () => {
+    const doc = frameNode("0", [{
+      id: "t1", type: "TEXT", characters: "Line one\nLine two",
+      absoluteBoundingBox: bbox(0, 0, 200, 40),
+      style: { fontFamily: "Chip Display Variable", fontSize: 24 },
+    }]);
+    const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map() });
+    // A raw \n in JSX collapses to a space; the renderer must emit {"\n"}.
+    expect(r.source).toContain('Line one{"\\n"}Line two');
+  });
+
   it("exports an IconButton's glyph as SVG when it has no kit-icon match (never blank)", () => {
     // IconButton wrapping an unmapped glyph (e.g. Icons/Eye not in the map):
     // planAssets must queue the glyph for SVG export, and emit must render it

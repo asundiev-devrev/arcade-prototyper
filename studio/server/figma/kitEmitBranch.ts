@@ -168,7 +168,7 @@ const MAX_EXPORT_PASSES = 3;
 
 export async function runFigmaKitEmitBranch(
   input: KitEmitBranchInput,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; frameSlug?: string }> {
   const { emit, slug, fileKey, nodeId, project, signal } = input;
   const getNode = input.deps?.getNode ?? figmanageGetNode;
   const getVariables = input.deps?.getVariables ?? figmanageGetVariables;
@@ -397,5 +397,5 @@ export async function runFigmaKitEmitBranch(
     createdAt: new Date().toISOString(),
   });
 
-  return { ok: true };
+  return { ok: true, frameSlug };
 }
