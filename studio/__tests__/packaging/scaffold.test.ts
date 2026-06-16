@@ -69,4 +69,17 @@ describe("electron-builder configuration", () => {
     expect(config.publish?.owner).toBe("asundiev-devrev");
     expect(config.publish?.repo).toBe("arcade-studio-releases");
   });
+
+  it("re-includes Assets-panel thumbnails after the blanket image exclusion", () => {
+    // The Assets panel ships prebuilt PNG previews under
+    // studio/prototype-kit/assets-thumbs/. A blanket `!**/*.{png,...}` rule
+    // strips images from the bundle; the thumbnails must be re-included AFTER
+    // that exclusion (electron-builder is last-match-wins) or every preview
+    // is blank in the packaged .app. Guard the ordering so it can't regress.
+    const files: string[] = config.files;
+    const exclusionIdx = files.indexOf("!**/*.{png,jpg,jpeg,gif}");
+    const reincludeIdx = files.indexOf("studio/prototype-kit/assets-thumbs/**/*.png");
+    expect(exclusionIdx).toBeGreaterThanOrEqual(0);
+    expect(reincludeIdx).toBeGreaterThan(exclusionIdx);
+  });
 });
