@@ -7,7 +7,7 @@
  * project names, or secrets. See redact.ts.
  */
 
-export type GenerationErrorKind = "bedrock_auth" | "cli_crash" | "parser_error" | "timeout" | "other";
+export type GenerationErrorKind = "bedrock_auth" | "cli_crash" | "parser_error" | "timeout" | "throttled" | "other";
 export type FrameErrorKind = "module_not_found" | "syntax_error" | "runtime_exception" | "hmr_failure";
 export type ShareErrorKind = "auth" | "worker_5xx" | "bundle_error" | "network" | "other";
 

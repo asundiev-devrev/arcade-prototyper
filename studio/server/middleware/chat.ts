@@ -406,6 +406,10 @@ function handleCancel(res: ServerResponse, slug: string): void {
 export function classifyGenerationError(info: { error?: string; timedOut: boolean; exitCode: number | null }): GenerationErrorKind {
   if (info.timedOut) return "timeout";
   const msg = (info.error ?? "").toLowerCase();
+  // Throttle BEFORE bedrock_auth: the throttle message mentions "Bedrock" too,
+  // and a rate limit is a distinct, transient cause (wait + retry) — not an
+  // auth/credential failure.
+  if (/rate-limit|rate limit|too many requests|throttl/.test(msg)) return "throttled";
   if (/bedrock|credential|expired|auth|sso|token/.test(msg)) return "bedrock_auth";
   if (typeof info.exitCode === "number" && info.exitCode !== 0) return "cli_crash";
   if (/parse|json|unexpected token/.test(msg)) return "parser_error";

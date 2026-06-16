@@ -14,6 +14,13 @@ describe("classifyGenerationError", () => {
   it("parser error from message", () => {
     expect(classifyGenerationError({ error: "Failed to parse response", timedOut: false, exitCode: 0 })).toBe("parser_error");
   });
+  it("throttled — and wins over bedrock_auth even though the message says 'Bedrock'", () => {
+    expect(classifyGenerationError({
+      error: "Bedrock is rate-limiting your account right now (too many requests). Wait ~30 seconds…",
+      timedOut: false, exitCode: 0,
+    })).toBe("throttled");
+    expect(classifyGenerationError({ error: "ThrottlingException", timedOut: false, exitCode: 0 })).toBe("throttled");
+  });
   it("other fallback", () => {
     expect(classifyGenerationError({ error: "weird", timedOut: false, exitCode: 0 })).toBe("other");
   });

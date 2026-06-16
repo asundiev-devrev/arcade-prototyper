@@ -120,6 +120,11 @@ export interface RunTurnOptions {
     rawStdout: string;
     timedOut: boolean;
     stalled: boolean;
+    /** Bedrock rate-limited this turn (a 429 / ThrottlingException seen on the
+     *  CLI's stderr). Distinct from a stall: it's external + transient, NOT
+     *  retryable in-process (retrying hammers the same limit), and the user
+     *  should wait and resend. */
+    throttled?: boolean;
   }) => void;
   /** When true, a hard timeout does NOT emit a terminal `end` event —
    *  `onCrash` still fires with `timedOut: true` and the caller decides
@@ -132,6 +137,22 @@ export interface RunTurnOptions {
 // "Generation model" dropdown (threaded through as opts.model). We pin it here
 // rather than inheriting the user's global ~/.claude model, which can silently
 // be Opus (much slower) — see the model-resolution comment in runClaudeTurn.
+/**
+ * True when CLI stderr indicates AWS Bedrock is rate-limiting the request.
+ * Bedrock surfaces throttling as a `ThrottlingException` / `TooManyRequestsException`
+ * (HTTP 429) — sometimes phrased "Too many requests" or "Rate exceeded". The
+ * Claude CLI writes these to stderr while stdout stays silent, so without this
+ * check a throttle is indistinguishable from a hang and the user waits out the
+ * full stall/timeout for a generic message. Matched loosely (any casing, any of
+ * several phrasings) because the exact wording drifts across SDK/CLI versions.
+ *
+ * Pure + exported for unit testing.
+ */
+export function isThrottleError(text: string | undefined | null): boolean {
+  if (!text) return false;
+  return /throttl|too many requests|tooManyRequests|rate exceeded|rate limit|\b429\b|service unavailable|serviceUnavailable|slow down/i.test(text);
+}
+
 const DEFAULT_GENERATION_MODEL = "sonnet";
 const DEFAULT_ALLOWED_TOOLS = "Read,Edit,Write,Glob,Grep,Bash";
 // figma-console MCP requires a live Figma Bridge plugin; in our environment
@@ -361,7 +382,19 @@ export async function runClaudeTurn(opts: RunTurnOptions): Promise<void> {
     });
 
     let stderrBuf = "";
-    proc.stderr.on("data", (c) => { stderrBuf += c.toString(); });
+    let throttled = false;
+    proc.stderr.on("data", (c) => {
+      stderrBuf += c.toString();
+      // Bedrock throttling shows up here while stdout stays silent. Detect it
+      // immediately and kill — waiting out the 120s stall to surface a generic
+      // "model went quiet" wastes the user's time and hides an actionable
+      // cause. The close handler reads `throttled` to emit the right message.
+      if (!throttled && isThrottleError(stderrBuf)) {
+        throttled = true;
+        console.warn("[studio] Bedrock throttling detected on stderr — ending turn fast");
+        try { proc.kill("SIGTERM"); } catch {}
+      }
+    });
 
     const cleanup = () => {
       clearTimeout(timeoutHandle);
@@ -401,7 +434,25 @@ export async function runClaudeTurn(opts: RunTurnOptions): Promise<void> {
       if (stdoutBuf.trim()) {
         for (const ev of parser.parseLine(stdoutBuf)) opts.onEvent(ev);
       }
-      if (stalled) {
+      if (throttled) {
+        // External rate limit — NOT retryable in-process (a retry hits the
+        // same limit). Emit a clear, actionable terminal `end` and tell the
+        // caller via onCrash so it doesn't burn a retry attempt.
+        opts.onEvent({
+          kind: "end",
+          ok: false,
+          error:
+            "Bedrock is rate-limiting your account right now (too many requests). Wait ~30 seconds, then send your prompt again. This is an AWS limit, not a problem with your project — a restart won't clear it.",
+        });
+        opts.onCrash?.({
+          exitCode: code,
+          stderr: stderrBuf,
+          rawStdout,
+          timedOut: false,
+          stalled: false,
+          throttled: true,
+        });
+      } else if (stalled) {
         // Stalls are recoverable via retry — do NOT emit a terminal `end`
         // here; let the retry wrapper decide. We still surface the crash
         // info so the log persists.
