@@ -10,8 +10,8 @@
     "studio:test": "vitest run --config studio/vitest.config.ts",
     "kit:build": "pnpm exec tsx studio/prototype-kit/scripts/build-package.mts",
     "studio:assets": "pnpm exec tsx studio/scripts/buildAssetsCatalog.ts",
-    "studio:pack": "pnpm run kit:build && bash studio/packaging/scripts/fetch-cli-deps.sh && pnpm exec tsc -p electron/tsconfig.json && node studio/packaging/scripts/gen-telemetry-config.mjs && pnpm exec electron-builder --mac --config electron-builder.yml --publish never",
-    "studio:release": "pnpm run kit:build && bash studio/packaging/scripts/fetch-cli-deps.sh && pnpm exec tsc -p electron/tsconfig.json && node studio/packaging/scripts/gen-telemetry-config.mjs && pnpm exec electron-builder --mac --config electron-builder.yml --publish always",
+    "studio:pack": "pnpm run studio:assets && pnpm run kit:build && bash studio/packaging/scripts/fetch-cli-deps.sh && pnpm exec tsc -p electron/tsconfig.json && node studio/packaging/scripts/gen-telemetry-config.mjs && pnpm exec electron-builder --mac --config electron-builder.yml --publish never",
+    "studio:release": "pnpm run studio:assets && pnpm run kit:build && bash studio/packaging/scripts/fetch-cli-deps.sh && pnpm exec tsc -p electron/tsconfig.json && node studio/packaging/scripts/gen-telemetry-config.mjs && pnpm exec electron-builder --mac --config electron-builder.yml --publish always",
     "studio:audit": "DRIFT_AUDIT=1 vitest run --config studio/vitest.config.ts __tests__/lift/drift --reporter=verbose",
     "sidecar": "pnpm exec tsx studio/server/sidecar/bin.ts --",
     "worker:deploy": "cd studio/worker && wrangler deploy"
