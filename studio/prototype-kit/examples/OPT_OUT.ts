@@ -4,4 +4,5 @@
 export const EXAMPLE_OPT_OUT: string[] = [
   "Separator",      // a thin divider — nothing meaningful to preview
   "KeyboardShortcut", // tiny inline keycap, low value
+  "FrameLink",      // invisible nav wrapper (display:contents, no visible affordance) — renders nothing to preview
 ];
