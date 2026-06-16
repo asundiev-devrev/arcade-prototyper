@@ -14,6 +14,7 @@ import {
   BADGE_VARIANT_MAP,
   TAG_INTENT_MAP,
   TAG_APPEARANCE_MAP,
+  NON_RENDERABLE_KIT_EXPORTS,
 } from "../../../server/figma/kitMappings";
 import {
   kitExportNames,
@@ -985,6 +986,42 @@ describe("kit mappings hygiene", () => {
       (v) => !names.has(v),
     );
     expect(missing, `Icon mappings pointing at non-existent kit exports: ${missing.join(", ")}`)
+      .toEqual([]);
+  });
+
+  it("no ICON mapping resolves to a NON-RENDERABLE compound export", () => {
+    // The Sidebar.Left crash: `Sidebar` IS a real export (so the membership
+    // test above passes) but it's a compound object {Root,Section,Item}, not a
+    // glyph. Emitting `<Sidebar size=…/>` throws "Element type is invalid …
+    // got: object". An icon mapping must NEVER point at one of these.
+    const bad = Object.entries(ICON_SET_NAME_TO_KIT).filter(
+      ([, kit]) => NON_RENDERABLE_KIT_EXPORTS.has(kit),
+    );
+    expect(bad, `Icon mappings pointing at compound objects: ${bad.map(([k, v]) => `${k}→${v}`).join(", ")}`)
+      .toEqual([]);
+  });
+
+  it("matchKit drops an icon match that resolves to a compound object (SVG fallback)", () => {
+    // Even if a bad icon row slips back in, the runtime guard must refuse to
+    // emit it as an icon — returning null routes the node to its exported SVG,
+    // which always renders. Drive matchKit with a setName the icon map points at
+    // a compound object via a temporary entry.
+    const SENTINEL = "__test/compound.icon__";
+    (ICON_SET_NAME_TO_KIT as Record<string, string>)[SENTINEL] = "Sidebar";
+    try {
+      expect(matchKit(undefined, SENTINEL)).toBeNull();
+    } finally {
+      delete (ICON_SET_NAME_TO_KIT as Record<string, string>)[SENTINEL];
+    }
+  });
+
+  it("NON_RENDERABLE_KIT_EXPORTS entries are all real arcade-gen exports", () => {
+    // The guard list must track the kit: every name in it should actually be an
+    // export (else we're guarding against a phantom and a real compound could be
+    // missing). Catches a typo or a removed compound on a kit bump.
+    const names = kitExportNames();
+    const missing = [...NON_RENDERABLE_KIT_EXPORTS].filter((v) => !names.has(v));
+    expect(missing, `Guard list names not exported by the kit: ${missing.join(", ")}`)
       .toEqual([]);
   });
 

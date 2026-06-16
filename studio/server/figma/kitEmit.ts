@@ -30,6 +30,7 @@ import {
   TAG_INTENT_MAP,
   TAG_APPEARANCE_MAP,
   ICON_SET_NAME_TO_KIT,
+  NON_RENDERABLE_KIT_EXPORTS,
 } from "./kitMappings";
 import { readColorVar } from "./resolveTokens";
 import { resolveKitTokenVar, type ColorProperty } from "./kitTokens";
@@ -110,7 +111,13 @@ function innerIcon(
   if (hidden(n)) return null; // designers hide alt glyphs in a slot — ignore them
   if (n.type === "INSTANCE") {
     const { setName } = resolveIdentity(n.componentId, components, componentSets);
-    if (setName && ICON_SET_NAME_TO_KIT[setName]) return ICON_SET_NAME_TO_KIT[setName];
+    // Same guard as matchKit: never return a compound layout object as an icon
+    // glyph (it would emit `<Sidebar size=…/>` inside a button and crash). A
+    // null return lets the caller fall back to the exported SVG glyph.
+    if (setName && ICON_SET_NAME_TO_KIT[setName]) {
+      const kit = ICON_SET_NAME_TO_KIT[setName];
+      if (!NON_RENDERABLE_KIT_EXPORTS.has(kit)) return kit;
+    }
   }
   for (const c of n.children ?? []) {
     const r = innerIcon(c, components, componentSets);
