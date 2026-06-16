@@ -8,7 +8,14 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-## [0.35.1] — 2026-06-16
+## [0.36.0] — 2026-06-16
+
+### Added
+- **A "what's new" note when the app updates.** Updates still install silently in the background, but now the first time you open a newly-updated version, a short "Updated to X" note shows you what changed. Nothing to click through on every launch — it appears once per new version, so when a release ships you can tell at a glance that you're on it.
+
+### Fixed
+- **Imported screens no longer white-screen on certain icons.** Some Figma designs (e.g. ones using a sidebar-toggle icon) imported a component the app couldn't actually draw, which crashed the whole frame to a blank red error — and a restart didn't help. Those icons now fall back to a faithful image, and a safeguard makes this class of crash impossible going forward.
+- **Clearer message when generation is rate-limited.** If AWS Bedrock throttles your account (usually after a burst of generations), the app used to just hang for minutes and then fail vaguely. It now detects the rate limit quickly and tells you plainly: wait ~30 seconds and resend — it's a temporary AWS limit, not a problem with your project, and a restart won't clear it.
 
 ### Fixed
 - **Figma prompts that ask to wire an interaction now actually wire it.** If you imported a screen and said “when you click X, this modal should appear” (with a second Figma link for the modal), Studio used to import only the screen and silently ignore the interaction — and asking again would import the modal as a separate frame instead. Now Studio imports both the screen and the modal pixel-exact into the *same* frame, then wires the click→show-modal behavior for you, on that one frame. Plain “implement this screen precisely” prompts are unchanged.
