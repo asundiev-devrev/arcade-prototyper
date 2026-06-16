@@ -14,8 +14,9 @@ import { runDriftCheck } from "../devrev/driftCheck";
 import { pendingObjections, markStaleByFrame } from "../chimeIns";
 import type { ChatMessage, ChimeIn } from "../types";
 import type { StudioEvent } from "../../src/lib/streamJson";
-import { extractFigmaUrl } from "../../src/lib/figmaUrl";
+import { extractFigmaUrl, extractFigmaUrls, detectInteractionIntent } from "../../src/lib/figmaUrl";
 import { parseFigmaUrl } from "../figmaCli";
+import { frameDir } from "../paths";
 import { getFigmaIngest } from "../figmaIngest";
 import { buildFigmaContextBlock } from "../figma/promptBlock";
 import { shouldUseHiFi, buildHiFiDirective } from "../figma/fidelityDirective";
@@ -209,12 +210,23 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
   const figmaParsed = figmaUrl ? parseFigmaUrl(figmaUrl) : null;
   const isKitEmitTurn = Boolean(figmaParsed);
 
+  // Wire-an-interaction turn: a Figma-import prompt that ALSO asks for behavior
+  // ("when you click X this modal appears <2nd url>"). The deterministic
+  // importer can't produce interactivity and silently dropped both the prose
+  // and any 2nd URL, so the interaction never got wired (and a re-ask imported
+  // the modal as a separate frame). We import the screen + overlay
+  // deterministically, then run ONE scoped LLM pass that only wires state.
+  // Needs the LLM, so it's gated on Bedrock auth like a Claude turn.
+  const figmaUrls = isComputerTurn ? [] : extractFigmaUrls(prompt);
+  const isWireTurn =
+    isKitEmitTurn && detectInteractionIntent(prompt) && figmaUrls.length >= 2;
+
   // Bedrock-auth pre-check applies only to Claude (Bedrock) turns; the
   // Computer agent uses the DevRev PAT, and kit-emit turns use no LLM at all.
   // We pass when either (a) a bearer token is exported for claude CLI to use,
   // or (b) SigV4 credentials resolve via `aws sts get-caller-identity`.
   // Otherwise we fail fast instead of spawning claude into a silent hang.
-  if (!isComputerTurn && !isKitEmitTurn && !(await hasBedrockAuth())) {
+  if (!isComputerTurn && (!isKitEmitTurn || isWireTurn) && !(await hasBedrockAuth())) {
     track({ name: "generation_failed", props: { project_slug_hash: hashSlug(slug), error_kind: "bedrock_auth" } });
     const turn = startTurn(slug, {
       prompt,
@@ -244,7 +256,16 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
   const turn = startTurn(slug, {
     prompt,
     run: ({ emit, end, signal }) => {
-      const task = isKitEmitTurn
+      const task = isWireTurn
+        ? runFigmaWireBranch({
+            emit,
+            slug,
+            prompt,
+            urls: figmaUrls,
+            project,
+            signal,
+          })
+        : isKitEmitTurn
         ? runFigmaKitEmitBranch({
             emit,
             slug,
@@ -815,6 +836,140 @@ async function runClaudeBranch(ctx: {
   }
 
   return endResult;
+}
+
+/**
+ * Wire-an-interaction turn: deterministic import of BOTH the screen and the
+ * overlay, then ONE scoped LLM pass that only wires the click→show-overlay
+ * state. Three steps:
+ *
+ *   1. Import the first URL as the screen frame (normal kit-emit → new frame).
+ *   2. Import the second URL as a sibling `Overlay.tsx` INSIDE that frame's dir
+ *      (target override → no new frame, pixel-exact, own assets/). reconcile
+ *      keys frames on `frames/<dir>/index.tsx`, so a sibling .tsx is invisible
+ *      to the viewport — exactly what "keep it on the same frame" needs.
+ *   3. Run the Claude branch with a tightly-scoped prompt (NO Figma URL, so it
+ *      stays in edit mode and never re-imports/rebuilds): import Overlay, add a
+ *      useState, render it conditionally over a backdrop, wire the trigger.
+ *
+ * Why the LLM at all: interactivity (state + handlers) is behavior the
+ * deterministic importer fundamentally cannot emit. But it never transcribes
+ * pixels — both visuals come from the importer — so fidelity stays exact while
+ * the LLM does only the wiring it's actually good at.
+ *
+ * Degrades safely: if the screen import fails we return its error; if the
+ * overlay import fails we keep the screen and tell the user to wire manually;
+ * if Bedrock auth is missing the gate upstream already short-circuited.
+ */
+async function runFigmaWireBranch(ctx: {
+  emit: (ev: StudioEvent) => void;
+  slug: string;
+  prompt: string;
+  urls: string[];
+  project: { frames?: Array<{ slug: string }>; sessionId?: string };
+  signal: AbortSignal;
+}): Promise<{ ok: boolean; error?: string }> {
+  const { emit, slug, prompt, urls, project, signal } = ctx;
+  const narrate = (text: string) => emit({ kind: "narration", text });
+
+  const screenParsed = parseFigmaUrl(urls[0]);
+  const overlayParsed = parseFigmaUrl(urls[1]);
+  if (!screenParsed || !overlayParsed) {
+    // Shouldn't happen (router parsed them), but never crash the turn.
+    return runFigmaKitEmitBranch({
+      emit, slug, fileKey: screenParsed?.fileId ?? "", nodeId: screenParsed?.nodeId ?? "", project, signal,
+    });
+  }
+
+  // Step 1 — screen as a normal frame.
+  const screen = await runFigmaKitEmitBranch({
+    emit,
+    slug,
+    fileKey: screenParsed.fileId,
+    nodeId: screenParsed.nodeId,
+    project,
+    signal,
+  });
+  if (!screen.ok || !screen.frameSlug) return screen;
+  if (signal.aborted) return screen;
+
+  // Step 2 — overlay as a sibling component INSIDE the screen frame's dir.
+  const fdir = frameDir(slug, screen.frameSlug);
+  narrate("Importing the overlay into the same frame…");
+  const overlay = await runFigmaKitEmitBranch({
+    emit,
+    slug,
+    fileKey: overlayParsed.fileId,
+    nodeId: overlayParsed.nodeId,
+    project,
+    signal,
+    target: { fdir, componentName: "Overlay", entryFileName: "Overlay.tsx" },
+  });
+  if (signal.aborted) return screen;
+  if (!overlay.ok) {
+    // Screen is fine; only the overlay import failed. Keep the screen, be honest.
+    const msg =
+      "Imported the screen, but couldn't import the overlay design — wire the interaction manually with a follow-up.";
+    narrate(msg);
+    await appendHistory(slug, {
+      id: `a-${Date.now()}`,
+      role: "assistant",
+      content: msg,
+      createdAt: new Date().toISOString(),
+    });
+    return { ok: true };
+  }
+
+  if (!(await hasBedrockAuth())) {
+    // Defensive: the upstream gate should have caught this. Both visuals are
+    // imported; just can't run the wiring pass.
+    const msg =
+      "Imported the screen and the overlay (`Overlay.tsx` in the same frame), but wiring needs the generator and no Bedrock auth was detected. Run `aws sso login`, then ask me to wire the click.";
+    narrate(msg);
+    await appendHistory(slug, {
+      id: `a-${Date.now()}`, role: "assistant", content: msg, createdAt: new Date().toISOString(),
+    });
+    return { ok: true };
+  }
+
+  // Step 3 — scoped LLM wiring pass. No Figma URL in this prompt, so the Claude
+  // branch stays in edit mode (no re-import, no hi-fi rebuild). The designer's
+  // original instruction is included verbatim so the trigger element is right.
+  narrate("Wiring the interaction…");
+  const fresh = (await getProject(slug)) ?? project;
+  const wirePrompt = buildWirePrompt(screen.frameSlug, prompt);
+  return runClaudeBranch({ emit, slug, prompt: wirePrompt, project: fresh, signal });
+}
+
+/**
+ * Prompt for the wiring pass. Both the screen (`index.tsx`) and the overlay
+ * (`Overlay.tsx`) already exist in the frame dir, pixel-exact. The LLM must
+ * ONLY add interactivity: import Overlay, add open/close state, render it over a
+ * dimmed backdrop when open, and wire the trigger named in the user's prompt.
+ * It must NOT redesign either file or split anything into a new frame.
+ *
+ * Pure + exported for unit testing.
+ */
+export function buildWirePrompt(frameSlug: string, originalPrompt: string): string {
+  return [
+    `Two files already exist in \`frames/${frameSlug}/\`, both imported from Figma pixel-exact:`,
+    `  - \`index.tsx\` — the screen (default export).`,
+    `  - \`Overlay.tsx\` — the modal/overlay design (DEFAULT export).`,
+    "",
+    "Your ONLY job this turn is to wire the interaction the designer asked for. Edit `index.tsx` so that:",
+    "1. It imports the overlay:  `import Overlay from \"./Overlay\";`  (it is a DEFAULT export — do NOT use named-import braces).",
+    "2. It holds open/closed state with `React.useState(false)`.",
+    "3. The trigger element named in the request gets an `onClick` that opens the overlay. Find that element in `index.tsx` by its visible label and attach the handler to it (or its nearest clickable wrapper).",
+    "4. When open, the overlay renders ABOVE the screen, centered, over a semi-transparent dimmed backdrop (e.g. a fixed/absolute full-bleed `div` with `rgba(0,0,0,0.4)`), and clicking the backdrop closes it.",
+    "",
+    "Hard rules:",
+    `- Edit ONLY \`frames/${frameSlug}/index.tsx\`. Do NOT create a new frame. Do NOT move the overlay into its own frame. Do NOT edit \`Overlay.tsx\`'s visuals.`,
+    "- Do NOT redesign, re-layout, or restyle the screen. Preserve its existing markup, positions, inline styles, and `className`s exactly — you are only adding state, a handler, and the conditional overlay render.",
+    "- Render `<Overlay />` as-is for the modal content; wrap it in the backdrop + centering, don't rebuild it.",
+    "",
+    "The designer's original request (for the trigger + intent):",
+    originalPrompt,
+  ].join("\n");
 }
 
 async function runComputerBranch(ctx: {

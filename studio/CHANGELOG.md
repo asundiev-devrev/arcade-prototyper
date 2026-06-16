@@ -8,7 +8,10 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-## [0.35.0] — 2026-06-15
+## [0.35.1] — 2026-06-16
+
+### Fixed
+- **Figma prompts that ask to wire an interaction now actually wire it.** If you imported a screen and said “when you click X, this modal should appear” (with a second Figma link for the modal), Studio used to import only the screen and silently ignore the interaction — and asking again would import the modal as a separate frame instead. Now Studio imports both the screen and the modal pixel-exact into the *same* frame, then wires the click→show-modal behavior for you, on that one frame. Plain “implement this screen precisely” prompts are unchanged.
 
 ### Fixed
 - **Figma import now reproduces multi-color titles and the right fonts.** When a single text layer mixed colors — like the OAuth title where “next meeting.” is red and the rest is purple — import used to flatten the whole line to one color and drop the accent. It now carries each colored run through exactly, so partial highlights land where the design has them.

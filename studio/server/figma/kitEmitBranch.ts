@@ -69,6 +69,23 @@ export interface KitEmitBranchInput {
   project: { frames?: Array<{ slug: string }> };
   signal: AbortSignal;
   deps?: KitEmitBranchDeps;
+  /**
+   * Sub-import override. When set, the node is emitted INTO an existing frame
+   * dir as a named sibling component (e.g. `Overlay.tsx` exporting `Overlay`)
+   * rather than allocated a brand-new frame. Used by the wire-an-interaction
+   * flow to pull a modal into the SAME frame as the screen, pixel-exact, so the
+   * follow-up LLM pass only has to wire state — never transcribe geometry.
+   * A sub-import emits no chat trailer and appends no history (the caller owns
+   * the turn's narration). Absent → today's behavior, untouched.
+   */
+  target?: {
+    /** Absolute frame dir to write into (assets land under <fdir>/assets). */
+    fdir: string;
+    /** Exported component name (default "FigmaImport"). */
+    componentName: string;
+    /** Entry filename within fdir (default "index.tsx"). */
+    entryFileName: string;
+  };
 }
 
 async function defaultDownload(url: string): Promise<Buffer> {
@@ -168,7 +185,7 @@ const MAX_EXPORT_PASSES = 3;
 
 export async function runFigmaKitEmitBranch(
   input: KitEmitBranchInput,
-): Promise<{ ok: boolean; error?: string; frameSlug?: string }> {
+): Promise<{ ok: boolean; error?: string; frameSlug?: string; entryPath?: string; componentName?: string }> {
   const { emit, slug, fileKey, nodeId, project, signal } = input;
   const getNode = input.deps?.getNode ?? figmanageGetNode;
   const getVariables = input.deps?.getVariables ?? figmanageGetVariables;
@@ -232,10 +249,15 @@ export async function runFigmaKitEmitBranch(
 
   const { document: doc, components, componentSets } = entry;
 
-  // Allocate frame slug + dir; assets land under it.
+  // Allocate frame slug + dir; assets land under it. A sub-import (target set)
+  // writes into an existing frame dir as a named sibling component instead of
+  // allocating a new frame.
+  const target = input.target;
   const existing = (project.frames ?? []).map((f) => f.slug);
   const frameSlug = `${nextFramePrefix(existing)}-${frameNameFromNode(nodeId)}`;
-  const fdir = frameDir(slug, frameSlug);
+  const fdir = target ? target.fdir : frameDir(slug, frameSlug);
+  const componentName = target?.componentName ?? "FigmaImport";
+  const entryFileName = target?.entryFileName ?? "index.tsx";
   const assetsDir = path.join(fdir, "assets");
   await fs.mkdir(assetsDir, { recursive: true });
 
@@ -357,7 +379,7 @@ export async function runFigmaKitEmitBranch(
       brokenIds,
       assetFiles,
       variables,
-      componentName: "FigmaImport",
+      componentName,
     });
   } catch (err: any) {
     const msg = `Couldn't generate the frame: ${err?.message ?? String(err)}`;
@@ -365,8 +387,8 @@ export async function runFigmaKitEmitBranch(
     return { ok: false, error: msg };
   }
 
-  // index.tsx LAST so the watcher's reload sees assets present.
-  await fs.writeFile(path.join(fdir, "index.tsx"), result.source, "utf-8");
+  // Entry file LAST so the watcher's reload sees assets present.
+  await fs.writeFile(path.join(fdir, entryFileName), result.source, "utf-8");
   console.log(`[kitEmit] ${frameSlug}: ${result.kitInstanceCount} kit instances, ${result.assetRefs.length} assets (${cacheHits} from cache), ${result.tokenizedColors} tokens / ${result.hexColors} hex, ${Date.now() - t0}ms`);
   // C3 — per-import kit-coverage telemetry. Turns "coverage" from a guess into a
   // tracked number; the unmatched list is the curation backlog (which set names
@@ -380,6 +402,13 @@ export async function runFigmaKitEmitBranch(
 
   if (downloadFailures.length) {
     narrate(`⚠ ${downloadFailures.length} asset${downloadFailures.length === 1 ? "" : "s"} couldn't be downloaded and may render as plain boxes.`);
+  }
+
+  // A sub-import is one half of a larger turn — the caller (the wire-up flow)
+  // owns the chat trailer + history. Return early with the written paths so it
+  // can wire the component in.
+  if (target) {
+    return { ok: true, frameSlug, entryPath: path.join(fdir, entryFileName), componentName };
   }
 
   const compNames = result.kitImports.join(", ");
