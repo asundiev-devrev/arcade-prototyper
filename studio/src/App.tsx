@@ -4,6 +4,7 @@ import { FrameFontProxy } from "./frame/FrameFontProxy";
 import { HomePage } from "./routes/HomePage";
 import { ProjectDetail } from "./routes/ProjectDetail";
 import { StartupAuthGate } from "./components/feedback/StartupAuthGate";
+import { WhatsNewModal } from "./components/feedback/WhatsNewModal";
 
 function readSlugFromHash(): string | null {
   const match = window.location.hash.match(/^#\/project\/([a-z0-9][a-z0-9-]{0,62})$/i);
@@ -85,6 +86,7 @@ export function App() {
           />
         )}
       </StartupAuthGate>
+      <WhatsNewModal />
       <Toaster />
     </DevRevThemeProvider>
   );

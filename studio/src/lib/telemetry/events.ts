@@ -31,7 +31,9 @@ export type TelemetryEvent =
   // --- figma export (renderer) ---
   | { name: "figma_export_run"; props: { outcome: "ok" | "no_bridge" | "error"; instance_count?: number; failure_count?: number } }
   // --- settings (renderer) ---
-  | { name: "settings_opened"; props: { tab: string } };
+  | { name: "settings_opened"; props: { tab: string } }
+  // --- updates (renderer): first launch after a silent auto-update ---
+  | { name: "whats_new_shown"; props: { version: string } };
 
 export type TelemetryEventName = TelemetryEvent["name"];
 
@@ -42,4 +44,5 @@ export const EVENT_NAMES = [
   "share_opened", "share_started", "share_succeeded", "share_failed", "share_url_copied",
   "figma_export_run",
   "settings_opened",
+  "whats_new_shown",
 ] as const satisfies readonly TelemetryEventName[];
