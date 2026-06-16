@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Viewport } from "../components/viewport/Viewport";
-import { ChatPane } from "../components/chat/ChatPane";
+import { LeftPaneTabs } from "../components/shell/LeftPaneTabs";
 import { DevModePanel } from "../components/devmode/DevModePanel";
 import { StudioHeader } from "../components/shell/StudioHeader";
 import { ThemeToggle } from "../components/shell/ThemeToggle";
@@ -346,7 +346,7 @@ function ProjectDetailShell({
             position: "relative",
           }}
         >
-          <ChatPane
+          <LeftPaneTabs
             projectSlug={project.slug}
             history={chatHistory}
             seedRef={seedChatRef}
