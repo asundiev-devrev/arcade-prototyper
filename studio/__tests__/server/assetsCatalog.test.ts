@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildCompositeSection, buildIconSection } from "../../server/assetsCatalog";
+import {
+  buildCompositeSection,
+  buildIconSection,
+  buildComponentSection,
+} from "../../server/assetsCatalog";
 
 const KIT_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -37,5 +41,25 @@ describe("buildIconSection", () => {
     expect(first.svg).toContain("<svg");
     expect(first.svg).toContain("</svg>");
     expect(Array.isArray(first.tags)).toBe(true);
+  });
+});
+
+describe("buildComponentSection", () => {
+  it("returns curated arcade-gen components with docs + thumb paths", () => {
+    const section = buildComponentSection();
+    expect(section.kind).toBe("component");
+    expect(section.items.length).toBeGreaterThanOrEqual(30);
+    const items = section.items as { name: string; doc: string; thumb: string }[];
+    const button = items.find((i) => i.name === "Button");
+    expect(button).toBeDefined();
+    expect(button!.doc.length).toBeGreaterThan(0);
+    expect(button!.thumb).toBe("assets-thumbs/Button.png");
+    const names = items.map((i) => i.name);
+    // Hooks/types/sub-parts must NOT appear.
+    expect(names).not.toContain("useDevRevTheme");
+    expect(names).not.toContain("buttonVariants");
+    expect(names).not.toContain("HStack");
+    // Charts are one compound component, not per-type exports.
+    expect(names).not.toContain("LineChart");
   });
 });

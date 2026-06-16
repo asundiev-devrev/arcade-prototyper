@@ -44,6 +44,72 @@ export async function buildCompositeSection(kitRoot: string): Promise<AssetSecti
   return { kind: "composite", items };
 }
 
+// Hand-curated allowlist of blessed, renderable, designer-relevant arcade-gen
+// components. The barrel exports ~48 things mixing components, hooks, types and
+// compound sub-parts; we deliberately show only the visible components here.
+// Each name MUST be a real arcade-gen export and gets a thumb at
+// assets-thumbs/<Name>.png. Charts are ONE compound component (Chart.Line,
+// Chart.Bar, ...) — not per-type exports. Stack covers HStack/VStack variants.
+const COMPONENT_CATALOG: { name: string; doc: string }[] = [
+  // Actions
+  { name: "Button", doc: "Primary action button with variants and sizes." },
+  { name: "IconButton", doc: "Compact button showing just an icon." },
+  { name: "ButtonGroup", doc: "A row of related buttons joined together." },
+  { name: "SplitButton", doc: "A button with an attached dropdown of more actions." },
+  { name: "Toggle", doc: "A button that flips between on and off." },
+  { name: "ToggleGroup", doc: "A set of toggles where one or more can be active." },
+  { name: "Link", doc: "Styled inline navigation link." },
+  // Inputs
+  { name: "Input", doc: "Single-line text field." },
+  { name: "TextArea", doc: "Multi-line text field for longer input." },
+  { name: "Select", doc: "Dropdown to pick one option from a list." },
+  { name: "Dropdown", doc: "Menu of choices triggered by a control." },
+  { name: "Checkbox", doc: "A box that toggles a single option on or off." },
+  { name: "Radio", doc: "Selects exactly one option from a group." },
+  { name: "Switch", doc: "An on/off toggle styled as a sliding switch." },
+  { name: "DatePicker", doc: "Calendar control for choosing a date." },
+  { name: "KeyboardShortcut", doc: "Displays a keyboard shortcut as styled keys." },
+  // Data display
+  { name: "Avatar", doc: "Round image or initials representing a person." },
+  { name: "Badge", doc: "Small status or count label." },
+  { name: "Tag", doc: "Compact label for categorizing or filtering." },
+  { name: "Table", doc: "Rows and columns of structured data." },
+  { name: "Accordion", doc: "Stacked sections that expand and collapse." },
+  { name: "Loader", doc: "Inline spinner for loading states." },
+  { name: "FullscreenLoader", doc: "Full-screen loading overlay." },
+  { name: "Widget", doc: "Card-like container for a dashboard tile." },
+  { name: "Dashboard", doc: "Grid layout that arranges widgets into a dashboard." },
+  { name: "ChatBubble", doc: "Message bubble for chat conversations." },
+  // Overlays & feedback
+  { name: "Modal", doc: "Centered dialog that overlays the page." },
+  { name: "Popover", doc: "Floating panel anchored to a trigger." },
+  { name: "Tooltip", doc: "Small hint shown on hover or focus." },
+  { name: "Menu", doc: "List of actions in a floating menu." },
+  { name: "Toast", doc: "Brief notification that pops in and fades out." },
+  { name: "Banner", doc: "Full-width message bar for important notices." },
+  // Navigation
+  { name: "Tabs", doc: "Row of tabs for switching between views." },
+  { name: "Breadcrumb", doc: "Trail showing the current page's location." },
+  { name: "Sidebar", doc: "Vertical navigation rail for an app shell." },
+  // Layout
+  { name: "Stack", doc: "Arranges children in a row or column with spacing." },
+  { name: "Grid", doc: "Lays children out on a responsive grid." },
+  { name: "Separator", doc: "A thin divider line between content." },
+  { name: "ScrollArea", doc: "Scrollable region with styled scrollbars." },
+  { name: "ResizablePanel", doc: "Panel the user can drag to resize." },
+  // Charts
+  { name: "Chart", doc: "Data chart — line, bar, area, pie, and more." },
+];
+
+export function buildComponentSection(): AssetSection {
+  const items: AssetItem[] = COMPONENT_CATALOG.map((c) => ({
+    name: c.name,
+    doc: c.doc,
+    thumb: `assets-thumbs/${c.name}.png`,
+  }));
+  return { kind: "component", items };
+}
+
 interface RawIcon {
   componentName: string;
   category: string;
