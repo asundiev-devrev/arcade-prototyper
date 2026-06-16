@@ -24,6 +24,7 @@ import { randomUUID } from "node:crypto";
 import { liftMiddleware } from "./server/middleware/lift";
 import { exportMiddleware } from "./server/middleware/export";
 import { figmaExportMiddleware } from "./server/middleware/figmaExport";
+import { assetsMiddleware } from "./server/middleware/assets";
 import { cloudflareMiddleware } from "./server/middleware/cloudflare";
 import { runtimeErrorMiddleware } from "./server/middleware/runtimeError";
 import { versionMiddleware, logVersionOnBoot } from "./server/middleware/version";
@@ -61,6 +62,7 @@ function apiPlugin(): import("vite").Plugin {
       server.middlewares.use(liftMiddleware());
       server.middlewares.use(exportMiddleware());
       server.middlewares.use(figmaExportMiddleware());
+      server.middlewares.use(assetsMiddleware());
       server.middlewares.use(preflightMiddleware());
       server.middlewares.use(metricsMiddleware());
       server.middlewares.use(fontsMiddleware());
