@@ -8,21 +8,12 @@ import {
   MagnifyingGlass,
   ArrowsUpAndDown,
   PlusSmall,
-  Flag,
-  HouseWithHorizontalLine,
 } from "../arcade-components";
 
 export default (
   <div className="h-[720px] w-[1200px]">
     <VistaPage
-      sidebar={
-        <NavSidebar workspace="DevRev">
-          <NavSidebar.Section title="Personal">
-            <NavSidebar.Item icon={<HouseWithHorizontalLine size={16} />} label="My work" />
-            <NavSidebar.Item icon={<Flag size={16} />} label="Issues" active />
-          </NavSidebar.Section>
-        </NavSidebar>
-      }
+      sidebar={<NavSidebar />}
       title="All issues"
       count="16,538"
       tabs={
