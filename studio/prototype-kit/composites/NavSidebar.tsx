@@ -149,10 +149,10 @@ function DefaultNav() {
           label="Foundations"
           trailing={<ExpandChevron expanded />}
         />
-        <Item icon={<Window size={16} />} label="Lobby" indent />
-        <Item icon={<Window size={16} />} label="Issues" indent active />
-        <Item icon={<Window size={16} />} label="Roadmap" indent />
-        <Item icon={<Window size={16} />} label="Sprints" indent />
+        <Item label="Lobby" indent />
+        <Item label="Issues" indent active />
+        <Item label="Roadmap" indent />
+        <Item label="Sprints" indent />
         <Item
           icon={<TwoHumanSilhouettes size={16} />}
           label="Experience Foundations"
@@ -414,8 +414,9 @@ type ItemProps = {
   /** Trailing content — counts (`<Tag intent="info">14</Tag>`), a chevron for
    *  expandable groups, or shortcuts. Pushed to the row's right edge. */
   trailing?: ReactNode;
-  /** Nest the item under its parent. Applies extra left padding so child
-   *  items align under a section/parent item. */
+  /** Nest the item under its parent (e.g. Lobby/Issues under a team). Indents
+   *  the row so its TEXT aligns under the parent's text. Per the design, nested
+   *  items are icon-less — pass no `icon` and none is reserved. */
   indent?: boolean;
   active?: boolean;
   onClick?: () => void;
@@ -427,12 +428,10 @@ const Item = forwardRef<HTMLDivElement, ItemProps>(function Item(
 ) {
   // Accept either `label` (new API) or `children` (legacy). `label` wins.
   const body = label ?? children;
-  // Icon fallback: top-level items always show a leading icon in the design.
-  // The generator sometimes passes `icon={null}`, which would render an
-  // icon-less, misaligned row — so fall back to a neutral placeholder glyph.
-  // Indented sub-items (Lobby / Issues under a team) are icon-less by design,
-  // so they keep their bare look.
-  const leadingIcon = icon ?? (indent ? null : <Placeholder size={16} />);
+  // Nested items are icon-less by design (their text aligns under the parent's
+  // text). Top-level items always show a leading icon; if the generator passes
+  // icon={null}, fall back to a neutral placeholder so the row isn't misaligned.
+  const leadingIcon = indent ? null : (icon ?? <Placeholder size={16} />);
   return (
     <div
       ref={ref}
@@ -443,7 +442,10 @@ const Item = forwardRef<HTMLDivElement, ItemProps>(function Item(
       className={[
         "flex items-center gap-1.5 h-7 rounded-square cursor-pointer select-none",
         "text-[13px] leading-4 tracking-[0.1px]",
-        indent ? "pl-12 pr-4" : "px-4",
+        // Top-level: px-4 + 20px icon + 6px gap puts text at 42px. Nested items
+        // have no icon, so pad to 42px directly to align their text under the
+        // parent's text (the design's nested rows sit at that same x).
+        indent ? "pl-[42px] pr-4" : "px-4",
         active
           ? "bg-(--bg-neutral-subtle) text-(--fg-neutral-prominent) font-medium"
           : "text-(--fg-neutral-medium) hover:bg-(--control-bg-neutral-subtle-hover) hover:text-(--fg-neutral-prominent)",
