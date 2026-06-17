@@ -137,7 +137,10 @@ export function AssetsPanel({
 
   const gridStyle: React.CSSProperties = {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
+    // Fixed 2 columns: thumbnails scale up as the panel widens, so the
+    // user can enlarge the pane to read previews instead of getting more,
+    // smaller tiles.
+    gridTemplateColumns: "repeat(2, 1fr)",
     gap: 8,
   };
 

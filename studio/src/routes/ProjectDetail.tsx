@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Viewport } from "../components/viewport/Viewport";
-import { LeftPaneTabs } from "../components/shell/LeftPaneTabs";
+import { LeftPaneTabs, type LeftPaneTab, LEFT_PANE_TAB_KEY } from "../components/shell/LeftPaneTabs";
+import { LeftPaneTabToggle } from "../components/shell/LeftPaneTabToggle";
 import { DevModePanel } from "../components/devmode/DevModePanel";
 import { StudioHeader } from "../components/shell/StudioHeader";
 import { ThemeToggle } from "../components/shell/ThemeToggle";
@@ -199,6 +200,10 @@ function ProjectDetailShell({
     const stored = window.localStorage.getItem(CHAT_OPEN_STORAGE_KEY);
     return stored === null ? true : stored === "true";
   });
+  const [leftTab, setLeftTab] = useState<LeftPaneTab>(() => {
+    if (typeof window === "undefined") return "chat";
+    return window.localStorage.getItem(LEFT_PANE_TAB_KEY) === "assets" ? "assets" : "chat";
+  });
   const [chatWidth, setChatWidth] = useState<number>(() => {
     if (typeof window === "undefined") return CHAT_WIDTH_DEFAULT;
     const stored = window.localStorage.getItem(CHAT_WIDTH_STORAGE_KEY);
@@ -213,6 +218,10 @@ function ProjectDetailShell({
   useEffect(() => {
     window.localStorage.setItem(CHAT_OPEN_STORAGE_KEY, String(chatOpen));
   }, [chatOpen]);
+
+  useEffect(() => {
+    window.localStorage.setItem(LEFT_PANE_TAB_KEY, leftTab);
+  }, [leftTab]);
 
   useEffect(() => {
     window.localStorage.setItem(CHAT_WIDTH_STORAGE_KEY, String(chatWidth));
@@ -307,7 +316,17 @@ function ProjectDetailShell({
     <div style={{ display: "grid", gridTemplateRows: "48px 1fr", height: "100vh" }}>
       <StudioHeader
         title={
-          <>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              // Span the chat-panel width (minus the header's 16px left pad)
+              // so the Chat/Assets toggle right-aligns to the panel's edge.
+              width: chatOpen ? chatWidth - 16 : undefined,
+              minWidth: 0,
+            }}
+          >
             <ChatToggle active={chatOpen} onToggle={() => setChatOpen((o) => !o)} />
             <ProjectPicker
               project={project}
@@ -315,7 +334,12 @@ function ProjectDetailShell({
               onOpenProject={onOpenProject}
               onRenamed={() => refreshProject()}
             />
-          </>
+            {chatOpen && (
+              <div style={{ marginLeft: "auto" }}>
+                <LeftPaneTabToggle tab={leftTab} onTabChange={setLeftTab} />
+              </div>
+            )}
+          </div>
         }
         right={
           <>
@@ -347,6 +371,8 @@ function ProjectDetailShell({
           }}
         >
           <LeftPaneTabs
+            tab={leftTab}
+            onTabChange={setLeftTab}
             projectSlug={project.slug}
             history={chatHistory}
             seedRef={seedChatRef}
