@@ -189,7 +189,10 @@ Intentional opinions:
   PageBody.
 
 Slots:
-- `sidebar` — typically <NavSidebar workspace="DevRev">…</NavSidebar>.
+- `sidebar` — pass a bare `<NavSidebar />`. It renders the full standard
+  DevRev nav (Work / Teams / Views + Explore) by itself. Do NOT author
+  Section/Item children or pass `workspace` — that reproduces the design
+  less accurately. Only add children for a genuinely non-standard item set.
 - `breadcrumb` — typically <Breadcrumb.Root>…</Breadcrumb.Root>.
 - `actions` (optional) — top-right cluster (IconButtons + Avatar).
 - `pageActions` (optional) — cluster on the BreadcrumbBar (e.g. a "More"
@@ -244,7 +247,10 @@ Intentional opinions:
   render one implicitly.
 
 Slots:
-- `sidebar` — typically <NavSidebar workspace="DevRev">…</NavSidebar>.
+- `sidebar` — pass a bare `<NavSidebar />`. It renders the full standard
+  DevRev nav (Work / Teams / Views + Explore) by itself. Do NOT author
+  Section/Item children or pass `workspace` — that reproduces the design
+  less accurately. Only add children for a genuinely non-standard item set.
 - `title` — VistaHeader title slot.
 - `count` (optional) — VistaHeader count slot.
 - `actions` (optional) — VistaHeader right-cluster icon buttons.

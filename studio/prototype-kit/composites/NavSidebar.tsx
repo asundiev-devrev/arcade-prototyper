@@ -117,11 +117,15 @@ function Root({
   // generator to author it every time produced random, off-design items. So
   // `<NavSidebar />` with no children renders the exact Figma nav; pass
   // Section/Item children only when a frame genuinely needs a custom tree.
+  const usingDefault = children == null;
   const body = children ?? <DefaultNav />;
   return (
     <div className="flex flex-col h-full w-full bg-(--surface-shallow)">
       {topNode}
       <nav className="flex-1 min-h-0 overflow-auto">{body}</nav>
+      {/* The default nav pins "Explore" to the bottom (above the footer),
+          separated from the scrollable Work/Teams/Views list — per Figma. */}
+      {usingDefault && <DefaultBottomNav />}
       {footerNode}
     </div>
   );
@@ -159,10 +163,19 @@ function DefaultNav() {
         <Item icon={<Window size={16} />} label="Trails" />
         <Item icon={<Window size={16} />} label="Now, next, later" />
       </Section>
-      <Section>
-        <Item icon={<MagnifyingGlassInSquare size={16} />} label="Explore" />
-      </Section>
     </>
+  );
+}
+
+/** Bottom-pinned nav row(s) for the default nav — "Explore" sits above the
+ *  footer, separated from the scrollable list, per Figma. No horizontal
+ *  padding on the wrapper: Section item rows have none either (the Item's own
+ *  px-4 sets the indent), so this keeps Explore flush-aligned with them. */
+function DefaultBottomNav() {
+  return (
+    <div className="shrink-0 pb-1">
+      <Item icon={<MagnifyingGlassInSquare size={16} />} label="Explore" />
+    </div>
   );
 }
 
