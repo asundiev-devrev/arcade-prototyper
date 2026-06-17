@@ -8,6 +8,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.37.1] — 2026-06-17
+
+### Changed
+- **The navigation sidebar matches the current DevRev look.** The left nav in generated frames (and in the Assets panel preview) was redesigned to the latest DevRev styling: a top toolbar with a ⌘K search and add button, a "computer" product switcher, lightweight grouped sections (Work / Teams / Views), and a person + chat footer. Prototypes that use the sidebar pick this up automatically — nothing to change in your prompts.
+
 ## [0.37.0] — 2026-06-17
 
 ### Added
