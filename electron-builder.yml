@@ -28,6 +28,12 @@ files:
   - "!node_modules/**/{*.md,*.markdown,*.ts,*.flow,*.spec.js,*.test.js,*.map}"
   - "!node_modules/**/{__tests__,test,tests}/**"
   - "!**/*.{png,jpg,jpeg,gif}"
+  # Re-include the Assets-panel thumbnails: the blanket image exclusion above
+  # would otherwise strip every composite/component preview from the bundle,
+  # leaving testers with blank name-only tiles. Must come AFTER the exclusion
+  # (electron-builder is last-match-wins). The catalog JSON + inline-SVG icons
+  # already ship; only these prebuilt PNGs need rescuing.
+  - "studio/prototype-kit/assets-thumbs/**/*.png"
   - "!.git/**"
   - "!.worktrees/**"
   - "!.claude/**"
