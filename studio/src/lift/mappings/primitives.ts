@@ -278,6 +278,13 @@ export const PRIMITIVE_MAPPINGS: MappingEntry[] = [
     translationClass: "mechanical",
   },
   {
+    studio: { source: "arcade", name: "KeyboardShortcut" },
+    production: { source: rawDs("KeyboardShortcut"), name: "KeyboardShortcut" },
+    propDeltas: [{ from: "keys", to: "keys" }],
+    slotNotes: [],
+    translationClass: "mechanical",
+  },
+  {
     studio: { source: "arcade", name: "Avatar" },
     production: { source: rawDs("Avatar"), name: "Avatar" },
     propDeltas: [
