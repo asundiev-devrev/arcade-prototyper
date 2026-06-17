@@ -1,74 +1,161 @@
 /**
  * NavSidebar — DevRev navigation sidebar composite.
  *
- * Matches Figma "Sidebar / My Work + Teams + Multiplayer Sidebar". Replaces
- * the bare `arcade.Sidebar` for prototype use. This composite lives BELOW
- * the TitleBar in AppShell, so it does NOT render traffic lights or a
- * collapse button — those are the TitleBar's responsibility.
+ * Matches Figma "Option_2_Interim_reduced(June)" (node 10:3508) — the current
+ * DevRev SoR left nav. Replaces the bare `arcade.Sidebar` for prototype use.
+ * Lives BELOW the window chrome in AppShell, so it owns its own top toolbar
+ * (collapse / ⌘K search / add) but NOT the mac traffic lights.
+ *
+ * Default chrome (rendered top→bottom):
+ * - Toolbar (top): collapse IconButton + ⌘K search field + "add" IconButton.
+ * - Computer pill: a full-width muted rounded button with the "computer"
+ *   wordmark — the product switcher.
+ * - Nav body (scrollable): NavSidebar.Section + NavSidebar.Item children.
+ * - User footer (bottom): avatar + status dot + a chat FAB.
  *
  * Intentional opinions:
- * - Three zones: a header (top), nav body (scrollable middle), footer (bottom).
- *   Two header/footer chrome variants are supported — Computer (brand chip +
- *   "computer ⌘.") and Settings (← back + title, "Agent Studio" footer).
- * - Uses --surface-shallow so the sidebar reads as a muted panel against
- *   the body's --surface-overlay.
- * - Nav body accepts NavSidebar.Section and NavSidebar.Item children —
- *   same compound pattern as arcade.Sidebar for familiarity.
- * - Active item is a SUBTLE neutral selection (--control-bg-neutral-subtle-active
- *   + --fg-neutral-prominent), matching the Settings sidenav — NOT a solid blue
- *   pill. (The blue --bg-info-prominent was drift; corrected 2026-06.)
- * - Section titles render small/subtle (text-caption + --fg-neutral-subtle),
- *   matching the Figma "Personal"/"Organization" group labels.
+ * - Surface is --surface-shallow so the sidebar reads as a muted panel.
+ * - Group labels (Work / Teams / Views) render as small, 60%-opacity chips
+ *   (text-system-small), matching the Figma "_Group Label".
+ * - Items are 28px rows, padded px-4, label in --text-interactive-navigation-
+ *   resting; the active/hover state is a subtle neutral wash (NOT a blue pill).
+ * - Items support a leading icon, a trailing slot (count Tag, or a chevron for
+ *   expandable groups), and `indent` for nested rows.
  *
- * Slots:
- * - `workspace` (optional) — label in the default brand header (e.g. "DevRev").
- *   When omitted or falsy, the brand header is NOT rendered.
- * - `header` (optional) — custom header node replacing the brand header. Use
- *   `<NavSidebar.BackHeader title="Settings" />` for the Settings chrome.
- * - `showFooter` (optional, default true) — when false, the Computer footer is
- *   not rendered.
- * - `footer` (optional) — custom footer node replacing the Computer footer. Use
- *   `<NavSidebar.AppFooter />` for the "Agent Studio" Settings chrome.
+ * Slots (all optional — sensible defaults render the full Figma design):
+ * - `workspace` — kept for back-compat; when set WITHOUT a custom `pill`, the
+ *   computer pill shows this label instead of the "computer" wordmark.
+ * - `toolbar` — replace the default top toolbar. Pass `false` to hide it.
+ * - `pill` — replace the default computer pill. Pass `false` to hide it.
+ * - `header` — legacy: a custom node ABOVE the toolbar (e.g.
+ *   `<NavSidebar.BackHeader>` for the Settings "← Title" chrome). When set,
+ *   the default toolbar + pill are suppressed (the Settings chrome owns the top).
+ * - `footer` — replace the default user footer. Pass `false` to hide it.
+ *   `<NavSidebar.AppFooter>` is still available for the "Agent Studio" chrome.
  * - `children` — NavSidebar.Section / NavSidebar.Item tree.
  *
  * @counterexample When Figma shows a chat-style sidebar (with "New Chat" and chat history), use `ComputerSidebar` instead. That composite owns its own window chrome; do NOT also render a `TitleBar` alongside it.
- * @counterexample Never use `arcade.Sidebar` directly for the main app sidebar — it's the bare primitive. `NavSidebar` adds the workspace dropdown, Computer footer, and correct tokens.
- * @counterexample Do not pass `workspace=""` to hide the brand header. Composites check truthiness; the empty string counts as "present but empty". Omit the prop entirely.
+ * @counterexample Never use `arcade.Sidebar` directly for the main app sidebar — it's the bare primitive. `NavSidebar` adds the toolbar, computer pill, user footer, and correct tokens.
+ * @counterexample To hide a default slot, pass `false` (e.g. `toolbar={false}`), NOT an empty string. Composites check for `false` explicitly; other falsy values still render the default.
  */
 import { forwardRef, type ReactNode } from "react";
-import { ChevronDownSmall, ArrowLeftSmall, AgentStudio, DotInLeftWindow } from "@xorkavi/arcade-gen";
+import {
+  ChevronDownSmall,
+  ArrowLeftSmall,
+  AgentStudio,
+  DotInLeftWindow,
+  IconButton,
+  MagnifyingGlass,
+  PlusLarge,
+  KeyboardShortcut,
+  Avatar,
+  ChatBubbles,
+} from "@xorkavi/arcade-gen";
 
 /* ─── Root ──────────────────────────────────────────────────────────────── */
 
 type NavSidebarRootProps = {
+  /** Back-compat: when set without a custom `pill`, the computer pill shows
+   *  this label instead of the "computer" wordmark. */
   workspace?: ReactNode;
-  showFooter?: boolean;
-  /** Custom header node, replacing the default brand/workspace header. Use
-   *  `<NavSidebar.BackHeader>` for the Settings-style "← Title" chrome. When
-   *  set, `workspace` is ignored. */
+  /** Custom top toolbar, or `false` to hide it. Defaults to the
+   *  collapse / ⌘K search / add toolbar. */
+  toolbar?: ReactNode | false;
+  /** Custom product-switcher pill, or `false` to hide it. Defaults to the
+   *  "computer" wordmark pill. */
+  pill?: ReactNode | false;
+  /** Legacy: a custom node rendered ABOVE everything, replacing the default
+   *  toolbar + pill. Use `<NavSidebar.BackHeader>` for the Settings chrome. */
   header?: ReactNode;
-  /** Custom footer node, replacing the default Computer footer. Use
-   *  `<NavSidebar.AppFooter>` for the "Agent Studio + bell" Settings chrome.
-   *  When set, `showFooter` is ignored. */
-  footer?: ReactNode;
+  /** Custom footer, or `false` to hide it. Defaults to the avatar + chat
+   *  user footer. */
+  footer?: ReactNode | false;
   children?: ReactNode;
 };
 
 function Root({
   workspace,
-  showFooter = true,
+  toolbar,
+  pill,
   header,
   footer,
   children,
 }: NavSidebarRootProps) {
-  const headerNode =
-    header ?? (workspace ? <BrandHeader workspace={workspace} /> : null);
-  const footerNode = footer ?? (showFooter ? <ComputerFooter /> : null);
+  // A custom `header` (e.g. BackHeader) owns the top — suppress the default
+  // toolbar + pill so the Settings chrome isn't doubled up.
+  const topNode = header ?? (
+    <>
+      {toolbar === false ? null : (toolbar ?? <Toolbar />)}
+      {pill === false ? null : (pill ?? <ComputerPill label={workspace} />)}
+    </>
+  );
+  const footerNode = footer === false ? null : (footer ?? <UserFooter />);
   return (
     <div className="flex flex-col h-full w-full bg-(--surface-shallow)">
-      {headerNode}
-      <nav className="flex-1 min-h-0 overflow-auto py-1">{children}</nav>
+      {topNode}
+      <nav className="flex-1 min-h-0 overflow-auto">{children}</nav>
       {footerNode}
+    </div>
+  );
+}
+
+/* ─── Toolbar (collapse / search / add) ─────────────────────────────────── */
+
+function Toolbar({
+  onToggle,
+  onAdd,
+}: {
+  onToggle?: () => void;
+  onAdd?: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-1 px-3 py-2.5 shrink-0">
+      <div className="flex flex-1 min-w-0 items-center gap-1">
+        <IconButton
+          aria-label="Collapse sidebar"
+          variant="tertiary"
+          onClick={onToggle}
+        >
+          <DotInLeftWindow size={16} />
+        </IconButton>
+        <button
+          type="button"
+          className="flex flex-1 min-w-0 items-center gap-1.5 h-8 px-2 rounded-square text-(--fg-neutral-medium) hover:bg-(--control-bg-neutral-subtle-hover)"
+        >
+          <MagnifyingGlass size={16} className="shrink-0 text-(--fg-neutral-subtle)" />
+          <KeyboardShortcut keys={["⌘", "K"]} />
+        </button>
+      </div>
+      <IconButton aria-label="Add" variant="secondary" onClick={onAdd}>
+        <PlusLarge size={16} />
+      </IconButton>
+    </div>
+  );
+}
+
+/* ─── Computer pill (product switcher) ──────────────────────────────────── */
+
+function ComputerPill({
+  label,
+  onClick,
+}: {
+  /** Defaults to the "computer" wordmark. */
+  label?: ReactNode;
+  onClick?: () => void;
+}) {
+  return (
+    <div className="px-3 shrink-0">
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex w-full items-center justify-center gap-1.5 h-9 px-2 rounded-[20px] bg-(--bg-neutral-subtle) hover:bg-(--control-bg-neutral-subtle-hover) text-(--fg-neutral-prominent) text-body-medium"
+      >
+        {label ?? (
+          <span className="lowercase tracking-tight">
+            comp<span className="font-mono">u</span>ter
+          </span>
+        )}
+      </button>
     </div>
   );
 }
@@ -93,7 +180,7 @@ function BackHeader({
   title: ReactNode;
   onBack?: () => void;
   /** When true, render the mac window controls + collapse row above the title
-   *  (6.5 — the sidebar spans the full window height including the top-left). */
+   *  (the sidebar spans the full window height including the top-left). */
   windowControls?: boolean;
 }) {
   return (
@@ -129,9 +216,8 @@ function AppFooter({
   trailing,
 }: {
   label?: ReactNode;
-  /** User avatar shown in a bottom row (6.6). When set, the footer renders the
-   *  Agent Studio link on one row and an avatar + `trailing` row below it,
-   *  matching the Settings sidenav. */
+  /** User avatar shown in a bottom row. When set, the footer renders the
+   *  Agent Studio link on one row and an avatar + `trailing` row below it. */
   avatar?: ReactNode;
   trailing?: ReactNode;
 }) {
@@ -152,19 +238,33 @@ function AppFooter({
   );
 }
 
-/* ─── Brand header ──────────────────────────────────────────────────────── */
+/* ─── User footer (avatar + chat FAB) ───────────────────────────────────── */
 
-function BrandHeader({ workspace }: { workspace: ReactNode }) {
+function UserFooter({
+  name = "Ada Lovelace",
+  initial = "A",
+  onChat,
+}: {
+  name?: string;
+  initial?: string;
+  onChat?: () => void;
+}) {
   return (
-    <div className="flex items-center px-3 h-11 shrink-0">
+    <div className="flex items-center gap-2 px-4 pb-5 pt-2 shrink-0">
+      <span className="relative shrink-0">
+        <Avatar name={name} size="md" />
+        <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-[#28C840] ring-2 ring-(--surface-shallow)" />
+      </span>
+      <span className="flex-1" aria-hidden />
       <button
         type="button"
-        className="flex items-center gap-1.5 py-1 px-1 -mx-1 rounded-square hover:bg-(--control-bg-neutral-subtle-hover) text-(--fg-neutral-prominent) text-body-medium"
+        onClick={onChat}
+        aria-label="Open chat"
+        className="flex h-7 w-7 items-center justify-center rounded-full bg-[#714AF0] text-white hover:opacity-90"
       >
-        <DevRevMark />
-        <span>{workspace}</span>
-        <ChevronDownSmall className="text-(--fg-neutral-subtle)" />
+        <ChatBubbles size={16} />
       </button>
+      <span className="sr-only">{initial}</span>
     </div>
   );
 }
@@ -178,34 +278,34 @@ type SectionProps = {
 
 function Section({ title, children }: SectionProps) {
   return (
-    <div className="py-2">
+    <div className="flex flex-col gap-0.5 py-1.5 w-full">
       {title && (
-        // Title aligns with item labels: items live in a px-2 wrapper and each
-        // item has px-2, so the label text starts 16px from the edge. The title
-        // matches that (px-4) — NO extra indent (6.2).
-        <div className="px-4 pb-1 text-caption text-(--fg-neutral-subtle)">
-          {title}
+        // Chip-style group label (Figma "_Group Label"): small, 60% opacity,
+        // padded so it aligns over the item rows.
+        <div className="flex items-center h-5 px-2.5">
+          <span className="px-1.5 py-0.5 rounded text-system-small text-(--fg-neutral-prominent) opacity-60 whitespace-nowrap">
+            {title}
+          </span>
         </div>
       )}
-      <div className="flex flex-col px-2 gap-0.5">{children}</div>
+      <div className="flex flex-col gap-0.5">{children}</div>
     </div>
   );
 }
 
 type ItemProps = {
   /** Item label. Legacy callers pass it as `children`; new callers may use
-   *  `label` with `icon` / `trailing` for a richer row. Both are supported
-   *  to avoid breaking existing prototype code. */
+   *  `label` with `icon` / `trailing`. Both are supported. */
   children?: ReactNode;
   label?: ReactNode;
-  /** Leading icon slot — typically a 16px arcade icon. Rendered with
-   *  --fg-neutral-subtle when idle, inheriting the active fg on selection. */
+  /** Leading icon slot — typically a 16px arcade icon (rendered in a 20px box
+   *  to match the Figma "Leading" slot). */
   icon?: ReactNode;
-  /** Trailing content — counts (`<Tag intent="info">14</Tag>`), shortcuts,
-   *  or a chevron for expandable sections. Pushed to the row's right edge. */
+  /** Trailing content — counts (`<Tag intent="info">14</Tag>`), a chevron for
+   *  expandable groups, or shortcuts. Pushed to the row's right edge. */
   trailing?: ReactNode;
-  /** Nest the item under its parent. Applies an extra 16px left padding
-   *  so child items align visually under a section/parent item. */
+  /** Nest the item under its parent. Applies extra left padding so child
+   *  items align under a section/parent item. */
   indent?: boolean;
   active?: boolean;
   onClick?: () => void;
@@ -215,8 +315,7 @@ const Item = forwardRef<HTMLDivElement, ItemProps>(function Item(
   { children, label, icon, trailing, indent, active, onClick },
   ref,
 ) {
-  // Accept either `label` (new API) or `children` (legacy). `label` wins
-  // when both are set so callers can migrate piecemeal without ambiguity.
+  // Accept either `label` (new API) or `children` (legacy). `label` wins.
   const body = label ?? children;
   return (
     <div
@@ -226,21 +325,19 @@ const Item = forwardRef<HTMLDivElement, ItemProps>(function Item(
       data-active={active ? "true" : undefined}
       onClick={onClick}
       className={[
-        "flex items-center gap-2 py-1 rounded-square text-system cursor-pointer select-none",
-        indent ? "pl-8 pr-2" : "px-2",
+        "flex items-center gap-1.5 h-7 rounded-square cursor-pointer select-none",
+        "text-[13px] leading-4 tracking-[0.1px]",
+        indent ? "pl-12 pr-4" : "px-4",
         active
-          ? // 6.4: real selected-state bg (the -subtle-active token is fully
-            // transparent in the shipped theme, so it showed no selection).
-            "bg-(--bg-neutral-subtle) text-(--fg-neutral-prominent) font-medium"
-          : // 6.3: idle items are medium (dark), not subtle (gray).
-            "text-(--fg-neutral-medium) hover:bg-(--control-bg-neutral-subtle-hover) hover:text-(--fg-neutral-prominent)",
+          ? "bg-(--bg-neutral-subtle) text-(--fg-neutral-prominent) font-medium"
+          : "text-(--fg-neutral-medium) hover:bg-(--control-bg-neutral-subtle-hover) hover:text-(--fg-neutral-prominent)",
       ].join(" ")}
     >
       {icon ? (
         <span
           aria-hidden
           className={[
-            "inline-flex items-center shrink-0",
+            "inline-flex items-center justify-center shrink-0 size-5",
             active ? "" : "text-(--fg-neutral-subtle)",
           ].join(" ")}
         >
@@ -249,81 +346,25 @@ const Item = forwardRef<HTMLDivElement, ItemProps>(function Item(
       ) : null}
       <span className="flex-1 min-w-0 truncate">{body}</span>
       {trailing != null ? (
-        <span className="shrink-0 inline-flex items-center">{trailing}</span>
+        <span className="flex items-center justify-center shrink-0 w-7 h-5">
+          {trailing}
+        </span>
       ) : null}
     </div>
   );
 });
 
-/* ─── Computer footer ───────────────────────────────────────────────────── */
+/* ─── Convenience: expandable chevron for an Item's trailing slot ───────── */
 
-function ComputerFooter() {
+function ExpandChevron({ expanded = false }: { expanded?: boolean }) {
   return (
-    <div className="flex items-center gap-2 h-10 px-3 shrink-0">
-      <ComputerMark />
-      <span className="flex-1 text-system text-(--fg-neutral-subtle)">
-        computer
-      </span>
-      <kbd className="inline-flex items-center gap-0.5 text-caption text-(--fg-neutral-subtle) font-mono">
-        <span>⌘</span>
-        <span>.</span>
-      </kbd>
-    </div>
-  );
-}
-
-/* ─── Inline brand marks ────────────────────────────────────────────────── */
-
-function DevRevMark() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <rect width="16" height="16" rx="3" fill="currentColor" />
-      <path
-        d="M5 5H11M5 8H9M5 11H11"
-        stroke="var(--surface-backdrop)"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function ComputerMark() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 18 18"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-      className="text-(--fg-neutral-prominent)"
-    >
-      <rect
-        x="2"
-        y="3"
-        width="14"
-        height="10"
-        rx="1.5"
-        stroke="currentColor"
-        strokeWidth="1.25"
-      />
-      <line
-        x1="6"
-        y1="15.5"
-        x2="12"
-        y2="15.5"
-        stroke="currentColor"
-        strokeWidth="1.25"
-      />
-    </svg>
+    <ChevronDownSmall
+      size={16}
+      className={[
+        "text-(--fg-neutral-subtle) transition-transform",
+        expanded ? "" : "-rotate-90",
+      ].join(" ")}
+    />
   );
 }
 
@@ -332,6 +373,10 @@ function ComputerMark() {
 export const NavSidebar = Object.assign(Root, {
   Section,
   Item,
+  Toolbar,
+  ComputerPill,
+  UserFooter,
+  ExpandChevron,
   BackHeader,
   AppFooter,
 });
