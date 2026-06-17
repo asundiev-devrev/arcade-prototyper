@@ -8,6 +8,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.37.2] — 2026-06-17
+
+### Fixed
+- **The navigation sidebar now matches the DevRev design faithfully.** The 0.37.1 redesign had several gaps: the product-switcher button showed a workspace name (e.g. "DevRev") instead of the **computer** logo; the ⌘K search hint rendered as "⌘ + K" with a stray plus; the search icon was too faint; and frames passing the old `workspace` prop lost the computer branding. The switcher now always shows the computer wordmark, the ⌘K hint and search icon match the design, and the grouped nav (Work / Teams / Views + Explore) renders as intended.
+
 ## [0.37.1] — 2026-06-17
 
 ### Changed

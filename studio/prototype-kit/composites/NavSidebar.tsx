@@ -23,8 +23,9 @@
  *   expandable groups), and `indent` for nested rows.
  *
  * Slots (all optional — sensible defaults render the full Figma design):
- * - `workspace` — kept for back-compat; when set WITHOUT a custom `pill`, the
- *   computer pill shows this label instead of the "computer" wordmark.
+ * - `workspace` — accepted for back-compat but IGNORED. The pill is the
+ *   "computer" product switcher and always shows the computer wordmark; it is
+ *   not a workspace-name label. (Pass a custom `pill` to change the switcher.)
  * - `toolbar` — replace the default top toolbar. Pass `false` to hide it.
  * - `pill` — replace the default computer pill. Pass `false` to hide it.
  * - `header` — legacy: a custom node ABOVE the toolbar (e.g.
@@ -47,7 +48,7 @@ import {
   IconButton,
   MagnifyingGlass,
   PlusLarge,
-  KeyboardShortcut,
+  Computer,
   Avatar,
   ChatBubbles,
 } from "@xorkavi/arcade-gen";
@@ -55,8 +56,8 @@ import {
 /* ─── Root ──────────────────────────────────────────────────────────────── */
 
 type NavSidebarRootProps = {
-  /** Back-compat: when set without a custom `pill`, the computer pill shows
-   *  this label instead of the "computer" wordmark. */
+  /** Accepted for back-compat but IGNORED — the pill always shows the
+   *  "computer" wordmark. Use `pill` to replace the switcher. */
   workspace?: ReactNode;
   /** Custom top toolbar, or `false` to hide it. Defaults to the
    *  collapse / ⌘K search / add toolbar. */
@@ -83,10 +84,15 @@ function Root({
 }: NavSidebarRootProps) {
   // A custom `header` (e.g. BackHeader) owns the top — suppress the default
   // toolbar + pill so the Settings chrome isn't doubled up.
+  // `workspace` is accepted for back-compat but intentionally ignored: the
+  // pill is the "computer" product switcher and always shows the computer
+  // wordmark, never a workspace name. (Older callers passed workspace="DevRev",
+  // which previously — and wrongly — replaced the logo with plain text.)
+  void workspace;
   const topNode = header ?? (
     <>
       {toolbar === false ? null : (toolbar ?? <Toolbar />)}
-      {pill === false ? null : (pill ?? <ComputerPill label={workspace} />)}
+      {pill === false ? null : (pill ?? <ComputerPill />)}
     </>
   );
   const footerNode = footer === false ? null : (footer ?? <UserFooter />);
@@ -120,10 +126,15 @@ function Toolbar({
         </IconButton>
         <button
           type="button"
-          className="flex flex-1 min-w-0 items-center gap-1.5 h-8 px-2 rounded-square text-(--fg-neutral-medium) hover:bg-(--control-bg-neutral-subtle-hover)"
+          aria-label="Search"
+          className="flex flex-1 min-w-0 items-center gap-2 h-8 px-2 rounded-square text-(--fg-neutral-medium) hover:bg-(--control-bg-neutral-subtle-hover)"
         >
-          <MagnifyingGlass size={16} className="shrink-0 text-(--fg-neutral-subtle)" />
-          <KeyboardShortcut keys={["⌘", "K"]} />
+          {/* Full-weight search icon in the medium fg — the design's magnifier
+              reads clearly, not the faint subtle token. */}
+          <MagnifyingGlass size={16} className="shrink-0 text-(--fg-neutral-medium)" />
+          {/* Plain "⌘K" hint, NOT the KeyboardShortcut badge (which renders
+              "⌘ + K" with a separator the design doesn't use). */}
+          <span className="text-system text-(--fg-neutral-subtle)">⌘K</span>
         </button>
       </div>
       <IconButton aria-label="Add" variant="secondary" onClick={onAdd}>
@@ -136,11 +147,8 @@ function Toolbar({
 /* ─── Computer pill (product switcher) ──────────────────────────────────── */
 
 function ComputerPill({
-  label,
   onClick,
 }: {
-  /** Defaults to the "computer" wordmark. */
-  label?: ReactNode;
   onClick?: () => void;
 }) {
   return (
@@ -148,15 +156,26 @@ function ComputerPill({
       <button
         type="button"
         onClick={onClick}
-        className="flex w-full items-center justify-center gap-1.5 h-9 px-2 rounded-[20px] bg-(--bg-neutral-subtle) hover:bg-(--control-bg-neutral-subtle-hover) text-(--fg-neutral-prominent) text-body-medium"
+        aria-label="computer"
+        className="flex w-full items-center justify-center h-9 px-2 rounded-[20px] bg-(--bg-neutral-subtle) hover:bg-(--control-bg-neutral-subtle-hover) text-(--fg-neutral-prominent)"
       >
-        {label ?? (
-          <span className="lowercase tracking-tight">
-            comp<span className="font-mono">u</span>ter
-          </span>
-        )}
+        {/* The "computer" wordmark: "comp" + the Computer glyph as the "u" +
+            "ter", matching the Figma logo. This is the product switcher and
+            ALWAYS shows the computer brand — it is not a workspace-name label. */}
+        <ComputerWordmark />
       </button>
     </div>
+  );
+}
+
+/** The "comp—ter" wordmark with the Computer glyph standing in for the "u". */
+function ComputerWordmark() {
+  return (
+    <span className="inline-flex items-baseline text-[15px] font-medium tracking-tight text-(--fg-neutral-prominent)">
+      comp
+      <Computer size={13} className="self-center mx-px text-(--fg-neutral-prominent)" />
+      ter
+    </span>
   );
 }
 
