@@ -88,6 +88,7 @@ describe("mapping-table coverage", () => {
       "HumanSilhouetteWithPlus",
       "MagnifyingGlass",
       "Pencil",
+      "Placeholder",
       "PlusInChatBubble",
       "ThreeDotsHorizontal",
       "ThumbsDown",

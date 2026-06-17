@@ -49,6 +49,7 @@ import {
   MagnifyingGlass,
   PlusLarge,
   Computer,
+  Placeholder,
   Avatar,
   ChatBubbles,
 } from "@xorkavi/arcade-gen";
@@ -116,7 +117,10 @@ function Toolbar({
 }) {
   return (
     <div className="flex items-center justify-between gap-1 px-3 py-2.5 shrink-0">
-      <div className="flex flex-1 min-w-0 items-center gap-1">
+      {/* Left cluster hugs its content (collapse + search). It must NOT take
+          flex-1, or the search button's hover background stretches the full
+          sidebar width — the design's search is auto-width. */}
+      <div className="flex items-center gap-1 min-w-0">
         <IconButton
           aria-label="Collapse sidebar"
           variant="tertiary"
@@ -127,7 +131,8 @@ function Toolbar({
         <button
           type="button"
           aria-label="Search"
-          className="flex flex-1 min-w-0 items-center gap-2 h-8 px-2 rounded-square text-(--fg-neutral-medium) hover:bg-(--control-bg-neutral-subtle-hover)"
+          // Auto-width (no flex-1): the hover wash only covers the icon + ⌘K.
+          className="inline-flex items-center gap-2 h-8 px-2 rounded-square text-(--fg-neutral-medium) hover:bg-(--control-bg-neutral-subtle-hover)"
         >
           {/* Full-weight search icon in the medium fg — the design's magnifier
               reads clearly, not the faint subtle token. */}
@@ -137,7 +142,14 @@ function Toolbar({
           <span className="text-system text-(--fg-neutral-subtle)">⌘K</span>
         </button>
       </div>
-      <IconButton aria-label="Add" variant="secondary" onClick={onAdd}>
+      {/* Secondary "add" button: the design gives it a soft neutral fill
+          (Figma BG/Neutral/Soft), not the near-invisible default. */}
+      <IconButton
+        aria-label="Add"
+        variant="secondary"
+        onClick={onAdd}
+        className="bg-(--bg-neutral-soft) hover:bg-(--control-bg-neutral-subtle-hover)"
+      >
         <PlusLarge size={16} />
       </IconButton>
     </div>
@@ -157,7 +169,9 @@ function ComputerPill({
         type="button"
         onClick={onClick}
         aria-label="computer"
-        className="flex w-full items-center justify-center h-9 px-2 rounded-[20px] bg-(--bg-neutral-subtle) hover:bg-(--control-bg-neutral-subtle-hover) text-(--fg-neutral-prominent)"
+        // Figma pill fill is a LIGHT neutral wash (BG/Neutral/Soft). The
+        // kit's --bg-neutral-subtle reads too dark here, so use --bg-neutral-soft.
+        className="flex w-full items-center justify-center h-9 px-2 rounded-[20px] bg-(--bg-neutral-soft) hover:bg-(--control-bg-neutral-subtle-hover) text-(--fg-neutral-prominent)"
       >
         {/* The "computer" wordmark: "comp" + the Computer glyph as the "u" +
             "ter", matching the Figma logo. This is the product switcher and
@@ -340,6 +354,12 @@ const Item = forwardRef<HTMLDivElement, ItemProps>(function Item(
 ) {
   // Accept either `label` (new API) or `children` (legacy). `label` wins.
   const body = label ?? children;
+  // Icon fallback: top-level items always show a leading icon in the design.
+  // The generator sometimes passes `icon={null}`, which would render an
+  // icon-less, misaligned row — so fall back to a neutral placeholder glyph.
+  // Indented sub-items (Lobby / Issues under a team) are icon-less by design,
+  // so they keep their bare look.
+  const leadingIcon = icon ?? (indent ? null : <Placeholder size={16} />);
   return (
     <div
       ref={ref}
@@ -356,7 +376,7 @@ const Item = forwardRef<HTMLDivElement, ItemProps>(function Item(
           : "text-(--fg-neutral-medium) hover:bg-(--control-bg-neutral-subtle-hover) hover:text-(--fg-neutral-prominent)",
       ].join(" ")}
     >
-      {icon ? (
+      {leadingIcon ? (
         <span
           aria-hidden
           className={[
@@ -364,7 +384,7 @@ const Item = forwardRef<HTMLDivElement, ItemProps>(function Item(
             active ? "" : "text-(--fg-neutral-subtle)",
           ].join(" ")}
         >
-          {icon}
+          {leadingIcon}
         </span>
       ) : null}
       <span className="flex-1 min-w-0 truncate">{body}</span>
