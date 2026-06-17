@@ -1229,8 +1229,16 @@ Default chrome (rendered top→bottom):
 - Toolbar (top): collapse IconButton + ⌘K search field + "add" IconButton.
 - Computer pill: a full-width muted rounded button with the "computer"
   wordmark — the product switcher.
-- Nav body (scrollable): NavSidebar.Section + NavSidebar.Item children.
+- Nav body (scrollable): the canonical DevRev nav (Work / Teams / Views +
+  Explore) by default, or NavSidebar.Section + NavSidebar.Item children if
+  you pass your own tree.
 - User footer (bottom): avatar + status dot + a chat FAB.
+
+IMPORTANT: `<NavSidebar />` with NO children renders the full standard
+DevRev nav out of the box — prefer this. Only pass Section/Item children
+when the frame genuinely needs a DIFFERENT set of nav items. Do NOT
+hand-author the standard Work/Teams/Views items; you'll just reproduce the
+default less accurately.
 
 Intentional opinions:
 - Surface is --surface-shallow so the sidebar reads as a muted panel.
@@ -1252,7 +1260,9 @@ Slots (all optional — sensible defaults render the full Figma design):
   the default toolbar + pill are suppressed (the Settings chrome owns the top).
 - `footer` — replace the default user footer. Pass `false` to hide it.
   `<NavSidebar.AppFooter>` is still available for the "Agent Studio" chrome.
-- `children` — NavSidebar.Section / NavSidebar.Item tree.
+- `children` — OPTIONAL custom NavSidebar.Section / NavSidebar.Item tree.
+  Omit entirely to get the standard DevRev nav (Work / Teams / Views +
+  Explore). Only provide children for a genuinely different item set.
 
 **Compound:** `NavSidebar.Section`, `NavSidebar.Item`, `NavSidebar.Toolbar`, `NavSidebar.ComputerPill`, `NavSidebar.UserFooter`, `NavSidebar.ExpandChevron`, `NavSidebar.BackHeader`, `NavSidebar.AppFooter`
 

@@ -10,8 +10,16 @@
  * - Toolbar (top): collapse IconButton + ⌘K search field + "add" IconButton.
  * - Computer pill: a full-width muted rounded button with the "computer"
  *   wordmark — the product switcher.
- * - Nav body (scrollable): NavSidebar.Section + NavSidebar.Item children.
+ * - Nav body (scrollable): the canonical DevRev nav (Work / Teams / Views +
+ *   Explore) by default, or NavSidebar.Section + NavSidebar.Item children if
+ *   you pass your own tree.
  * - User footer (bottom): avatar + status dot + a chat FAB.
+ *
+ * IMPORTANT: `<NavSidebar />` with NO children renders the full standard
+ * DevRev nav out of the box — prefer this. Only pass Section/Item children
+ * when the frame genuinely needs a DIFFERENT set of nav items. Do NOT
+ * hand-author the standard Work/Teams/Views items; you'll just reproduce the
+ * default less accurately.
  *
  * Intentional opinions:
  * - Surface is --surface-shallow so the sidebar reads as a muted panel.
@@ -33,7 +41,9 @@
  *   the default toolbar + pill are suppressed (the Settings chrome owns the top).
  * - `footer` — replace the default user footer. Pass `false` to hide it.
  *   `<NavSidebar.AppFooter>` is still available for the "Agent Studio" chrome.
- * - `children` — NavSidebar.Section / NavSidebar.Item tree.
+ * - `children` — OPTIONAL custom NavSidebar.Section / NavSidebar.Item tree.
+ *   Omit entirely to get the standard DevRev nav (Work / Teams / Views +
+ *   Explore). Only provide children for a genuinely different item set.
  *
  * @counterexample When Figma shows a chat-style sidebar (with "New Chat" and chat history), use `ComputerSidebar` instead. That composite owns its own window chrome; do NOT also render a `TitleBar` alongside it.
  * @counterexample Never use `arcade.Sidebar` directly for the main app sidebar — it's the bare primitive. `NavSidebar` adds the toolbar, computer pill, user footer, and correct tokens.
@@ -52,6 +62,11 @@ import {
   Placeholder,
   Avatar,
   ChatBubbles,
+  Bell,
+  Document,
+  TwoHumanSilhouettes,
+  Window,
+  MagnifyingGlassInSquare,
 } from "@xorkavi/arcade-gen";
 
 /* ─── Root ──────────────────────────────────────────────────────────────── */
@@ -97,12 +112,57 @@ function Root({
     </>
   );
   const footerNode = footer === false ? null : (footer ?? <UserFooter />);
+  // Bake the canonical DevRev nav as the default. A prototype almost always
+  // wants the real Work / Teams / Views + Explore tree, and asking the
+  // generator to author it every time produced random, off-design items. So
+  // `<NavSidebar />` with no children renders the exact Figma nav; pass
+  // Section/Item children only when a frame genuinely needs a custom tree.
+  const body = children ?? <DefaultNav />;
   return (
     <div className="flex flex-col h-full w-full bg-(--surface-shallow)">
       {topNode}
-      <nav className="flex-1 min-h-0 overflow-auto">{children}</nav>
+      <nav className="flex-1 min-h-0 overflow-auto">{body}</nav>
       {footerNode}
     </div>
+  );
+}
+
+/* ─── Default nav (canonical DevRev SoR tree, Figma 10:3508) ─────────────── */
+
+/** The standard DevRev left-nav contents, rendered when NavSidebar is given
+ *  no children. Matches the Figma: Work / Teams (expandable Foundations with
+ *  sub-items) / Views, plus a standalone Explore. */
+function DefaultNav() {
+  return (
+    <>
+      <Section title="Work">
+        <Item icon={<Bell size={16} />} label="Updates" />
+        <Item icon={<Document size={16} />} label="My tasks" />
+      </Section>
+      <Section title="Teams">
+        <Item
+          icon={<TwoHumanSilhouettes size={16} />}
+          label="Foundations"
+          trailing={<ExpandChevron expanded />}
+        />
+        <Item icon={<Window size={16} />} label="Lobby" indent />
+        <Item icon={<Window size={16} />} label="Issues" indent active />
+        <Item icon={<Window size={16} />} label="Roadmap" indent />
+        <Item icon={<Window size={16} />} label="Sprints" indent />
+        <Item
+          icon={<TwoHumanSilhouettes size={16} />}
+          label="Experience Foundations"
+          trailing={<ExpandChevron />}
+        />
+      </Section>
+      <Section title="Views">
+        <Item icon={<Window size={16} />} label="Trails" />
+        <Item icon={<Window size={16} />} label="Now, next, later" />
+      </Section>
+      <Section>
+        <Item icon={<MagnifyingGlassInSquare size={16} />} label="Explore" />
+      </Section>
+    </>
   );
 }
 

@@ -87,6 +87,7 @@ describe("mapping-table coverage", () => {
       "Globe",
       "HumanSilhouetteWithPlus",
       "MagnifyingGlass",
+      "MagnifyingGlassInSquare",
       "Pencil",
       "Placeholder",
       "PlusInChatBubble",
@@ -94,7 +95,9 @@ describe("mapping-table coverage", () => {
       "ThumbsDown",
       "ThumbsUp",
       "TrashBin",
+      "TwoHumanSilhouettes",
       "TwoSquaresOverlapping",
+      "Window",
     ]);
     const reachable = new Set<string>();
     const kitDir = path.join(PROTOTYPE_KIT, "composites");
