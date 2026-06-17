@@ -8,6 +8,8 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.37.0] — 2026-06-17
+
 ### Added
 - **An Assets tab to see everything you can build with.** The left pane now has a second tab, *Assets*, next to Chat — a browsable gallery of every building block Studio knows: the 34 ready-made composites (forms, modals, cards, page layouts…), the underlying component library, and all the icons, each with a real rendered preview. Search across the lot by name. Open a composite or component and hit **Use this** to drop a starter prompt into chat (it flips you back to Chat, ready to finish the sentence); click an icon to copy its name. No more guessing what already exists — you can see it.
 

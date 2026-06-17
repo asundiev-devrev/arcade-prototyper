@@ -99,9 +99,15 @@ vi.mock("@xorkavi/arcade-gen", async () => {
     React.forwardRef((props: any, ref: any) =>
       React.createElement(tag, { ...props, ref }),
     );
+  const ToggleGroup: any = {
+    Root: ({ children }: any) => React.createElement("div", null, children),
+    Item: ({ children, ...rest }: any) =>
+      React.createElement("button", rest, children),
+  };
   return {
     IconButton: passthrough("button"),
     Tooltip: ({ children }: any) => React.createElement("div", null, children),
+    ToggleGroup,
   };
 });
 
