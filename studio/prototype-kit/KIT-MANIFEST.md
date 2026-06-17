@@ -1220,42 +1220,46 @@ _source: `composites/NavSidebar.tsx`_
 
 NavSidebar — DevRev navigation sidebar composite.
 
-Matches Figma "Sidebar / My Work + Teams + Multiplayer Sidebar". Replaces
-the bare `arcade.Sidebar` for prototype use. This composite lives BELOW
-the TitleBar in AppShell, so it does NOT render traffic lights or a
-collapse button — those are the TitleBar's responsibility.
+Matches Figma "Option_2_Interim_reduced(June)" (node 10:3508) — the current
+DevRev SoR left nav. Replaces the bare `arcade.Sidebar` for prototype use.
+Lives BELOW the window chrome in AppShell, so it owns its own top toolbar
+(collapse / ⌘K search / add) but NOT the mac traffic lights.
+
+Default chrome (rendered top→bottom):
+- Toolbar (top): collapse IconButton + ⌘K search field + "add" IconButton.
+- Computer pill: a full-width muted rounded button with the "computer"
+  wordmark — the product switcher.
+- Nav body (scrollable): NavSidebar.Section + NavSidebar.Item children.
+- User footer (bottom): avatar + status dot + a chat FAB.
 
 Intentional opinions:
-- Three zones: a header (top), nav body (scrollable middle), footer (bottom).
-  Two header/footer chrome variants are supported — Computer (brand chip +
-  "computer ⌘.") and Settings (← back + title, "Agent Studio" footer).
-- Uses --surface-shallow so the sidebar reads as a muted panel against
-  the body's --surface-overlay.
-- Nav body accepts NavSidebar.Section and NavSidebar.Item children —
-  same compound pattern as arcade.Sidebar for familiarity.
-- Active item is a SUBTLE neutral selection (--control-bg-neutral-subtle-active
-  + --fg-neutral-prominent), matching the Settings sidenav — NOT a solid blue
-  pill. (The blue --bg-info-prominent was drift; corrected 2026-06.)
-- Section titles render small/subtle (text-caption + --fg-neutral-subtle),
-  matching the Figma "Personal"/"Organization" group labels.
+- Surface is --surface-shallow so the sidebar reads as a muted panel.
+- Group labels (Work / Teams / Views) render as small, 60%-opacity chips
+  (text-system-small), matching the Figma "_Group Label".
+- Items are 28px rows, padded px-4, label in --text-interactive-navigation-
+  resting; the active/hover state is a subtle neutral wash (NOT a blue pill).
+- Items support a leading icon, a trailing slot (count Tag, or a chevron for
+  expandable groups), and `indent` for nested rows.
 
-Slots:
-- `workspace` (optional) — label in the default brand header (e.g. "DevRev").
-  When omitted or falsy, the brand header is NOT rendered.
-- `header` (optional) — custom header node replacing the brand header. Use
-  `<NavSidebar.BackHeader title="Settings" />` for the Settings chrome.
-- `showFooter` (optional, default true) — when false, the Computer footer is
-  not rendered.
-- `footer` (optional) — custom footer node replacing the Computer footer. Use
-  `<NavSidebar.AppFooter />` for the "Agent Studio" Settings chrome.
+Slots (all optional — sensible defaults render the full Figma design):
+- `workspace` — accepted for back-compat but IGNORED. The pill is the
+  "computer" product switcher and always shows the computer wordmark; it is
+  not a workspace-name label. (Pass a custom `pill` to change the switcher.)
+- `toolbar` — replace the default top toolbar. Pass `false` to hide it.
+- `pill` — replace the default computer pill. Pass `false` to hide it.
+- `header` — legacy: a custom node ABOVE the toolbar (e.g.
+  `<NavSidebar.BackHeader>` for the Settings "← Title" chrome). When set,
+  the default toolbar + pill are suppressed (the Settings chrome owns the top).
+- `footer` — replace the default user footer. Pass `false` to hide it.
+  `<NavSidebar.AppFooter>` is still available for the "Agent Studio" chrome.
 - `children` — NavSidebar.Section / NavSidebar.Item tree.
 
-**Compound:** `NavSidebar.Section`, `NavSidebar.Item`, `NavSidebar.BackHeader`, `NavSidebar.AppFooter`
+**Compound:** `NavSidebar.Section`, `NavSidebar.Item`, `NavSidebar.Toolbar`, `NavSidebar.ComputerPill`, `NavSidebar.UserFooter`, `NavSidebar.ExpandChevron`, `NavSidebar.BackHeader`, `NavSidebar.AppFooter`
 
 **When NOT to use this:**
 - When Figma shows a chat-style sidebar (with "New Chat" and chat history), use `ComputerSidebar` instead. That composite owns its own window chrome; do NOT also render a `TitleBar` alongside it.
-- Never use `arcade.Sidebar` directly for the main app sidebar — it's the bare primitive. `NavSidebar` adds the workspace dropdown, Computer footer, and correct tokens.
-- Do not pass `workspace=""` to hide the brand header. Composites check truthiness; the empty string counts as "present but empty". Omit the prop entirely.
+- Never use `arcade.Sidebar` directly for the main app sidebar — it's the bare primitive. `NavSidebar` adds the toolbar, computer pill, user footer, and correct tokens.
+- To hide a default slot, pass `false` (e.g. `toolbar={false}`), NOT an empty string. Composites check for `false` explicitly; other falsy values still render the default.
 
 ## PageBody (composite)
 _source: `composites/PageBody.tsx`_

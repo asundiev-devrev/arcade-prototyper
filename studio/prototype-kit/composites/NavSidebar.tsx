@@ -292,18 +292,22 @@ function UserFooter({
 
 type SectionProps = {
   title?: ReactNode;
+  /** Alias of `title`. The generator sometimes emits `label` on a Section;
+   *  accept both so the group heading never silently disappears. */
+  label?: ReactNode;
   children: ReactNode;
 };
 
-function Section({ title, children }: SectionProps) {
+function Section({ title, label, children }: SectionProps) {
+  const heading = title ?? label;
   return (
     <div className="flex flex-col gap-0.5 py-1.5 w-full">
-      {title && (
+      {heading && (
         // Chip-style group label (Figma "_Group Label"): small, 60% opacity,
         // padded so it aligns over the item rows.
         <div className="flex items-center h-5 px-2.5">
           <span className="px-1.5 py-0.5 rounded text-system-small text-(--fg-neutral-prominent) opacity-60 whitespace-nowrap">
-            {title}
+            {heading}
           </span>
         </div>
       )}
