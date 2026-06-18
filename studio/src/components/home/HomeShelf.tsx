@@ -31,14 +31,17 @@ export function HomeShelf({ projects, onOpen, onRename, onDelete, onStartTemplat
 
   return (
     <section>
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 24 }}>
         {/* Each Item carries an explicit onClick AND the Root carries
             onValueChange on purpose: onValueChange drives the real Radix
             ToggleGroup in production, while onClick keeps the switch working
-            under the test mock. Don't "simplify" by dropping the onClick. */}
-        <ToggleGroup.Root type="single" value={tab} onValueChange={(v: string) => { if (v === "projects" || v === "templates") setTab(v); }}>
-          <ToggleGroup.Item value="projects" onClick={() => setTab("projects")}>My projects</ToggleGroup.Item>
-          <ToggleGroup.Item value="templates" onClick={() => setTab("templates")}>Templates</ToggleGroup.Item>
+            under the test mock. Don't "simplify" by dropping the onClick.
+            The inline font-size/padding scale the segmented control up — it
+            doubles as this section's heading now that the "Projects" h2 is
+            gone. */}
+        <ToggleGroup.Root type="single" value={tab} onValueChange={(v: string) => { if (v === "projects" || v === "templates") setTab(v); }} style={{ fontSize: 16 }}>
+          <ToggleGroup.Item value="projects" onClick={() => setTab("projects")} style={{ padding: "8px 16px", fontSize: 16, lineHeight: "24px" }}>My projects</ToggleGroup.Item>
+          <ToggleGroup.Item value="templates" onClick={() => setTab("templates")} style={{ padding: "8px 16px", fontSize: 16, lineHeight: "24px" }}>Templates</ToggleGroup.Item>
         </ToggleGroup.Root>
       </div>
       {tab === "projects" ? (
