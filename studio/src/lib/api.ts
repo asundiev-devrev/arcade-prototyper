@@ -1,5 +1,7 @@
 import type { Project, Frame } from "../../server/types";
 
+export interface TemplateSummary { id: string; name: string; description: string; }
+
 async function j<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let msg: string;
@@ -18,6 +20,13 @@ export const api = {
     fetch(`/api/projects/${slug}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) }).then(j<Project>),
   deleteProject: (slug: string) =>
     fetch(`/api/projects/${slug}`, { method: "DELETE" }).then(j<void>),
+  listTemplates: () => fetch("/api/templates").then(j<TemplateSummary[]>),
+  seedTemplate: (slug: string, templateId: string) =>
+    fetch(`/api/projects/${slug}/seed-template`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ templateId }),
+    }).then(j<Frame>),
   stageUpload: (blob: Blob, fileName?: string) =>
     fetch("/api/uploads/_staging", {
       method: "POST",
