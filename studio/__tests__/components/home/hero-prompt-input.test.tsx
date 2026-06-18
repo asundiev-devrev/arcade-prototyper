@@ -47,7 +47,7 @@ afterEach(() => {
 describe("HeroPromptInput", () => {
   it("renders the placeholder text", () => {
     render(<HeroPromptInput onSubmit={vi.fn()} />);
-    expect(screen.getByPlaceholderText(/what we're building today/i)).toBeTruthy();
+    expect(screen.getByPlaceholderText(/what do you want to build today/i)).toBeTruthy();
   });
 
   it("disables the send button when the input is empty", () => {
@@ -59,7 +59,7 @@ describe("HeroPromptInput", () => {
   it("enables send and calls onSubmit with the prompt when Enter pressed", () => {
     const onSubmit = vi.fn();
     render(<HeroPromptInput onSubmit={onSubmit} />);
-    const textarea = screen.getByPlaceholderText(/what we're building today/i);
+    const textarea = screen.getByPlaceholderText(/what do you want to build today/i);
 
     fireEvent.change(textarea, { target: { value: "a landing page" } });
     fireEvent.keyDown(textarea, { key: "Enter" });
@@ -75,7 +75,7 @@ describe("HeroPromptInput", () => {
   it("Shift+Enter inserts a newline instead of submitting", () => {
     const onSubmit = vi.fn();
     render(<HeroPromptInput onSubmit={onSubmit} />);
-    const textarea = screen.getByPlaceholderText(/what we're building today/i);
+    const textarea = screen.getByPlaceholderText(/what do you want to build today/i);
 
     fireEvent.change(textarea, { target: { value: "hi" } });
     fireEvent.keyDown(textarea, { key: "Enter", shiftKey: true });
@@ -85,7 +85,7 @@ describe("HeroPromptInput", () => {
 
   it("shrinks font-size when the mirror spans multiple lines", () => {
     const { container } = render(<HeroPromptInput onSubmit={vi.fn()} />);
-    const textarea = screen.getByPlaceholderText(/what we're building today/i) as HTMLTextAreaElement;
+    const textarea = screen.getByPlaceholderText(/what do you want to build today/i) as HTMLTextAreaElement;
     const mirror = container.querySelector('[aria-hidden="true"]') as HTMLDivElement;
     expect(mirror).toBeTruthy();
 
