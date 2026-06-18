@@ -69,4 +69,13 @@ describe("electron-builder configuration", () => {
     expect(config.publish?.owner).toBe("asundiev-devrev");
     expect(config.publish?.repo).toBe("arcade-studio-releases");
   });
+
+  it("re-includes template thumbnails after the blanket image exclusion", () => {
+    const yml = fs.readFileSync(CONFIG_PATH, "utf-8");
+    const exclusionIdx = yml.indexOf('"!**/*.{png,jpg,jpeg,gif}"');
+    const reincludeIdx = yml.indexOf("studio/prototype-kit/template-thumbs/**/*.png");
+    expect(exclusionIdx).toBeGreaterThan(-1);
+    expect(reincludeIdx).toBeGreaterThan(-1);
+    expect(reincludeIdx).toBeGreaterThan(exclusionIdx); // last-match-wins
+  });
 });
