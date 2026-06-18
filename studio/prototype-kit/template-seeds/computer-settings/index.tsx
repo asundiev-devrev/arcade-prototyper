@@ -8,6 +8,9 @@ import Users from "./pages/Users";
 import Profile from "./pages/Profile";
 import Preferences from "./pages/Preferences";
 import Organization from "./pages/Organization";
+import WorkflowsTools from "./pages/WorkflowsTools";
+import PlansBilling from "./pages/PlansBilling";
+import Usage from "./pages/Usage";
 
 function PagePlaceholder({ id }: { id: PageId }) {
   return <div className="text-body-medium" style={{ color: "var(--fg-neutral-subtle)" }}>{id} — coming soon</div>;
@@ -22,6 +25,9 @@ function renderPage(id: PageId): React.ReactNode {
     case "profile": return <Profile />;
     case "preferences": return <Preferences />;
     case "organization": return <Organization />;
+    case "workflows-tools": return <WorkflowsTools />;
+    case "plans-billing": return <PlansBilling />;
+    case "usage": return <Usage />;
     default:
       return <PagePlaceholder id={id} />;
   }
