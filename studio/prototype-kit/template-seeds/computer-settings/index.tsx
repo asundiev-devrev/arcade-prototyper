@@ -1,6 +1,35 @@
 import * as React from "react";
+import { ComputerSettingsSidebar } from "./ComputerSettingsSidebar";
+import { PAGE_TITLES, type PageId } from "./types.tsx";
 
-// Temporary placeholder — replaced by the real shell in Task 2.
+function PagePlaceholder({ id }: { id: PageId }) {
+  return <div className="text-body-medium" style={{ color: "var(--fg-neutral-subtle)" }}>{id} — coming soon</div>;
+}
+
+function renderPage(id: PageId): React.ReactNode {
+  switch (id) {
+    default:
+      return <PagePlaceholder id={id} />;
+  }
+}
+
 export default function ComputerSettingsTemplate() {
-  return <div>Computer Settings</div>;
+  const [active, setActive] = React.useState<PageId>("my-computer");
+  const meta = PAGE_TITLES[active] ?? PAGE_TITLES["my-computer"];
+  return (
+    <div className="flex h-screen w-full overflow-hidden" style={{ background: "var(--surface-default)" }}>
+      <ComputerSettingsSidebar active={active} onSelect={setActive} />
+      <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+        <div className="flex h-12 shrink-0 items-center px-9 text-body-small" style={{ color: "var(--fg-neutral-subtle)" }}>
+          Settings <span className="px-1.5">›</span>
+          <span style={{ color: "var(--fg-neutral-prominent)" }}>{meta.title}</span>
+        </div>
+        <div className="mx-auto w-full max-w-[760px] px-9 py-6">
+          <h1 className="text-title-1" style={{ color: "var(--fg-neutral-prominent)" }}>{meta.title}</h1>
+          <p className="mt-2 text-body-medium" style={{ color: "var(--fg-neutral-subtle)" }}>{meta.subtitle}</p>
+          <div className="mt-8">{renderPage(active)}</div>
+        </div>
+      </div>
+    </div>
+  );
 }
