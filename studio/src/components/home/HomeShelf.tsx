@@ -32,6 +32,10 @@ export function HomeShelf({ projects, onOpen, onRename, onDelete, onStartTemplat
   return (
     <section>
       <div style={{ marginBottom: 16 }}>
+        {/* Each Item carries an explicit onClick AND the Root carries
+            onValueChange on purpose: onValueChange drives the real Radix
+            ToggleGroup in production, while onClick keeps the switch working
+            under the test mock. Don't "simplify" by dropping the onClick. */}
         <ToggleGroup.Root type="single" value={tab} onValueChange={(v: string) => { if (v === "projects" || v === "templates") setTab(v); }}>
           <ToggleGroup.Item value="projects" onClick={() => setTab("projects")}>My projects</ToggleGroup.Item>
           <ToggleGroup.Item value="templates" onClick={() => setTab("templates")}>Templates</ToggleGroup.Item>
