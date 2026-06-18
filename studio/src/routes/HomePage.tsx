@@ -80,10 +80,10 @@ export function HomePage({ onOpen }: { onOpen: (slug: string) => void }) {
     if (submitting) return;
     setSubmitting(true);
     try {
-      const names: Record<string, string> = { computer: "Computer", "settings-page": "Settings page", "app-list": "App list" };
+      const names: Record<string, string> = { computer: "Computer: Chat", "settings-page": "Computer: Skills settings" };
       const base = names[templateId] ?? "Untitled";
       // Dedupe the DISPLAY name against existing projects (createProject only
-      // dedupes the slug): "Computer", then "Computer 2", "Computer 3", …
+      // dedupes the slug): "Computer: Chat", then "Computer: Chat 2", …
       const taken = new Set(projects.map((p) => p.name));
       let name = base;
       for (let n = 2; taken.has(name); n++) name = `${base} ${n}`;

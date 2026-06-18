@@ -3,8 +3,8 @@ import fs from "node:fs/promises";
 import { TEMPLATES, getTemplate, readTemplateSeed, TEMPLATE_SEEDS_DIR } from "../../server/templates";
 
 describe("templates manifest", () => {
-  it("exposes exactly the three named templates", () => {
-    expect(TEMPLATES.map((t) => t.id).sort()).toEqual(["app-list", "computer", "settings-page"]);
+  it("exposes exactly the named templates", () => {
+    expect(TEMPLATES.map((t) => t.id).sort()).toEqual(["computer", "settings-page"]);
   });
 
   it("every entry has a name, description, and a seed file that exists on disk", async () => {

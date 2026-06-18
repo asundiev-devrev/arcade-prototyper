@@ -11,8 +11,8 @@ beforeEach(() => {
         ok: true,
         status: 200,
         json: async () => [
-          { id: "computer", name: "Computer", description: "Agent chat screen" },
-          { id: "app-list", name: "App list", description: "DevRev list view" },
+          { id: "computer", name: "Computer: Chat", description: "Agent chat screen" },
+          { id: "settings-page", name: "Computer: Skills settings", description: "Computer skills settings page" },
         ],
       } as Response;
     }
@@ -24,9 +24,9 @@ describe("TemplatesSection", () => {
   it("renders a card per template and fires onStart on click", async () => {
     const onStart = vi.fn();
     render(<TemplatesSection onStart={onStart} />);
-    await waitFor(() => expect(screen.getByText("Computer")).toBeTruthy());
-    expect(screen.getByText("App list")).toBeTruthy();
-    fireEvent.click(screen.getByText("Computer"));
+    await waitFor(() => expect(screen.getByText("Computer: Chat")).toBeTruthy());
+    expect(screen.getByText("Computer: Skills settings")).toBeTruthy();
+    fireEvent.click(screen.getByText("Computer: Chat"));
     expect(onStart).toHaveBeenCalledWith("computer");
   });
 });

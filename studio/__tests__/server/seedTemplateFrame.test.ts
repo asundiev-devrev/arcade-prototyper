@@ -18,16 +18,16 @@ afterEach(async () => {
 
 describe("seedTemplateFrame", () => {
   it("writes the template source to frames/01-<id>/index.tsx", async () => {
-    const p = await createProject({ name: "App list", theme: "arcade", mode: "light" });
-    const frame = await seedTemplateFrame(p.slug, "app-list");
-    expect(frame.slug).toBe("01-app-list");
+    const p = await createProject({ name: "Computer: Skills settings", theme: "arcade", mode: "light" });
+    const frame = await seedTemplateFrame(p.slug, "settings-page");
+    expect(frame.slug).toBe("01-settings-page");
     const onDisk = await fs.readFile(
-      path.join(tmpRoot, "projects", p.slug, "frames", "01-app-list", "index.tsx"),
+      path.join(tmpRoot, "projects", p.slug, "frames", "01-settings-page", "index.tsx"),
       "utf-8",
     );
-    expect(onDisk).toContain("VistaPage");
+    expect(onDisk).toContain("SettingsPage");
     const reloaded = await getProject(p.slug);
-    expect(reloaded?.frames.some((f) => f.slug === "01-app-list")).toBe(true);
+    expect(reloaded?.frames.some((f) => f.slug === "01-settings-page")).toBe(true);
   });
 
   it("rejects an unknown template id", async () => {

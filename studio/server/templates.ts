@@ -6,7 +6,7 @@ const STUDIO_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".
 export const TEMPLATE_SEEDS_DIR = path.resolve(STUDIO_DIR, "prototype-kit", "template-seeds");
 export const TEMPLATE_THUMBS_DIR = path.resolve(STUDIO_DIR, "prototype-kit", "template-thumbs");
 
-export type TemplateId = "computer" | "settings-page" | "app-list";
+export type TemplateId = "computer" | "settings-page";
 
 export interface TemplateDef {
   id: TemplateId;
@@ -17,9 +17,8 @@ export interface TemplateDef {
 }
 
 export const TEMPLATES: TemplateDef[] = [
-  { id: "computer", name: "Computer", description: "Agent chat screen", seedFile: "computer.tsx", thumb: "computer.png" },
-  { id: "settings-page", name: "Settings page", description: "DevRev settings layout", seedFile: "settings-page.tsx", thumb: "settings-page.png" },
-  { id: "app-list", name: "App list", description: "DevRev list view", seedFile: "app-list.tsx", thumb: "app-list.png" },
+  { id: "computer", name: "Computer: Chat", description: "Agent chat screen", seedFile: "computer.tsx", thumb: "computer.png" },
+  { id: "settings-page", name: "Computer: Skills settings", description: "Computer skills settings page", seedFile: "settings-page.tsx", thumb: "settings-page.png" },
 ];
 
 export function getTemplate(id: string): TemplateDef | undefined {

@@ -24,7 +24,7 @@ describe("templatesMiddleware", () => {
     await templatesMiddleware()(mockReq("GET", "/api/templates"), out.res, () => {});
     expect(out.status).toBe(200);
     const list = JSON.parse(out.bytes.toString());
-    expect(list.map((t: any) => t.id).sort()).toEqual(["app-list", "computer", "settings-page"]);
+    expect(list.map((t: any) => t.id).sort()).toEqual(["computer", "settings-page"]);
   });
 
   it("GET /api/templates/:id/thumb streams a PNG", async () => {
