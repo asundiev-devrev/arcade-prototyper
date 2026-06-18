@@ -36,12 +36,12 @@ function mockRes() {
 
 describe("POST /api/projects/:slug/seed-template", () => {
   it("seeds the frame and returns 201", async () => {
-    const p = await createProject({ name: "Settings page", theme: "arcade", mode: "light" });
+    const p = await createProject({ name: "Computer Settings", theme: "arcade", mode: "light" });
     const mw = projectsMiddleware();
     const out = mockRes();
-    await mw(mockReq("POST", `/api/projects/${p.slug}/seed-template`, { templateId: "settings-page" }), out.res);
+    await mw(mockReq("POST", `/api/projects/${p.slug}/seed-template`, { templateId: "computer-settings" }), out.res);
     expect(out.status).toBe(201);
-    expect(out.body.slug).toBe("01-settings-page");
+    expect(out.body.slug).toBe("01-computer-settings");
   });
 
   it("returns 404 for an unknown template id", async () => {

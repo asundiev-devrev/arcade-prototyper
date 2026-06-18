@@ -12,7 +12,7 @@ beforeEach(() => {
         status: 200,
         json: async () => [
           { id: "computer", name: "Computer: Chat", description: "Agent chat screen" },
-          { id: "settings-page", name: "Computer: Skills settings", description: "Computer skills settings page" },
+          { id: "computer-settings", name: "Computer: Settings", description: "Full Computer settings" },
         ],
       } as Response;
     }
@@ -25,7 +25,7 @@ describe("TemplatesSection", () => {
     const onStart = vi.fn();
     render(<TemplatesSection onStart={onStart} />);
     await waitFor(() => expect(screen.getByText("Computer: Chat")).toBeTruthy());
-    expect(screen.getByText("Computer: Skills settings")).toBeTruthy();
+    expect(screen.getByText("Computer: Settings")).toBeTruthy();
     fireEvent.click(screen.getByText("Computer: Chat"));
     expect(onStart).toHaveBeenCalledWith("computer");
   });

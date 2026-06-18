@@ -6,7 +6,7 @@ import { projectDir, projectsRoot, projectJsonPath, chatHistoryPath, projectMemo
 import { projectSchema, type Project, type Frame, type ChatMessage } from "./types";
 import { scaffoldDevRevHelper } from "./devrev/scaffoldHelper";
 import { ensureMemoryStubs } from "./memory";
-import { getTemplate, readTemplateSeed, type TemplateId } from "./templates";
+import { getTemplate, readTemplateSeed, templateSeedPath, isSeedDirectory, type TemplateId } from "./templates";
 
 const STUDIO_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PROTOTYPER_ROOT = path.resolve(STUDIO_DIR, "..");
@@ -193,10 +193,16 @@ export async function seedTemplateFrame(slug: string, templateId: string): Promi
   if (!project) throw new Error(`Project not found: ${slug}`);
 
   const frameSlug = `01-${def.id}`;
-  const source = await readTemplateSeed(def.id as TemplateId);
   const dir = path.join(projectDir(slug), "frames", frameSlug);
   await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(path.join(dir, "index.tsx"), source, "utf-8");
+
+  if (await isSeedDirectory(def.id)) {
+    // Directory seed: copy the whole tree (index.tsx + sibling files).
+    await fs.cp(templateSeedPath(def.id), dir, { recursive: true });
+  } else {
+    const source = await readTemplateSeed(def.id as TemplateId);
+    await fs.writeFile(path.join(dir, "index.tsx"), source, "utf-8");
+  }
 
   const frame: Frame = {
     slug: frameSlug,

@@ -9,8 +9,8 @@
 import path from "node:path";
 import fs from "node:fs/promises";
 import { chromium } from "playwright";
-import { packFromSource } from "../server/sidecar/packFromSource";
-import { TEMPLATES, readTemplateSeed, TEMPLATE_THUMBS_DIR } from "../server/templates";
+import { packFromSource, packFromDir } from "../server/sidecar/packFromSource";
+import { TEMPLATES, readTemplateSeed, templateSeedPath, isSeedDirectory, TEMPLATE_THUMBS_DIR } from "../server/templates";
 
 async function main() {
   await fs.mkdir(TEMPLATE_THUMBS_DIR, { recursive: true });
@@ -20,7 +20,9 @@ async function main() {
     for (const t of TEMPLATES) {
       let page;
       try {
-        const html = await packFromSource({ tsx: await readTemplateSeed(t.id), theme: "arcade", mode: "light" });
+        const html = (await isSeedDirectory(t.id))
+          ? await packFromDir(templateSeedPath(t.id), { theme: "arcade", mode: "light" })
+          : await packFromSource({ tsx: await readTemplateSeed(t.id), theme: "arcade", mode: "light" });
         // Wide page preview (16:9-ish) — show the full layout, not a crop.
         page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
         await page.setContent(html, { waitUntil: "networkidle" });

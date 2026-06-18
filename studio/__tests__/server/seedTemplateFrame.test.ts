@@ -17,17 +17,26 @@ afterEach(async () => {
 });
 
 describe("seedTemplateFrame", () => {
-  it("writes the template source to frames/01-<id>/index.tsx", async () => {
-    const p = await createProject({ name: "Computer: Skills settings", theme: "arcade", mode: "light" });
-    const frame = await seedTemplateFrame(p.slug, "settings-page");
-    expect(frame.slug).toBe("01-settings-page");
-    const onDisk = await fs.readFile(
-      path.join(tmpRoot, "projects", p.slug, "frames", "01-settings-page", "index.tsx"),
+  it("copies a directory seed (computer-settings) tree into the frame", async () => {
+    const p = await createProject({ name: "Computer: Settings", theme: "arcade", mode: "light" });
+    const frame = await seedTemplateFrame(p.slug, "computer-settings");
+    expect(frame.slug).toBe("01-computer-settings");
+    const frameDir = path.join(tmpRoot, "projects", p.slug, "frames", "01-computer-settings");
+    const idx = await fs.readFile(path.join(frameDir, "index.tsx"), "utf-8");
+    expect(idx).toContain("export default");
+    const reloaded = await getProject(p.slug);
+    expect(reloaded?.frames.some((f) => f.slug === "01-computer-settings")).toBe(true);
+  });
+
+  it("writes a single-file seed (computer) to frames/01-<id>/index.tsx", async () => {
+    const p = await createProject({ name: "Computer: Chat", theme: "arcade", mode: "light" });
+    const frame = await seedTemplateFrame(p.slug, "computer");
+    expect(frame.slug).toBe("01-computer");
+    const idx = await fs.readFile(
+      path.join(tmpRoot, "projects", p.slug, "frames", "01-computer", "index.tsx"),
       "utf-8",
     );
-    expect(onDisk).toContain("SettingsPage");
-    const reloaded = await getProject(p.slug);
-    expect(reloaded?.frames.some((f) => f.slug === "01-settings-page")).toBe(true);
+    expect(idx).toContain("ComputerScene");
   });
 
   it("rejects an unknown template id", async () => {

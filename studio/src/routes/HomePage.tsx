@@ -80,7 +80,7 @@ export function HomePage({ onOpen }: { onOpen: (slug: string) => void }) {
     if (submitting) return;
     setSubmitting(true);
     try {
-      const names: Record<string, string> = { computer: "Computer: Chat", "settings-page": "Computer: Skills settings", "builder-page": "Agent Studio: Builder" };
+      const names: Record<string, string> = { computer: "Computer: Chat", "computer-settings": "Computer: Settings", "builder-page": "Agent Studio: Builder" };
       const base = names[templateId] ?? "Untitled";
       // Dedupe the DISPLAY name against existing projects (createProject only
       // dedupes the slug): "Computer: Chat", then "Computer: Chat 2", …
