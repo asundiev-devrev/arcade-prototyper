@@ -5,6 +5,9 @@ import MyComputer from "./pages/MyComputer";
 import Skills from "./pages/Skills";
 import Connectors from "./pages/Connectors";
 import Users from "./pages/Users";
+import Profile from "./pages/Profile";
+import Preferences from "./pages/Preferences";
+import Organization from "./pages/Organization";
 
 function PagePlaceholder({ id }: { id: PageId }) {
   return <div className="text-body-medium" style={{ color: "var(--fg-neutral-subtle)" }}>{id} — coming soon</div>;
@@ -16,6 +19,9 @@ function renderPage(id: PageId): React.ReactNode {
     case "skills": return <Skills />;
     case "connectors": return <Connectors />;
     case "users": return <Users />;
+    case "profile": return <Profile />;
+    case "preferences": return <Preferences />;
+    case "organization": return <Organization />;
     default:
       return <PagePlaceholder id={id} />;
   }
