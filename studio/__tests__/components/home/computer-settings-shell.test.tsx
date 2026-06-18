@@ -12,7 +12,7 @@ vi.mock("arcade/components", () => ({
   Buildings: () => null,
   TwoHumanSilhouettes: () => null,
   CreditCard: () => null,
-  Dashboard: () => null,
+  ChartLineInSquare: () => null,
   ChevronLeftSmall: () => null,
   ChevronRightSmall: () => null,
   ThreeDotsHorizontal: () => null,
@@ -23,7 +23,15 @@ vi.mock("arcade/components", () => ({
     List: ({ children }: any) => <div>{children}</div>,
     Trigger: ({ children }: any) => <button>{children}</button>,
   },
+  Select: {
+    Root: ({ children }: any) => <div>{children}</div>,
+    Trigger: ({ children }: any) => <div>{children}</div>,
+    Value: ({ placeholder }: any) => <span>{placeholder}</span>,
+    Content: ({ children }: any) => <div>{children}</div>,
+    Item: ({ children }: any) => <div>{children}</div>,
+  },
   Switch: () => <input type="checkbox" />,
+  Input: ({ defaultValue }: any) => <input defaultValue={defaultValue} />,
   Button: ({ children }: any) => <button>{children}</button>,
   Tag: ({ children }: any) => <span>{children}</span>,
   Link: ({ children }: any) => <a>{children}</a>,
@@ -56,5 +64,31 @@ describe("Computer: Settings shell", () => {
   it("renders the My Computer settings body by default", () => {
     render(<ComputerSettingsTemplate />);
     expect(screen.getByText(/General settings/i)).toBeTruthy();
+  });
+
+  it("renders all nav pages without crashing", () => {
+    render(<ComputerSettingsTemplate />);
+    const pagesToTest = [
+      "Profile",
+      "Preferences",
+      "My Computer",
+      "Workflows & Tools",
+      "Skills",
+      "Connectors",
+      "Organization",
+      "Users",
+      "Plans & Billing",
+      "Usage",
+    ];
+
+    pagesToTest.forEach((pageLabel) => {
+      // Click the nav button with the page label
+      const navButtons = screen.getAllByRole("button");
+      const targetButton = navButtons.find((btn) => btn.textContent === pageLabel);
+      expect(targetButton).toBeDefined();
+      fireEvent.click(targetButton!);
+      // Assert the page title appears (verify render succeeded)
+      expect(screen.getAllByText(pageLabel).length).toBeGreaterThan(0);
+    });
   });
 });

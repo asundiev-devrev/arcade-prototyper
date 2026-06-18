@@ -1,5 +1,5 @@
 import * as React from "react";
-import { HumanSilhouette, ArrowsLeftAndRight, Computer, ThreeBarsHorizontal, LightingBolt, Mcp, Buildings, TwoHumanSilhouettes, CreditCard, Dashboard } from "arcade/components";
+import { HumanSilhouette, ArrowsLeftAndRight, Computer, ThreeBarsHorizontal, LightingBolt, Mcp, Buildings, TwoHumanSilhouettes, CreditCard, ChartLineInSquare } from "arcade/components";
 
 export type PageId =
   | "profile" | "preferences"
@@ -24,7 +24,7 @@ export const NAV_GROUPS: NavGroup[] = [
     { id: "organization", label: "Organization", icon: <Buildings size={16} /> },
     { id: "users", label: "Users", icon: <TwoHumanSilhouettes size={16} /> },
     { id: "plans-billing", label: "Plans & Billing", icon: <CreditCard size={16} /> },
-    { id: "usage", label: "Usage", icon: <Dashboard size={16} /> },
+    { id: "usage", label: "Usage", icon: <ChartLineInSquare size={16} /> },
   ]},
 ];
 
