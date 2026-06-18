@@ -1,6 +1,10 @@
 import * as React from "react";
 import { ComputerSettingsSidebar } from "./ComputerSettingsSidebar";
 import { PAGE_TITLES, type PageId } from "./types.tsx";
+import MyComputer from "./pages/MyComputer";
+import Skills from "./pages/Skills";
+import Connectors from "./pages/Connectors";
+import Users from "./pages/Users";
 
 function PagePlaceholder({ id }: { id: PageId }) {
   return <div className="text-body-medium" style={{ color: "var(--fg-neutral-subtle)" }}>{id} — coming soon</div>;
@@ -8,6 +12,10 @@ function PagePlaceholder({ id }: { id: PageId }) {
 
 function renderPage(id: PageId): React.ReactNode {
   switch (id) {
+    case "my-computer": return <MyComputer />;
+    case "skills": return <Skills />;
+    case "connectors": return <Connectors />;
+    case "users": return <Users />;
     default:
       return <PagePlaceholder id={id} />;
   }

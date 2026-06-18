@@ -14,7 +14,27 @@ vi.mock("arcade/components", () => ({
   CreditCard: () => null,
   Dashboard: () => null,
   ChevronLeftSmall: () => null,
+  ChevronRightSmall: () => null,
+  ThreeDotsHorizontal: () => null,
+  PlusSmall: () => null,
   Sidebar: () => null,
+  Tabs: {
+    Root: ({ children }: any) => <div>{children}</div>,
+    List: ({ children }: any) => <div>{children}</div>,
+    Trigger: ({ children }: any) => <button>{children}</button>,
+  },
+  Switch: () => <input type="checkbox" />,
+  Button: ({ children }: any) => <button>{children}</button>,
+  Tag: ({ children }: any) => <span>{children}</span>,
+  Link: ({ children }: any) => <a>{children}</a>,
+  Avatar: ({ name }: any) => <div>{name}</div>,
+  IconButton: ({ children }: any) => <button>{children}</button>,
+}));
+
+vi.mock("arcade-prototypes", () => ({
+  SettingsCard: ({ title, children }: any) => <div>{title}{children}</div>,
+  SettingsRow: ({ label, description }: any) => <div>{label}{description}</div>,
+  SkillCard: ({ title }: any) => <div>{title}</div>,
 }));
 
 import ComputerSettingsTemplate from "../../../prototype-kit/template-seeds/computer-settings/index";
@@ -31,5 +51,10 @@ describe("Computer: Settings shell", () => {
     expect(screen.getAllByText("Skills").length).toBeGreaterThan(0);
     // breadcrumb/title now shows Skills subtitle
     expect(screen.getByText(/Discover and add capabilities/i)).toBeTruthy();
+  });
+
+  it("renders the My Computer settings body by default", () => {
+    render(<ComputerSettingsTemplate />);
+    expect(screen.getByText(/General settings/i)).toBeTruthy();
   });
 });
