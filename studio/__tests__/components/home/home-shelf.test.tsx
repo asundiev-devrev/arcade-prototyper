@@ -41,4 +41,11 @@ describe("HomeShelf smart default tab", () => {
     render(<HomeShelf projects={[proj]} onOpen={noop} onRename={noop} onDelete={noop} onStartTemplate={noop} />);
     expect(screen.getByText("Demo")).toBeTruthy();
   });
+
+  it("flips to My projects when projects arrive after mount (async load)", () => {
+    const { rerender } = render(<HomeShelf projects={[]} onOpen={noop} onRename={noop} onDelete={noop} onStartTemplate={noop} />);
+    expect(screen.queryByText("Demo")).toBeNull();           // started on Templates
+    rerender(<HomeShelf projects={[proj]} onOpen={noop} onRename={noop} onDelete={noop} onStartTemplate={noop} />);
+    expect(screen.getByText("Demo")).toBeTruthy();           // flipped to My projects
+  });
 });

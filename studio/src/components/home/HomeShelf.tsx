@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ToggleGroup } from "@xorkavi/arcade-gen";
 import type { Project } from "../../../server/types";
 import { ProjectsSection } from "./ProjectsSection";
@@ -16,6 +16,18 @@ export interface HomeShelfProps {
 
 export function HomeShelf({ projects, onOpen, onRename, onDelete, onStartTemplate }: HomeShelfProps) {
   const [tab, setTab] = useState<Tab>(projects.length === 0 ? "templates" : "projects");
+  // useProjects starts as [] and populates async, so a returning user's
+  // projects may not be present at mount. Resolve the smart-default tab once,
+  // the first time projects become non-empty; never override a later manual
+  // switch (the ref guard ensures this fires at most once).
+  const resolvedInitialTab = useRef(projects.length > 0);
+  useEffect(() => {
+    if (resolvedInitialTab.current) return;
+    if (projects.length > 0) {
+      resolvedInitialTab.current = true;
+      setTab("projects");
+    }
+  }, [projects.length]);
 
   return (
     <section>
