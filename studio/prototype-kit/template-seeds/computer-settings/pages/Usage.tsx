@@ -24,9 +24,9 @@ export default function Usage() {
       </div>
       <div className="rounded-square-x2 border p-5" style={{ borderColor: "var(--stroke-neutral-subtle)" }}>
         <div className="mb-4 text-system-medium" style={{ color: "var(--fg-neutral-prominent)" }}>Usage this week</div>
-        <div className="flex items-end gap-3" style={{ height: 160 }}>
+        <div className="flex gap-3" style={{ height: 160 }}>
           {usageByDay.map((d) => (
-            <div key={d.day} className="flex flex-1 flex-col items-center gap-2">
+            <div key={d.day} className="flex h-full flex-1 flex-col items-center justify-end gap-2">
               <div className="w-full rounded-square" style={{ height: `${d.pct}%`, background: "var(--fg-accent-prominent, #7c3aed)" }} />
               <span className="text-body-small" style={{ color: "var(--fg-neutral-subtle)" }}>{d.day}</span>
             </div>
