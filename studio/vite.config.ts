@@ -4,6 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
 import { studioRoot } from "./server/paths";
 import { projectsMiddleware } from "./server/middleware/projects";
+import { templatesMiddleware } from "./server/middleware/templates";
 import { framesMiddleware } from "./server/middleware/frames";
 import { adoptUploadsMiddleware } from "./server/middleware/adoptUploads";
 import { chatMiddleware } from "./server/middleware/chat";
@@ -52,6 +53,7 @@ function apiPlugin(): import("vite").Plugin {
       server.middlewares.use(settingsMiddleware());
       server.middlewares.use(cloudflareMiddleware());
       server.middlewares.use(projectsMiddleware());
+      server.middlewares.use(templatesMiddleware());
       server.middlewares.use(framesMiddleware());
       server.middlewares.use(adoptUploadsMiddleware());
       server.middlewares.use(chatMiddleware());

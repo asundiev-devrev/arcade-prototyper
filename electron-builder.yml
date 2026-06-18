@@ -28,6 +28,10 @@ files:
   - "!node_modules/**/{*.md,*.markdown,*.ts,*.flow,*.spec.js,*.test.js,*.map}"
   - "!node_modules/**/{__tests__,test,tests}/**"
   - "!**/*.{png,jpg,jpeg,gif}"
+  # Re-include homepage-template thumbnails: the blanket image exclusion above
+  # would strip them, leaving testers with blank template tiles. Must come
+  # AFTER the exclusion.
+  - "studio/prototype-kit/template-thumbs/**/*.png"
   - "!.git/**"
   - "!.worktrees/**"
   - "!.claude/**"
