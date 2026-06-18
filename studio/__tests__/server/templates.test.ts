@@ -4,7 +4,7 @@ import { TEMPLATES, getTemplate, readTemplateSeed, TEMPLATE_SEEDS_DIR } from "..
 
 describe("templates manifest", () => {
   it("exposes exactly the named templates", () => {
-    expect(TEMPLATES.map((t) => t.id).sort()).toEqual(["computer", "settings-page"]);
+    expect(TEMPLATES.map((t) => t.id).sort()).toEqual(["builder-page", "computer", "settings-page"]);
   });
 
   it("every entry has a name, description, and a seed file that exists on disk", async () => {
