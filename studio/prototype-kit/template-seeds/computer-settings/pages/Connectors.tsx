@@ -36,10 +36,10 @@ function ConnectorCard({ connector }: { connector: Connector }) {
         </span>
         <StatusTag status={connector.status} />
       </div>
-      <div className="flex flex-col gap-1">
-        <div className="text-system-medium" style={{ color: "var(--fg-neutral-prominent)" }}>{connector.name}</div>
+      <div className="flex flex-col gap-1.5">
+        <div className="text-title-3" style={{ color: "var(--fg-neutral-prominent)" }}>{connector.name}</div>
         {connector.description && (
-          <div className="text-body-small" style={{ color: "var(--fg-neutral-subtle)" }}>{connector.description}</div>
+          <div className="text-body-medium" style={{ color: "var(--fg-neutral-subtle)" }}>{connector.description}</div>
         )}
       </div>
     </div>
