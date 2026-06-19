@@ -154,11 +154,7 @@ function Root({
           <div className={[
             "flex items-center gap-2 px-2 py-2 shrink-0 group-data-[collapsed=true]/sidebar:justify-center",
           ].join(" ")}>
-            <div className={[
-              "flex-1 min-w-0 px-1 group-data-[collapsed=true]/sidebar:hidden",
-              "@max-[600px]:hidden",
-              canvasOpen ? "@max-[900px]:hidden" : "",
-            ].join(" ")}>{user}</div>
+            <div className="flex-1 min-w-0 px-1">{user}</div>
             {footerAction ? <div className={[
               "shrink-0 group-data-[collapsed=true]/sidebar:hidden",
               "@max-[600px]:hidden",
@@ -176,8 +172,20 @@ function Root({
 function WindowChrome({ onToggle }: { onToggle?: () => void }) {
   const canvasOpen = useContext(SidebarCtx);
   return (
-    <div className="flex items-center h-11 shrink-0 px-3 gap-2">
-      <TrafficLights />
+    <div className={[
+      "flex items-center h-11 shrink-0 px-3 gap-2",
+      "group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:px-0",
+      "@max-[600px]:justify-center @max-[600px]:px-0",
+      canvasOpen ? "@max-[900px]:justify-center @max-[900px]:px-0" : "",
+    ].join(" ")}>
+      <span className={[
+        "flex",
+        "group-data-[collapsed=true]/sidebar:hidden",
+        "@max-[600px]:hidden",
+        canvasOpen ? "@max-[900px]:hidden" : "",
+      ].join(" ")}>
+        <TrafficLights />
+      </span>
       <IconButton
         aria-label="Toggle sidebar"
         variant="tertiary"
@@ -186,7 +194,12 @@ function WindowChrome({ onToggle }: { onToggle?: () => void }) {
       >
         <DotInLeftWindow size={16} aria-hidden="true" />
       </IconButton>
-      <div className="flex-1" />
+      <div className={[
+        "flex-1",
+        "group-data-[collapsed=true]/sidebar:hidden",
+        "@max-[600px]:hidden",
+        canvasOpen ? "@max-[900px]:hidden" : "",
+      ].join(" ")} />
       <div className={[
         "flex items-center gap-0.5 text-(--fg-neutral-prominent) group-data-[collapsed=true]/sidebar:hidden",
         "@max-[600px]:hidden",
@@ -426,6 +439,7 @@ type UserProps = {
 };
 
 function User({ avatar, name, subtitle, presence = true }: UserProps) {
+  const canvasOpen = useContext(SidebarCtx);
   return (
     <div className="flex items-center gap-2.5 min-w-0">
       <div className="relative shrink-0">
@@ -437,7 +451,12 @@ function User({ avatar, name, subtitle, presence = true }: UserProps) {
           />
         ) : null}
       </div>
-      <div className="flex flex-col min-w-0">
+      <div className={[
+        "flex flex-col min-w-0",
+        "group-data-[collapsed=true]/sidebar:hidden",
+        "@max-[600px]:hidden",
+        canvasOpen ? "@max-[900px]:hidden" : "",
+      ].join(" ")}>
         <span className="text-body-medium text-(--fg-neutral-prominent) truncate">{name}</span>
         {subtitle ? (
           <span className="text-system text-(--fg-neutral-subtle) truncate">{subtitle}</span>
