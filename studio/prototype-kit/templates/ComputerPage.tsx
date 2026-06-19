@@ -62,6 +62,7 @@
  * The root is a `@container` element; descendants can query its width. The canvas panel auto-converts from a docked column to a fixed overlay drawer below 600px container width.
  */
 import type { ReactNode } from "react";
+import { IconButton, CrossSmall } from "@xorkavi/arcade-gen";
 
 export const COMPUTER_LAYOUT = {
   RAIL_WIDTH: 64,
@@ -80,6 +81,10 @@ type ComputerPageProps = {
   chatInput: ReactNode;
   children: ReactNode;
   panel?: ReactNode;
+  /** Called when the user dismisses the canvas drawer (backdrop click or the
+   *  drawer's close button) — only reachable below 600px where the canvas is
+   *  an overlay. Typically flips the canvas-open state in the caller. */
+  onCanvasClose?: () => void;
 };
 
 export function ComputerPage({
@@ -88,6 +93,7 @@ export function ComputerPage({
   chatInput,
   children,
   panel,
+  onCanvasClose,
 }: ComputerPageProps) {
   const hasPanel = panel != null;
   return (
@@ -105,8 +111,25 @@ export function ComputerPage({
           {/* Below 600px the same panel becomes a fixed overlay drawer
               (backdrop + right-pinned panel) escaping the overflow-hidden clip. */}
           <div className="hidden @max-[600px]:block">
-            <div className="fixed inset-0 z-[110] bg-black/20" aria-hidden="true" />
-            <div className="fixed right-0 top-0 z-[120] h-full shadow-lg">{panel}</div>
+            <div
+              className="fixed inset-0 z-[110] bg-black/20"
+              onClick={onCanvasClose}
+              aria-hidden="true"
+            />
+            <div className="fixed right-0 top-0 z-[120] h-full shadow-lg">
+              {onCanvasClose ? (
+                <IconButton
+                  aria-label="Close canvas"
+                  variant="tertiary"
+                  size="sm"
+                  onClick={onCanvasClose}
+                  className="absolute right-2 top-2 z-[1] text-(--fg-neutral-prominent)"
+                >
+                  <CrossSmall size={16} />
+                </IconButton>
+              ) : null}
+              {panel}
+            </div>
           </div>
         </>
       ) : null}

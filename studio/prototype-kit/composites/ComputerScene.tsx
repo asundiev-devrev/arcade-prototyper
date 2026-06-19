@@ -261,7 +261,7 @@ export function ComputerScene({
           footerAction={<NotificationsBell />}
         >
           {sessionsOpen ? (
-            <ComputerSidebar.Group title="Sessions">
+            <ComputerSidebar.Group title="Sessions" hideOnCollapse>
               {visibleSessions.map((s) => (
                 <ComputerSidebar.Item
                   key={s.id}
@@ -353,6 +353,7 @@ export function ComputerScene({
           </CanvasTabs>
         ) : undefined
       }
+      onCanvasClose={() => setPanelOpen(false)}
     >
       {messages.length === 0 ? (
         <ChatEmptyState />

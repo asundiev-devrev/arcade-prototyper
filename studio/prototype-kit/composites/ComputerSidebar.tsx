@@ -148,7 +148,11 @@ function Root({
           {children}
         </nav>
 
-        {agentStudio ? <div className="px-2 pb-1 shrink-0">{agentStudio}</div> : null}
+        {agentStudio ? <div className={[
+          "px-2 pb-1 shrink-0",
+          "group-data-[collapsed=true]/sidebar:px-0 @max-[600px]:px-0",
+          canvasOpen ? "@max-[900px]:px-0" : "",
+        ].join(" ")}>{agentStudio}</div> : null}
 
         {user ? (
           <div className={[
@@ -325,12 +329,20 @@ type GroupProps = {
   title?: ReactNode;
   trailing?: ReactNode;
   children: ReactNode;
+  /** When true, the ENTIRE group (title + items) hides in the icon-rail —
+   *  not just the title. Used for Sessions, which collapse away in the rail
+   *  leaving only the Chats avatar stack. */
+  hideOnCollapse?: boolean;
 };
 
-function Group({ title, trailing, children }: GroupProps) {
+function Group({ title, trailing, children, hideOnCollapse = false }: GroupProps) {
   const canvasOpen = useContext(SidebarCtx);
   return (
-    <div className="pt-1.5 pb-1">
+    <div className={[
+      "pt-1.5 pb-1",
+      hideOnCollapse ? "group-data-[collapsed=true]/sidebar:hidden @max-[600px]:hidden" : "",
+      hideOnCollapse && canvasOpen ? "@max-[900px]:hidden" : "",
+    ].join(" ")}>
       {title || trailing ? (
         <div className={[
           "flex items-center justify-between px-3 py-2 mx-1 rounded-square hover:bg-(--bg-neutral-soft) transition-colors group-data-[collapsed=true]/sidebar:hidden",
