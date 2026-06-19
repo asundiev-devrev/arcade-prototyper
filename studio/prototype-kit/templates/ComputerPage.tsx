@@ -105,8 +105,8 @@ export function ComputerPage({
           {/* Below 600px the same panel becomes a fixed overlay drawer
               (backdrop + right-pinned panel) escaping the overflow-hidden clip. */}
           <div className="hidden @max-[600px]:block">
-            <div className="absolute inset-0 z-[110] bg-black/20" aria-hidden="true" />
-            <div className="absolute right-0 top-0 z-[120] h-full shadow-lg">{panel}</div>
+            <div className="fixed inset-0 z-[110] bg-black/20" aria-hidden="true" />
+            <div className="fixed right-0 top-0 z-[120] h-full shadow-lg">{panel}</div>
           </div>
         </>
       ) : null}
