@@ -12,6 +12,8 @@ export { NavSidebar } from "./composites/NavSidebar.js";
 export { ComputerSidebar } from "./composites/ComputerSidebar.js";
 export { ComputerHeader } from "./composites/ComputerHeader.js";
 export { CanvasPanel } from "./composites/CanvasPanel.js";
+export { CanvasTabs } from "./composites/CanvasTabs.js";
+export type { CanvasTab } from "./composites/CanvasTabs.js";
 export { ChatInput } from "./composites/ChatInput.js";
 export { ChatEmptyState } from "./composites/ChatEmptyState.js";
 export { ChatMessages } from "./composites/ChatMessages.js";

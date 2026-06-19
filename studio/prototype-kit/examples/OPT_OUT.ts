@@ -7,4 +7,5 @@ export const EXAMPLE_OPT_OUT: string[] = [
   "FrameLink",      // invisible nav wrapper (display:contents, no visible affordance) — renders nothing to preview
   "Toast",          // styled toast only exists behind the imperative useToast() hook + a click; Toast.Root is the unstyled Radix primitive, so a static thumbnail has no padding/intent color to show
   "Tooltip",        // hover-only Radix tooltip with no `open`/`defaultOpen` prop on the public API — content can't be forced visible for a static thumbnail
+  "CanvasTabs",     // Computer-specific tabbed container — requires runtime context, treat like CanvasPanel
 ];

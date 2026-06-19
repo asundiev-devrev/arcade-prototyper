@@ -6,7 +6,7 @@
 > template source; if a prop signature here is enough, skip the extra
 > `Read`. Open the `.tsx` only when you need the full rendered markup.
 
-_34 entries — 30 composites, 4 templates._
+_35 entries — 31 composites, 4 templates._
 
 ## Templates
 
@@ -445,6 +445,29 @@ Compound:
   callers don't need to inline their own SVGs or pill shapes.
 
 **Compound:** `CanvasPanel.Step`, `CanvasPanel.Group`, `CanvasPanel.GroupAddButton`, `CanvasPanel.Item`, `CanvasPanel.FileIcon`, `CanvasPanel.FolderIcon`, `CanvasPanel.StatusDot`, `CanvasPanel.CountBadge`
+
+## CanvasTabs (composite)
+_source: `composites/CanvasTabs.tsx`_
+
+CanvasTabs — tab strip for the Computer canvas pane. Connected-tab styling
+(active tab merges into the body via white fill + no bottom rule; inactive
+tabs + a trailing filler carry an inset bottom rule). Tabs shrink + ellipsis
++ horizontally scroll as the canvas narrows — no JS for that.
+
+Usage:
+  <CanvasTabs tabs={[{id:"canvas",label:"Canvas"},{id:"docs",label:"Docs"}]}>
+    {(active) => active === "docs" ? <DocsBody/> : <CanvasPanel .../>}
+  </CanvasTabs>
+
+
+```ts
+type CanvasTabsProps = {
+  tabs: CanvasTab[];
+  defaultTabId?: string;
+  /** Render-prop: receives the active tab id, returns that tab's body. */
+  children: (activeId: string) => React.ReactNode;
+}
+```
 
 ## CapabilitySection (composite)
 _source: `composites/CapabilitySection.tsx`_

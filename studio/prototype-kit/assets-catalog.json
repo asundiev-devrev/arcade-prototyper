@@ -19,6 +19,11 @@
           "thumb": "assets-thumbs/CanvasPanel.png"
         },
         {
+          "name": "CanvasTabs",
+          "doc": "CanvasTabs — tab strip for the Computer canvas pane.",
+          "thumb": null
+        },
+        {
           "name": "CapabilitySection",
           "doc": "CapabilitySection — a titled capability group on the agent builder page.",
           "thumb": "assets-thumbs/CapabilitySection.png"

@@ -250,6 +250,15 @@ export const COMPOSITE_MAPPINGS: MappingEntry[] = [
       "No production equivalent. Decide whether the frame genuinely needs a scratch-canvas pattern; most product features don't.",
   },
   {
+    studio: { source: "arcade-prototypes", name: "CanvasTabs" },
+    production: { source: "n/a", name: "n/a" },
+    propDeltas: [],
+    slotNotes: [],
+    translationClass: "judgment",
+    judgmentNote:
+      "Studio-specific UI (tabbed container for Computer canvas). No production equivalent — treat like CanvasPanel.",
+  },
+  {
     studio: { source: "arcade-prototypes", name: "ChatInput" },
     production: { source: "n/a", name: "n/a" },
     propDeltas: [],
