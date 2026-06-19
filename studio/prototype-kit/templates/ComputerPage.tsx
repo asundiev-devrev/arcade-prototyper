@@ -99,7 +99,7 @@ export function ComputerPage({
   return (
     <div className="@container relative flex h-screen w-full bg-(--surface-backdrop) overflow-hidden">
       {sidebar}
-      <div className="flex-1 min-w-0 flex flex-col h-full bg-(--surface-overlay)">
+      <div className="@container/chat flex-1 min-w-0 flex flex-col h-full bg-(--surface-overlay)">
         {header}
         <div className="flex-1 min-h-0 overflow-y-auto">{children}</div>
         {chatInput}
