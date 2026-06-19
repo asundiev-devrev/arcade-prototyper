@@ -21,6 +21,7 @@ vi.mock("arcade/components", () => ({
   TwoSquaresOverlapping: () => null,
   MagnifyingGlass: () => null,
   InfoInCircle: () => null,
+  Clock: () => null,
   Sidebar: () => null,
   Tabs: {
     Root: ({ children }: any) => <div>{children}</div>,
