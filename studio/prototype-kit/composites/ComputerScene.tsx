@@ -48,7 +48,11 @@
  */
 import * as React from "react";
 import {
+  ArrowDownTray,
+  ArrowRightTray,
+  ArrowUpSmall,
   Avatar,
+  Cog,
   IconButton,
   Bell,
   ChatBubble,
@@ -56,8 +60,11 @@ import {
   Document as DocumentIcon,
   DotInRightWindow,
   Globe,
+  Menu,
+  QuestionMarkInCircle,
   ThreeDotsHorizontal,
 } from "@xorkavi/arcade-gen";
+import { ArtefactCard } from "./ArtefactCard.js";
 import { ComputerSidebar } from "./ComputerSidebar.js";
 import { ComputerHeader } from "./ComputerHeader.js";
 import { ChatInput } from "./ChatInput.js";
@@ -230,6 +237,24 @@ export function ComputerScene({
   const resolvedHeaderTitle = headerTitle ?? activeSession.topic;
   const showStreaming = state === "streaming" && messages === SEED_TRANSCRIPT;
 
+  const accountMenu = (
+    <>
+      <Menu.Group>
+        <Menu.Item><Cog size={16} /> Settings</Menu.Item>
+        <Menu.Item><QuestionMarkInCircle size={16} /> Help</Menu.Item>
+      </Menu.Group>
+      <Menu.Separator />
+      <Menu.Group>
+        <Menu.Item><ArrowUpSmall size={16} /> Upgrade plan</Menu.Item>
+        <Menu.Item><ArrowDownTray size={16} /> Get mobile app</Menu.Item>
+      </Menu.Group>
+      <Menu.Separator />
+      <Menu.Group>
+        <Menu.Item><ArrowRightTray size={16} /> Log out</Menu.Item>
+      </Menu.Group>
+    </>
+  );
+
   return (
     <ComputerPage
       sidebar={
@@ -281,6 +306,7 @@ export function ComputerScene({
                   size="md"
                 />
               }
+              menu={accountMenu}
             />
           }
           footerAction={<NotificationsBell />}
@@ -407,6 +433,9 @@ function Transcript({ messages, streaming }: { messages: Message[]; streaming: b
             thoughts={<ChatMessages.Thoughts label="Thought for 4s" />}
           >
             {m.text}
+            {m.id === 2 ? (
+              <ArtefactCard tag="DOC" title="Q3 launch brief" onOpen={() => setPanelOpen(true)} />
+            ) : null}
             <ChatMessages.Actions />
           </ChatMessages.Agent>
         ),
