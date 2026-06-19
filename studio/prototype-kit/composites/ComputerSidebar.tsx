@@ -54,6 +54,7 @@ import {
   Button,
   ThreeDotsHorizontal,
   DotInLeftWindow,
+  Menu,
 } from "@xorkavi/arcade-gen";
 import { ResizeHandle } from "./ResizeHandle";
 
@@ -477,21 +478,47 @@ type UserProps = {
   subtitle?: ReactNode;
   /** Render a green presence dot bottom-right of the avatar. Default true. */
   presence?: boolean;
+  /** Menu contents (Menu.Item / Menu.Separator children). When present the
+   *  AVATAR becomes a menu trigger; when omitted the footer renders exactly as
+   *  before (backward-compatible, no trigger, no behavior change). */
+  menu?: ReactNode;
 };
 
-function User({ avatar, name, subtitle, presence = true }: UserProps) {
+function User({ avatar, name, subtitle, presence = true, menu }: UserProps) {
   const canvasOpen = useContext(SidebarCtx);
+  const avatarBlock = (
+    <div className="relative shrink-0">
+      {avatar}
+      {presence ? (
+        <span
+          className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-circle bg-(--bg-success-prominent) ring-2 ring-(--surface-shallow)"
+          aria-label="Online"
+        />
+      ) : null}
+    </div>
+  );
   return (
     <div className="flex items-center gap-2.5 min-w-0">
-      <div className="relative shrink-0">
-        {avatar}
-        {presence ? (
-          <span
-            className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-circle bg-(--bg-success-prominent) ring-2 ring-(--surface-shallow)"
-            aria-label="Online"
-          />
-        ) : null}
-      </div>
+      {menu != null ? (
+        <Menu.Root>
+          <Menu.Trigger asChild>
+            <button type="button" aria-label="Account menu" className="relative shrink-0 rounded-circle">
+              {avatar}
+              {presence ? (
+                <span
+                  className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-circle bg-(--bg-success-prominent) ring-2 ring-(--surface-shallow)"
+                  aria-label="Online"
+                />
+              ) : null}
+            </button>
+          </Menu.Trigger>
+          <Menu.Content side="top" align="start" sideOffset={4}>
+            {menu}
+          </Menu.Content>
+        </Menu.Root>
+      ) : (
+        avatarBlock
+      )}
       <div className={[
         "flex flex-col min-w-0",
         "group-data-[collapsed=true]/sidebar:hidden",

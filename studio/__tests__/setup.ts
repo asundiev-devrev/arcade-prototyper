@@ -6,6 +6,15 @@ if (typeof globalThis.ResizeObserver === "undefined") {
   } as any;
 }
 
+// Radix Menu portals need IntersectionObserver
+if (typeof globalThis.IntersectionObserver === "undefined") {
+  globalThis.IntersectionObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as any;
+}
+
 // jsdom does not implement EventSource; useProjectPresence and any other
 // SSE-consuming hook reaches for `new EventSource(...)` on mount, which would
 // throw. Stub it with an inert connection — tests that exercise SSE behaviour
