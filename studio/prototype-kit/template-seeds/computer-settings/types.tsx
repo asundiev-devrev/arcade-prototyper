@@ -38,5 +38,5 @@ export const PAGE_TITLES: Record<PageId, { title: string; subtitle: string }> = 
   "organization": { title: "Organization", subtitle: "Manage everything about your organization" },
   "users": { title: "Users", subtitle: "Invite, remove, and manage users and their access roles." },
   "plans-billing": { title: "Plans and Billing", subtitle: "Manage payment methods, balances and billing preferences." },
-  "usage": { title: "Usage", subtitle: "Track how your organization is using Computer." },
+  "usage": { title: "Usage", subtitle: "Track your team's credit consumption and session activity" },
 };
