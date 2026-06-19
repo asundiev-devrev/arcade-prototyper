@@ -64,6 +64,7 @@ import { ChatInput } from "./ChatInput.js";
 import { ChatEmptyState } from "./ChatEmptyState.js";
 import { ChatMessages } from "./ChatMessages.js";
 import { CanvasPanel } from "./CanvasPanel.js";
+import { CanvasTabs } from "./CanvasTabs.js";
 import { ComputerPage } from "../templates/ComputerPage.js";
 
 /* ─── Baked-in roster (mirrors the colleague prototype) ─────────────────── */
@@ -331,7 +332,26 @@ export function ComputerScene({
           }
         />
       }
-      panel={panelOpen ? <DefaultCanvasPanel /> : undefined}
+      panel={
+        panelOpen ? (
+          <CanvasTabs
+            tabs={[
+              { id: "canvas", label: "Canvas" },
+              { id: "docs", label: "Q3 launch brief.doc" },
+            ]}
+          >
+            {(active) =>
+              active === "canvas" ? (
+                <DefaultCanvasPanel />
+              ) : (
+                <div className="p-6 text-body-medium text-(--fg-neutral-subtle)">
+                  Document preview
+                </div>
+              )
+            }
+          </CanvasTabs>
+        ) : undefined
+      }
     >
       {messages.length === 0 ? (
         <ChatEmptyState />

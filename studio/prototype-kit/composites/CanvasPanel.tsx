@@ -62,7 +62,7 @@ type RootProps = {
 
 function Root({ step, children }: RootProps) {
   return (
-    <aside className="flex flex-col h-full w-[272px] shrink-0 bg-(--surface-overlay) border-l border-(--stroke-neutral-subtle) overflow-y-auto">
+    <aside className="flex flex-col h-full shrink-0 bg-(--surface-overlay) overflow-y-auto">
       {step ? <div className="px-4 pt-4 pb-2">{step}</div> : null}
       <div className="flex-1 min-h-0 flex flex-col gap-1 pb-4">{children}</div>
     </aside>
