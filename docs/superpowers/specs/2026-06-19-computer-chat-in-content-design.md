@@ -25,9 +25,9 @@ Neither depends on the other; both are reusable by the generator; they are wired
 
 ## Key prior-art facts (from prototype analysis)
 
-- The prototype hand-rolls the avatar menu with `getBoundingClientRect` + `position: fixed` because it is vanilla JS. **We do not need this** — `@xorkavi/arcade-gen` ships a Radix-backed `DropdownMenu` (`Root / Trigger / Content / Item / Separator / Label / Group`) that anchors, portals out of `overflow:hidden`, and handles Esc / click-outside / focus for free.
+- The prototype hand-rolls the avatar menu with `getBoundingClientRect` + `position: fixed` because it is vanilla JS. **We do not need this** — `@xorkavi/arcade-gen` ships a Radix-backed `Menu` compound (`Root / Trigger / Content / Item / Separator / Label / Group`) that anchors, portals out of `overflow:hidden`, and handles Esc / click-outside / focus for free. NOTE: the relevant export is **`Menu`**, NOT `Dropdown` — arcade-gen's `Dropdown` is a Popover-style compound (Root/Trigger/Content/Close) with no menu Items.
 - The prototype's responsive behaviors key off `@container main` (the whole main pane). Our equivalent target is the **chat column**, because its width shrinks when the canvas docks — exactly the behavior we want the card to react to.
-- The card's `--stack-scale` is a CSS custom property **stepped at discrete container-query breakpoints**; Tailwind v4 arbitrary `@container` variants cannot set a custom property per breakpoint, so the card needs raw CSS.
+- The card's `--stack-scale` is a CSS custom property **stepped at discrete container-query breakpoints**. The prototype used raw CSS because it is vanilla JS. We are on **Tailwind v4.3**, which CAN set a custom property per named-container breakpoint via arbitrary-property utilities (`@max-[820px]/chat:[--stack-scale:0.82]`), so the card needs **no CSS file**. This matters because `kit:build` is tsc-only — it does not bundle or copy `.css`, so a co-located stylesheet would 404 in generated frames without build-pipeline changes. All card styling is therefore Tailwind utilities, matching the kit's existing convention (Sub-project A already used `@max-[600px]:` variants).
 
 ---
 
@@ -46,7 +46,7 @@ type UserProps = {
   subtitle?: ReactNode;
   /** Render a green presence dot bottom-right of the avatar. Default true. */
   presence?: boolean;
-  /** Menu contents (DropdownMenu.Item / .Separator children). When present the
+  /** Menu contents (Menu.Item / Menu.Separator children). When present the
    *  AVATAR becomes a menu trigger; when omitted the footer renders exactly as
    *  before (backward-compatible, no trigger, no behavior change). */
   menu?: ReactNode;
@@ -62,24 +62,24 @@ type UserProps = {
 - `menu == null` → render the footer exactly as today.
 - `menu != null` → wrap the avatar container in:
   ```tsx
-  <DropdownMenu.Root>
-    <DropdownMenu.Trigger asChild>
+  <Menu.Root>
+    <Menu.Trigger asChild>
       <button type="button" aria-label="Account menu" className="relative shrink-0 …">
         {avatar}
         {presence ? <span …presence dot… /> : null}
       </button>
-    </DropdownMenu.Trigger>
-    <DropdownMenu.Content side="top" align="start" sideOffset={4}>
+    </Menu.Trigger>
+    <Menu.Content side="top" align="start" sideOffset={4}>
       {menu}
-    </DropdownMenu.Content>
-  </DropdownMenu.Root>
+    </Menu.Content>
+  </Menu.Root>
   ```
-  `side="top"` reproduces "opens above the avatar"; `align="start"` left-aligns to the avatar; `sideOffset={4}` is the prototype's 4px gap.
+  `side="top"` reproduces "opens above the avatar"; `align="start"` left-aligns to the avatar; `sideOffset={4}` is the prototype's 4px gap. (`Menu.Content` extends Radix `DropdownMenu.Content`, so `side`/`align`/`sideOffset` pass through.)
 - The presence dot must stay visually attached to the avatar inside the trigger button (same absolute positioning as today).
 
 ### Default menu contents (supplied by `ComputerScene`)
 
-Mirrors the prototype's three groups, separated by `DropdownMenu.Separator`:
+Mirrors the prototype's three groups, separated by `Menu.Separator`:
 
 ```
 Group 1:  Settings · Help
@@ -89,7 +89,7 @@ Group 2:  Upgrade plan · Get mobile app
 Group 3:  Log out
 ```
 
-Each item is a `DropdownMenu.Item` with a leading 16px icon (use existing `arcade-gen` icons: `Gear`/settings, a question-mark/help, an up-arrow/upgrade, a tray-down/mobile, a tray-right/log-out — choose the closest available icons; exact icon identity is not load-bearing). `ComputerScene` passes this default so generated frames get it for free; the generator may override via the `menu` prop.
+Each item is a `Menu.Item` with a leading 16px icon. Confirmed available `arcade-gen` icons to use: `Cog` (Settings), `QuestionMarkInCircle` (Help), `ArrowUpSmall` (Upgrade plan), `ArrowDownTray` (Get mobile app), `ArrowRightTray` (Log out). `ComputerScene` passes this default so generated frames get it for free; the generator may override via the `menu` prop.
 
 ### Acceptance
 
@@ -101,7 +101,7 @@ Each item is a `DropdownMenu.Item` with a leading 16px icon (use existing `arcad
 
 ## Piece 2 — Artefact card
 
-### New composite: `ArtefactCard.tsx` + co-located `ArtefactCard.css`
+### New composite: `ArtefactCard.tsx` (Tailwind utilities only — no CSS file)
 
 Drops into an agent message body:
 
@@ -133,23 +133,32 @@ Flex row, `min-height: 152px`, **pink surface `#FFE5DB`**, border-radius 4px, ho
   - Red filetype tag: `#FF342D` text, monospace-ish small caps, with a small document glyph rendered via CSS `mask` (so it picks up `currentColor` — an `<img>` would ignore the color). Use an inline SVG mask or a masked pseudo-element.
   - Title: the document title. On DevRev typography tokens (NOT Chip 650 — rejected). Use the closest existing heading token.
   - "Open in canvas" CTA: a soft-gray pill button (~28px tall, radius 4). Rendered only when `onOpen` is set. Clicking calls `onOpen`.
-- **Right column** (the fanned thumbnail): `flex: 0 0 calc(410px * var(--stack-scale))`, holds `.artefact-card__stack`.
+- **Right column** (the fanned thumbnail): `flex-[0_0_calc(410px*var(--stack-scale))]`, holds the page-stack wrapper.
 
 ### Fanned 3-page thumbnail
 
-Three absolutely-positioned page layers inside `.artefact-card__stack` (which is `transform: scale(var(--stack-scale)); transform-origin: top right`):
+Three absolutely-positioned page layers inside a stack wrapper that carries `scale-[var(--stack-scale)] origin-top-right` (Tailwind utilities):
 
-- **back** — `rotate(4deg)`, palest pink (≈70% white wash over `#FF342D`).
-- **mid** — `rotate(-3deg)`, pale pink (≈75% white wash over `#FF342D`).
-- **top/front** — `rotate(-6deg)`, white page with a small shadow, containing a tiny replica scene: an icon, a title line, a hairline rule, and 2–3 body lines (a miniature of "what opens in the canvas").
+- **back** — `rotate-[4deg]`, palest pink (≈70% white wash over `#FF342D`).
+- **mid** — `-rotate-[3deg]`, pale pink (≈75% white wash over `#FF342D`).
+- **top/front** — `-rotate-[6deg]`, white page with a small shadow, containing a tiny replica scene: an icon, a title line, a hairline rule, and 2–3 body lines (a miniature of "what opens in the canvas").
 
-Each layer ≈316px wide, `aspect-ratio: 573/692`, radius 6px. Back/mid carry a soft shadow (a `::after` with `mix-blend-mode: multiply` per the prototype, or a plain box-shadow if blend-mode proves fragile in the iframe).
+Each layer ≈316px wide, `aspect-[573/692]`, radius 6px. Back/mid carry a soft `shadow-*` (plain box-shadow — avoid `mix-blend-mode: multiply`, which proved fragile in the studio iframe during Sub-project A).
 
-### Responsive — `ArtefactCard.css`
+### Responsive — Tailwind utilities (no CSS file)
 
-The card must sit inside a **named container** `@container/chat` (added to the chat column in `ComputerPage`; see Integration). The CSS file scopes all rules to the card's own class names.
+The card must sit inside a **named container** `@container/chat` (added to the chat column in `ComputerPage`; see Integration). All breakpoints below are expressed as named-container arbitrary-property utility classes on the card root.
 
-**A. `--stack-scale` step-down** (drives both the right column's flex-basis and the inner stack transform):
+**A. `--stack-scale` step-down** — set the custom property at each breakpoint via arbitrary-property utilities, then consume it in the flex-basis and the stack transform:
+
+```
+[--stack-scale:1]
+@max-[900px]/chat:[--stack-scale:0.92]
+@max-[820px]/chat:[--stack-scale:0.82]
+@max-[680px]/chat:[--stack-scale:0.7]
+@max-[540px]/chat:[--stack-scale:0.58]
+@max-[420px]/chat:[--stack-scale:0.5]
+```
 
 | `@container chat (max-width: …)` | `--stack-scale` |
 |---|---|
@@ -160,11 +169,13 @@ The card must sit inside a **named container** `@container/chat` (added to the c
 | 540px | `0.58` |
 | 420px | `0.5` |
 
-**B. Snap-to-edges** at `@container chat (max-width: 900px)`:
-- `border-radius: 0`
-- negate the chat column's horizontal padding so the card goes flush edge-to-edge (`width: calc(100% + 2 * PAD); margin-inline: calc(-1 * PAD)` where `PAD` matches the chat column's horizontal padding). Width AND margin must be set together — negative margin alone will not stretch a `width:100%` block.
+CASCADE-ORDER RISK: the step-down only works if Tailwind emits the `@max-[Npx]` variants largest→smallest so the narrowest matching one wins. Lock this with a test that asserts the variant utilities appear in descending-px order in the className string (a unit assertion on the literal class list — no browser needed).
 
-A transition on `border-radius / width / margin` (~40ms ease-out) is acceptable but not required; if added, suppress it on first paint to avoid an animated card on load.
+**B. Snap-to-edges** at `@max-[900px]/chat`:
+- `@max-[900px]/chat:rounded-none`
+- negate the chat column's horizontal padding so the card goes flush edge-to-edge. The chat column (`ChatMessages.Root`) uses `px-4` = **16px**, so: `@max-[900px]/chat:w-[calc(100%+32px)] @max-[900px]/chat:-mx-4`. Width AND margin must be set together — negative margin alone will not stretch a `width:100%` block.
+
+A transition (~40ms ease-out) is optional and omitted by default to avoid an animated card on first paint.
 
 ### Acceptance
 
