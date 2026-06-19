@@ -10,6 +10,7 @@
     "studio:test": "vitest run --config studio/vitest.config.ts",
     "studio:templates": "pnpm exec tsx studio/scripts/buildTemplateThumbs.ts",
     "kit:build": "pnpm exec tsx studio/prototype-kit/scripts/build-package.mts",
+    "kit:typecheck": "pnpm exec tsc -p studio/prototype-kit/tsconfig.build.json --noEmit",
     "studio:assets": "pnpm exec tsx studio/scripts/buildAssetsCatalog.ts",
     "studio:pack": "pnpm run studio:assets && pnpm run studio:templates && pnpm run kit:build && bash studio/packaging/scripts/fetch-cli-deps.sh && pnpm exec tsc -p electron/tsconfig.json && node studio/packaging/scripts/gen-telemetry-config.mjs && pnpm exec electron-builder --mac --config electron-builder.yml --publish never",
     "studio:release": "pnpm run studio:assets && pnpm run studio:templates && pnpm run kit:build && bash studio/packaging/scripts/fetch-cli-deps.sh && pnpm exec tsc -p electron/tsconfig.json && node studio/packaging/scripts/gen-telemetry-config.mjs && pnpm exec electron-builder --mac --config electron-builder.yml --publish always",

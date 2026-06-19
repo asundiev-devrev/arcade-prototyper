@@ -240,17 +240,42 @@ export function ComputerScene({
   const accountMenu = (
     <>
       <Menu.Group>
-        <Menu.Item><Cog size={16} /> Settings</Menu.Item>
-        <Menu.Item><QuestionMarkInCircle size={16} /> Help</Menu.Item>
+        <Menu.Item>
+          <span className="inline-flex items-center gap-2">
+            <Cog size={16} aria-hidden="true" />
+            Settings
+          </span>
+        </Menu.Item>
+        <Menu.Item>
+          <span className="inline-flex items-center gap-2">
+            <QuestionMarkInCircle size={16} aria-hidden="true" />
+            Help
+          </span>
+        </Menu.Item>
       </Menu.Group>
       <Menu.Separator />
       <Menu.Group>
-        <Menu.Item><ArrowUpSmall size={16} /> Upgrade plan</Menu.Item>
-        <Menu.Item><ArrowDownTray size={16} /> Get mobile app</Menu.Item>
+        <Menu.Item>
+          <span className="inline-flex items-center gap-2">
+            <ArrowUpSmall size={16} aria-hidden="true" />
+            Upgrade plan
+          </span>
+        </Menu.Item>
+        <Menu.Item>
+          <span className="inline-flex items-center gap-2">
+            <ArrowDownTray size={16} aria-hidden="true" />
+            Get mobile app
+          </span>
+        </Menu.Item>
       </Menu.Group>
       <Menu.Separator />
       <Menu.Group>
-        <Menu.Item><ArrowRightTray size={16} /> Log out</Menu.Item>
+        <Menu.Item>
+          <span className="inline-flex items-center gap-2">
+            <ArrowRightTray size={16} aria-hidden="true" />
+            Log out
+          </span>
+        </Menu.Item>
       </Menu.Group>
     </>
   );
