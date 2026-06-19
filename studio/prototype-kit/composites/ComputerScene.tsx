@@ -196,6 +196,7 @@ export function ComputerScene({
   const [panelOpen, setPanelOpen] = React.useState(withCanvasPanel ?? false);
   const [sessionsOpen, setSessionsOpen] = React.useState(true);
   const [sessionsExpanded, setSessionsExpanded] = React.useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
   const replyIndex = React.useRef(0);
 
   const visibleSessions = sessionsExpanded
@@ -230,6 +231,8 @@ export function ComputerScene({
     <ComputerPage
       sidebar={
         <ComputerSidebar
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
           historyAction={
             <IconButton
               aria-label={sessionsOpen ? "Hide sessions" : "Show sessions"}

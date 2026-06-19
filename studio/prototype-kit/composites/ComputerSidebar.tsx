@@ -74,6 +74,8 @@ type RootProps = {
    *  Chat → circle). A container query ALSO forces the rail below ~600px
    *  regardless of this prop, so a width-forced collapse auto-restores. */
   collapsed?: boolean;
+  /** Callback fired when the user clicks the window-chrome collapse toggle. */
+  onToggleCollapse?: () => void;
   children?: ReactNode;
 };
 
@@ -89,6 +91,7 @@ function Root({
   footerAction,
   banner,
   collapsed = false,
+  onToggleCollapse,
   children,
 }: RootProps) {
   // The primary action row (New Chat + history) is Computer's defining feature.
@@ -114,7 +117,7 @@ function Root({
         "@max-[600px]:w-16",
       ].join(" ")}
     >
-      {showWindowChrome ? <WindowChrome /> : null}
+      {showWindowChrome ? <WindowChrome onToggle={onToggleCollapse} /> : null}
 
       {workspace ? <Brand label={workspace} /> : null}
 
@@ -144,7 +147,7 @@ function Root({
 
 /* ─── Window chrome ─────────────────────────────────────────────────────── */
 
-function WindowChrome() {
+function WindowChrome({ onToggle }: { onToggle?: () => void }) {
   return (
     <div className="flex items-center h-11 shrink-0 px-3 gap-2">
       <TrafficLights />
@@ -152,6 +155,7 @@ function WindowChrome() {
         aria-label="Toggle sidebar"
         variant="tertiary"
         className="text-(--fg-neutral-prominent)"
+        onClick={onToggle}
       >
         <DotInLeftWindow size={16} aria-hidden="true" />
       </IconButton>
