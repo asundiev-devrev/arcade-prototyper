@@ -246,7 +246,28 @@ export function ComputerScene({
               size="lg"
               onClick={() => setSessionsOpen((v) => !v)}
             >
-              {sessionsOpen ? <CloseGlyph /> : <Clock size={20} />}
+              {sessionsOpen ? (
+                <>
+                  {/* Sessions visible → X (hide). In the rail, Sessions are
+                      force-hidden by collapse, so swap to the Clock (show)
+                      glyph via the same collapse classes — covers both the
+                      JS-pinned and width-forced rail. */}
+                  <span className={[
+                    "inline-flex group-data-[collapsed=true]/sidebar:hidden @max-[600px]:hidden",
+                    panelOpen ? "@max-[900px]:hidden" : "",
+                  ].join(" ")}>
+                    <CloseGlyph />
+                  </span>
+                  <span className={[
+                    "hidden group-data-[collapsed=true]/sidebar:inline-flex @max-[600px]:inline-flex",
+                    panelOpen ? "@max-[900px]:inline-flex" : "",
+                  ].join(" ")}>
+                    <Clock size={20} />
+                  </span>
+                </>
+              ) : (
+                <Clock size={20} />
+              )}
             </IconButton>
           }
           user={
