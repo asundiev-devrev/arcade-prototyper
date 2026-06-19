@@ -259,6 +259,17 @@ export const COMPOSITE_MAPPINGS: MappingEntry[] = [
       "Studio-specific UI (tabbed container for Computer canvas). No production equivalent — treat like CanvasPanel.",
   },
   {
+    studio: { source: "arcade-prototypes", name: "ArtefactCard" },
+    production: { source: "n/a", name: "n/a" },
+    propDeltas: [],
+    slotNotes: [
+      "ArtefactCard is an embedded file/document-preview card for the Computer chat transcript (filetype tag + title + 'Open in canvas' CTA + a decorative fanned-page thumbnail). Its pink surface + red tag are intentional prototype-only expressive styling, not production tokens.",
+    ],
+    translationClass: "judgment",
+    judgmentNote:
+      "No production equivalent. The fanned-thumbnail visual is prototype-only; in production decide with the reviewer how an artefact/attachment preview should render (likely a neutral card + the real file metadata), and drop the expressive pink/red treatment.",
+  },
+  {
     studio: { source: "arcade-prototypes", name: "ChatInput" },
     production: { source: "n/a", name: "n/a" },
     propDeltas: [],
