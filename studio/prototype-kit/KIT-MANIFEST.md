@@ -6,7 +6,7 @@
 > template source; if a prop signature here is enough, skip the extra
 > `Read`. Open the `.tsx` only when you need the full rendered markup.
 
-_36 entries — 32 composites, 4 templates._
+_37 entries — 33 composites, 4 templates._
 
 ## Templates
 
@@ -360,6 +360,43 @@ Canvas tokens most likely to be referenced inside `children`:
 | Sidebar surface             | `--surface-shallow` (already applied via NavSidebar) |
 | Window backdrop             | `--surface-backdrop`            |
 | Divider / border            | `--stroke-neutral-subtle`       |
+
+## ArtefactCard (composite)
+_source: `composites/ArtefactCard.tsx`_
+
+ArtefactCard — a file/document preview card embedded in an agent chat
+message. Borrowed from the DeReGilz/responsive prototype's "artefact card":
+a red filetype tag + title + "Open in canvas" CTA on the left, and a fanned
+three-page thumbnail on the right.
+
+Responsive: the card must sit inside a `@container/chat` element (the
+ComputerPage chat column establishes it). As the chat column narrows (e.g.
+when the canvas docks), `--stack-scale` steps down so the thumbnail scales
+proportionally (anchored top-right) instead of squishing, and at ≤900px the
+card snaps flush to the column edges. All via Tailwind utilities — no CSS
+file (the kit build is tsc-only and does not bundle CSS).
+
+The two expressive borrows (pink #FFE5DB surface, red #FF342D tag) are
+deliberately confined to this composite; everywhere else stays on DevRev
+arcade-gen tokens.
+
+Usage:
+  <ChatMessages.Agent thoughts={…}>
+    Here's the launch brief I drafted:
+    <ArtefactCard tag="DOC" title="Q3 launch brief" onOpen={() => openCanvas()} />
+  </ChatMessages.Agent>
+
+
+```ts
+type ArtefactCardProps = {
+  /** Filetype label shown in the red tag pill, e.g. "DOC". */
+  tag: string;
+  /** Document title. */
+  title: string;
+  /** "Open in canvas" CTA handler. When omitted, the CTA is not rendered. */
+  onOpen?: () => void;
+}
+```
 
 ## BreadcrumbBar (composite)
 _source: `composites/BreadcrumbBar.tsx`_

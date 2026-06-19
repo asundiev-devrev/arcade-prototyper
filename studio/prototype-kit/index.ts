@@ -14,6 +14,8 @@ export { ComputerHeader } from "./composites/ComputerHeader.js";
 export { CanvasPanel } from "./composites/CanvasPanel.js";
 export { CanvasTabs } from "./composites/CanvasTabs.js";
 export type { CanvasTab } from "./composites/CanvasTabs.js";
+export { ArtefactCard } from "./composites/ArtefactCard.js";
+export type { ArtefactCardProps } from "./composites/ArtefactCard.js";
 export { ChatInput } from "./composites/ChatInput.js";
 export { ChatEmptyState } from "./composites/ChatEmptyState.js";
 export { ChatMessages } from "./composites/ChatMessages.js";

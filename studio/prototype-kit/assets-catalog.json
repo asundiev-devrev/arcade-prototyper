@@ -9,6 +9,11 @@
           "thumb": "assets-thumbs/AppShell.png"
         },
         {
+          "name": "ArtefactCard",
+          "doc": "ArtefactCard — a file/document preview card embedded in an agent chat message.",
+          "thumb": "assets-thumbs/ArtefactCard.png"
+        },
+        {
           "name": "BreadcrumbBar",
           "doc": "BreadcrumbBar — DevRev breadcrumb row composite.",
           "thumb": "assets-thumbs/BreadcrumbBar.png"
