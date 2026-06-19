@@ -34,7 +34,7 @@ export const PAGE_TITLES: Record<PageId, { title: string; subtitle: string }> = 
   "my-computer": { title: "My Computer", subtitle: "Personalise Computer to your own work style and control how it behaves." },
   "workflows-tools": { title: "Workflows & Tools", subtitle: "Browse and manage the tools your agent can use." },
   "skills": { title: "Skills", subtitle: "Skills are reusable, packaged instructions that tell a model how to behave for a specific task" },
-  "connectors": { title: "Connectors", subtitle: "Connect Computer to apps, tools, MCP, storage, and more." },
+  "connectors": { title: "Connectors", subtitle: "Connect Computer to apps, tools, storage, and more." },
   "organization": { title: "Organization", subtitle: "Manage your organization's profile and settings." },
   "users": { title: "Users", subtitle: "Invite, remove, and manage users and their access roles." },
   "plans-billing": { title: "Plans and Billing", subtitle: "Manage payment methods, balances and billing preferences." },

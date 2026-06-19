@@ -3,6 +3,10 @@ import * as React from "react";
 // Minimal inline-SVG brand marks for the Connectors page. Simplified, single-
 // path-ish glyphs tinted to each brand — recognizable without shipping real logo assets.
 export const BRAND_LOGOS: Record<string, React.ReactNode> = {
+  Github: <svg width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#181717"/></svg>,
+  "Granola MCP": <svg width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#6B7280"/></svg>,
+  "Notion MCP": <svg width="20" height="20" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2" fill="#111"/></svg>,
+  "Slack MCP": <svg width="20" height="20" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="4" fill="#4A154B"/></svg>,
   Gmail: <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#EA4335" d="M2 5l10 7L22 5v14H2z" opacity="0.9"/></svg>,
   "Outlook Email": <svg width="20" height="20" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2" fill="#0078D4"/></svg>,
   Salesforce: <svg width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#00A1E0"/></svg>,
