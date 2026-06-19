@@ -55,6 +55,7 @@ import {
   ThreeDotsHorizontal,
   DotInLeftWindow,
 } from "@xorkavi/arcade-gen";
+import { ResizeHandle } from "./ResizeHandle";
 
 /* ─── Context for canvas-aware collapse threshold ──────────────────────── */
 
@@ -83,6 +84,11 @@ type RootProps = {
   /** When the canvas is docked, collapse to the rail earlier (at 900px container
    *  width instead of 600) — the docked canvas steals horizontal room. */
   canvasOpen?: boolean;
+  /** Expanded width in px (user-resizable). Applied inline; the rail width
+   *  (`!w-16`) overrides it via !important at narrow widths. Default 256. */
+  width?: number;
+  /** Fired during drag of the right-edge resize handle with the new width. */
+  onResize?: (width: number) => void;
   children?: ReactNode;
 };
 
@@ -100,6 +106,8 @@ function Root({
   collapsed = false,
   onToggleCollapse,
   canvasOpen = false,
+  width = 256,
+  onResize,
   children,
 }: RootProps) {
   // The primary action row (New Chat + history) is Computer's defining feature.
@@ -113,18 +121,24 @@ function Root({
   const agentStudio =
     (agentStudioLink as unknown) === ACTION_ROW_UNSET ? <DefaultAgentStudioLink /> : agentStudioLink;
 
+  // Inline width drives the expanded, user-resized state. The rail width
+  // (`!w-16`) uses !important so it overrides this inline width at narrow
+  // widths (container query) or when React-collapsed (data-collapsed). When
+  // React-collapsed we drop the inline width so the rail class governs.
+  const inlineWidth = collapsed ? undefined : width;
   return (
     <SidebarCtx.Provider value={canvasOpen}>
       <div
         data-collapsed={collapsed ? "true" : undefined}
+        style={inlineWidth != null ? { width: inlineWidth } : undefined}
         className={[
           "group/sidebar flex flex-col h-full shrink-0 bg-(--surface-overlay) border-r border-(--stroke-neutral-subtle)",
           "transition-[width] duration-200 ease-[cubic-bezier(0.33,1,0.68,1)] overflow-hidden",
-          collapsed ? "w-16" : "w-64",
+          collapsed ? "w-16" : "",
           // Width-forced rail: when the container is narrow, force 64px even if
-          // not React-collapsed. THRESHOLD_NO_CANVAS = 600.
-          "@max-[600px]:w-16",
-          canvasOpen ? "@max-[900px]:w-16" : "",
+          // not React-collapsed. !important beats the inline width above.
+          "@max-[600px]:!w-16",
+          canvasOpen ? "@max-[900px]:!w-16" : "",
         ].join(" ")}
       >
         {showWindowChrome ? <WindowChrome onToggle={onToggleCollapse} /> : null}
@@ -167,6 +181,21 @@ function Root({
           </div>
         ) : null}
       </div>
+      {/* Right-edge resize handle — only in the expanded docked state. Hidden
+          when React-collapsed or width-forced to the rail. */}
+      {onResize && !collapsed ? (
+        <ResizeHandle
+          side="right"
+          width={width}
+          min={200}
+          max={400}
+          onResize={onResize}
+          className={[
+            "@max-[600px]:hidden",
+            canvasOpen ? "@max-[900px]:hidden" : "",
+          ].join(" ")}
+        />
+      ) : null}
     </SidebarCtx.Provider>
   );
 }

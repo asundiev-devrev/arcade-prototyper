@@ -11,20 +11,34 @@
  */
 import * as React from "react";
 import { PlusSmall } from "@xorkavi/arcade-gen";
+import { ResizeHandle } from "./ResizeHandle";
 
 export type CanvasTab = { id: string; label: string; icon?: React.ReactNode };
 
 type CanvasTabsProps = {
   tabs: CanvasTab[];
   defaultTabId?: string;
+  /** Docked width in px (user-resizable). Applied inline; in the narrow
+   *  drawer mode a container query overrides it to a wide overlay. Default 320. */
+  width?: number;
+  /** Fired during drag of the left-edge resize handle with the new width. */
+  onResize?: (width: number) => void;
   /** Render-prop: receives the active tab id, returns that tab's body. */
   children: (activeId: string) => React.ReactNode;
 };
 
-export function CanvasTabs({ tabs, defaultTabId, children }: CanvasTabsProps) {
+export function CanvasTabs({ tabs, defaultTabId, width = 320, onResize, children }: CanvasTabsProps) {
   const [active, setActive] = React.useState(defaultTabId ?? tabs[0]?.id ?? "");
   return (
-    <div className="flex h-full w-80 shrink-0 flex-col border-l border-(--stroke-neutral-subtle) bg-(--surface-overlay)">
+    <div
+      style={{ width }}
+      className="flex h-full shrink-0 flex-row border-l border-(--stroke-neutral-subtle) bg-(--surface-overlay) @max-[600px]:!w-[88vw]"
+    >
+      {/* Left-edge resize handle — docked only; hidden in the narrow drawer. */}
+      {onResize ? (
+        <ResizeHandle side="left" width={width} min={260} max={560} onResize={onResize} className="@max-[600px]:hidden" />
+      ) : null}
+      <div className="flex min-w-0 flex-1 flex-col">
       {/* Tab strip */}
       <div className="flex shrink-0 items-stretch overflow-x-auto" style={{ scrollbarWidth: "thin" }}>
         {tabs.map((t) => {
@@ -59,6 +73,7 @@ export function CanvasTabs({ tabs, defaultTabId, children }: CanvasTabsProps) {
       </div>
       {/* Active tab body */}
       <div className="min-h-0 flex-1 overflow-y-auto">{children(active)}</div>
+      </div>
     </div>
   );
 }

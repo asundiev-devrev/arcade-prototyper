@@ -198,6 +198,8 @@ export function ComputerScene({
   const [sessionsOpen, setSessionsOpen] = React.useState(true);
   const [sessionsExpanded, setSessionsExpanded] = React.useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
+  const [sidebarWidth, setSidebarWidth] = React.useState(256); // SIDENAV_EXPANDED
+  const [canvasWidth, setCanvasWidth] = React.useState(320); // CANVAS_WIDTH
   const replyIndex = React.useRef(0);
 
   const visibleSessions = sessionsExpanded
@@ -235,6 +237,8 @@ export function ComputerScene({
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
           canvasOpen={panelOpen}
+          width={sidebarWidth}
+          onResize={setSidebarWidth}
           historyAction={
             <IconButton
               aria-label={sessionsOpen ? "Hide sessions" : "Show sessions"}
@@ -336,6 +340,8 @@ export function ComputerScene({
       panel={
         panelOpen ? (
           <CanvasTabs
+            width={canvasWidth}
+            onResize={setCanvasWidth}
             tabs={[
               { id: "canvas", label: "Canvas" },
               { id: "docs", label: "Q3 launch brief.doc" },

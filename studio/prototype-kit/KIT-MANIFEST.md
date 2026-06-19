@@ -6,7 +6,7 @@
 > template source; if a prop signature here is enough, skip the extra
 > `Read`. Open the `.tsx` only when you need the full rendered markup.
 
-_35 entries — 31 composites, 4 templates._
+_36 entries — 32 composites, 4 templates._
 
 ## Templates
 
@@ -135,6 +135,10 @@ type ComputerPageProps = {
   chatInput: ReactNode;
   children: ReactNode;
   panel?: ReactNode;
+  /** Called when the user dismisses the canvas drawer (backdrop click or the
+   *  drawer's close button) — only reachable below 600px where the canvas is
+   *  an overlay. Typically flips the canvas-open state in the caller. */
+  onCanvasClose?: () => void;
 }
 ```
 
@@ -464,6 +468,11 @@ Usage:
 type CanvasTabsProps = {
   tabs: CanvasTab[];
   defaultTabId?: string;
+  /** Docked width in px (user-resizable). Applied inline; in the narrow
+   *  drawer mode a container query overrides it to a wide overlay. Default 320. */
+  width?: number;
+  /** Fired during drag of the left-edge resize handle with the new width. */
+  onResize?: (width: number) => void;
   /** Render-prop: receives the active tab id, returns that tab's body. */
   children: (activeId: string) => React.ReactNode;
 }
@@ -1412,6 +1421,35 @@ type PickerModalProps = {
 | Element | Token |
 | Search field | arcade `Input` defaults |
 | Tab bar | arcade `Tabs` defaults |
+
+## ResizeHandle (composite)
+_source: `composites/ResizeHandle.tsx`_
+
+ResizeHandle — a thin draggable divider for resizing a sibling pane.
+
+Internal helper for ComputerSidebar (right edge) and CanvasTabs (left edge).
+NOT exported from the kit barrel — it's pane chrome, not a standalone
+composite. Pointer-drag updates a width via `onResize(px)`; the caller owns
+the width state and applies it (as an inline width on the resized pane).
+
+`side` controls drag direction:
+- "right": handle on the pane's right edge; dragging right grows the pane
+  (sidebar). delta = +dx.
+- "left": handle on the pane's left edge; dragging left grows the pane
+  (canvas, which sits on the right). delta = -dx.
+
+
+```ts
+type ResizeHandleProps = {
+  side: "left" | "right";
+  width: number;
+  min: number;
+  max: number;
+  onResize: (width: number) => void;
+  /** Extra classes (e.g. container-query hides in the rail/drawer states). */
+  className?: string;
+}
+```
 
 ## SettingsCard (composite)
 _source: `composites/SettingsCard.tsx`_

@@ -109,6 +109,11 @@
           "thumb": "assets-thumbs/PickerModal.png"
         },
         {
+          "name": "ResizeHandle",
+          "doc": "ResizeHandle — a thin draggable divider for resizing a sibling pane.",
+          "thumb": null
+        },
+        {
           "name": "SettingsCard",
           "doc": "SettingsCard — DevRev settings group composite.",
           "thumb": "assets-thumbs/SettingsCard.png"
