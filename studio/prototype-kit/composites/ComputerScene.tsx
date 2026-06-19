@@ -411,7 +411,7 @@ export function ComputerScene({
       {messages.length === 0 ? (
         <ChatEmptyState />
       ) : (
-        <Transcript messages={messages} streaming={showStreaming || pending} />
+        <Transcript messages={messages} streaming={showStreaming || pending} onOpenArtefact={() => setPanelOpen(true)} />
       )}
     </ComputerPage>
   );
@@ -419,7 +419,7 @@ export function ComputerScene({
 
 /* ─── Transcript renderer ───────────────────────────────────────────────── */
 
-function Transcript({ messages, streaming }: { messages: Message[]; streaming: boolean }) {
+function Transcript({ messages, streaming, onOpenArtefact }: { messages: Message[]; streaming: boolean; onOpenArtefact: () => void }) {
   return (
     <ChatMessages>
       {messages.map((m) =>
@@ -434,7 +434,7 @@ function Transcript({ messages, streaming }: { messages: Message[]; streaming: b
           >
             {m.text}
             {m.id === 2 ? (
-              <ArtefactCard tag="DOC" title="Q3 launch brief" onOpen={() => setPanelOpen(true)} />
+              <ArtefactCard tag="DOC" title="Q3 launch brief" onOpen={onOpenArtefact} />
             ) : null}
             <ChatMessages.Actions />
           </ChatMessages.Agent>
