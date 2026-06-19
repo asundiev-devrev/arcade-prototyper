@@ -132,7 +132,12 @@ function Root({
         {workspace ? <Brand label={workspace} /> : null}
 
         {hasActionRow ? (
-          <div className="flex items-center gap-2 px-3 pt-2 pb-3">
+          <div className={[
+            "flex items-center gap-2 px-3 pt-2 pb-3",
+            "group-data-[collapsed=true]/sidebar:flex-col group-data-[collapsed=true]/sidebar:items-center group-data-[collapsed=true]/sidebar:gap-1.5 group-data-[collapsed=true]/sidebar:px-0",
+            "@max-[600px]:flex-col @max-[600px]:items-center @max-[600px]:gap-1.5 @max-[600px]:px-0",
+            canvasOpen ? "@max-[900px]:flex-col @max-[900px]:items-center @max-[900px]:gap-1.5 @max-[900px]:px-0" : "",
+          ].join(" ")}>
             {primary}
             {history}
           </div>
@@ -252,9 +257,9 @@ function DefaultPrimaryAction() {
   const canvasOpen = useContext(SidebarCtx);
   return (
     <Button variant="secondary" size="lg" className={[
-      "flex-1 justify-center group-data-[collapsed=true]/sidebar:w-10 group-data-[collapsed=true]/sidebar:px-0 group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:rounded-full",
-      "@max-[600px]:w-10 @max-[600px]:px-0 @max-[600px]:justify-center @max-[600px]:rounded-full",
-      canvasOpen ? "@max-[900px]:w-10 @max-[900px]:px-0 @max-[900px]:justify-center @max-[900px]:rounded-full" : "",
+      "flex-1 justify-center group-data-[collapsed=true]/sidebar:flex-none group-data-[collapsed=true]/sidebar:w-10 group-data-[collapsed=true]/sidebar:px-0 group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:rounded-full",
+      "@max-[600px]:flex-none @max-[600px]:w-10 @max-[600px]:px-0 @max-[600px]:justify-center @max-[600px]:rounded-full",
+      canvasOpen ? "@max-[900px]:flex-none @max-[900px]:w-10 @max-[900px]:px-0 @max-[900px]:justify-center @max-[900px]:rounded-full" : "",
     ].join(" ")}>
       <span className="inline-flex items-center gap-2">
         <PlusInChatBubble size={16} />
@@ -277,15 +282,26 @@ function DefaultHistoryAction() {
 }
 
 function DefaultAgentStudioLink() {
+  const canvasOpen = useContext(SidebarCtx);
   return (
     <button
       type="button"
-      className="flex items-center gap-2.5 w-full px-3 py-1.5 rounded-square text-body text-(--fg-neutral-prominent) hover:bg-(--control-bg-neutral-subtle-hover)"
+      className={[
+        "flex items-center gap-2.5 w-full px-3 py-1.5 rounded-square text-body text-(--fg-neutral-prominent) hover:bg-(--control-bg-neutral-subtle-hover)",
+        "group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:px-0",
+        "@max-[600px]:justify-center @max-[600px]:px-0",
+        canvasOpen ? "@max-[900px]:justify-center @max-[900px]:px-0" : "",
+      ].join(" ")}
     >
       <span className="shrink-0 w-5 h-5 flex items-center justify-center">
         <AgentStudio size={16} />
       </span>
-      <span className="flex-1 text-left">Agent Studio</span>
+      <span className={[
+        "flex-1 text-left",
+        "group-data-[collapsed=true]/sidebar:hidden",
+        "@max-[600px]:hidden",
+        canvasOpen ? "@max-[900px]:hidden" : "",
+      ].join(" ")}>Agent Studio</span>
     </button>
   );
 }
