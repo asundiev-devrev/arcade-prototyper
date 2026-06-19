@@ -76,10 +76,13 @@ describe("mapping-table coverage", () => {
     // when composites pull in new plain-noun icons.
     const NON_MAPPED_ICON_NAMES = new Set([
       "AgentStudio",
+      "ArrowDownTray",
+      "ArrowRightTray",
       "Bell",
       "ChatBubbles",
       "Clock",
       "ClockWithDashedOutline",
+      "Cog",
       "Computer",
       "Document",
       "DotInLeftWindow",
@@ -91,6 +94,7 @@ describe("mapping-table coverage", () => {
       "Pencil",
       "Placeholder",
       "PlusInChatBubble",
+      "QuestionMarkInCircle",
       "ThreeDotsHorizontal",
       "ThumbsDown",
       "ThumbsUp",
