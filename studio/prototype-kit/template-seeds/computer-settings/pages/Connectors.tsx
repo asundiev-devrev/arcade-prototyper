@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Button, Tag } from "arcade/components";
+import { Tag } from "arcade/components";
 import { BrandTile } from "../brandLogos";
 
 const connectors: Array<{ name: string; connected?: boolean }> = [
@@ -16,9 +16,6 @@ const connectors: Array<{ name: string; connected?: boolean }> = [
 export default function Connectors() {
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex justify-end">
-        <Button variant="primary" size="sm">Add custom connector</Button>
-      </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {connectors.map((c) => (
           <div key={c.name} className="flex items-center justify-between rounded-square-x2 border px-4 py-3"

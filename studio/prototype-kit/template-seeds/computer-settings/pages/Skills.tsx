@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Tabs, Button, Avatar, LightingBolt, PlusSmall, ChevronDownSmall } from "arcade/components";
+import { Tabs, Avatar, LightingBolt, ChevronDownSmall } from "arcade/components";
 
 type Skill = { title: string; description: string; author: string; added?: boolean };
 
@@ -44,9 +44,6 @@ function SkillCard({ skill }: { skill: Skill }) {
 export default function Skills() {
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-end">
-        <Button variant="primary" size="sm" iconLeft={<PlusSmall size={16} />}>Add skills</Button>
-      </div>
       <div className="flex items-center justify-between" style={{ borderBottom: "1px solid var(--stroke-neutral-subtle)" }}>
         <Tabs.Root defaultValue="discover">
           <Tabs.List>

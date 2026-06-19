@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Button, Avatar, Tag, IconButton, ThreeDotsHorizontal, Tabs } from "arcade/components";
+import { Avatar, IconButton, ThreeDotsHorizontal, Tabs } from "arcade/components";
 
 const users = [
   { name: "Michael Machado", email: "michael@maple.ai", role: "Admin" },
@@ -13,15 +13,12 @@ const users = [
 export default function Users() {
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between">
-        <Tabs.Root defaultValue="users">
-          <Tabs.List>
-            <Tabs.Trigger value="users">Users 234</Tabs.Trigger>
-            <Tabs.Trigger value="invitations">Invitations 4</Tabs.Trigger>
-          </Tabs.List>
-        </Tabs.Root>
-        <Button variant="primary" size="sm">Invite users</Button>
-      </div>
+      <Tabs.Root defaultValue="users">
+        <Tabs.List>
+          <Tabs.Trigger value="users">Users 234</Tabs.Trigger>
+          <Tabs.Trigger value="invitations">Invitations 4</Tabs.Trigger>
+        </Tabs.List>
+      </Tabs.Root>
       <div className="flex flex-col">
         <div className="flex items-center justify-between px-2 pb-2 text-body-small" style={{ color: "var(--fg-neutral-subtle)" }}>
           <span>Name</span><span>Role</span>
