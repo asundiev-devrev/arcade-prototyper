@@ -70,6 +70,10 @@ type RootProps = {
    *  Daily Digest" banner on the Computer web surface. Pass a
    *  `<ComputerSidebar.Banner />` here. */
   banner?: ReactNode;
+  /** When true, the sidebar renders as a 64px icon-rail (labels hidden, New
+   *  Chat → circle). A container query ALSO forces the rail below ~600px
+   *  regardless of this prop, so a width-forced collapse auto-restores. */
+  collapsed?: boolean;
   children?: ReactNode;
 };
 
@@ -84,6 +88,7 @@ function Root({
   user,
   footerAction,
   banner,
+  collapsed = false,
   children,
 }: RootProps) {
   // The primary action row (New Chat + history) is Computer's defining feature.
@@ -98,7 +103,17 @@ function Root({
     (agentStudioLink as unknown) === ACTION_ROW_UNSET ? <DefaultAgentStudioLink /> : agentStudioLink;
 
   return (
-    <div className="flex flex-col h-full w-64 shrink-0 bg-(--surface-overlay) border-r border-(--stroke-neutral-subtle)">
+    <div
+      data-collapsed={collapsed ? "true" : undefined}
+      className={[
+        "group/sidebar flex flex-col h-full shrink-0 bg-(--surface-overlay) border-r border-(--stroke-neutral-subtle)",
+        "transition-[width] duration-200 ease-[cubic-bezier(0.33,1,0.68,1)] overflow-hidden",
+        collapsed ? "w-16" : "w-64",
+        // Width-forced rail: when the container is narrow, force 64px even if
+        // not React-collapsed. THRESHOLD_NO_CANVAS = 600.
+        "@max-[600px]:w-16",
+      ].join(" ")}
+    >
       {showWindowChrome ? <WindowChrome /> : null}
 
       {workspace ? <Brand label={workspace} /> : null}
@@ -118,9 +133,9 @@ function Root({
       {agentStudio ? <div className="px-2 pb-1 shrink-0">{agentStudio}</div> : null}
 
       {user ? (
-        <div className="flex items-center gap-2 px-2 py-2 shrink-0">
-          <div className="flex-1 min-w-0 px-1">{user}</div>
-          {footerAction ? <div className="shrink-0">{footerAction}</div> : null}
+        <div className="flex items-center gap-2 px-2 py-2 shrink-0 group-data-[collapsed=true]/sidebar:justify-center">
+          <div className="flex-1 min-w-0 px-1 group-data-[collapsed=true]/sidebar:hidden @max-[600px]:hidden">{user}</div>
+          {footerAction ? <div className="shrink-0 group-data-[collapsed=true]/sidebar:hidden @max-[600px]:hidden">{footerAction}</div> : null}
         </div>
       ) : null}
     </div>
@@ -141,7 +156,7 @@ function WindowChrome() {
         <DotInLeftWindow size={16} aria-hidden="true" />
       </IconButton>
       <div className="flex-1" />
-      <div className="flex items-center gap-0.5 text-(--fg-neutral-prominent)">
+      <div className="flex items-center gap-0.5 text-(--fg-neutral-prominent) group-data-[collapsed=true]/sidebar:hidden @max-[600px]:hidden">
         <IconButton aria-label="Back" variant="tertiary" size="sm">
           <ChevronLeftSmall size={16} />
         </IconButton>
@@ -205,10 +220,10 @@ function DevRevMark() {
 
 function DefaultPrimaryAction() {
   return (
-    <Button variant="secondary" size="lg" className="flex-1 justify-center">
+    <Button variant="secondary" size="lg" className="flex-1 justify-center group-data-[collapsed=true]/sidebar:w-10 group-data-[collapsed=true]/sidebar:px-0 group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:rounded-full @max-[600px]:w-10 @max-[600px]:px-0 @max-[600px]:justify-center @max-[600px]:rounded-full">
       <span className="inline-flex items-center gap-2">
         <PlusInChatBubble size={16} />
-        New Chat
+        <span className="group-data-[collapsed=true]/sidebar:hidden @max-[600px]:hidden">New Chat</span>
       </span>
     </Button>
   );
@@ -248,7 +263,7 @@ function Group({ title, trailing, children }: GroupProps) {
   return (
     <div className="pt-1.5 pb-1">
       {title || trailing ? (
-        <div className="flex items-center justify-between px-3 py-2 mx-1 rounded-square hover:bg-(--bg-neutral-soft) transition-colors">
+        <div className="flex items-center justify-between px-3 py-2 mx-1 rounded-square hover:bg-(--bg-neutral-soft) transition-colors group-data-[collapsed=true]/sidebar:hidden @max-[600px]:hidden">
           <span className="text-caption text-(--fg-neutral-subtle)">
             {title}
           </span>
@@ -304,10 +319,11 @@ const Item = forwardRef<HTMLDivElement, ItemProps>(function Item(
           ? "bg-(--control-bg-neutral-subtle-active)"
           : "hover:bg-(--bg-neutral-soft)",
         strong ? "text-(--fg-neutral-prominent) font-semibold" : "text-(--fg-neutral-prominent)",
+        "group-data-[collapsed=true]/sidebar:justify-center @max-[600px]:justify-center",
       ].join(" ")}
     >
       {leading ? <span className="shrink-0 w-5 h-5 flex items-center justify-center text-(--fg-neutral-subtle)">{leading}</span> : null}
-      <span className="flex-1 min-w-0 truncate">{children}</span>
+      <span className="min-w-0 flex-1 truncate group-data-[collapsed=true]/sidebar:hidden @max-[600px]:hidden">{children}</span>
       {onMenu || trailing ? (
         <span className="shrink-0 flex items-center gap-1.5">
           {trailing ? (
