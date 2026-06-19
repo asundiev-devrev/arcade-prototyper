@@ -17,11 +17,15 @@ vi.mock("arcade/components", () => ({
   ChevronRightSmall: () => null,
   ThreeDotsHorizontal: () => null,
   PlusSmall: () => null,
+  ChevronDownSmall: () => null,
+  TwoSquaresOverlapping: () => null,
+  MagnifyingGlass: () => null,
   Sidebar: () => null,
   Tabs: {
     Root: ({ children }: any) => <div>{children}</div>,
     List: ({ children }: any) => <div>{children}</div>,
     Trigger: ({ children }: any) => <button>{children}</button>,
+    Content: ({ children }: any) => <div>{children}</div>,
   },
   Select: {
     Root: ({ children }: any) => <div>{children}</div>,
@@ -37,6 +41,7 @@ vi.mock("arcade/components", () => ({
   Link: ({ children }: any) => <a>{children}</a>,
   Avatar: ({ name }: any) => <div>{name}</div>,
   IconButton: ({ children }: any) => <button>{children}</button>,
+  Separator: () => <hr />,
 }));
 
 vi.mock("arcade-prototypes", () => ({
@@ -58,7 +63,7 @@ describe("Computer: Settings shell", () => {
     fireEvent.click(screen.getByText("Skills"));
     expect(screen.getAllByText("Skills").length).toBeGreaterThan(0);
     // breadcrumb/title now shows Skills subtitle
-    expect(screen.getByText(/Discover and add capabilities/i)).toBeTruthy();
+    expect(screen.getByText(/packaged instructions that tell a model/i)).toBeTruthy();
   });
 
   it("renders the My Computer settings body by default", () => {
