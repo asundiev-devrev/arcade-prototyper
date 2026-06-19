@@ -108,19 +108,19 @@ export function ComputerPage({
         <>
           {/* Docked canvas at wide container widths; hidden below 600px. */}
           <div className="shrink-0 @max-[600px]:hidden">{panel}</div>
-          {/* Below 600px the same panel becomes an overlay drawer (backdrop +
-              right-pinned panel). Use `absolute` — the root is `relative` AND a
-              `container-type` element, which establishes a containing block for
-              `fixed` too, so `fixed` would anchor to the root (offset by any
-              outer chrome) rather than the viewport. `absolute inset-0` pins
-              flush to the ComputerPage box, which is exactly the overlay scope. */}
-          <div className="hidden @max-[600px]:block">
+          {/* Below 600px the same panel becomes an overlay drawer. The wrapper
+              itself is `absolute inset-0` over the root (the root is `relative`
+              + a `container-type` element, so it's the containing block for
+              abspos descendants) — this guarantees the overlay covers the whole
+              ComputerPage box flush, with no flex-flow offset. backdrop fills
+              it; the panel is right-pinned inside it. */}
+          <div className="hidden @max-[600px]:block absolute inset-0 z-[110]">
             <div
-              className="absolute inset-0 z-[110] bg-black/20"
+              className="absolute inset-0 bg-black/20"
               onClick={onCanvasClose}
               aria-hidden="true"
             />
-            <div className="absolute right-0 top-0 z-[120] h-full shadow-lg">
+            <div className="absolute right-0 top-0 z-[1] h-full shadow-lg">
               {onCanvasClose ? (
                 <IconButton
                   aria-label="Close canvas"
