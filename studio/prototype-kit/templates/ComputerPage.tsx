@@ -58,8 +58,21 @@
  * | Sidebar surface             | `--surface-shallow` (already applied via ComputerSidebar) |
  * | Window backdrop             | `--surface-backdrop`            |
  * | Divider / border            | `--stroke-neutral-subtle`       |
+ *
+ * The root is a `@container` element; descendants can query its width. The canvas panel auto-converts from a docked column to a fixed overlay drawer below 600px container width.
  */
 import type { ReactNode } from "react";
+
+export const COMPUTER_LAYOUT = {
+  RAIL_WIDTH: 64,
+  SIDENAV_EXPANDED: 256,
+  SIDENAV_OVERLAY: 360,
+  CANVAS_WIDTH: 320,
+  THRESHOLD_NO_CANVAS: 600,
+  THRESHOLD_WITH_CANVAS: 900,
+  CANVAS_DRAWER_BELOW: 600,
+  MAIN_MIN: 260,
+} as const;
 
 type ComputerPageProps = {
   sidebar: ReactNode;
@@ -76,15 +89,27 @@ export function ComputerPage({
   children,
   panel,
 }: ComputerPageProps) {
+  const hasPanel = panel != null;
   return (
-    <div className="flex h-screen w-full bg-(--surface-backdrop) overflow-hidden">
+    <div className="@container relative flex h-screen w-full bg-(--surface-backdrop) overflow-hidden">
       {sidebar}
       <div className="flex-1 min-w-0 flex flex-col h-full bg-(--surface-overlay)">
         {header}
         <div className="flex-1 min-h-0 overflow-y-auto">{children}</div>
         {chatInput}
       </div>
-      {panel}
+      {hasPanel ? (
+        <>
+          {/* Docked canvas at wide container widths; hidden below 600px. */}
+          <div className="shrink-0 @max-[600px]:hidden">{panel}</div>
+          {/* Below 600px the same panel becomes a fixed overlay drawer
+              (backdrop + right-pinned panel) escaping the overflow-hidden clip. */}
+          <div className="hidden @max-[600px]:block">
+            <div className="absolute inset-0 z-[110] bg-black/20" aria-hidden="true" />
+            <div className="absolute right-0 top-0 z-[120] h-full shadow-lg">{panel}</div>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

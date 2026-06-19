@@ -156,6 +156,8 @@ Canvas tokens most likely to be referenced inside the body slot:
 | Window backdrop             | `--surface-backdrop`            |
 | Divider / border            | `--stroke-neutral-subtle`       |
 
+The root is a `@container` element; descendants can query its width. The canvas panel auto-converts from a docked column to a fixed overlay drawer below 600px container width.
+
 ## SettingsPage (template)
 _source: `templates/SettingsPage.tsx`_
 
@@ -189,10 +191,7 @@ Intentional opinions:
   PageBody.
 
 Slots:
-- `sidebar` — pass a bare `<NavSidebar />`. It renders the full standard
-  DevRev nav (Work / Teams / Views + Explore) by itself. Do NOT author
-  Section/Item children or pass `workspace` — that reproduces the design
-  less accurately. Only add children for a genuinely non-standard item set.
+- `sidebar` — typically <NavSidebar workspace="DevRev">…</NavSidebar>.
 - `breadcrumb` — typically <Breadcrumb.Root>…</Breadcrumb.Root>.
 - `actions` (optional) — top-right cluster (IconButtons + Avatar).
 - `pageActions` (optional) — cluster on the BreadcrumbBar (e.g. a "More"
@@ -247,10 +246,7 @@ Intentional opinions:
   render one implicitly.
 
 Slots:
-- `sidebar` — pass a bare `<NavSidebar />`. It renders the full standard
-  DevRev nav (Work / Teams / Views + Explore) by itself. Do NOT author
-  Section/Item children or pass `workspace` — that reproduces the design
-  less accurately. Only add children for a genuinely non-standard item set.
+- `sidebar` — typically <NavSidebar workspace="DevRev">…</NavSidebar>.
 - `title` — VistaHeader title slot.
 - `count` (optional) — VistaHeader count slot.
 - `actions` (optional) — VistaHeader right-cluster icon buttons.
