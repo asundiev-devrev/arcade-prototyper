@@ -70,7 +70,10 @@ export function ProjectPicker({
     .slice(0, 10);
 
   return (
-    <span ref={rootRef} style={{ display: "flex", alignItems: "center", gap: 4, position: "relative" }}>
+    <span
+      ref={rootRef}
+      style={{ display: "flex", alignItems: "center", gap: 4, position: "relative", minWidth: 0 }}
+    >
       <BackButton onClick={onHome} />
       <button
         type="button"
@@ -81,6 +84,7 @@ export function ProjectPicker({
           display: "flex",
           alignItems: "center",
           gap: 4,
+          minWidth: 0,
           background: open ? "var(--surface-shallow)" : "transparent",
           border: "none",
           padding: "2px 6px",
@@ -98,13 +102,23 @@ export function ProjectPicker({
             : "transparent";
         }}
       >
-        <span>{project.name}</span>
+        <span
+          style={{
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            minWidth: 0,
+          }}
+        >
+          {project.name}
+        </span>
         <svg
           width="12"
           height="12"
           viewBox="0 0 12 12"
           fill="currentColor"
           style={{
+            flex: "0 0 auto",
             opacity: 0.6,
             transform: open ? "rotate(180deg)" : "none",
             transition: "transform 0.15s",

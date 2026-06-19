@@ -8,6 +8,21 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.37.2] — 2026-06-17
+
+### Fixed
+- **The navigation sidebar now matches the DevRev design faithfully.** The 0.37.1 redesign had several gaps: the product-switcher button showed a workspace name (e.g. "DevRev") instead of the **computer** logo; the ⌘K search hint rendered as "⌘ + K" with a stray plus; the search icon was too faint; and frames passing the old `workspace` prop lost the computer branding. The switcher now always shows the computer wordmark, the ⌘K hint and search icon match the design, and the grouped nav (Work / Teams / Views + Explore) renders as intended.
+
+## [0.37.1] — 2026-06-17
+
+### Changed
+- **The navigation sidebar matches the current DevRev look.** The left nav in generated frames (and in the Assets panel preview) was redesigned to the latest DevRev styling: a top toolbar with a ⌘K search and add button, a "computer" product switcher, lightweight grouped sections (Work / Teams / Views), and a person + chat footer. Prototypes that use the sidebar pick this up automatically — nothing to change in your prompts.
+
+## [0.37.0] — 2026-06-17
+
+### Added
+- **An Assets tab to see everything you can build with.** The left pane now has a second tab, *Assets*, next to Chat — a browsable gallery of every building block Studio knows: the 34 ready-made composites (forms, modals, cards, page layouts…), the underlying component library, and all the icons, each with a real rendered preview. Search across the lot by name. Open a composite or component and hit **Use this** to drop a starter prompt into chat (it flips you back to Chat, ready to finish the sentence); click an icon to copy its name. No more guessing what already exists — you can see it.
+
 ## [0.36.0] — 2026-06-16
 
 ### Added

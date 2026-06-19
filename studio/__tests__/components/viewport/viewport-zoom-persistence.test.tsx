@@ -15,12 +15,18 @@ vi.mock("@xorkavi/arcade-gen", async () => {
     Item: ({ children, ...rest }: any) =>
       React.createElement("button", rest, children),
   };
+  const ToggleGroup: any = {
+    Root: ({ children }: any) => React.createElement("div", null, children),
+    Item: ({ children, ...rest }: any) =>
+      React.createElement("button", rest, children),
+  };
   return {
     Button: passthrough("button"),
     IconButton: passthrough("button"),
     Tooltip: ({ children }: any) => children,
     useToast: () => ({ toast: () => {} }),
     Menu,
+    ToggleGroup,
     ArrowUpRightSmall: () => null,
     ChevronDownSmall: () => null,
     ThreeDotsHorizontal: () => null,
