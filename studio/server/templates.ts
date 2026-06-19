@@ -1,0 +1,48 @@
+import path from "node:path";
+import fs from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+
+const STUDIO_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+export const TEMPLATE_SEEDS_DIR = path.resolve(STUDIO_DIR, "prototype-kit", "template-seeds");
+export const TEMPLATE_THUMBS_DIR = path.resolve(STUDIO_DIR, "prototype-kit", "template-thumbs");
+
+export type TemplateId = "computer" | "computer-settings" | "builder-page";
+
+export interface TemplateDef {
+  id: TemplateId;
+  name: string;
+  description: string;
+  seedFile: string; // basename of a .tsx file OR a directory under TEMPLATE_SEEDS_DIR
+  thumb: string;
+}
+
+export const TEMPLATES: TemplateDef[] = [
+  { id: "computer", name: "Computer: Chat", description: "Agent chat screen", seedFile: "computer.tsx", thumb: "computer.png" },
+  { id: "computer-settings", name: "Computer: Settings", description: "Full Computer settings", seedFile: "computer-settings", thumb: "computer-settings.png" },
+  { id: "builder-page", name: "Agent Studio: Builder", description: "Agent capability builder", seedFile: "builder-page.tsx", thumb: "builder-page.png" },
+];
+
+export function getTemplate(id: string): TemplateDef | undefined {
+  return TEMPLATES.find((t) => t.id === id);
+}
+
+export function templateSeedPath(id: string): string {
+  const def = getTemplate(id);
+  if (!def) throw new Error(`Unknown template: ${id}`);
+  return path.join(TEMPLATE_SEEDS_DIR, def.seedFile);
+}
+
+export async function isSeedDirectory(id: string): Promise<boolean> {
+  try {
+    const st = await fs.stat(templateSeedPath(id));
+    return st.isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+export function readTemplateSeed(id: TemplateId): Promise<string> {
+  const def = getTemplate(id);
+  if (!def) return Promise.reject(new Error(`Unknown template: ${id}`));
+  return fs.readFile(path.join(TEMPLATE_SEEDS_DIR, def.seedFile), "utf-8");
+}

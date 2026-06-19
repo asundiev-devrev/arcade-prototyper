@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import fs from "node:fs/promises";
-import { createProject, deleteProject, listProjects, renameProject, updateProject, getProject, readHistory, fileTree, readProjectFile, reconcileFrames } from "../projects";
+import { createProject, deleteProject, listProjects, renameProject, updateProject, getProject, readHistory, fileTree, readProjectFile, reconcileFrames, seedTemplateFrame } from "../projects";
 import { dismissChimeIn, applyChimeIn } from "../chimeIns";
 import { frameDir } from "../paths";
 
@@ -77,6 +77,24 @@ export function projectsMiddleware() {
         return send(res, 200, {
           content: await readProjectFile(fileMatch[1], decodeURIComponent(relPath)),
         });
+      }
+
+      const seedMatch = url
+        .replace(/\?.*$/, "")
+        .match(/^\/api\/projects\/([a-z0-9-]+)\/seed-template$/);
+      if (seedMatch && req.method === "POST") {
+        const p = await getProject(seedMatch[1]);
+        if (!p) return send(res, 404, { error: { code: "not_found", message: "Project not found" } });
+        const body = await readJson(req);
+        try {
+          const frame = await seedTemplateFrame(seedMatch[1], body.templateId);
+          return send(res, 201, frame);
+        } catch (err: any) {
+          if (/Unknown template/.test(err?.message ?? "")) {
+            return send(res, 404, { error: { code: "not_found", message: err.message } });
+          }
+          throw err;
+        }
       }
 
       const revealMatch = url

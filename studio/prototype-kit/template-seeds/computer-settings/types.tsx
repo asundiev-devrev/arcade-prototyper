@@ -1,0 +1,42 @@
+import * as React from "react";
+import { HumanSilhouette, ArrowsLeftAndRight, Computer, ThreeBarsHorizontal, LightingBolt, Mcp, Buildings, TwoHumanSilhouettes, CreditCard, ChartLineInSquare } from "arcade/components";
+
+export type PageId =
+  | "profile" | "preferences"
+  | "my-computer" | "workflows-tools" | "skills" | "connectors"
+  | "organization" | "users" | "plans-billing" | "usage";
+
+export interface NavItem { id: PageId; label: string; icon: React.ReactNode; }
+export interface NavGroup { title?: string; items: NavItem[]; }
+
+export const NAV_GROUPS: NavGroup[] = [
+  { items: [
+    { id: "profile", label: "Profile", icon: <HumanSilhouette size={16} /> },
+    { id: "preferences", label: "Preferences", icon: <ArrowsLeftAndRight size={16} /> },
+  ]},
+  { title: "Customization", items: [
+    { id: "my-computer", label: "My Computer", icon: <Computer size={16} /> },
+    { id: "workflows-tools", label: "Workflows & Tools", icon: <ThreeBarsHorizontal size={16} /> },
+    { id: "skills", label: "Skills", icon: <LightingBolt size={16} /> },
+    { id: "connectors", label: "Connectors", icon: <Mcp size={16} /> },
+  ]},
+  { title: "Account", items: [
+    { id: "organization", label: "Organization", icon: <Buildings size={16} /> },
+    { id: "users", label: "Users", icon: <TwoHumanSilhouettes size={16} /> },
+    { id: "plans-billing", label: "Plans & Billing", icon: <CreditCard size={16} /> },
+    { id: "usage", label: "Usage", icon: <ChartLineInSquare size={16} /> },
+  ]},
+];
+
+export const PAGE_TITLES: Record<PageId, { title: string; subtitle: string }> = {
+  "profile": { title: "Profile", subtitle: "Update your name, photo, and account-specific personal information." },
+  "preferences": { title: "Preferences", subtitle: "Customize your default settings for theme and language." },
+  "my-computer": { title: "My Computer", subtitle: "Personalise Computer to your own work style and control how it behaves." },
+  "workflows-tools": { title: "Workflows & Tools", subtitle: "Browse and manage the tools your agent can use." },
+  "skills": { title: "Skills", subtitle: "Skills are reusable, packaged instructions that tell a model how to behave for a specific task" },
+  "connectors": { title: "Connectors", subtitle: "Connect Computer to apps, tools, storage, and more." },
+  "organization": { title: "Organization", subtitle: "Manage everything about your organization" },
+  "users": { title: "Users", subtitle: "Invite, remove, and manage users and their access roles." },
+  "plans-billing": { title: "Plans and Billing", subtitle: "Manage payment methods, balances and billing preferences." },
+  "usage": { title: "Usage", subtitle: "Track your team's credit consumption and session activity" },
+};

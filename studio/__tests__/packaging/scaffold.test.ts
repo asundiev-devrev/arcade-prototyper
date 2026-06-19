@@ -82,4 +82,15 @@ describe("electron-builder configuration", () => {
     expect(exclusionIdx).toBeGreaterThanOrEqual(0);
     expect(reincludeIdx).toBeGreaterThan(exclusionIdx);
   });
+
+  it("re-includes homepage-template thumbnails after the blanket image exclusion", () => {
+    // Same trap as the Assets-panel thumbnails: the three homepage-template
+    // PNGs under studio/prototype-kit/template-thumbs/ must be re-included
+    // AFTER the blanket image exclusion or template tiles ship blank.
+    const files: string[] = config.files;
+    const exclusionIdx = files.indexOf("!**/*.{png,jpg,jpeg,gif}");
+    const reincludeIdx = files.indexOf("studio/prototype-kit/template-thumbs/**/*.png");
+    expect(exclusionIdx).toBeGreaterThanOrEqual(0);
+    expect(reincludeIdx).toBeGreaterThan(exclusionIdx);
+  });
 });

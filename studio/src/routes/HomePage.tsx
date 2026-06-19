@@ -7,7 +7,7 @@ import { setPendingPrompt } from "../lib/pendingPrompt";
 import { StudioHeader } from "../components/shell/StudioHeader";
 import { AppSettingsButton } from "../components/shell/SettingsButton";
 import { HeroPromptInput, type HeroPromptSubmitArgs } from "../components/home/HeroPromptInput";
-import { ProjectsSection } from "../components/home/ProjectsSection";
+import { HomeShelf } from "../components/home/HomeShelf";
 import type { Project } from "../../server/types";
 
 export function HomePage({ onOpen }: { onOpen: (slug: string) => void }) {
@@ -76,6 +76,36 @@ export function HomePage({ onOpen }: { onOpen: (slug: string) => void }) {
     }
   }
 
+  async function handleTemplateStart(templateId: string) {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      const names: Record<string, string> = { computer: "Computer: Chat", "computer-settings": "Computer: Settings", "builder-page": "Agent Studio: Builder" };
+      const base = names[templateId] ?? "Untitled";
+      // Dedupe the DISPLAY name against existing projects (createProject only
+      // dedupes the slug): "Computer: Chat", then "Computer: Chat 2", …
+      const taken = new Set(projects.map((p) => p.name));
+      let name = base;
+      for (let n = 2; taken.has(name); n++) name = `${base} ${n}`;
+      const project = await api.createProject({
+        name,
+        theme: "arcade",
+        mode: "light",
+      });
+      await api.seedTemplate(project.slug, templateId);
+      void refresh();
+      onOpen(project.slug);
+    } catch (e) {
+      toast({
+        title: "Failed to start from template",
+        description: e instanceof Error ? e.message : String(e),
+        intent: "alert",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
       <StudioHeader title="Studio" right={<AppSettingsButton />} />
@@ -91,11 +121,12 @@ export function HomePage({ onOpen }: { onOpen: (slug: string) => void }) {
           }}
         >
           <HeroPromptInput onSubmit={handleHeroSubmit} disabled={submitting} />
-          <ProjectsSection
+          <HomeShelf
             projects={projects}
             onOpen={onOpen}
             onRename={handleRename}
             onDelete={handleDelete}
+            onStartTemplate={handleTemplateStart}
           />
         </div>
       </div>
