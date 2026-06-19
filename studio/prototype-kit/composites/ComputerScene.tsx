@@ -234,6 +234,7 @@ export function ComputerScene({
         <ComputerSidebar
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
+          canvasOpen={panelOpen}
           historyAction={
             <IconButton
               aria-label={sessionsOpen ? "Hide sessions" : "Show sessions"}

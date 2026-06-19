@@ -41,7 +41,7 @@
  * - Chat items should use the arcade `<Avatar name="..." src="..." size="sm" />`
  *   component for leading content — never a raw string letter placeholder.
  */
-import { forwardRef, type ReactNode } from "react";
+import { forwardRef, createContext, useContext, type ReactNode } from "react";
 import {
   ChevronDownSmall,
   ChevronLeftSmall,
@@ -55,6 +55,10 @@ import {
   ThreeDotsHorizontal,
   DotInLeftWindow,
 } from "@xorkavi/arcade-gen";
+
+/* ─── Context for canvas-aware collapse threshold ──────────────────────── */
+
+const SidebarCtx = createContext(false);
 
 /* ─── Root ──────────────────────────────────────────────────────────────── */
 
@@ -76,6 +80,9 @@ type RootProps = {
   collapsed?: boolean;
   /** Callback fired when the user clicks the window-chrome collapse toggle. */
   onToggleCollapse?: () => void;
+  /** When the canvas is docked, collapse to the rail earlier (at 900px container
+   *  width instead of 600) — the docked canvas steals horizontal room. */
+  canvasOpen?: boolean;
   children?: ReactNode;
 };
 
@@ -92,6 +99,7 @@ function Root({
   banner,
   collapsed = false,
   onToggleCollapse,
+  canvasOpen = false,
   children,
 }: RootProps) {
   // The primary action row (New Chat + history) is Computer's defining feature.
@@ -106,48 +114,62 @@ function Root({
     (agentStudioLink as unknown) === ACTION_ROW_UNSET ? <DefaultAgentStudioLink /> : agentStudioLink;
 
   return (
-    <div
-      data-collapsed={collapsed ? "true" : undefined}
-      className={[
-        "group/sidebar flex flex-col h-full shrink-0 bg-(--surface-overlay) border-r border-(--stroke-neutral-subtle)",
-        "transition-[width] duration-200 ease-[cubic-bezier(0.33,1,0.68,1)] overflow-hidden",
-        collapsed ? "w-16" : "w-64",
-        // Width-forced rail: when the container is narrow, force 64px even if
-        // not React-collapsed. THRESHOLD_NO_CANVAS = 600.
-        "@max-[600px]:w-16",
-      ].join(" ")}
-    >
-      {showWindowChrome ? <WindowChrome onToggle={onToggleCollapse} /> : null}
+    <SidebarCtx.Provider value={canvasOpen}>
+      <div
+        data-collapsed={collapsed ? "true" : undefined}
+        className={[
+          "group/sidebar flex flex-col h-full shrink-0 bg-(--surface-overlay) border-r border-(--stroke-neutral-subtle)",
+          "transition-[width] duration-200 ease-[cubic-bezier(0.33,1,0.68,1)] overflow-hidden",
+          collapsed ? "w-16" : "w-64",
+          // Width-forced rail: when the container is narrow, force 64px even if
+          // not React-collapsed. THRESHOLD_NO_CANVAS = 600.
+          "@max-[600px]:w-16",
+          canvasOpen ? "@max-[900px]:w-16" : "",
+        ].join(" ")}
+      >
+        {showWindowChrome ? <WindowChrome onToggle={onToggleCollapse} /> : null}
 
-      {workspace ? <Brand label={workspace} /> : null}
+        {workspace ? <Brand label={workspace} /> : null}
 
-      {hasActionRow ? (
-        <div className="flex items-center gap-2 px-3 pt-2 pb-3">
-          {primary}
-          {history}
-        </div>
-      ) : null}
+        {hasActionRow ? (
+          <div className="flex items-center gap-2 px-3 pt-2 pb-3">
+            {primary}
+            {history}
+          </div>
+        ) : null}
 
-      <nav className="flex-1 min-h-0 overflow-auto">
-        {banner ? <div className="px-2 pt-2">{banner}</div> : null}
-        {children}
-      </nav>
+        <nav className="flex-1 min-h-0 overflow-auto">
+          {banner ? <div className="px-2 pt-2">{banner}</div> : null}
+          {children}
+        </nav>
 
-      {agentStudio ? <div className="px-2 pb-1 shrink-0">{agentStudio}</div> : null}
+        {agentStudio ? <div className="px-2 pb-1 shrink-0">{agentStudio}</div> : null}
 
-      {user ? (
-        <div className="flex items-center gap-2 px-2 py-2 shrink-0 group-data-[collapsed=true]/sidebar:justify-center">
-          <div className="flex-1 min-w-0 px-1 group-data-[collapsed=true]/sidebar:hidden @max-[600px]:hidden">{user}</div>
-          {footerAction ? <div className="shrink-0 group-data-[collapsed=true]/sidebar:hidden @max-[600px]:hidden">{footerAction}</div> : null}
-        </div>
-      ) : null}
-    </div>
+        {user ? (
+          <div className={[
+            "flex items-center gap-2 px-2 py-2 shrink-0 group-data-[collapsed=true]/sidebar:justify-center",
+          ].join(" ")}>
+            <div className={[
+              "flex-1 min-w-0 px-1 group-data-[collapsed=true]/sidebar:hidden",
+              "@max-[600px]:hidden",
+              canvasOpen ? "@max-[900px]:hidden" : "",
+            ].join(" ")}>{user}</div>
+            {footerAction ? <div className={[
+              "shrink-0 group-data-[collapsed=true]/sidebar:hidden",
+              "@max-[600px]:hidden",
+              canvasOpen ? "@max-[900px]:hidden" : "",
+            ].join(" ")}>{footerAction}</div> : null}
+          </div>
+        ) : null}
+      </div>
+    </SidebarCtx.Provider>
   );
 }
 
 /* ─── Window chrome ─────────────────────────────────────────────────────── */
 
 function WindowChrome({ onToggle }: { onToggle?: () => void }) {
+  const canvasOpen = useContext(SidebarCtx);
   return (
     <div className="flex items-center h-11 shrink-0 px-3 gap-2">
       <TrafficLights />
@@ -160,7 +182,11 @@ function WindowChrome({ onToggle }: { onToggle?: () => void }) {
         <DotInLeftWindow size={16} aria-hidden="true" />
       </IconButton>
       <div className="flex-1" />
-      <div className="flex items-center gap-0.5 text-(--fg-neutral-prominent) group-data-[collapsed=true]/sidebar:hidden @max-[600px]:hidden">
+      <div className={[
+        "flex items-center gap-0.5 text-(--fg-neutral-prominent) group-data-[collapsed=true]/sidebar:hidden",
+        "@max-[600px]:hidden",
+        canvasOpen ? "@max-[900px]:hidden" : "",
+      ].join(" ")}>
         <IconButton aria-label="Back" variant="tertiary" size="sm">
           <ChevronLeftSmall size={16} />
         </IconButton>
@@ -223,11 +249,20 @@ function DevRevMark() {
 /* ─── Default actions row children ──────────────────────────────────────── */
 
 function DefaultPrimaryAction() {
+  const canvasOpen = useContext(SidebarCtx);
   return (
-    <Button variant="secondary" size="lg" className="flex-1 justify-center group-data-[collapsed=true]/sidebar:w-10 group-data-[collapsed=true]/sidebar:px-0 group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:rounded-full @max-[600px]:w-10 @max-[600px]:px-0 @max-[600px]:justify-center @max-[600px]:rounded-full">
+    <Button variant="secondary" size="lg" className={[
+      "flex-1 justify-center group-data-[collapsed=true]/sidebar:w-10 group-data-[collapsed=true]/sidebar:px-0 group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:rounded-full",
+      "@max-[600px]:w-10 @max-[600px]:px-0 @max-[600px]:justify-center @max-[600px]:rounded-full",
+      canvasOpen ? "@max-[900px]:w-10 @max-[900px]:px-0 @max-[900px]:justify-center @max-[900px]:rounded-full" : "",
+    ].join(" ")}>
       <span className="inline-flex items-center gap-2">
         <PlusInChatBubble size={16} />
-        <span className="group-data-[collapsed=true]/sidebar:hidden @max-[600px]:hidden">New Chat</span>
+        <span className={[
+          "group-data-[collapsed=true]/sidebar:hidden",
+          "@max-[600px]:hidden",
+          canvasOpen ? "@max-[900px]:hidden" : "",
+        ].join(" ")}>New Chat</span>
       </span>
     </Button>
   );
@@ -264,10 +299,15 @@ type GroupProps = {
 };
 
 function Group({ title, trailing, children }: GroupProps) {
+  const canvasOpen = useContext(SidebarCtx);
   return (
     <div className="pt-1.5 pb-1">
       {title || trailing ? (
-        <div className="flex items-center justify-between px-3 py-2 mx-1 rounded-square hover:bg-(--bg-neutral-soft) transition-colors group-data-[collapsed=true]/sidebar:hidden @max-[600px]:hidden">
+        <div className={[
+          "flex items-center justify-between px-3 py-2 mx-1 rounded-square hover:bg-(--bg-neutral-soft) transition-colors group-data-[collapsed=true]/sidebar:hidden",
+          "@max-[600px]:hidden",
+          canvasOpen ? "@max-[900px]:hidden" : "",
+        ].join(" ")}>
           <span className="text-caption text-(--fg-neutral-subtle)">
             {title}
           </span>
@@ -309,6 +349,7 @@ const Item = forwardRef<HTMLDivElement, ItemProps>(function Item(
   { leading, trailing, children, active, emphasis = "normal", onClick, onMenu },
   ref,
 ) {
+  const canvasOpen = useContext(SidebarCtx);
   const strong = active || emphasis === "strong";
   return (
     <div
@@ -323,11 +364,17 @@ const Item = forwardRef<HTMLDivElement, ItemProps>(function Item(
           ? "bg-(--control-bg-neutral-subtle-active)"
           : "hover:bg-(--bg-neutral-soft)",
         strong ? "text-(--fg-neutral-prominent) font-semibold" : "text-(--fg-neutral-prominent)",
-        "group-data-[collapsed=true]/sidebar:justify-center @max-[600px]:justify-center",
+        "group-data-[collapsed=true]/sidebar:justify-center",
+        "@max-[600px]:justify-center",
+        canvasOpen ? "@max-[900px]:justify-center" : "",
       ].join(" ")}
     >
       {leading ? <span className="shrink-0 w-5 h-5 flex items-center justify-center text-(--fg-neutral-subtle)">{leading}</span> : null}
-      <span className="min-w-0 flex-1 truncate group-data-[collapsed=true]/sidebar:hidden @max-[600px]:hidden">{children}</span>
+      <span className={[
+        "min-w-0 flex-1 truncate group-data-[collapsed=true]/sidebar:hidden",
+        "@max-[600px]:hidden",
+        canvasOpen ? "@max-[900px]:hidden" : "",
+      ].join(" ")}>{children}</span>
       {onMenu || trailing ? (
         <span className="shrink-0 flex items-center gap-1.5">
           {trailing ? (
