@@ -30,7 +30,7 @@ export const NAV_GROUPS: NavGroup[] = [
 
 export const PAGE_TITLES: Record<PageId, { title: string; subtitle: string }> = {
   "profile": { title: "Profile", subtitle: "Update your name, photo, and account-specific personal information." },
-  "preferences": { title: "Preferences", subtitle: "Tune appearance, language, and notifications." },
+  "preferences": { title: "Preferences", subtitle: "Customize your default settings for theme and language." },
   "my-computer": { title: "My Computer", subtitle: "Personalise Computer to your own work style and control how it behaves." },
   "workflows-tools": { title: "Workflows & Tools", subtitle: "Browse and manage the tools your agent can use." },
   "skills": { title: "Skills", subtitle: "Discover and add capabilities for your agent." },
