@@ -7,10 +7,11 @@
   "engines": { "vscode": "^1.90.0" },
   "categories": ["Other"],
   "main": "./dist/extension.js",
-  "activationEvents": ["onCommand:arcade.open"],
+  "activationEvents": ["onCommand:arcade.open", "onCommand:arcade.reload"],
   "contributes": {
     "commands": [
-      { "command": "arcade.open", "title": "Arcade: Open Prototyper" }
+      { "command": "arcade.open", "title": "Arcade: Open Prototyper" },
+      { "command": "arcade.reload", "title": "Arcade: Reload" }
     ]
   },
   "scripts": {
