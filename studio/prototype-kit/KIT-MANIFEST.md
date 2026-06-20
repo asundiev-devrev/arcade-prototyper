@@ -867,6 +867,13 @@ type ComputerSceneProps = {
   sessions?: Session[];
   /** Placeholder for the bottom command bar. */
   chatInputPlaceholder?: string;
+  /**
+   * Called when the user picks "Settings" from the account menu (avatar/name
+   * footer). When provided, the Settings item is wired to it — typically the
+   * host swaps the whole pane to the Computer settings view. When omitted, the
+   * Settings item is inert (the menu still renders).
+   */
+  onOpenSettings?: () => void;
 }
 ```
 
