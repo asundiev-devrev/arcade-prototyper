@@ -16,6 +16,8 @@ const rootPkg = JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), 
 const extPkgPath = path.join(repoRoot, "extension/package.json");
 const extPkg = JSON.parse(fs.readFileSync(extPkgPath, "utf-8"));
 extPkg.version = rootPkg.version;
+// Explicitly include node_modules via the files field (overrides vsce's built-in exclusion).
+extPkg.files = ["dist", "bin", "studio", "prototype-kit", "aws-cli", "node_modules"];
 fs.writeFileSync(extPkgPath, JSON.stringify(extPkg, null, 2) + "\n");
 
 // 2. Reset staging dir.
@@ -40,8 +42,10 @@ await build({
 
 // 4. Copy the extension manifest to the staging ROOT.
 //    Write a custom .vscodeignore that KEEPS node_modules (vsce excludes it by default).
+//    Negation patterns require the dir itself to be negated first, then its contents.
 fs.copyFileSync(extPkgPath, path.join(stage, "package.json"));
 const vscodeignore = `# VSIX .vscodeignore — keep runtime deps, exclude dev artifacts.
+!node_modules
 !node_modules/**
 studio/packaging/**
 studio/__tests__/**
@@ -70,9 +74,45 @@ for (const item of studioContents) {
   }
 }
 
-for (const dir of ["prototype-kit", "node_modules"]) {
-  const src = path.join(repoRoot, dir);
-  if (fs.existsSync(src)) fs.cpSync(src, path.join(stage, dir), { recursive: true });
+// Copy prototype-kit (no symlinks, cpSync is fine)
+const prototypeKitSrc = path.join(repoRoot, "prototype-kit");
+if (fs.existsSync(prototypeKitSrc)) {
+  fs.cpSync(prototypeKitSrc, path.join(stage, "prototype-kit"), { recursive: true });
+}
+
+// Copy node_modules with rsync -L to dereference pnpm's symlink forest.
+// pnpm's node_modules are symlinks into .pnpm/ store (absolute paths outside the
+// staging dir); cpSync copies them verbatim → vsce excludes broken links → VSIX
+// is missing runtime deps. rsync -L resolves them into real files.
+//
+// Strategy: copy individual top-level packages we need (not the whole tree with
+// excludes, which is complex and risks missing transitive deps). Explicit list
+// ensures we only ship runtime deps.
+const nodeModulesSrc = path.join(repoRoot, "node_modules");
+if (fs.existsSync(nodeModulesSrc)) {
+  const nodeModulesDest = path.join(stage, "node_modules");
+  fs.mkdirSync(nodeModulesDest, { recursive: true });
+
+  // Runtime dependencies (server + kit + figmanage).
+  const runtimePackages = [
+    "vite", "esbuild", "@tailwindcss", "tailwindcss", "react", "react-dom",
+    "react-day-picker", "react-markdown", "@xorkavi", "figmanage",
+    "@sentry", "posthog-js", "posthog-node", "@vitejs", "chokidar", "ws", "yaml",
+    "zod", "concurrently", ".pnpm", ".bin", ".modules.yaml", ".pnpm-workspace-state-v1.json"
+  ];
+
+  console.log(`[stage-vsix] Copying runtime node_modules via rsync...`);
+  const rsyncArgs = ["-aL"]; // -L = transform symlinks into referents
+  for (const pkg of runtimePackages) {
+    const src = path.join(nodeModulesSrc, pkg);
+    if (fs.existsSync(src)) rsyncArgs.push(src);
+  }
+  rsyncArgs.push(`${nodeModulesDest}/`);
+
+  execFileSync("rsync", rsyncArgs, { stdio: "inherit" });
+  console.log(`[stage-vsix] rsync complete (${runtimePackages.length} packages)`);
+} else {
+  console.warn(`[stage-vsix] WARNING: node_modules not found at ${nodeModulesSrc}`);
 }
 // electron imports are now bundled into dist/extension.js — no separate copy needed.
 
@@ -117,8 +157,11 @@ fs.cpSync(path.join(repoRoot, "studio/packaging/aws-cli"), path.join(stage, "aws
 // cloudflared intentionally NOT staged (share out of scope for v1).
 
 // 7. Package with --no-dependencies (we supply node_modules manually).
+//    Run vsce from the repo root's node_modules (the staging dir's node_modules
+//    excludes vsce since it's dev-only), but operate on the staging dir.
 fs.mkdirSync(dist, { recursive: true });
-execFileSync("pnpm", ["exec", "vsce", "package", "--no-dependencies",
+const vscebin = path.join(repoRoot, "node_modules/.bin/vsce");
+execFileSync(vscebin, ["package", "--no-dependencies",
   "--out", path.join(dist, `arcade-prototyper-${rootPkg.version}.vsix`)],
   { cwd: stage, stdio: "inherit" });
 
