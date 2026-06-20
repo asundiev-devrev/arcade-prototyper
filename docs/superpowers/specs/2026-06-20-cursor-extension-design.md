@@ -163,9 +163,18 @@ Identical to Studio. Only the outer container changed (webview tab vs. browser t
 - `prototype-kit` **dist** + arcade-gen — the fidelity payload. Must ship built; stale dist surfaces
   as "Element type is invalid" (memory `prototype-kit-dist-vite-cache`).
 - Vendored CLIs as bundled resources (macOS): `claude` binary, `awscli` (~217M), and **`figmanage`**
-  (npm package + node wrapper — required by the in-scope Figma import; Studio vendors it at
-  `<Resources>/bin/figmanage` + `node_modules/figmanage/`). `cloudflared` dropped (−37M, share is
-  out of scope). figmanage's wrapper invokes `node`, so the `process.execPath` rule applies to it too.
+  (npm package + a shell wrapper; required by the in-scope Figma import). `cloudflared` dropped
+  (−37M, share is out of scope).
+  - **figmanage wrapper is VSIX-native, not the desktop one.** Studio's wrapper (`electron/bin/figmanage`)
+    `exec`s the Electron `.app` binary (`Contents/MacOS/Arcade Studio`) — which does **not** exist in a
+    VSIX. The packaging step writes a replacement wrapper that runs figmanage's JS entry
+    (`node_modules/figmanage/dist/index.js`) via the **host editor's** node binary
+    (`process.execPath` + `ELECTRON_RUN_AS_NODE=1`, passed as `ARCADE_NODE_BIN`). Verified by the
+    Gatekeeper spike: figmanage runs fine under plain node. This is the `process.execPath` rule
+    (Global Constraints) applied to the third binary.
+  - **Gatekeeper:** spike verdict **GO without quarantine-stripping** — `claude` and `aws` are
+    Developer-ID signed (Anthropic / Amazon), so macOS runs them even with the download quarantine
+    xattr. No per-binary notarization or activation-time `xattr` strip needed.
 
 **Build pipeline:** the prereq chain from `studio:pack` carries over unchanged — assets → templates →
 `kit:build` → `fetch-cli-deps.sh` (which vendors claude/awscli/figmanage) — then the final step swaps
@@ -203,10 +212,10 @@ notarize dance, the Cloudflare Worker.
 
 ## Risks / spikes (ranked, do before building)
 
-1. **Gatekeeper on vendored binaries** — do `claude` / `aws` / `figmanage` execute from
-   `~/.cursor/extensions/...` (and the VS Code equivalent) without a quarantine block? The VSIX is
-   not notarized like a `.app`, so first-run Gatekeeper behavior on the bundled binaries is unknown.
-   Spike first; a block could force a different auth/distribution path.
+1. **Gatekeeper on vendored binaries** — ✅ **RESOLVED (GO).** Spike (`docs/superpowers/scratch/2026-06-20-gatekeeper-spike-finding.md`)
+   confirmed `claude` + `aws` are Developer-ID signed and execute from a quarantined side-load dir
+   with no strip needed. figmanage runs fine under plain node (drives the VSIX-native wrapper above).
+   No per-binary notarization required.
 2. **VSIX size** — verify `vsce package` + side-load works at 200M+.
 3. **Dynamic port + multi-window** — verify port-pick + reclaim correctness with two windows open.
 4. **Webview CSP** — confirm `http://localhost:PORT` + `ws://` HMR is permitted in a webview.

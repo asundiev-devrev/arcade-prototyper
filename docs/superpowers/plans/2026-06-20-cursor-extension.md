@@ -600,14 +600,14 @@ git commit -m "feat(studio/extension): scaffold VS Code extension manifest + act
 **Interfaces:**
 - Produces: `resolveBinDirs(context): string[]` — absolute paths to the vendored `bin/` and `aws-cli/` dirs inside the extension install (`context.extensionUri.fsPath`).
 - Produces: `resolveStorageRoot(context): string` — `context.globalStorageUri.fsPath` (the hidden frame dir; fed to the server as `ARCADE_STUDIO_ROOT`).
-- Produces: `stripQuarantine(dir): void` — runs `xattr -dr com.apple.quarantine <dir>`; **only included if Task 1 found it required**. No-op wrapper that swallows errors otherwise.
+
+(Task 1's spike returned GO-without-strip — the vendored binaries are Developer-ID signed — so no `stripQuarantine` helper is needed.)
 
 - [ ] **Step 1: Implement paths.ts**
 
 ```ts
 // extension/src/paths.ts
 import * as vscode from "vscode";
-import { execFile } from "node:child_process";
 import path from "node:path";
 
 /** Vendored-CLI directories inside the installed extension. PATH gets prefixed
@@ -621,18 +621,6 @@ export function resolveBinDirs(context: vscode.ExtensionContext): string[] {
  *  server via ARCADE_STUDIO_ROOT (studio/server/paths.ts honors it). */
 export function resolveStorageRoot(context: vscode.ExtensionContext): string {
   return context.globalStorageUri.fsPath;
-}
-
-/** Strip the macOS quarantine xattr from a freshly side-loaded bin dir, so
- *  Gatekeeper doesn't block first execution. Only wired in if Task 1's spike
- *  found it necessary. Best-effort; logs and continues on failure. */
-export function stripQuarantine(dir: string): Promise<void> {
-  return new Promise((resolve) => {
-    execFile("xattr", ["-dr", "com.apple.quarantine", dir], (err) => {
-      if (err) console.warn(`[arcade] xattr strip failed for ${dir}: ${err.message}`);
-      resolve();
-    });
-  });
 }
 ```
 
@@ -674,6 +662,7 @@ describe("buildServerEnv", () => {
     binDirs: ["/ext/bin", "/ext/aws-cli"],
     storageRoot: "/store",
     basePath: "/usr/bin:/bin",
+    nodeBin: "/path/to/code-electron",
   });
 
   it("prefixes PATH with the vendored bin dirs", () => {
@@ -686,6 +675,12 @@ describe("buildServerEnv", () => {
   it("marks the run as packaged and pins the claude binary", () => {
     expect(env.ARCADE_IS_PACKAGED).toBe("1");
     expect(env.ARCADE_STUDIO_CLAUDE_BIN).toBe(path.join("/ext/bin", "claude"));
+  });
+  it("exposes the host node binary for the figmanage wrapper", () => {
+    // The staged bin/figmanage wrapper exec's this via ELECTRON_RUN_AS_NODE.
+    // In a VSIX there is no Electron .app, so the wrapper cannot use the
+    // old Contents/MacOS path — it uses the host editor's Electron instead.
+    expect(env.ARCADE_NODE_BIN).toBe("/path/to/code-electron");
   });
 });
 ```
@@ -704,13 +699,14 @@ import path from "node:path";
 import { pickFreePort } from "../../electron/shared/freePort";
 import { startVite, stopVite } from "../../electron/viteRunner";
 import { bootstrapAwsProfile } from "../../electron/shared/awsBootstrap";
-import { resolveBinDirs, resolveStorageRoot, stripQuarantine } from "./paths";
+import { resolveBinDirs, resolveStorageRoot } from "./paths";
 
 /** Pure: the env overrides the Vite child needs to behave like the packaged app. */
 export function buildServerEnv(opts: {
   binDirs: string[];
   storageRoot: string;
   basePath: string;
+  nodeBin: string;
 }): Record<string, string> {
   return {
     PATH: `${opts.binDirs.join(":")}:${opts.basePath}`,
@@ -718,6 +714,11 @@ export function buildServerEnv(opts: {
     ARCADE_IS_PACKAGED: "1",
     ARCADE_APP_VERSION: process.env.ARCADE_APP_VERSION ?? "",
     ARCADE_STUDIO_CLAUDE_BIN: path.join(opts.binDirs[0], "claude"),
+    // The staged bin/figmanage wrapper runs figmanage's JS entry via this
+    // node binary (the host editor's Electron, which honors
+    // ELECTRON_RUN_AS_NODE). A VSIX has no Arcade .app, so the wrapper
+    // cannot exec Contents/MacOS/Arcade Studio like the desktop build does.
+    ARCADE_NODE_BIN: opts.nodeBin,
   };
 }
 
@@ -735,17 +736,21 @@ export class ServerHost {
     const binDirs = resolveBinDirs(context);
     const storageRoot = resolveStorageRoot(context);
 
-    // STRIP_QUARANTINE: include only if Task 1 found it necessary.
-    await stripQuarantine(binDirs[0]);
+    // Task 1 spike verdict: GO without quarantine-stripping — the vendored
+    // claude/aws binaries are Developer-ID signed, so Gatekeeper runs them
+    // even with the quarantine xattr. No stripQuarantine call needed.
 
     bootstrapAwsProfile();
 
     // Apply env to THIS process so the spawned Vite child inherits it
     // (startVite spreads process.env). Mirrors electron/main.ts patchPath().
+    // process.execPath is the host editor's Electron binary, reused as node
+    // (ELECTRON_RUN_AS_NODE) for the staged figmanage wrapper.
     const overrides = buildServerEnv({
       binDirs,
       storageRoot,
       basePath: process.env.PATH ?? "",
+      nodeBin: process.execPath,
     });
     Object.assign(process.env, overrides);
 
@@ -761,12 +766,12 @@ export class ServerHost {
   }
 }
 ```
-NOTE on `appRoot`: the VSIX lays the repo out under the extension root so that `appRoot/node_modules/vite/bin/vite.js` and `appRoot/studio/vite.config.ts` resolve — guaranteed by the packaging layout in Task 9. If Task 1 returned GO-without-strip, delete the `stripQuarantine` import + call.
+NOTE on `appRoot`: the VSIX lays the repo out under the extension root so that `appRoot/node_modules/vite/bin/vite.js` and `appRoot/studio/vite.config.ts` resolve — guaranteed by the packaging layout in Task 9.
 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pnpm run studio:test __tests__/extension/serverHost.test.ts`
-Expected: PASS (3 tests).
+Expected: PASS (4 tests).
 
 - [ ] **Step 5: Commit**
 
@@ -1038,12 +1043,45 @@ for (const dir of ["studio", "prototype-kit", "node_modules", "electron/dist", "
 }
 // electron/viteRunner.js + freePort.js are imported by serverHost — ship compiled electron/dist.
 
-// 5. Copy vendored binaries to the staging ROOT (bin/, aws-cli/).
-const appRes = path.join(repoRoot, "studio/packaging/dist/Arcade Studio.app/Contents/Resources");
-fs.cpSync(path.join(appRes, "bin"), path.join(stage, "bin"), { recursive: true });
+// 5. Assemble the staged bin/ from RAW sources (not from a pre-built .app —
+//    avoids requiring a full studio:pack first, and lets us swap the
+//    Electron-dependent figmanage wrapper for a VSIX-native one).
+const binDir = path.join(stage, "bin");
+fs.mkdirSync(binDir, { recursive: true });
+
+//    claude: the macOS binary ships in node_modules as claude.exe (that IS the
+//    mac executable in this repo). Stage it as `bin/claude` (matches
+//    ARCADE_STUDIO_CLAUDE_BIN + figmaCli/chat spawn names).
+fs.copyFileSync(
+  path.join(repoRoot, "node_modules/@anthropic-ai/claude-code/bin/claude.exe"),
+  path.join(binDir, "claude"),
+);
+fs.chmodSync(path.join(binDir, "claude"), 0o755);
+
+//    figmanage: the DESKTOP wrapper (electron/bin/figmanage) exec's the
+//    Electron .app binary (Contents/MacOS/Arcade Studio) — which does NOT
+//    exist in a VSIX. Write a VSIX-native wrapper that runs figmanage's JS
+//    entry via the host editor's node binary (ARCADE_NODE_BIN, set by
+//    serverHost to process.execPath, with ELECTRON_RUN_AS_NODE=1). The entry
+//    resolves inside the staged node_modules copied in step 4.
+// NOTE: written as a JS template literal — every shell `$` is escaped `\$`
+// so it stays literal in the emitted file (no JS interpolation).
+const figmanageWrapper = `#!/bin/sh
+# VSIX-native figmanage wrapper. Runs figmanage's JS entry under the host
+# editor's Electron-as-node runtime (ARCADE_NODE_BIN). Unlike the desktop
+# build there is no Arcade .app to exec, so we use the host's node binary.
+set -e
+SCRIPT_DIR="\$(cd "\$(dirname "\$0")" && pwd)"
+EXT_ROOT="\$(cd "\$SCRIPT_DIR/.." && pwd)"
+FIGMANAGE_ENTRY="\$EXT_ROOT/node_modules/figmanage/dist/index.js"
+exec env ELECTRON_RUN_AS_NODE=1 "\${ARCADE_NODE_BIN:-node}" "\$FIGMANAGE_ENTRY" "\$@"
+`;
+fs.writeFileSync(path.join(binDir, "figmanage"), figmanageWrapper);
+fs.chmodSync(path.join(binDir, "figmanage"), 0o755);
+
+//    aws CLI v2 expanded layout (nested aws-cli/aws per fetch-cli-deps.sh).
 fs.cpSync(path.join(repoRoot, "studio/packaging/aws-cli"), path.join(stage, "aws-cli"), { recursive: true });
-// Drop cloudflared from the staged bin/ (share is out of scope for v1).
-fs.rmSync(path.join(stage, "bin", "cloudflared"), { force: true });
+// cloudflared intentionally NOT staged (share out of scope for v1).
 
 // 6. Package.
 fs.mkdirSync(dist, { recursive: true });
@@ -1070,9 +1108,12 @@ Run:
 pnpm add -D -w @vscode/vsce
 pnpm run studio:test __tests__/packaging/vsix-manifest.test.ts
 pnpm run studio:pack-vsix
-unzip -l studio/packaging/dist/arcade-prototyper-*.vsix | grep -E "extension/(dist/extension.js|studio/vite.config.ts|bin/claude|aws-cli/aws|node_modules/vite/bin/vite.js)"
+unzip -l studio/packaging/dist/arcade-prototyper-*.vsix | grep -E "extension/(dist/extension.js|studio/vite.config.ts|bin/claude|bin/figmanage|aws-cli/aws|node_modules/figmanage/dist/index.js|node_modules/vite/bin/vite.js)"
+# Confirm the staged figmanage wrapper has NO Electron-.app dependency
+# (the desktop wrapper exec'd Contents/MacOS/Arcade Studio, absent in a VSIX):
+ARCADE_NODE_BIN="$(command -v node)" studio/packaging/vsix-stage/bin/figmanage --version
 ```
-Expected: manifest test PASS; VSIX builds; the grep shows `dist/extension.js`, `studio/vite.config.ts`, `bin/claude`, `aws-cli/aws`, and `node_modules/vite/bin/vite.js` all present (vsce nests staged content under `extension/`). If the `require("../../electron/...")` paths don't resolve, switch Step 4 to esbuild bundling and rebuild.
+Expected: manifest test PASS; VSIX builds; the grep shows `dist/extension.js`, `studio/vite.config.ts`, `bin/claude`, `bin/figmanage`, `aws-cli/aws`, `node_modules/figmanage/dist/index.js`, and `node_modules/vite/bin/vite.js` all present (vsce nests staged content under `extension/`); and the staged `bin/figmanage` prints `1.4.2` with a plain node binary — proving it does NOT need an Arcade `.app`. If the `require("../../electron/...")` paths don't resolve at runtime, switch Step 4 to esbuild bundling and rebuild.
 
 - [ ] **Step 7: Commit**
 
