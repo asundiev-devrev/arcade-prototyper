@@ -27,6 +27,15 @@
  * appended at dev time by `injectTailwindSourcePlugin`. */
 @source "../../../studio/src/**/*.{ts,tsx}";
 @source "../../../studio/prototype-kit/**/*.{ts,tsx}";
+/* arcade-gen's compiled components carry the bulk of the utility classes
+ * (disabled:*, file:*, focus-visible:*, group-hover:* …). Tailwind v4 auto-
+ * IGNORES node_modules, so in the packaged extension (where arcade-gen is a
+ * real dir under node_modules, not a pnpm symlink Tailwind follows) those
+ * classes silently drop — ~135 utilities — breaking component styles in the
+ * UI and templates. An explicit @source overrides the node_modules ignore so
+ * they compile in both the dev tree and the VSIX. See auto-memory
+ * tailwind-v4-source-scanning. */
+@source "../../../node_modules/@xorkavi/arcade-gen/dist/*.{js,cjs,mjs}";
 
 @theme {
   /* Control sizes */
