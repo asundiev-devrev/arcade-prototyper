@@ -49,12 +49,14 @@ function renderPage(id: PageId): React.ReactNode {
   }
 }
 
-export default function ComputerSettingsTemplate() {
+// `onBack` — when provided (e.g. by the chat seed that swaps chat ↔ settings),
+// the sidebar's back row becomes a button that returns to the chat view.
+export default function ComputerSettingsTemplate({ onBack }: { onBack?: () => void } = {}) {
   const [active, setActive] = React.useState<PageId>("my-computer");
   const meta = PAGE_TITLES[active] ?? PAGE_TITLES["my-computer"];
   return (
     <div className="flex h-screen w-full overflow-hidden" style={{ background: "var(--surface-default)" }}>
-      <ComputerSettingsSidebar active={active} onSelect={setActive} />
+      <ComputerSettingsSidebar active={active} onSelect={setActive} onBack={onBack} />
       <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
         <div className="flex h-12 shrink-0 items-center px-9 text-body-small" style={{ color: "var(--fg-neutral-subtle)" }}>
           Settings <span className="px-1.5">›</span>

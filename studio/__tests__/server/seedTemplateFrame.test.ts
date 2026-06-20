@@ -28,15 +28,21 @@ describe("seedTemplateFrame", () => {
     expect(reloaded?.frames.some((f) => f.slug === "01-computer-settings")).toBe(true);
   });
 
-  it("writes a single-file seed (computer) to frames/01-<id>/index.tsx", async () => {
+  it("copies the computer directory seed (chat + nested settings tree) into the frame", async () => {
     const p = await createProject({ name: "Computer: Chat", theme: "arcade", mode: "light" });
     const frame = await seedTemplateFrame(p.slug, "computer");
     expect(frame.slug).toBe("01-computer");
-    const idx = await fs.readFile(
-      path.join(tmpRoot, "projects", p.slug, "frames", "01-computer", "index.tsx"),
+    const frameDir = path.join(tmpRoot, "projects", p.slug, "frames", "01-computer");
+    const idx = await fs.readFile(path.join(frameDir, "index.tsx"), "utf-8");
+    // The chat seed is the swap host: it renders ComputerScene and swaps to settings.
+    expect(idx).toContain("ComputerScene");
+    expect(idx).toContain("./settings/index");
+    // The nested settings tree must travel with it so the swap survives scaffolding.
+    const settingsIdx = await fs.readFile(
+      path.join(frameDir, "settings", "index.tsx"),
       "utf-8",
     );
-    expect(idx).toContain("ComputerScene");
+    expect(settingsIdx).toContain("export default");
   });
 
   it("rejects an unknown template id", async () => {

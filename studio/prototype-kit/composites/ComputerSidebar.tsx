@@ -497,39 +497,45 @@ function User({ avatar, name, subtitle, presence = true, menu }: UserProps) {
       ) : null}
     </div>
   );
+  const textBlock = (
+    <div className={[
+      "flex flex-col min-w-0 text-left",
+      "group-data-[collapsed=true]/sidebar:hidden",
+      "@max-[600px]:hidden",
+      canvasOpen ? "@max-[900px]:hidden" : "",
+    ].join(" ")}>
+      <span className="text-body-medium text-(--fg-neutral-prominent) truncate">{name}</span>
+      {subtitle ? (
+        <span className="text-system text-(--fg-neutral-subtle) truncate">{subtitle}</span>
+      ) : null}
+    </div>
+  );
+  // With a menu, the WHOLE row (avatar + name + subtitle) is the trigger — not
+  // just the avatar. In the collapsed rail the text block hides itself, so the
+  // trigger naturally shrinks to the avatar. Without a menu, render the inert row.
+  if (menu != null) {
+    return (
+      <Menu.Root>
+        <Menu.Trigger asChild>
+          <button
+            type="button"
+            aria-label="Account menu"
+            className="flex items-center gap-2.5 min-w-0 w-full rounded-square text-left"
+          >
+            {avatarBlock}
+            {textBlock}
+          </button>
+        </Menu.Trigger>
+        <Menu.Content side="top" align="start" sideOffset={4}>
+          {menu}
+        </Menu.Content>
+      </Menu.Root>
+    );
+  }
   return (
     <div className="flex items-center gap-2.5 min-w-0">
-      {menu != null ? (
-        <Menu.Root>
-          <Menu.Trigger asChild>
-            <button type="button" aria-label="Account menu" className="relative shrink-0 rounded-circle">
-              {avatar}
-              {presence ? (
-                <span
-                  className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-circle bg-(--bg-success-prominent) ring-2 ring-(--surface-shallow)"
-                  aria-label="Online"
-                />
-              ) : null}
-            </button>
-          </Menu.Trigger>
-          <Menu.Content side="top" align="start" sideOffset={4}>
-            {menu}
-          </Menu.Content>
-        </Menu.Root>
-      ) : (
-        avatarBlock
-      )}
-      <div className={[
-        "flex flex-col min-w-0",
-        "group-data-[collapsed=true]/sidebar:hidden",
-        "@max-[600px]:hidden",
-        canvasOpen ? "@max-[900px]:hidden" : "",
-      ].join(" ")}>
-        <span className="text-body-medium text-(--fg-neutral-prominent) truncate">{name}</span>
-        {subtitle ? (
-          <span className="text-system text-(--fg-neutral-subtle) truncate">{subtitle}</span>
-        ) : null}
-      </div>
+      {avatarBlock}
+      {textBlock}
     </div>
   );
 }

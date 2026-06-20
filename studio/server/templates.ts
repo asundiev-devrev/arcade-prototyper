@@ -17,8 +17,8 @@ export interface TemplateDef {
 }
 
 export const TEMPLATES: TemplateDef[] = [
-  { id: "computer", name: "Computer: Chat", description: "Agent chat screen", seedFile: "computer.tsx", thumb: "computer.png" },
-  { id: "computer-settings", name: "Computer: Settings", description: "Full Computer settings", seedFile: "computer-settings", thumb: "computer-settings.png" },
+  { id: "computer", name: "Computer: Chat", description: "Agent chat screen (with in-place Settings view)", seedFile: "computer", thumb: "computer.png" },
+  { id: "computer-settings", name: "Computer: Settings", description: "Full Computer settings", seedFile: "computer/settings", thumb: "computer-settings.png" },
   { id: "builder-page", name: "Agent Studio: Builder", description: "Agent capability builder", seedFile: "builder-page.tsx", thumb: "builder-page.png" },
 ];
 
@@ -41,8 +41,15 @@ export async function isSeedDirectory(id: string): Promise<boolean> {
   }
 }
 
-export function readTemplateSeed(id: TemplateId): Promise<string> {
+export async function readTemplateSeed(id: TemplateId): Promise<string> {
   const def = getTemplate(id);
-  if (!def) return Promise.reject(new Error(`Unknown template: ${id}`));
-  return fs.readFile(path.join(TEMPLATE_SEEDS_DIR, def.seedFile), "utf-8");
+  if (!def) throw new Error(`Unknown template: ${id}`);
+  // A seed is either a single .tsx file or a directory whose entry is
+  // index.tsx (e.g. "computer", "computer/settings"). For a directory seed,
+  // return its index.tsx source.
+  const seedPath = path.join(TEMPLATE_SEEDS_DIR, def.seedFile);
+  const entry = (await isSeedDirectory(id))
+    ? path.join(seedPath, "index.tsx")
+    : seedPath;
+  return fs.readFile(entry, "utf-8");
 }

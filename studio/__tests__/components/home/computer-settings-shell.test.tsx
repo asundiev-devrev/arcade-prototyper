@@ -52,7 +52,7 @@ vi.mock("arcade-prototypes", () => ({
   SkillCard: ({ title }: any) => <div>{title}</div>,
 }));
 
-import ComputerSettingsTemplate from "../../../prototype-kit/template-seeds/computer-settings/index";
+import ComputerSettingsTemplate from "../../../prototype-kit/template-seeds/computer/settings/index";
 
 afterEach(() => cleanup());
 

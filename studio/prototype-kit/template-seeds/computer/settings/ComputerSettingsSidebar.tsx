@@ -2,7 +2,7 @@ import * as React from "react";
 import { ChevronLeftSmall } from "arcade/components";
 import { NAV_GROUPS, type PageId } from "./types.tsx";
 
-export function ComputerSettingsSidebar({ active, onSelect }: { active: PageId; onSelect: (id: PageId) => void }) {
+export function ComputerSettingsSidebar({ active, onSelect, onBack }: { active: PageId; onSelect: (id: PageId) => void; onBack?: () => void }) {
   return (
     <div
       className="flex h-full w-60 shrink-0 flex-col border-r"
@@ -14,11 +14,24 @@ export function ComputerSettingsSidebar({ active, onSelect }: { active: PageId; 
         <span className="h-3 w-3 rounded-full" style={{ background: "#febc2e" }} />
         <span className="h-3 w-3 rounded-full" style={{ background: "#28c840" }} />
       </div>
-      {/* back row */}
-      <div className="flex h-12 shrink-0 items-center gap-1 px-3" style={{ color: "var(--fg-neutral-prominent)" }}>
-        <ChevronLeftSmall size={16} />
-        <span className="text-system-medium">Settings</span>
-      </div>
+      {/* back row — a button when onBack is wired (returns to chat), else inert label */}
+      {onBack ? (
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label="Back to chat"
+          className="flex h-12 shrink-0 items-center gap-1 px-3 text-left text-system-medium"
+          style={{ color: "var(--fg-neutral-prominent)" }}
+        >
+          <ChevronLeftSmall size={16} />
+          <span>Settings</span>
+        </button>
+      ) : (
+        <div className="flex h-12 shrink-0 items-center gap-1 px-3" style={{ color: "var(--fg-neutral-prominent)" }}>
+          <ChevronLeftSmall size={16} />
+          <span className="text-system-medium">Settings</span>
+        </div>
+      )}
       {/* groups */}
       <nav className="flex flex-col gap-4 overflow-y-auto px-3 py-2">
         {NAV_GROUPS.map((group, gi) => (
