@@ -79,7 +79,7 @@ job, minus the window chrome. Studio's fidelity guts ride along untouched.
 | Vite middleware server (`studio/server/`) | Studio | ~as-is; port becomes dynamic |
 | React shell (`studio/src/`) | Studio | ~as-is; relative `/api/*` already works |
 | Frame gen (claude CLI + prototype-kit + DS instructions) | Studio | unchanged — the fidelity core |
-| Figma import (`middleware/figma.ts`) | Studio | unchanged |
+| Figma import (`middleware/figma.ts` + `figmaCli.ts`) | Studio | unchanged; depends on vendored `figmanage` on PATH |
 | Preview (Vite HMR → iframe) | Studio | unchanged |
 | Parser (`streamJson.ts`), auth gate, throttle handling | Studio | unchanged |
 | **Extension host shim (`extension/extension.ts`)** | **new** | spawns server, opens webview, lifecycle |
@@ -118,7 +118,7 @@ chrome. Fidelity fixes land in core → both shells inherit them.
    `AWS_PROFILE=dev`. Idempotent; never clobbers a customized profile.
 2. Pick a free port; spawn the Vite middleware server as a child via `process.execPath` (the
    extension host *is* Node — no `ELECTRON_RUN_AS_NODE` needed). Inject the same env Studio injects,
-   with `PATH` pointed at the vendored `claude` + `awscli`.
+   with `PATH` pointed at the vendored `claude`, `awscli`, and `figmanage`.
 3. Wait for server health (`/api/version` 200), then create the webview panel and load
    `http://localhost:PORT`.
 4. Webview CSP allows `http://localhost:PORT` and its `ws://` (Vite HMR).
@@ -156,11 +156,21 @@ Identical to Studio. Only the outer container changed (webview tab vs. browser t
 `vsce package` produces a `.vsix` instead of electron-builder producing a `.dmg`.
 
 **Contents of the VSIX:**
-- The Studio React shell + server, run in **dev-mode Vite** (matches Studio exactly). Carries
-  `node_modules` + the dev server.
+- The Studio React shell + server (`studio/` source), run in **dev-mode Vite** (matches Studio
+  exactly). Carries the **repo-root** `node_modules` + the dev server. Note: there is no
+  `studio/package.json` — all deps (vite, react, etc.) and the version (root `package.json#version`)
+  live at the repo root; `studio/` is source that the root toolchain builds.
 - `prototype-kit` **dist** + arcade-gen — the fidelity payload. Must ship built; stale dist surfaces
   as "Element type is invalid" (memory `prototype-kit-dist-vite-cache`).
-- Vendored `claude` binary + `awscli` (~217M) as bundled resources. `cloudflared` dropped (−37M).
+- Vendored CLIs as bundled resources (macOS): `claude` binary, `awscli` (~217M), and **`figmanage`**
+  (npm package + node wrapper — required by the in-scope Figma import; Studio vendors it at
+  `<Resources>/bin/figmanage` + `node_modules/figmanage/`). `cloudflared` dropped (−37M, share is
+  out of scope). figmanage's wrapper invokes `node`, so the `process.execPath` rule applies to it too.
+
+**Build pipeline:** the prereq chain from `studio:pack` carries over unchanged — assets → templates →
+`kit:build` → `fetch-cli-deps.sh` (which vendors claude/awscli/figmanage) — then the final step swaps
+`electron-builder` for `vsce package`. A new script (e.g. `studio:pack-vsix`) mirrors `studio:pack`
+with that one substitution.
 
 **Size:** ~200M+ VSIX. Allowed for side-loaded `.vsix` (no hard limit). Not listed on the public
 marketplace in v1 — distribute the file directly to beta testers.
@@ -193,9 +203,10 @@ notarize dance, the Cloudflare Worker.
 
 ## Risks / spikes (ranked, do before building)
 
-1. **Gatekeeper on vendored binaries** — does `claude` / `aws` execute from
-   `~/.cursor/extensions/...` (and the VS Code equivalent) without a quarantine block? Spike first;
-   a block could force a different auth/distribution path.
+1. **Gatekeeper on vendored binaries** — do `claude` / `aws` / `figmanage` execute from
+   `~/.cursor/extensions/...` (and the VS Code equivalent) without a quarantine block? The VSIX is
+   not notarized like a `.app`, so first-run Gatekeeper behavior on the bundled binaries is unknown.
+   Spike first; a block could force a different auth/distribution path.
 2. **VSIX size** — verify `vsce package` + side-load works at 200M+.
 3. **Dynamic port + multi-window** — verify port-pick + reclaim correctness with two windows open.
 4. **Webview CSP** — confirm `http://localhost:PORT` + `ws://` HMR is permitted in a webview.
