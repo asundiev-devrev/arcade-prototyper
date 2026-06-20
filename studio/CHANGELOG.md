@@ -8,6 +8,18 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.38.0] — 2026-06-20
+
+### Added
+- **A document "artefact" card you can open in the canvas.** Computer chat replies can now include a file-preview card — a filetype tag, the document title, an *Open in canvas* button, and a fanned three-page thumbnail — right inside the agent's message. Clicking *Open in canvas* opens the canvas panel. The card is responsive: as the chat column narrows (e.g. when the canvas docks), the thumbnail scales down gracefully instead of squishing, and the card snaps flush to the edges on narrow screens.
+- **An account menu on the Computer sidebar.** Clicking the user's avatar *or* name at the bottom of the chat sidebar opens a menu (Settings · Help · Upgrade plan · Get mobile app · Log out). Picking **Settings** switches the whole screen to the Computer settings pages in place; the settings sidebar's back row returns you to chat — all within one prototype, no separate frame.
+
+### Changed
+- **Chat content is now centred in a readable column.** The transcript and command bar sit in a centred max-width column (matching the DevRev product and the reference design) instead of spanning the full width — so replies and your own messages line up naturally instead of drifting to the far edges.
+
+### Fixed
+- **The Computer chat and settings templates are now one connected prototype.** "Computer: Chat" carries its settings screens with it, so the chat-to-settings navigation works in any generated prototype, not just the in-app preview.
+
 ## [0.37.2] — 2026-06-17
 
 ### Fixed
