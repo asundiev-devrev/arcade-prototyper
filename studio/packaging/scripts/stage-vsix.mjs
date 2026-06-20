@@ -16,12 +16,23 @@ const rootPkg = JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), 
 const extPkgPath = path.join(repoRoot, "extension/package.json");
 const extPkg = JSON.parse(fs.readFileSync(extPkgPath, "utf-8"));
 extPkg.version = rootPkg.version;
-// Explicitly include node_modules via the files field (overrides vsce's built-in exclusion).
-extPkg.files = ["dist", "bin", "studio", "prototype-kit", "aws-cli", "node_modules"];
+// Do NOT set a `files` allowlist. vsce force-excludes node_modules from a
+// `files` list (the pattern then matches nothing → hard error), and `files`
+// can't be combined with a .vscodeignore. Instead we rely on vsce's DEFAULT
+// inclusion: it walks the flat node_modules and packs it (verified: 35k+
+// entries incl vite/figmanage/react). That walk works here only because we
+// staged a HOISTED real-file node_modules below — pnpm's normal symlink tree
+// would break vsce's dependency detection. A .vscodeignore (written in step 4)
+// trims dev artifacts.
+delete extPkg.files;
 fs.writeFileSync(extPkgPath, JSON.stringify(extPkg, null, 2) + "\n");
 
-// 2. Reset staging dir.
-fs.rmSync(stage, { recursive: true, force: true });
+// 2. Reset staging dir. Use `rm -rf` (not fs.rmSync) because a prior run may
+//    have left a materialized node_modules whose pnpm-store hardlinks are
+//    read-only — fs.rmSync trips ENOTEMPTY on those, rm -rf handles them.
+if (fs.existsSync(stage)) {
+  execFileSync("rm", ["-rf", stage], { stdio: "inherit" });
+}
 fs.mkdirSync(stage, { recursive: true });
 
 // 3. Bundle the extension with esbuild (inlines electron imports to avoid
@@ -40,30 +51,26 @@ await build({
   minify: false,
 });
 
-// 4. Copy the extension manifest to the staging ROOT.
-//    Write a custom .vscodeignore that KEEPS node_modules (vsce excludes it by default).
-//    Negation patterns require the dir itself to be negated first, then its contents.
+// 4. Copy the extension manifest to the staging ROOT, plus a .vscodeignore that
+//    trims dev artifacts. With no `files` field (step 1), vsce's default
+//    inclusion packs the whole staging tree — including the hoisted
+//    node_modules — and this .vscodeignore subtracts what we don't want. (We
+//    also skip __tests__/tmp at copy time below, so this is belt-and-braces.)
 fs.copyFileSync(extPkgPath, path.join(stage, "package.json"));
-const vscodeignore = `# VSIX .vscodeignore — keep runtime deps, exclude dev artifacts.
-!node_modules
-!node_modules/**
-studio/packaging/**
-studio/__tests__/**
-studio/tmp/**
-**/*.test.*
-**/*.map
-`;
-fs.writeFileSync(path.join(stage, ".vscodeignore"), vscodeignore);
+fs.writeFileSync(
+  path.join(stage, ".vscodeignore"),
+  ["**/*.map", "studio/__tests__/**", "studio/tmp/**", "**/*.test.*", ""].join("\n"),
+);
 
 // 5. Copy the shared core beside dist/ so serverHost's appRoot resolves.
-//    For studio/, we need to exclude the packaging dir to avoid copying into self.
-//    Copy individual subdirs of studio/ rather than the whole tree.
+//    Skip studio/packaging (self-copy) and dev-only dirs that bloat the VSIX.
+const STUDIO_SKIP = new Set(["packaging", "__tests__", "tmp"]);
 const studioDest = path.join(stage, "studio");
 fs.mkdirSync(studioDest, { recursive: true });
 const studioSrc = path.join(repoRoot, "studio");
 const studioContents = fs.readdirSync(studioSrc);
 for (const item of studioContents) {
-  if (item === "packaging") continue; // skip packaging to avoid self-copy
+  if (STUDIO_SKIP.has(item)) continue;
   const itemSrc = path.join(studioSrc, item);
   const itemDest = path.join(studioDest, item);
   const stat = fs.statSync(itemSrc);
@@ -74,46 +81,50 @@ for (const item of studioContents) {
   }
 }
 
-// Copy prototype-kit (no symlinks, cpSync is fine)
-const prototypeKitSrc = path.join(repoRoot, "prototype-kit");
-if (fs.existsSync(prototypeKitSrc)) {
-  fs.cpSync(prototypeKitSrc, path.join(stage, "prototype-kit"), { recursive: true });
-}
+// NOTE: prototype-kit is NOT copied separately — it lives at studio/prototype-kit/
+// and is already staged inside the studio/ tree above (the repo has no
+// repo-root prototype-kit/ dir).
 
-// Copy node_modules with rsync -L to dereference pnpm's symlink forest.
-// pnpm's node_modules are symlinks into .pnpm/ store (absolute paths outside the
-// staging dir); cpSync copies them verbatim → vsce excludes broken links → VSIX
-// is missing runtime deps. rsync -L resolves them into real files.
+// Stage node_modules via a HOISTED PRODUCTION install, not a copy.
 //
-// Strategy: copy individual top-level packages we need (not the whole tree with
-// excludes, which is complex and risks missing transitive deps). Explicit list
-// ensures we only ship runtime deps.
-const nodeModulesSrc = path.join(repoRoot, "node_modules");
-if (fs.existsSync(nodeModulesSrc)) {
-  const nodeModulesDest = path.join(stage, "node_modules");
-  fs.mkdirSync(nodeModulesDest, { recursive: true });
+// Why not copy the repo's node_modules: pnpm lays it out as a symlink forest
+// into the .pnpm/ store (absolute paths outside the staging dir). vsce strips
+// symlinks, so a verbatim copy ships broken links (missing runtime deps), and
+// dereferencing the whole tree explodes to 3-6 GB (resolving pnpm's dedup
+// symlinks quadruples size and drags in devDependencies).
+//
+// Instead, ask pnpm to materialize the PRODUCTION dependency closure as a flat,
+// real-file tree with the hoisted linker: deduped, transitive deps included,
+// devDependencies skipped, no top-level symlinks for vsce to drop. All of the
+// server/kit/figmanage runtime deps live in `dependencies` (not devDeps), so
+// --prod is correct. Reuses the local store (no network). ~638 MB, ~7 s.
+// A final rsync -aL flattens the handful of nested symlinks pnpm still leaves.
+const nodeModulesDest = path.join(stage, "node_modules");
+fs.mkdirSync(nodeModulesDest, { recursive: true });
 
-  // Runtime dependencies (server + kit + figmanage).
-  const runtimePackages = [
-    "vite", "esbuild", "@tailwindcss", "tailwindcss", "react", "react-dom",
-    "react-day-picker", "react-markdown", "@xorkavi", "figmanage",
-    "@sentry", "posthog-js", "posthog-node", "@vitejs", "chokidar", "ws", "yaml",
-    "zod", "concurrently", ".pnpm", ".bin", ".modules.yaml", ".pnpm-workspace-state-v1.json"
-  ];
+// Build the prod tree in a scratch project (just package.json + lockfile) so we
+// never mutate the repo's own node_modules.
+const nmBuild = path.join(stage, ".nm-build");
+fs.mkdirSync(nmBuild, { recursive: true });
+fs.copyFileSync(path.join(repoRoot, "package.json"), path.join(nmBuild, "package.json"));
+fs.copyFileSync(path.join(repoRoot, "pnpm-lock.yaml"), path.join(nmBuild, "pnpm-lock.yaml"));
 
-  console.log(`[stage-vsix] Copying runtime node_modules via rsync...`);
-  const rsyncArgs = ["-aL"]; // -L = transform symlinks into referents
-  for (const pkg of runtimePackages) {
-    const src = path.join(nodeModulesSrc, pkg);
-    if (fs.existsSync(src)) rsyncArgs.push(src);
-  }
-  rsyncArgs.push(`${nodeModulesDest}/`);
+console.log(`[stage-vsix] Materializing production node_modules (hoisted)…`);
+execFileSync(
+  "pnpm",
+  ["install", "--prod", "--config.node-linker=hoisted", "--ignore-scripts", "--frozen-lockfile"],
+  { cwd: nmBuild, stdio: "inherit" },
+);
 
-  execFileSync("rsync", rsyncArgs, { stdio: "inherit" });
-  console.log(`[stage-vsix] rsync complete (${runtimePackages.length} packages)`);
-} else {
-  console.warn(`[stage-vsix] WARNING: node_modules not found at ${nodeModulesSrc}`);
-}
+// Flatten into the staging node_modules, dereferencing any residual symlinks so
+// the VSIX carries only real files.
+execFileSync(
+  "rsync",
+  ["-aL", `${path.join(nmBuild, "node_modules")}/`, `${nodeModulesDest}/`],
+  { stdio: "inherit" },
+);
+fs.rmSync(nmBuild, { recursive: true, force: true });
+console.log(`[stage-vsix] node_modules staged (production closure, real files).`);
 // electron imports are now bundled into dist/extension.js — no separate copy needed.
 
 // 6. Assemble the staged bin/ from RAW sources (not from a pre-built .app —
@@ -160,8 +171,13 @@ fs.cpSync(path.join(repoRoot, "studio/packaging/aws-cli"), path.join(stage, "aws
 //    Run vsce from the repo root's node_modules (the staging dir's node_modules
 //    excludes vsce since it's dev-only), but operate on the staging dir.
 fs.mkdirSync(dist, { recursive: true });
+// NOTE: do NOT pass --no-dependencies. That flag tells vsce "deps are already
+// bundled, skip them" → it DROPS node_modules entirely (verified: only ~2
+// incidental matches). We WANT vsce to include the staged hoisted node_modules,
+// so we let its default dependency inclusion run over the flat real-file tree.
+// --allow-missing-repository: this is an internal extension, no repo field.
 const vscebin = path.join(repoRoot, "node_modules/.bin/vsce");
-execFileSync(vscebin, ["package", "--no-dependencies",
+execFileSync(vscebin, ["package", "--allow-missing-repository",
   "--out", path.join(dist, `arcade-prototyper-${rootPkg.version}.vsix`)],
   { cwd: stage, stdio: "inherit" });
 
