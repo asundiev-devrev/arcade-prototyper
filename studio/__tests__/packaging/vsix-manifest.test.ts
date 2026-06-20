@@ -27,3 +27,12 @@ describe(".vscodeignore", () => {
     expect(ignore).not.toMatch(/^dist/m);
   });
 });
+
+describe("stage-vsix script", () => {
+  it("exists and is referenced by the pack-vsix script", () => {
+    const { existsSync } = require("node:fs");
+    expect(existsSync(path.join(root, "studio/packaging/scripts/stage-vsix.mjs"))).toBe(true);
+    const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf-8"));
+    expect(pkg.scripts["studio:pack-vsix"]).toContain("stage-vsix.mjs");
+  });
+});
