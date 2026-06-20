@@ -12,12 +12,28 @@ const ACCOUNT = "devrev-pat";
 
 let keytar: typeof import("keytar") | null = null;
 let keytarAvailable = false;
+let keytarInit: Promise<void> | null = null;
 
-try {
-  keytar = await import("keytar");
-  keytarAvailable = true;
-} catch {
-  console.warn("[secrets] keytar not available, falling back to plaintext storage");
+/**
+ * Lazily load keytar once, memoized. Must NOT be a top-level await: Vite's
+ * config bundler (rolldown, cjs output) rejects top-level await, which breaks
+ * the dev server in the packaged extension (the hoisted node_modules surfaces
+ * rolldown where the repo dev tree does not). Lazy init keeps identical
+ * behavior on both paths — keytar on macOS, graceful plaintext fallback if it
+ * can't load. Each public function awaits this first.
+ */
+function ensureKeytar(): Promise<void> {
+  if (!keytarInit) {
+    keytarInit = (async () => {
+      try {
+        keytar = await import("keytar");
+        keytarAvailable = true;
+      } catch {
+        console.warn("[secrets] keytar not available, falling back to plaintext storage");
+      }
+    })();
+  }
+  return keytarInit;
 }
 
 function plaintextPath(): string {
@@ -25,6 +41,7 @@ function plaintextPath(): string {
 }
 
 export async function saveDevRevPat(pat: string): Promise<void> {
+  await ensureKeytar();
   if (keytarAvailable && keytar) {
     try {
       await keytar.setPassword(SERVICE, ACCOUNT, pat);
@@ -46,6 +63,7 @@ export async function saveDevRevPat(pat: string): Promise<void> {
 }
 
 export async function getDevRevPat(): Promise<string | null> {
+  await ensureKeytar();
   if (keytarAvailable && keytar) {
     try {
       const pat = await keytar.getPassword(SERVICE, ACCOUNT);
@@ -65,6 +83,7 @@ export async function getDevRevPat(): Promise<string | null> {
 }
 
 export async function deleteDevRevPat(): Promise<void> {
+  await ensureKeytar();
   if (keytarAvailable && keytar) {
     try {
       await keytar.deletePassword(SERVICE, ACCOUNT);
