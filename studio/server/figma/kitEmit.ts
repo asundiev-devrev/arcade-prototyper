@@ -30,6 +30,7 @@ import {
   TAG_INTENT_MAP,
   TAG_APPEARANCE_MAP,
   ICON_SET_NAME_TO_KIT,
+  NON_RENDERABLE_KIT_EXPORTS,
 } from "./kitMappings";
 import { readColorVar } from "./resolveTokens";
 import { resolveKitTokenVar, type ColorProperty } from "./kitTokens";
@@ -110,7 +111,13 @@ function innerIcon(
   if (hidden(n)) return null; // designers hide alt glyphs in a slot — ignore them
   if (n.type === "INSTANCE") {
     const { setName } = resolveIdentity(n.componentId, components, componentSets);
-    if (setName && ICON_SET_NAME_TO_KIT[setName]) return ICON_SET_NAME_TO_KIT[setName];
+    // Same guard as matchKit: never return a compound layout object as an icon
+    // glyph (it would emit `<Sidebar size=…/>` inside a button and crash). A
+    // null return lets the caller fall back to the exported SVG glyph.
+    if (setName && ICON_SET_NAME_TO_KIT[setName]) {
+      const kit = ICON_SET_NAME_TO_KIT[setName];
+      if (!NON_RENDERABLE_KIT_EXPORTS.has(kit)) return kit;
+    }
   }
   for (const c of n.children ?? []) {
     const r = innerIcon(c, components, componentSets);
@@ -513,11 +520,38 @@ function flexChildStyle(n: RawNode, parentMode: string, tok?: TokenResolver | nu
   return { ...s, ...paintStyle(n, tok) };
 }
 
+/**
+ * Map a Figma font-family name to the kit's font utility class. Emitting the
+ * font as a CLASS (`font-display`) instead of an inline `fontFamily: "'Chip
+ * Display Variable', …"` string removes the single most fragile thing in an
+ * imported frame: a quoted family name. When a follow-up edit forced the LLM to
+ * rewrite a title element, it "smart-quoted" the family (`'`→`’`), CSS found no
+ * family named `’Chip Display Variable’`, and the heading silently fell back to
+ * the system font. A class has no quotes to corrupt. Returns null for an
+ * unknown family so the caller can fall back to an inline family for fidelity.
+ */
+function fontClassFor(family: string | undefined): string | null {
+  switch (family) {
+    case "Chip Display Variable":
+      return "font-display";
+    case "Chip Text Variable":
+      return "font-text";
+    case "Chip Mono":
+      return "font-mono";
+    default:
+      return null;
+  }
+}
+
 function textStyle(n: RawNode, tok?: TokenResolver | null): Style {
   const st = n.style ?? {};
-  const s: Style = {
-    fontFamily: `'${st.fontFamily ?? "Inter"}', -apple-system, sans-serif`,
-  };
+  const s: Style = {};
+  // Only bake an inline fontFamily when the family is NOT a known kit font —
+  // kit fonts are emitted as a `font-*` class by the TEXT renderer (no quoted
+  // string to corrupt on a later edit). See fontClassFor.
+  if (!fontClassFor(st.fontFamily)) {
+    s.fontFamily = `'${st.fontFamily ?? "Inter"}', -apple-system, sans-serif`;
+  }
   if (st.fontSize) s.fontSize = `${st.fontSize}px`;
   if (st.fontWeight) s.fontWeight = st.fontWeight;
   if (st.lineHeightPx) s.lineHeight = `${st.lineHeightPx}px`;
@@ -606,6 +640,83 @@ function escText(t: string): string {
     .replace(/}/g, "&#125;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
+}
+
+/**
+ * Escape a text segment for JSX AND preserve hard line breaks. A literal `\n`
+ * written into JSX source is collapsed to a single space by JSX's whitespace
+ * rules, so a Figma text layer carrying "Let's prepare\nfor your next meeting."
+ * imported as one unbroken line even though the node has `white-space:pre-wrap`.
+ * Emitting each newline as a `{"\n"}` expression keeps it in the DOM, where
+ * pre-wrap renders it as the intended break.
+ */
+function escTextWithBreaks(t: string): string {
+  return t.split("\n").map(escText).join('{"\\n"}');
+}
+
+/**
+ * Resolve a per-character override's text color the same way textStyle resolves
+ * the base color: first visible SOLID fill → kit token (when bound + tok
+ * present) else literal hex. Returns null when the override carries no fill.
+ */
+function overrideColor(ov: any, tok?: TokenResolver | null): string | null {
+  for (const f of ov?.fills ?? []) {
+    if (f.type === "SOLID" && f.visible !== false) {
+      const hex = rgba(f.color, f.opacity ?? 1);
+      return tok ? tok.colorFor(ov.fills, "color", hex) : hex;
+    }
+  }
+  return null;
+}
+
+/**
+ * Build the inner JSX of a TEXT node, honoring Figma's per-character style runs
+ * (`characterStyleOverrides` aligned per codepoint to `characters`, indexing
+ * into `styleOverrideTable`). A run whose color or weight differs from the base
+ * is wrapped in a `<span>` carrying ONLY the differing props; base runs stay as
+ * plain escaped text.
+ *
+ * Why this exists: a single Figma text layer routinely paints part of its
+ * string a different color — e.g. the OAuth title "Let's prepare for your next
+ * meeting." has "next meeting." in red while the rest is purple. The old
+ * emitter read only the FIRST fill of the whole node, so every accent run
+ * collapsed to the base color and silently vanished. Designers then had to ask
+ * for the accent in prose, which a downstream LLM pass guessed wrong (it
+ * recolored only "meeting."). Emitting the real runs makes the accent import
+ * exactly, with no prose and no LLM involvement.
+ */
+function textRuns(n: RawNode, tok: TokenResolver | null | undefined, baseColor?: string): string {
+  const chars: string = n.characters ?? "";
+  const overrides = n.characterStyleOverrides;
+  const table = n.styleOverrideTable;
+  if (!Array.isArray(overrides) || overrides.length === 0 || !table || typeof table !== "object") {
+    return escTextWithBreaks(chars);
+  }
+  const baseWeight = n.style?.fontWeight;
+  // characterStyleOverrides is aligned per Unicode codepoint to `characters`;
+  // Array.from splits on codepoints (so a curly apostrophe / emoji counts as
+  // one), matching Figma's indexing.
+  const cps = Array.from(chars);
+  const out: string[] = [];
+  let i = 0;
+  while (i < cps.length) {
+    const id = overrides[i] ?? 0;
+    let j = i + 1;
+    while (j < cps.length && (overrides[j] ?? 0) === id) j++;
+    const text = cps.slice(i, j).join("");
+    i = j;
+    const ov = id ? (table[String(id)] ?? table[id]) : null;
+    const span: Style = {};
+    if (ov) {
+      const c = overrideColor(ov, tok);
+      if (c && c !== baseColor) span.color = c;
+      if (ov.fontWeight && ov.fontWeight !== baseWeight) span.fontWeight = ov.fontWeight;
+      if (ov.italic || ov.fontStyle === "Italic") span.fontStyle = "italic";
+    }
+    const inner = escTextWithBreaks(text);
+    out.push(Object.keys(span).length ? `<span style=${sx(span)}>${inner}</span>` : inner);
+  }
+  return out.join("");
 }
 
 // ---------------------------------------------------------------------------
@@ -1101,7 +1212,17 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
 
     if (n.type === "TEXT") {
       const s = { ...nodeBox(n, px, py, flex), ...textStyle(n, tok) };
-      lines.push(`${pad}<div style=${sx(s)}>${escText(n.characters ?? "")}</div>`);
+      // Kit fonts ride on a `font-*` class, not an inline family string, so a
+      // later targeted edit can't corrupt the quoted family name (see
+      // fontClassFor). Non-kit families keep their inline fontFamily via
+      // textStyle and get no class.
+      const fontClass = fontClassFor(n.style?.fontFamily);
+      const cls = fontClass ? ` className="${fontClass}"` : "";
+      // Honor per-character style runs (accent colors, bold spans) and hard
+      // line breaks — both were silently dropped by the old single-color,
+      // single-run renderer. See textRuns / escTextWithBreaks.
+      const inner = textRuns(n, tok, typeof s.color === "string" ? s.color : undefined);
+      lines.push(`${pad}<div${cls} style=${sx(s)}>${inner}</div>`);
       return;
     }
 

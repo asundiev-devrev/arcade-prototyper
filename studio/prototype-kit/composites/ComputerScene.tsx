@@ -48,7 +48,11 @@
  */
 import * as React from "react";
 import {
+  ArrowDownTray,
+  ArrowRightTray,
+  ArrowUpSmall,
   Avatar,
+  Cog,
   IconButton,
   Bell,
   ChatBubble,
@@ -56,14 +60,18 @@ import {
   Document as DocumentIcon,
   DotInRightWindow,
   Globe,
+  Menu,
+  QuestionMarkInCircle,
   ThreeDotsHorizontal,
 } from "@xorkavi/arcade-gen";
+import { ArtefactCard } from "./ArtefactCard.js";
 import { ComputerSidebar } from "./ComputerSidebar.js";
 import { ComputerHeader } from "./ComputerHeader.js";
 import { ChatInput } from "./ChatInput.js";
 import { ChatEmptyState } from "./ChatEmptyState.js";
 import { ChatMessages } from "./ChatMessages.js";
 import { CanvasPanel } from "./CanvasPanel.js";
+import { CanvasTabs } from "./CanvasTabs.js";
 import { ComputerPage } from "../templates/ComputerPage.js";
 
 /* ─── Baked-in roster (mirrors the colleague prototype) ─────────────────── */
@@ -115,7 +123,13 @@ const CHATS: Chat[] = [
 
 type Message =
   | { id: number; role: "user"; text: string }
-  | { id: number; role: "assistant"; text: string };
+  | {
+      id: number;
+      role: "assistant";
+      text: string;
+      /** When set, render an ArtefactCard with this title below the text. */
+      artefact?: { tag: string; title: string };
+    };
 
 const SEED_TRANSCRIPT: Message[] = [
   {
@@ -127,6 +141,7 @@ const SEED_TRANSCRIPT: Message[] = [
     id: 2,
     role: "assistant",
     text: "Here's a starting outline — I can expand any section. Want me to draft slide copy, build a structure, or pull together visual references?",
+    artefact: { tag: "DOC", title: "Q3 launch brief" },
   },
   { id: 3, role: "user", text: "Build the structure first." },
   {
@@ -172,6 +187,13 @@ export type ComputerSceneProps = {
   sessions?: Session[];
   /** Placeholder for the bottom command bar. */
   chatInputPlaceholder?: string;
+  /**
+   * Called when the user picks "Settings" from the account menu (avatar/name
+   * footer). When provided, the Settings item is wired to it — typically the
+   * host swaps the whole pane to the Computer settings view. When omitted, the
+   * Settings item is inert (the menu still renders).
+   */
+  onOpenSettings?: () => void;
 };
 
 export function ComputerScene({
@@ -184,6 +206,7 @@ export function ComputerScene({
   activeSessionId: activeSessionIdProp = "strategic",
   sessions = DEFAULT_SESSIONS,
   chatInputPlaceholder = "Ask me anything",
+  onOpenSettings,
 }: ComputerSceneProps = {}) {
   const [activeId, setActiveId] = React.useState(activeSessionIdProp);
   const activeSession =
@@ -196,6 +219,9 @@ export function ComputerScene({
   const [panelOpen, setPanelOpen] = React.useState(withCanvasPanel ?? false);
   const [sessionsOpen, setSessionsOpen] = React.useState(true);
   const [sessionsExpanded, setSessionsExpanded] = React.useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
+  const [sidebarWidth, setSidebarWidth] = React.useState(256); // SIDENAV_EXPANDED
+  const [canvasWidth, setCanvasWidth] = React.useState(320); // CANVAS_WIDTH
   const replyIndex = React.useRef(0);
 
   const visibleSessions = sessionsExpanded
@@ -226,10 +252,58 @@ export function ComputerScene({
   const resolvedHeaderTitle = headerTitle ?? activeSession.topic;
   const showStreaming = state === "streaming" && messages === SEED_TRANSCRIPT;
 
+  const accountMenu = (
+    <>
+      <Menu.Group>
+        <Menu.Item onSelect={onOpenSettings}>
+          <span className="inline-flex items-center gap-2">
+            <Cog size={16} aria-hidden="true" />
+            Settings
+          </span>
+        </Menu.Item>
+        <Menu.Item>
+          <span className="inline-flex items-center gap-2">
+            <QuestionMarkInCircle size={16} aria-hidden="true" />
+            Help
+          </span>
+        </Menu.Item>
+      </Menu.Group>
+      <Menu.Separator />
+      <Menu.Group>
+        <Menu.Item>
+          <span className="inline-flex items-center gap-2">
+            <ArrowUpSmall size={16} aria-hidden="true" />
+            Upgrade plan
+          </span>
+        </Menu.Item>
+        <Menu.Item>
+          <span className="inline-flex items-center gap-2">
+            <ArrowDownTray size={16} aria-hidden="true" />
+            Get mobile app
+          </span>
+        </Menu.Item>
+      </Menu.Group>
+      <Menu.Separator />
+      <Menu.Group>
+        <Menu.Item>
+          <span className="inline-flex items-center gap-2">
+            <ArrowRightTray size={16} aria-hidden="true" />
+            Log out
+          </span>
+        </Menu.Item>
+      </Menu.Group>
+    </>
+  );
+
   return (
     <ComputerPage
       sidebar={
         <ComputerSidebar
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
+          canvasOpen={panelOpen}
+          width={sidebarWidth}
+          onResize={setSidebarWidth}
           historyAction={
             <IconButton
               aria-label={sessionsOpen ? "Hide sessions" : "Show sessions"}
@@ -237,7 +311,28 @@ export function ComputerScene({
               size="lg"
               onClick={() => setSessionsOpen((v) => !v)}
             >
-              {sessionsOpen ? <CloseGlyph /> : <Clock size={20} />}
+              {sessionsOpen ? (
+                <>
+                  {/* Sessions visible → X (hide). In the rail, Sessions are
+                      force-hidden by collapse, so swap to the Clock (show)
+                      glyph via the same collapse classes — covers both the
+                      JS-pinned and width-forced rail. */}
+                  <span className={[
+                    "inline-flex group-data-[collapsed=true]/sidebar:hidden @max-[600px]:hidden",
+                    panelOpen ? "@max-[900px]:hidden" : "",
+                  ].join(" ")}>
+                    <CloseGlyph />
+                  </span>
+                  <span className={[
+                    "hidden group-data-[collapsed=true]/sidebar:inline-flex @max-[600px]:inline-flex",
+                    panelOpen ? "@max-[900px]:inline-flex" : "",
+                  ].join(" ")}>
+                    <Clock size={20} />
+                  </span>
+                </>
+              ) : (
+                <Clock size={20} />
+              )}
             </IconButton>
           }
           user={
@@ -251,12 +346,13 @@ export function ComputerScene({
                   size="md"
                 />
               }
+              menu={accountMenu}
             />
           }
           footerAction={<NotificationsBell />}
         >
           {sessionsOpen ? (
-            <ComputerSidebar.Group title="Sessions">
+            <ComputerSidebar.Group title="Sessions" hideOnCollapse>
               {visibleSessions.map((s) => (
                 <ComputerSidebar.Item
                   key={s.id}
@@ -328,12 +424,34 @@ export function ComputerScene({
           }
         />
       }
-      panel={panelOpen ? <DefaultCanvasPanel /> : undefined}
+      panel={
+        panelOpen ? (
+          <CanvasTabs
+            width={canvasWidth}
+            onResize={setCanvasWidth}
+            tabs={[
+              { id: "canvas", label: "Canvas" },
+              { id: "docs", label: "Q3 launch brief.doc" },
+            ]}
+          >
+            {(active) =>
+              active === "canvas" ? (
+                <DefaultCanvasPanel />
+              ) : (
+                <div className="p-6 text-body-medium text-(--fg-neutral-subtle)">
+                  Document preview
+                </div>
+              )
+            }
+          </CanvasTabs>
+        ) : undefined
+      }
+      onCanvasClose={() => setPanelOpen(false)}
     >
       {messages.length === 0 ? (
         <ChatEmptyState />
       ) : (
-        <Transcript messages={messages} streaming={showStreaming || pending} />
+        <Transcript messages={messages} streaming={showStreaming || pending} onOpenArtefact={() => setPanelOpen(true)} />
       )}
     </ComputerPage>
   );
@@ -341,7 +459,7 @@ export function ComputerScene({
 
 /* ─── Transcript renderer ───────────────────────────────────────────────── */
 
-function Transcript({ messages, streaming }: { messages: Message[]; streaming: boolean }) {
+function Transcript({ messages, streaming, onOpenArtefact }: { messages: Message[]; streaming: boolean; onOpenArtefact: () => void }) {
   return (
     <ChatMessages>
       {messages.map((m) =>
@@ -355,6 +473,9 @@ function Transcript({ messages, streaming }: { messages: Message[]; streaming: b
             thoughts={<ChatMessages.Thoughts label="Thought for 4s" />}
           >
             {m.text}
+            {m.artefact ? (
+              <ArtefactCard tag={m.artefact.tag} title={m.artefact.title} onOpen={onOpenArtefact} />
+            ) : null}
             <ChatMessages.Actions />
           </ChatMessages.Agent>
         ),

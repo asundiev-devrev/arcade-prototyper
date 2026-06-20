@@ -6,6 +6,7 @@ import { projectDir, projectsRoot, projectJsonPath, chatHistoryPath, projectMemo
 import { projectSchema, type Project, type Frame, type ChatMessage } from "./types";
 import { scaffoldDevRevHelper } from "./devrev/scaffoldHelper";
 import { ensureMemoryStubs } from "./memory";
+import { getTemplate, readTemplateSeed, templateSeedPath, isSeedDirectory, type TemplateId } from "./templates";
 
 const STUDIO_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PROTOTYPER_ROOT = path.resolve(STUDIO_DIR, "..");
@@ -112,7 +113,6 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
   try {
     await fs.mkdir(path.join(dir, "frames"), { recursive: true });
     await fs.mkdir(path.join(dir, "shared"), { recursive: true });
-    await fs.mkdir(path.join(dir, "thumbnails"), { recursive: true });
     await fs.writeFile(projectJsonPath(slug), JSON.stringify(project, null, 2));
     await fs.writeFile(path.join(dir, "theme-overrides.css"), "/* Local theme overrides */\n");
     await fs.writeFile(path.join(dir, "CLAUDE.md"), renderTemplate(tpl, {
@@ -176,6 +176,44 @@ async function scaffoldComputerReferenceFrame(dir: string): Promise<void> {
   const frameDir = path.join(dir, "frames", COMPUTER_REFERENCE_SLUG);
   await fs.mkdir(frameDir, { recursive: true });
   await fs.writeFile(path.join(frameDir, "index.tsx"), COMPUTER_REFERENCE_SOURCE);
+}
+
+/**
+ * Seed a chosen homepage template into an existing project as a VISIBLE frame.
+ * Unlike the hidden 00-computer-reference seed, this is the page the user
+ * explicitly picked, so it gets a 01- prefix and surfaces in the viewport.
+ * reconcileFrames (called on every project GET) would also pick the file up,
+ * but we update project.json here too so the frame is present immediately
+ * without waiting for the next reconcile.
+ */
+export async function seedTemplateFrame(slug: string, templateId: string): Promise<Frame> {
+  const def = getTemplate(templateId);
+  if (!def) throw new Error(`Unknown template: ${templateId}`);
+  const project = await getProject(slug);
+  if (!project) throw new Error(`Project not found: ${slug}`);
+
+  const frameSlug = `01-${def.id}`;
+  const dir = path.join(projectDir(slug), "frames", frameSlug);
+  await fs.mkdir(dir, { recursive: true });
+
+  if (await isSeedDirectory(def.id)) {
+    // Directory seed: copy the whole tree (index.tsx + sibling files).
+    await fs.cp(templateSeedPath(def.id), dir, { recursive: true });
+  } else {
+    const source = await readTemplateSeed(def.id as TemplateId);
+    await fs.writeFile(path.join(dir, "index.tsx"), source, "utf-8");
+  }
+
+  const frame: Frame = {
+    slug: frameSlug,
+    name: def.name,
+    size: "1440",
+    createdAt: new Date().toISOString(),
+  };
+  if (!project.frames.some((f) => f.slug === frameSlug)) {
+    await updateProject(slug, { frames: [...project.frames, frame] });
+  }
+  return frame;
 }
 
 /**
@@ -486,7 +524,6 @@ async function reconcileFramesInner(slug: string): Promise<Frame[]> {
   entries.sort();
 
   const discovered: Frame[] = [];
-  const newFrames: string[] = [];
   for (const name of entries) {
     const idx = path.join(framesDir, name, "index.tsx");
     try { await fs.access(idx); } catch { continue; }
@@ -496,9 +533,6 @@ async function reconcileFramesInner(slug: string): Promise<Frame[]> {
     // for. Once edited (by the user or the agent), it surfaces normally.
     if (await isUnmodifiedReferenceFrame(slug, name)) continue;
     const prior = project.frames.find((f) => f.slug === name);
-    if (!prior) {
-      newFrames.push(name);
-    }
     discovered.push(prior ?? {
       slug: name,
       name: titleCase(name),
@@ -511,37 +545,7 @@ async function reconcileFramesInner(slug: string): Promise<Frame[]> {
   if (JSON.stringify(discovered) === JSON.stringify(prevSorted)) return project.frames;
   const next = await updateProject(slug, { frames: discovered });
 
-  // Fire-and-forget thumbnail capture for new frames
-  if (newFrames.length > 0) {
-    enqueueThumbnailCapture(slug, newFrames).catch((err) => {
-      console.warn(`[projects] thumbnail capture failed for ${slug}:`, err);
-    });
-  }
-
   return next.frames;
-}
-
-async function enqueueThumbnailCapture(slug: string, framesSlugs: string[]): Promise<void> {
-  try {
-    const { captureFrameThumbnail } = await import("./thumbnails/capture");
-    const project = await getProject(slug);
-    if (!project) return;
-
-    for (const frameSlug of framesSlugs) {
-      const thumbnailPath = await captureFrameThumbnail(slug, frameSlug);
-      if (thumbnailPath) {
-        const frames = project.frames.map((f) =>
-          f.slug === frameSlug ? { ...f, thumbnail: thumbnailPath } : f
-        );
-        await updateProject(slug, {
-          frames,
-          coverThumbnail: project.coverThumbnail || thumbnailPath,
-        });
-      }
-    }
-  } catch (err) {
-    console.warn(`[projects] enqueueThumbnailCapture failed:`, err);
-  }
 }
 
 function titleCase(slug: string): string {

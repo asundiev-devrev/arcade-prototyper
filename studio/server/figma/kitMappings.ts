@@ -111,7 +111,13 @@ export const ICON_SET_NAME_TO_KIT: Record<string, string> = {
   "Icons/Human.silhouette.with.plus": "HumanSilhouetteWithPlus",
   "Icons / Arrow.Up": "ArrowUpSmall",
   "Icons / Bubble.Plus": "PlusInChatBubble",
-  "Icons / Sidebar.Left": "Sidebar",
+  // NOTE: there is intentionally NO "Icons / Sidebar.Left" entry. arcade-gen has
+  // no sidebar-left ICON — `Sidebar` is a compound LAYOUT object ({Root, Section,
+  // Item}), not a renderable glyph. Mapping the icon to `Sidebar` emitted
+  // `<Sidebar size={16}/>`, which React rejects ("Element type is invalid …
+  // got: object") and white-screens the whole frame. With no mapping, the node
+  // falls back to an exported SVG (always renders). The NON_RENDERABLE_KIT_EXPORTS
+  // guard below now makes this class of mistake impossible to ship again.
   "Icons/Agent.studio": "AgentStudio",
   "Icons/Arrow.pointing.into.tray": "ArrowPointingIntoTray",
   "Icons/Cross": "CrossSmall",
@@ -217,6 +223,29 @@ export type KitMatch =
   | { kind: "component"; kit: string };
 
 /**
+ * arcade-gen exports that are COMPOUND NAMESPACE OBJECTS, not renderable React
+ * components — `Sidebar` is `{ Root, Section, Item }`, `Modal` is `{ Root,
+ * Content, … }`, etc. Emitting one as a bare element (`<Sidebar />`) makes React
+ * throw "Element type is invalid … got: object" and white-screen the whole
+ * frame. These names are real exports, so the export-membership hygiene test
+ * passes them — this list is the SECOND gate: a mapping resolving to one of
+ * these (especially as an `icon`, which always emits `<Name />`) is a bug.
+ *
+ * The icon path enforces it at runtime (drops the match → SVG fallback, which
+ * always renders); the component path uses dotted sub-components via the emit
+ * switch (`<Modal.Root>`, `<Select.Trigger>`) so a bare object never reaches
+ * JSX there. A hygiene test asserts no ICON mapping value is in this set.
+ *
+ * Sourced from the compound `declare const X: { … }` exports in arcade-gen's
+ * index.d.mts. If the kit adds another compound, add it here too.
+ */
+export const NON_RENDERABLE_KIT_EXPORTS = new Set<string>([
+  "Accordion", "Breadcrumb", "Chart", "Dropdown", "Menu", "Modal", "Popover",
+  "Radio", "ResizablePanel", "Select", "Sidebar", "Table", "Tabs", "Toast",
+  "ToggleGroup", "Widget",
+]);
+
+/**
  * Resolve an INSTANCE node's kit identity. `setKey`/`setName` come from
  * resolving the instance's componentId through the REST payload's
  * components/componentSets maps.
@@ -226,7 +255,14 @@ export function matchKit(
   setName: string | undefined,
 ): KitMatch | null {
   if (setName && ICON_SET_NAME_TO_KIT[setName]) {
-    return { kind: "icon", kit: ICON_SET_NAME_TO_KIT[setName] };
+    const kit = ICON_SET_NAME_TO_KIT[setName];
+    // Guard: an icon mapping must resolve to a renderable glyph, never a
+    // compound layout object. A bad row (e.g. the old Sidebar.Left → Sidebar)
+    // would otherwise emit `<Sidebar size={16}/>` and crash the frame. Drop the
+    // match so the node falls back to its exported SVG, which always renders.
+    if (!NON_RENDERABLE_KIT_EXPORTS.has(kit)) {
+      return { kind: "icon", kit };
+    }
   }
   if (setKey && SET_KEY_TO_KIT[setKey]) {
     return { kind: "component", kit: SET_KEY_TO_KIT[setKey] };

@@ -27,12 +27,8 @@ const sampleHistory: ChatMessage[] = [
 interface CapturedSource {
   project: Project | null;
   chatHistory: ChatMessage[];
-  status: "online" | "offline" | "unknown";
   hasSend: boolean;
-  hasPostComment: boolean;
   phase: string;
-  hostPresenceLength: number;
-  guestsLength: number;
 }
 
 function HookProbe({
@@ -46,12 +42,8 @@ function HookProbe({
   onState({
     project: source.project,
     chatHistory: source.chatHistory,
-    status: source.status,
     hasSend: typeof source.send === "function",
-    hasPostComment: typeof source.postComment === "function",
     phase: source.chat.phase,
-    hostPresenceLength: source.presence.host ? 1 : 0,
-    guestsLength: source.presence.guests.length,
   });
   return null;
 }
@@ -109,12 +101,8 @@ describe("useProjectFromHost", () => {
     expect(last!.project!.slug).toBe("demo");
     expect(last!.chatHistory).toHaveLength(1);
     expect(last!.chatHistory[0]!.id).toBe("msg-1");
-    expect(last!.status).toBe("online");
     expect(last!.hasSend).toBe(true);
-    expect(last!.hasPostComment).toBe(false);
     expect(last!.phase).toBe("idle");
-    expect(last!.hostPresenceLength).toBe(0);
-    expect(last!.guestsLength).toBe(0);
   });
 
   it("calls /api/projects/:slug at least once on mount", async () => {
@@ -208,12 +196,8 @@ describe("useProjectFromHost", () => {
       last = {
         project: source.project,
         chatHistory: source.chatHistory,
-        status: source.status,
         hasSend: typeof source.send === "function",
-        hasPostComment: typeof source.postComment === "function",
         phase: source.chat.phase,
-        hostPresenceLength: source.presence.host ? 1 : 0,
-        guestsLength: source.presence.guests.length,
       };
       return null;
     }

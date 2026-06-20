@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
-import { runClaudeTurn, runClaudeTurnWithRetry } from "../../server/claudeCode";
+import { runClaudeTurn, runClaudeTurnWithRetry, isThrottleError } from "../../server/claudeCode";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,6 +38,31 @@ describe("runClaudeTurn", () => {
     });
     expect(events[events.length - 1]).toMatchObject({ kind: "end", ok: false });
   });
+
+  it("detects Bedrock throttling on stderr and ends fast with an actionable message", async () => {
+    // The fake CLI emits a ThrottlingException on stderr then sleeps 30s. With a
+    // generous stall budget, the ONLY way this finishes quickly is the stderr
+    // throttle watchdog killing it. Asserts both the fast exit and the message.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "arcade-studio-cc-"));
+    const events: any[] = [];
+    let crash: any = null;
+    const t0 = Date.now();
+    await runClaudeTurn({
+      cwd: tmp, prompt: "hi", bin: FAKE,
+      env: { FAKE_CLAUDE_SCENARIO: "throttle" },
+      stallMs: 0,          // disable stall watchdog so only throttle-detect can end it
+      timeoutMs: 20_000,   // generous; throttle detect must fire well before this
+      onEvent: (e) => events.push(e),
+      onCrash: (info) => { crash = info; },
+    });
+    const elapsed = Date.now() - t0;
+    expect(elapsed).toBeLessThan(10_000); // killed fast, not waited out
+    const end = events[events.length - 1];
+    expect(end).toMatchObject({ kind: "end", ok: false });
+    expect(end.error).toMatch(/rate-limit/i);
+    expect(end.error).toMatch(/wait/i);
+    expect(crash?.throttled).toBe(true);
+  }, 25_000);
 
   it("passes --resume when sessionId is a valid UUID", async () => {
     const spy = path.join(__dirname, "../fixtures/fake-claude-spy.sh");
@@ -433,5 +458,22 @@ describe("runClaudeTurnWithRetry", () => {
     } finally {
       fs.rmSync(spy, { force: true });
     }
+  });
+});
+
+describe("isThrottleError", () => {
+  it("matches Bedrock throttle / 429 signatures (any casing/phrasing)", () => {
+    expect(isThrottleError("ThrottlingException: Rate exceeded")).toBe(true);
+    expect(isThrottleError("ERROR: Too many requests (HTTP 429)")).toBe(true);
+    expect(isThrottleError("TooManyRequestsException")).toBe(true);
+    expect(isThrottleError("503 ServiceUnavailable: slow down")).toBe(true);
+    expect(isThrottleError("bedrock rate limit reached")).toBe(true);
+  });
+  it("does NOT match unrelated stderr or empty input", () => {
+    expect(isThrottleError("")).toBe(false);
+    expect(isThrottleError(null)).toBe(false);
+    expect(isThrottleError(undefined)).toBe(false);
+    expect(isThrottleError("aws sso session expired, run aws sso login")).toBe(false);
+    expect(isThrottleError("No conversation found with session ID: abc")).toBe(false);
   });
 });

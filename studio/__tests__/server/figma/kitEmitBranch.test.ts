@@ -23,6 +23,7 @@ vi.mock("../../../server/projects", () => ({
   appendHistory: vi.fn(async () => {}),
   nextFramePrefix: () => "01",
 }));
+import { appendHistory } from "../../../server/projects";
 
 let tmpRoot: string;
 
@@ -115,6 +116,9 @@ describe("runFigmaKitEmitBranch", () => {
     const { input, events } = makeInput(deps);
     const r = await runFigmaKitEmitBranch(input as any);
     expect(r.ok).toBe(true);
+    // The branch reports the slug it wrote so the wire-an-interaction flow can
+    // target that exact frame dir for the overlay sub-import.
+    expect(r.frameSlug).toBe("01-figma-1-1");
 
     const fdir = path.join(tmpRoot, "proj", "frames", "01-figma-1-1");
     const src = await fs.readFile(path.join(fdir, "index.tsx"), "utf-8");
@@ -124,6 +128,29 @@ describe("runFigmaKitEmitBranch", () => {
 
     const narrations = events.filter((e) => e.kind === "narration").map((e) => e.text);
     expect(narrations.some((t: string) => t.includes("Importing the Figma design"))).toBe(true);
+  });
+
+  it("sub-import (target) writes a named sibling component, no new frame, no history", async () => {
+    (appendHistory as any).mockClear();
+    const deps = makeDeps();
+    const { input } = makeInput(deps);
+    const targetDir = path.join(tmpRoot, "proj", "frames", "01-screen");
+    const r = await runFigmaKitEmitBranch({
+      ...(input as any),
+      target: { fdir: targetDir, componentName: "Overlay", entryFileName: "Overlay.tsx" },
+    });
+    expect(r.ok).toBe(true);
+    // Wrote to the chosen file + component name…
+    expect(r.entryPath).toBe(path.join(targetDir, "Overlay.tsx"));
+    expect(r.componentName).toBe("Overlay");
+    const src = await fs.readFile(path.join(targetDir, "Overlay.tsx"), "utf-8");
+    expect(src).toContain("export default function Overlay");
+    // …assets land under the same dir…
+    await expect(fs.access(path.join(targetDir, "assets", "v1.svg"))).resolves.toBeUndefined();
+    // …no index.tsx is created (so reconcile won't see a new frame)…
+    await expect(fs.access(path.join(targetDir, "index.tsx"))).rejects.toThrow();
+    // …and the caller owns narration, so a sub-import appends NO history.
+    expect((appendHistory as any)).not.toHaveBeenCalled();
   });
 
   it("re-plans past nodes whose export URL is null (broken)", async () => {

@@ -1,10 +1,40 @@
 import { app, Notification } from "electron";
+import fs from "node:fs";
 // electron-updater ships as CommonJS. Under ESM, named imports of
 // `autoUpdater` fail at runtime ("Named export 'autoUpdater' not
 // found"). Default-import the package and destructure.
 import electronUpdaterPkg from "electron-updater";
 const { autoUpdater } = electronUpdaterPkg;
-import { decideApply } from "./applyDecision.js";
+import { decideApply, shouldApplyUpdate } from "./applyDecision.js";
+
+/**
+ * Can quitAndInstall actually replace the app bundle on disk? It can't when:
+ *  - the app runs from a read-only path (Gatekeeper App Translocation runs the
+ *    DMG/quarantined copy from a randomized read-only mount), or
+ *  - the .app dir isn't writable by us (installed somewhere we can't modify).
+ *
+ * In those cases quitAndInstall relaunches the SAME copy, the new process
+ * re-finds the update, and it loops forever (the user sees endless restarts +
+ * AWS re-sign-in). We detect it and DECLINE to enter the apply path, telling
+ * the user to move the app to /Applications instead of silently looping.
+ *
+ * Heuristic: the bundle path contains "/AppTranslocation/", OR the bundle dir
+ * is not writable. Best-effort — any error → assume installable (today's
+ * behavior) so we never block a legitimate update.
+ */
+function appIsInstallable(): boolean {
+  try {
+    const appPath = app.getPath("exe"); // …/Arcade Studio.app/Contents/MacOS/Arcade Studio
+    if (appPath.includes("/AppTranslocation/")) return false;
+    // The .app bundle root is three levels up from the exe. Writability there
+    // is what quitAndInstall needs to swap the bundle.
+    const bundleRoot = appPath.replace(/\/Contents\/MacOS\/[^/]+$/, "");
+    fs.accessSync(bundleRoot, fs.constants.W_OK);
+    return true;
+  } catch {
+    return true; // unknown → don't block updates
+  }
+}
 
 // The turn-aware apply decision lives in a standalone, electron-free module
 // so it is unit-testable under vitest (importing this file pulls in
@@ -39,6 +69,33 @@ export function initUpdater(): void {
 
   autoUpdater.on("update-downloaded", (info) => {
     if (applying) return;
+
+    // Loop guard: NEVER restart into a version we're already running (or older).
+    // If quitAndInstall couldn't swap the bundle last time, the relaunched
+    // process re-receives this same event — applying again would loop forever
+    // (endless restarts + AWS re-sign-in). Refusing a non-newer version means a
+    // failed swap is harmless: we just keep running the current version.
+    const current = app.getVersion();
+    if (!shouldApplyUpdate(current, info.version)) {
+      console.warn(`[updater] downloaded ${info.version} is not newer than running ${current} — not applying (loop guard)`);
+      return;
+    }
+
+    // If the app can't be replaced in place (translocated / read-only path),
+    // quitAndInstall would relaunch the same copy and loop. Surface an
+    // actionable notice instead of restarting into the same version forever.
+    if (!appIsInstallable()) {
+      console.warn(`[updater] ${info.version} downloaded but app is not installable in place (translocated/read-only) — skipping auto-apply`);
+      if (!translocationNoticeShown && Notification.isSupported()) {
+        translocationNoticeShown = true;
+        new Notification({
+          title: "Move Arcade Studio to Applications to update",
+          body: "An update is ready but can't install from the current location. Drag Arcade Studio into your Applications folder, then reopen it.",
+        }).show();
+      }
+      return;
+    }
+
     applying = true;
     void applyWhenIdle(info.version, 0);
   });
@@ -68,6 +125,10 @@ const POLL_MS = 15 * 1000;
  *  second applyWhenIdle chain (resetting the defer cap + scheduling another
  *  quit). Once we commit to applying, we never re-enter. */
 let applying = false;
+
+/** One-shot guard so the "move to Applications" notice doesn't fire on every
+ *  re-check while the app stays in a non-installable location. */
+let translocationNoticeShown = false;
 
 /** Ask the local server whether a generation turn is running. On any error
  *  (server not up, fetch failed) we treat the app as idle — a dead server has

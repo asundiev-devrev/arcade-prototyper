@@ -23,18 +23,6 @@ vi.mock("../../server/projects", () => ({
   reconcileFrames: vi.fn(async () => {}),
 }));
 
-vi.mock("../../server/middleware/chatRelayMirror", () => ({
-  recordChatEventForReplay: vi.fn(),
-}));
-
-vi.mock("../../server/secrets/keychain", () => ({
-  getDevRevPat: vi.fn(async () => null),
-}));
-
-vi.mock("../../server/relay/auth", () => ({
-  resolveDevuFromPat: vi.fn(async () => null),
-}));
-
 let TMP_ROOT = "";
 vi.mock("../../server/paths", () => ({
   projectsRoot: () => TMP_ROOT,

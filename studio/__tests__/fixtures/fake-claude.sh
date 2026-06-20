@@ -16,5 +16,14 @@ case "${FAKE_CLAUDE_SCENARIO:-default}" in
     printf '{"type":"result","subtype":"error_during_execution","error":"aws sso expired"}\n'
     exit 1
     ;;
+  throttle)
+    # Bedrock rate limit: init, then go silent on stdout while emitting a
+    # ThrottlingException on stderr (as the real CLI does), then hang. The
+    # studio stderr watchdog should detect the throttle and kill us fast,
+    # well before the stall/timeout budget.
+    printf '{"type":"system","subtype":"init","session_id":"sess-throttle"}\n'
+    printf 'ERROR: ThrottlingException: Too many requests, please wait before trying again. (HTTP 429)\n' >&2
+    sleep 30
+    ;;
   *) exit 2 ;;
 esac

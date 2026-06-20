@@ -11,6 +11,7 @@ export default defineConfig({
       // keytar is a native module used by keychain.ts; mock it for tests
       { find: "keytar", replacement: path.resolve(__dirname, "__tests__/__mocks__/keytar.ts") },
     ],
+    extensions: [".mjs", ".js", ".mts", ".ts", ".jsx", ".tsx", ".json"],
   },
   test: {
     include: [
@@ -25,7 +26,15 @@ export default defineConfig({
     // Forcing it through vite's optimizer pre-bundles + rewrites the import.
     deps: {
       optimizer: {
-        web: { include: ["gridstack"] },
+        web: {
+          enabled: true,
+          include: ["gridstack", "@xorkavi/arcade-gen"],
+        },
+      },
+    },
+    server: {
+      deps: {
+        inline: ["gridstack", "@xorkavi/arcade-gen"],
       },
     },
   },

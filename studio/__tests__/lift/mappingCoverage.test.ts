@@ -76,10 +76,13 @@ describe("mapping-table coverage", () => {
     // when composites pull in new plain-noun icons.
     const NON_MAPPED_ICON_NAMES = new Set([
       "AgentStudio",
+      "ArrowDownTray",
+      "ArrowRightTray",
       "Bell",
       "ChatBubbles",
       "Clock",
       "ClockWithDashedOutline",
+      "Cog",
       "Computer",
       "Document",
       "DotInLeftWindow",
@@ -87,13 +90,18 @@ describe("mapping-table coverage", () => {
       "Globe",
       "HumanSilhouetteWithPlus",
       "MagnifyingGlass",
+      "MagnifyingGlassInSquare",
       "Pencil",
+      "Placeholder",
       "PlusInChatBubble",
+      "QuestionMarkInCircle",
       "ThreeDotsHorizontal",
       "ThumbsDown",
       "ThumbsUp",
       "TrashBin",
+      "TwoHumanSilhouettes",
       "TwoSquaresOverlapping",
+      "Window",
     ]);
     const reachable = new Set<string>();
     const kitDir = path.join(PROTOTYPE_KIT, "composites");

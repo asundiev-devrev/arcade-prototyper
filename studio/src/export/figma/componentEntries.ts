@@ -96,10 +96,10 @@ export const COMPONENT_ENTRIES: FigmaComponentMapping[] = [
     generation: "0.3",
     figma: { componentSetKey: "367267f81839b123664fa8b1304b16ee6006b37a", setName: "Counter" },
     variants: [
-      { prop: "variant", figmaProp: "Variant", valueMap: { neutral: "Neutral", info: "Emphasis", intelligence: "Emphasis" } },
+      { prop: "variant", figmaProp: "Variant", valueMap: { neutral: "Neutral", emphasis: "Emphasis" } },
     ],
     textNode: { strategy: "lowest-depth" },
-    note: "RENAMED CONCEPT: arcade-gen 'Badge' == 0.3 'Counter'. Axis Variant (Emphasis/Neutral).",
+    note: "RENAMED CONCEPT: arcade-gen 'Badge' == 0.3 'Counter'. Axis Variant (Emphasis/Neutral). The kit Badge variant is exactly 'emphasis' | 'neutral' (see server/figma/kitMappings.ts BADGE_VARIANT_MAP); an earlier table mapped non-existent 'info'/'intelligence' values and omitted 'emphasis'.",
   },
   {
     arcadeGen: "Tag",

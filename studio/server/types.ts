@@ -7,7 +7,6 @@ export const frameSchema = z.object({
   name: z.string().min(1).max(120),
   createdAt: z.string(),
   size: z.enum(["375", "1024", "1440", "1920"]).default("1440"),
-  thumbnail: z.string().optional(),
 });
 export type Frame = z.infer<typeof frameSchema>;
 
@@ -33,7 +32,6 @@ export const projectSchema = z.object({
   computerConversationId: z.string().optional(),
   chimeIns: z.array(chimeInSchema).default([]),
   frames: z.array(frameSchema).default([]),
-  coverThumbnail: z.string().optional(),
   deployments: z.array(z.object({
     frameSlug: z.string(),
     url: z.string(),

@@ -15,7 +15,6 @@ import {
   MentionPopover,
   filterMentions,
   type MentionOption,
-  type UserMentionInput,
 } from "./MentionPopover";
 import { useTargetSelection, type TargetSelection } from "../../hooks/targetSelectionContext";
 import type { SendResult } from "../../hooks/useChatStream";
@@ -26,16 +25,6 @@ interface PromptInputProps {
   onSend: (prompt: string, images: string[]) => void | Promise<SendResult>;
   onStop?: () => void;
   seedRef?: MutableRefObject<((text: string) => void) | null>;
-  /**
-   * When set, the input runs in spectator/comment mode: same chrome, but
-   * submitting calls `commentMode.onSubmit(text)` instead of driving an
-   * agent turn. We hide authoring-only affordances (image upload,
-   * @-mentions, Figma URL paste, target chip, Computer/#frame attachments)
-   * because those mutate host state guests can't drive. On rejection the
-   * text is preserved and an inline error is surfaced; busy resets so the
-   * guest can retry.
-   */
-  commentMode?: { onSubmit: (text: string) => Promise<void> };
 }
 
 /**
@@ -71,19 +60,15 @@ function buildTargetPreamble(t: TargetSelection): string {
   ].join("\n");
 }
 
-export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commentMode }: PromptInputProps) {
-  const isComment = !!commentMode;
+export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef }: PromptInputProps) {
   const [text, setText] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [imagePaths, setImagePaths] = useState<string[]>([]);
   const [fileNames, setFileNames] = useState<string[]>([]);
   const [detectedFigmaUrl, setDetectedFigmaUrl] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [commentBusy, setCommentBusy] = useState(false);
-  const [commentError, setCommentError] = useState<string | null>(null);
   const { target, clear: clearTarget } = useTargetSelection();
   const { toast } = useToast();
-  const [users, setUsers] = useState<UserMentionInput[]>([]);
   const [mention, setMention] = useState<{
     query: string;
     atIdx: number;
@@ -104,36 +89,6 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commen
   }, []);
 
   useEffect(() => {
-    if (isComment) return;
-    let cancelled = false;
-    async function load() {
-      try {
-        // Resolve the current user's devu id (so we can exclude self from the list).
-        const settingsRes = await fetch("/api/settings");
-        const settings = await settingsRes.json().catch(() => ({}));
-        const me = (settings as { devrev?: { user?: { id?: string } } })?.devrev?.user?.id;
-
-        // Fetch the pre-filtered, cached mentionable-users list from our
-        // own server. Pagination + state filtering + gmail/contractor
-        // exclusion all happen server-side because DevRev's full org is
-        // ~4k rows and requires cursor pagination across ~8 pages.
-        const res = await fetch("/api/multiplayer/mention-users");
-        if (!res.ok) return;
-        const data = (await res.json()) as {
-          users?: { id: string; displayName: string; email: string }[];
-        };
-        if (cancelled) return;
-        const list = (data.users ?? []).filter((u) => !me || u.id !== me);
-        setUsers(list);
-      } catch {
-        // fall back to empty list — popover will still show @Computer
-      }
-    }
-    void load();
-    return () => { cancelled = true; };
-  }, [isComment]);
-
-  useEffect(() => {
     if (!seedRef) return;
     seedRef.current = (seed: string) => {
       setText(seed);
@@ -148,7 +103,7 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commen
   }, [seedRef]);
 
   useEffect(() => {
-    if (isComment || !detectedFigmaUrl) return;
+    if (!detectedFigmaUrl) return;
     const ctrl = new AbortController();
     fetch("/api/figma/ingest", {
       method: "POST",
@@ -157,7 +112,7 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commen
       signal: ctrl.signal,
     }).catch(() => { /* fire-and-forget; server logs real failures */ });
     return () => ctrl.abort();
-  }, [isComment, detectedFigmaUrl]);
+  }, [detectedFigmaUrl]);
 
   function scheduleErrorClear() {
     if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
@@ -192,7 +147,6 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commen
   }
 
   async function addFiles(files: File[] | FileList) {
-    if (isComment) return;
     for (const file of Array.from(files)) {
       try {
         const { path, url } = await uploadFile(file);
@@ -256,116 +210,7 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commen
     if (mention) return;
     const p = text.trim();
     if (!p) return;
-
-    if (commentMode) {
-      // Spectator branch: post a comment to the host instead of driving a
-      // turn. Preserve text on rejection so guests can retry; clear busy
-      // and surface the error inline either way.
-      if (commentBusy) return;
-      setCommentBusy(true);
-      setCommentError(null);
-      try {
-        await commentMode.onSubmit(p);
-        if (!mountedRef.current) return;
-        setText("");
-      } catch (err) {
-        if (!mountedRef.current) return;
-        setCommentError(err instanceof Error ? err.message : "Failed to post comment");
-      } finally {
-        if (mountedRef.current) setCommentBusy(false);
-      }
-      return;
-    }
-
     if (busy) return;
-
-    // Detect user @-mentions in the current text against our known users list.
-    // Token form is @<handle>. The handle is the email local-part with the
-    // `i-` prefix stripped for DevRev imported-identity accounts — keeps
-    // this in sync with MentionPopover's token generation.
-    const userMentionTargets: { devu: string; displayName: string }[] = [];
-    for (const u of users) {
-      const local = u.email.split("@")[0];
-      const handle = local.startsWith("i-") ? local.slice(2) : local;
-      // Escape regex special chars in the handle (dots, hyphens).
-      const escaped = handle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const re = new RegExp(`@${escaped}\\b`, "i");
-      if (re.test(text)) {
-        userMentionTargets.push({ devu: u.id, displayName: u.displayName });
-      }
-    }
-
-    if (userMentionTargets.length > 0) {
-      // Plan 2b: An @-mention is now a shortcut for the project-sharing flow.
-      // We check whether the mentioned devu is already on the project's
-      // shared_with list; if not, we confirm with the user and POST to the
-      // sharing endpoint. Either way we skip the chat turn — the @-mention
-      // text is not a design prompt, and letting it run would just produce a
-      // confusing "no frame to build" response. v1 shares one user at a time
-      // (first match).
-      const guest = userMentionTargets[0];
-      try {
-        // Fetch current shared_with to avoid re-confirming for collaborators
-        // who are already on the project.
-        const curRes = await fetch(`/api/projects/${projectSlug}/collaborators`);
-        const cur = (await curRes.json().catch(() => ({}))) as {
-          shared_with?: { devu: string }[];
-        };
-        const isAlready = (cur.shared_with ?? []).some((c) => c.devu === guest.devu);
-
-        if (!isAlready) {
-          // Native window.confirm is deliberate v1 — a styled inline
-          // confirmation is a polish follow-up.
-          const ok = window.confirm(`Add ${guest.displayName} to this project?`);
-          if (!ok) {
-            // Keep the input intact so the host can edit and try again.
-            return;
-          }
-          const shareRes = await fetch(`/api/projects/${projectSlug}/collaborators`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ devu: guest.devu, displayName: guest.displayName }),
-          });
-          if (!shareRes.ok) {
-            const data = await shareRes.json().catch(() => ({}));
-            toast({
-              title: `Share failed: ${(data as { error?: string })?.error ?? shareRes.status}`,
-              intent: "alert",
-            });
-            return;
-          }
-          toast({
-            title: `Shared with ${guest.displayName}`,
-            intent: "success",
-          });
-        } else {
-          toast({
-            title: `${guest.displayName} is already on this project`,
-            intent: "info",
-          });
-        }
-      } catch (err) {
-        toast({
-          title: `Share failed: ${(err as Error).message}`,
-          intent: "alert",
-        });
-        return;
-      }
-      // Clear the input and stop. We keep the existing custom-event dispatch
-      // so any chat-history-driven UI gets a chance to refresh; the
-      // multiplayerInvite middleware (2a) used to write a system message —
-      // the new share endpoint does not, so the system-message side-effect
-      // is intentionally left to a follow-up task.
-      setText("");
-      setImages([]);
-      setImagePaths([]);
-      setFileNames([]);
-      setDetectedFigmaUrl(null);
-      setMention(null);
-      clearTarget();
-      window.dispatchEvent(new CustomEvent("arcade-studio:refresh-chat-history"));
-      return;
-    }
 
     const finalPrompt = target ? `${buildTargetPreamble(target)}${p}` : p;
     const result = await onSend(finalPrompt, imagePaths);
@@ -392,7 +237,7 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commen
     if (!el) { setMention(null); return; }
     const caret = el.selectionStart ?? next.length;
     const detected = detectMentionAtCaret(next, caret);
-    if (!detected || filterMentions(detected.query, users).length === 0) {
+    if (!detected || filterMentions(detected.query, []).length === 0) {
       setMention(null);
       return;
     }
@@ -423,62 +268,24 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commen
     }
   }
 
-  const hasComputerMention = !isComment && /@Computer\b/i.test(text);
-  const hasFrameTrigger = !isComment && /#frame\b/i.test(text);
-  const effectiveBusy = isComment ? commentBusy : busy;
+  const hasComputerMention = /@Computer\b/i.test(text);
+  const hasFrameTrigger = /#frame\b/i.test(text);
 
   return (
     <div
       ref={containerRef}
-      onDrop={isComment ? undefined : onDrop}
-      onDragOver={isComment ? undefined : (e) => e.preventDefault()}
+      onDrop={onDrop}
+      onDragOver={(e) => e.preventDefault()}
     >
-      {!isComment && (
-        <input
-          ref={fileInputRef}
-          type="file"
-          // Any file type — images, PRDs, PDFs, docs, etc. No `accept` filter
-          // so the picker shows everything; the agent reads whatever lands.
-          multiple
-          hidden
-          onChange={onFilePicked}
-        />
-      )}
-      {commentError && (
-        <div
-          role="alert"
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 8,
-            padding: "6px 12px",
-            margin: "0 16px 8px",
-            borderRadius: 8,
-            color: "var(--fg-alert-prominent)",
-            background: "var(--bg-alert-subtle)",
-            border: "1px solid var(--stroke-alert-subtle)",
-            fontSize: 12,
-          }}
-        >
-          <span>{commentError}</span>
-          <button
-            type="button"
-            onClick={() => setCommentError(null)}
-            aria-label="Dismiss error"
-            style={{
-              background: "transparent",
-              border: "none",
-              color: "var(--fg-alert-prominent)",
-              cursor: "pointer",
-              fontSize: 16,
-              padding: 0,
-            }}
-          >
-            ×
-          </button>
-        </div>
-      )}
+      <input
+        ref={fileInputRef}
+        type="file"
+        // Any file type — images, PRDs, PDFs, docs, etc. No `accept` filter
+        // so the picker shows everything; the agent reads whatever lands.
+        multiple
+        hidden
+        onChange={onFilePicked}
+      />
       {uploadError && (
         <div
           role="alert"
@@ -526,10 +333,6 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commen
           const el = e.target as HTMLInputElement | HTMLTextAreaElement;
           const next = el.value;
           setText(next);
-          if (isComment) {
-            if (commentError) setCommentError(null);
-            return;
-          }
           // Check for Figma URL as user types
           const url = extractFigmaUrl(next);
           setDetectedFigmaUrl(url);
@@ -540,10 +343,9 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commen
           if (mention) return;
           void submit();
         }}
-        placeholder={isComment ? "Comment on this prototype…" : "Ask me anything"}
+        placeholder="Ask me anything"
         attachments={
-          !isComment &&
-          (images.length > 0 || detectedFigmaUrl || hasComputerMention || hasFrameTrigger || target) ? (
+          images.length > 0 || detectedFigmaUrl || hasComputerMention || hasFrameTrigger || target ? (
             <>
               {target && (
                 <TargetChip target={target} onClear={clearTarget} />
@@ -578,13 +380,13 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commen
         }
         trailing={
           <>
-            {!isComment && <ChatInput.AddAttachmentButton onClick={handlePickFile} />}
-            {effectiveBusy && onStop && !isComment ? (
+            <ChatInput.AddAttachmentButton onClick={handlePickFile} />
+            {busy && onStop ? (
               <ChatInput.StopButton onClick={onStop} />
             ) : (
               <ChatInput.SendButton
                 onClick={() => void submit()}
-                disabled={!text.trim() || effectiveBusy}
+                disabled={!text.trim() || busy}
               />
             )}
           </>
@@ -594,7 +396,7 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef, commen
         <MentionPopover
           query={mention.query}
           anchor={mention.anchor}
-          users={users}
+          users={[]}
           onSelect={insertMention}
           onDismiss={() => setMention(null)}
         />

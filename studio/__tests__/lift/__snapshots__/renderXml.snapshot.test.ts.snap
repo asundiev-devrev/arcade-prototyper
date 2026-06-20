@@ -6,7 +6,7 @@ exports[`renderXml > marks n/a composites with equivalent="none" 1`] = `
   <frame_path>/abs/computer-frame.tsx</frame_path>
   <intent>Computer app chrome.</intent>
   <default_mapping_convention>
-    <rule>For any arcade primitive with no explicit mapping entry, the default assumption is that the same symbol is exported from '@devrev-web/design-system/shared/raw-design-system'. Verify by grep; if absent, surface to the reviewer.</rule>
+    <rule>For any arcade primitive with no explicit mapping entry, the default assumption is that the same symbol is exported from raw-design-system, imported via its per-component kebab-cased subpath '@devrev-web-internal/design-system-shared-raw-design-system/components/&lt;kebab-name&gt;' (e.g. Switch → .../components/switch). Verify by grep; if absent, surface to the reviewer.</rule>
     <lookup>From a devrev-web checkout: grep -rE "^export .*\\b&lt;Name&gt;\\b" libs/design-system/shared/raw-design-system/src/components. If the export exists, use it. If not, it may live in a sibling package (settings, pages, agent, side-panel) — widen the grep, or surface to the reviewer. Prop names usually match; treat non-trivial prop differences as the reviewer's decision.</lookup>
     <anchors>
       <anchor>Switch → raw-design-system Switch (direct match; confirm with grep)</anchor>
@@ -143,7 +143,7 @@ exports[`renderXml > renders a detail frame 1`] = `
     </anchors>
   </chrome_convention>
   <default_mapping_convention>
-    <rule>For any arcade primitive with no explicit mapping entry, the default assumption is that the same symbol is exported from '@devrev-web/design-system/shared/raw-design-system'. Verify by grep; if absent, surface to the reviewer.</rule>
+    <rule>For any arcade primitive with no explicit mapping entry, the default assumption is that the same symbol is exported from raw-design-system, imported via its per-component kebab-cased subpath '@devrev-web-internal/design-system-shared-raw-design-system/components/&lt;kebab-name&gt;' (e.g. Switch → .../components/switch). Verify by grep; if absent, surface to the reviewer.</rule>
     <lookup>From a devrev-web checkout: grep -rE "^export .*\\b&lt;Name&gt;\\b" libs/design-system/shared/raw-design-system/src/components. If the export exists, use it. If not, it may live in a sibling package (settings, pages, agent, side-panel) — widen the grep, or surface to the reviewer. Prop names usually match; treat non-trivial prop differences as the reviewer's decision.</lookup>
     <anchors>
       <anchor>Switch → raw-design-system Switch (direct match; confirm with grep)</anchor>
@@ -280,7 +280,7 @@ exports[`renderXml > renders a list-view frame 1`] = `
   <frame_path>/abs/list-frame.tsx</frame_path>
   <intent>List of tickets with filters and pagination.</intent>
   <default_mapping_convention>
-    <rule>For any arcade primitive with no explicit mapping entry, the default assumption is that the same symbol is exported from '@devrev-web/design-system/shared/raw-design-system'. Verify by grep; if absent, surface to the reviewer.</rule>
+    <rule>For any arcade primitive with no explicit mapping entry, the default assumption is that the same symbol is exported from raw-design-system, imported via its per-component kebab-cased subpath '@devrev-web-internal/design-system-shared-raw-design-system/components/&lt;kebab-name&gt;' (e.g. Switch → .../components/switch). Verify by grep; if absent, surface to the reviewer.</rule>
     <lookup>From a devrev-web checkout: grep -rE "^export .*\\b&lt;Name&gt;\\b" libs/design-system/shared/raw-design-system/src/components. If the export exists, use it. If not, it may live in a sibling package (settings, pages, agent, side-panel) — widen the grep, or surface to the reviewer. Prop names usually match; treat non-trivial prop differences as the reviewer's decision.</lookup>
     <anchors>
       <anchor>Switch → raw-design-system Switch (direct match; confirm with grep)</anchor>
@@ -418,7 +418,7 @@ exports[`renderXml > renders a settings-form frame 1`] = `
   <frame_path>/abs/settings-frame.tsx</frame_path>
   <intent>Profile settings form.</intent>
   <default_mapping_convention>
-    <rule>For any arcade primitive with no explicit mapping entry, the default assumption is that the same symbol is exported from '@devrev-web/design-system/shared/raw-design-system'. Verify by grep; if absent, surface to the reviewer.</rule>
+    <rule>For any arcade primitive with no explicit mapping entry, the default assumption is that the same symbol is exported from raw-design-system, imported via its per-component kebab-cased subpath '@devrev-web-internal/design-system-shared-raw-design-system/components/&lt;kebab-name&gt;' (e.g. Switch → .../components/switch). Verify by grep; if absent, surface to the reviewer.</rule>
     <lookup>From a devrev-web checkout: grep -rE "^export .*\\b&lt;Name&gt;\\b" libs/design-system/shared/raw-design-system/src/components. If the export exists, use it. If not, it may live in a sibling package (settings, pages, agent, side-panel) — widen the grep, or surface to the reviewer. Prop names usually match; treat non-trivial prop differences as the reviewer's decision.</lookup>
     <anchors>
       <anchor>Switch → raw-design-system Switch (direct match; confirm with grep)</anchor>
@@ -571,7 +571,7 @@ exports[`renderXml > renders an ad-hoc frame 1`] = `
   <frame_path>/abs/adhoc-frame.tsx</frame_path>
   <intent>Confirmation modal.</intent>
   <default_mapping_convention>
-    <rule>For any arcade primitive with no explicit mapping entry, the default assumption is that the same symbol is exported from '@devrev-web/design-system/shared/raw-design-system'. Verify by grep; if absent, surface to the reviewer.</rule>
+    <rule>For any arcade primitive with no explicit mapping entry, the default assumption is that the same symbol is exported from raw-design-system, imported via its per-component kebab-cased subpath '@devrev-web-internal/design-system-shared-raw-design-system/components/&lt;kebab-name&gt;' (e.g. Switch → .../components/switch). Verify by grep; if absent, surface to the reviewer.</rule>
     <lookup>From a devrev-web checkout: grep -rE "^export .*\\b&lt;Name&gt;\\b" libs/design-system/shared/raw-design-system/src/components. If the export exists, use it. If not, it may live in a sibling package (settings, pages, agent, side-panel) — widen the grep, or surface to the reviewer. Prop names usually match; treat non-trivial prop differences as the reviewer's decision.</lookup>
     <anchors>
       <anchor>Switch → raw-design-system Switch (direct match; confirm with grep)</anchor>

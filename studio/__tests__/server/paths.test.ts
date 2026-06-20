@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import path from "node:path";
 import os from "node:os";
-import { studioRoot, projectsRoot, projectDir, frameDir, designMdPath, multiplayerRoot, sessionsJsonPath, globalMemoryDir, projectMemoryDir } from "../../server/paths";
+import { studioRoot, projectsRoot, projectDir, frameDir, designMdPath, globalMemoryDir, projectMemoryDir } from "../../server/paths";
 
 describe("paths", () => {
   it("studioRoot defaults to Application Support on darwin", () => {
@@ -37,20 +37,6 @@ describe("designMdPath", () => {
 
   it("rejects invalid slugs via requireSlug", () => {
     expect(() => designMdPath("../etc")).toThrow(/Invalid slug/);
-  });
-});
-
-describe("multiplayer paths", () => {
-  it("multiplayerRoot sits inside studioRoot", () => {
-    process.env.ARCADE_STUDIO_ROOT = "/tmp/studio-test";
-    expect(multiplayerRoot()).toBe("/tmp/studio-test/multiplayer");
-    delete process.env.ARCADE_STUDIO_ROOT;
-  });
-
-  it("sessionsJsonPath lives under multiplayerRoot", () => {
-    process.env.ARCADE_STUDIO_ROOT = "/tmp/studio-test";
-    expect(sessionsJsonPath()).toBe("/tmp/studio-test/multiplayer/sessions.json");
-    delete process.env.ARCADE_STUDIO_ROOT;
   });
 });
 

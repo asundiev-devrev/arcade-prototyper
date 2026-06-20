@@ -50,8 +50,6 @@ function makeSource() {
     chatHistory: [],
     chat: {} as any,
     chatStream: { state: {}, send: sendSpy, retry: () => {}, cancel: () => {} } as any,
-    presence: { host: null, guests: [] },
-    status: "online" as const,
     send: sendSpy,
     refresh: async () => {},
   };
@@ -59,10 +57,6 @@ function makeSource() {
 
 vi.mock("../../src/hooks/useProjectFromHost", () => ({
   useProjectFromHost: (_slug: string) => makeSource(),
-}));
-
-vi.mock("../../src/hooks/useProjectFromMirror", () => ({
-  useProjectFromMirror: (_id: string) => makeSource(),
 }));
 
 // Stub heavy children — irrelevant to the hero-handoff effect under test.
@@ -74,12 +68,6 @@ vi.mock("../../src/components/chat/ChatPane", () => ({
 }));
 vi.mock("../../src/components/devmode/DevModePanel", () => ({
   DevModePanel: () => <div data-testid="devmode-panel" />,
-}));
-vi.mock("../../src/components/multiplayer/SharePanel", () => ({
-  SharePanel: () => <div data-testid="share-panel" />,
-}));
-vi.mock("../../src/components/multiplayer/PresenceStrip", () => ({
-  PresenceStrip: () => <div data-testid="presence-strip" />,
 }));
 vi.mock("../../src/components/shell/ShareButton", () => ({
   ShareButton: () => <button data-testid="share-button" />,
@@ -111,9 +99,15 @@ vi.mock("@xorkavi/arcade-gen", async () => {
     React.forwardRef((props: any, ref: any) =>
       React.createElement(tag, { ...props, ref }),
     );
+  const ToggleGroup: any = {
+    Root: ({ children }: any) => React.createElement("div", null, children),
+    Item: ({ children, ...rest }: any) =>
+      React.createElement("button", rest, children),
+  };
   return {
     IconButton: passthrough("button"),
     Tooltip: ({ children }: any) => React.createElement("div", null, children),
+    ToggleGroup,
   };
 });
 
@@ -147,7 +141,6 @@ describe("ProjectDetail hero handoff under StrictMode", () => {
     render(
       <StrictMode>
         <ProjectDetail
-          mode="author"
           slug="p-strict-1"
           onBack={() => {}}
           onOpenProject={() => {}}
@@ -171,7 +164,6 @@ describe("ProjectDetail hero handoff under StrictMode", () => {
     render(
       <StrictMode>
         <ProjectDetail
-          mode="author"
           slug="p-strict-2"
           onBack={() => {}}
           onOpenProject={() => {}}
@@ -201,7 +193,6 @@ describe("ProjectDetail hero handoff under StrictMode", () => {
 
     const { queryByText, getByTestId } = render(
       <ProjectDetail
-        mode="author"
         slug="p-strict-3"
         onBack={() => {}}
         onOpenProject={() => {}}
@@ -224,7 +215,6 @@ describe("ProjectDetail hero handoff under StrictMode", () => {
 
     const { queryByTestId, getByText } = render(
       <ProjectDetail
-        mode="author"
         slug="p-strict-4"
         onBack={() => {}}
         onOpenProject={() => {}}

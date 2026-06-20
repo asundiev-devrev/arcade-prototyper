@@ -58,7 +58,12 @@ import {
 type RootProps = { children: ReactNode };
 
 function Root({ children }: RootProps) {
-  return <div className="flex flex-col gap-6 px-4 py-4">{children}</div>;
+  // Center the transcript in a max-width column (matches the reference
+  // prototype + production: content-column max-width 860px, margin-inline auto).
+  // Without this the bubbles span the whole pane — user bubbles fly to the far
+  // right edge and agent text sits left-shifted. The artefact card fills 100%
+  // of this column and negates the px-4 to snap flush below 900px.
+  return <div className="flex flex-col gap-6 px-4 py-4 w-full max-w-[860px] mx-auto">{children}</div>;
 }
 
 /* ─── Agent response ────────────────────────────────────────────────────── */

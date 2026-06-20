@@ -33,7 +33,15 @@ export async function startVite(appRoot: string): Promise<string> {
   // ONLY if it is unmistakably an Arcade Vite (its argv runs studio/vite.config
   // via vite.js), kill it and wait for the port to free. A genuine foreign
   // process is never touched — we still fail loudly so we don't hijack it.
-  if (await tryGet(VITE_URL)) {
+  // Reclaim if ANYTHING holds the port — not only when it answers HTTP. On an
+  // auto-update relaunch the previous instance's Vite is often mid-shutdown: it
+  // still owns the TCP listener (so our strictPort bind fails) but no longer
+  // answers HTTP (so a `tryGet` probe alone misses it, skips reclaim, and the
+  // spawn dies "port in use" → the window never loads). Checking for a live
+  // listener catches that teardown window too. reclaimStaleVitePort only ever
+  // kills a process whose argv is unmistakably our own Vite (isArcadeViteCommand).
+  const portHeld = (await tryGet(VITE_URL)) || (await listenersOnVitePort()).length > 0;
+  if (portHeld) {
     const reclaimed = await reclaimStaleVitePort();
     if (!reclaimed) {
       throw new Error(

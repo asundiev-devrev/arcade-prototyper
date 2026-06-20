@@ -18,17 +18,6 @@ export function Viewport({
   zoom,
   onZoomChange,
   onSeedChat,
-  // Spectator mode passes `readonly`. Hides destructive affordances
-  // (NewFrameCard, EmptyViewport CTA) and skips host-only data
-  // sources (`useFrames` polling against `/api/projects/:slug`, which
-  // 404s for spectators).
-  readonly: isReadonly = false,
-  // Spectator mode also passes a custom iframe URL builder so the
-  // FrameCard hits the spectator compile endpoint
-  // (`/api/shared-projects/:id/frame/:framePath`) instead of the host
-  // endpoint. Author mode leaves this undefined → FrameCard falls back
-  // to its existing `/api/frames/:slug/:frame` URL.
-  frameSrcOverride,
   phase = "idle",
 }: {
   project: Project;
@@ -37,13 +26,9 @@ export function Viewport({
   zoom: number;
   onZoomChange: (next: number) => void;
   onSeedChat: (text: string) => void;
-  readonly?: boolean;
-  frameSrcOverride?: (frameSlug: string) => string;
   phase?: TurnPhase;
 }) {
-  // Pass `enabled: !isReadonly` so the polling timer and host fetch
-  // don't run for spectators — see useFrames docstring.
-  const { frames, refresh } = useFrames(project, { enabled: !isReadonly });
+  const { frames, refresh } = useFrames(project);
   const [creatingFrame, setCreatingFrame] = useState(false);
   const { target, setTarget } = useTargetSelection();
   const { toast } = useToast();
@@ -166,22 +151,6 @@ export function Viewport({
   }, []);
 
   if (!frames.length) {
-    // Spectator-side empty state: the host hasn't generated anything yet.
-    if (isReadonly && phase !== "running") {
-      return (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            height: "100%",
-            color: "var(--fg-neutral-subtle)",
-          }}
-        >
-          Waiting for the host to generate frames…
-        </div>
-      );
-    }
     // Empty + turn running: show the LoadingShow scene loop centered in
     // the viewport. Skips ViewportPreview wrapper — the loading scene is
     // a centered overlay, not a pannable/zoomable canvas, and putting it
@@ -191,24 +160,8 @@ export function Viewport({
     if (phase === "running") {
       return <LoadingShow />;
     }
-    // Author empty state while idle: show "+ New frame" CTA.
-    if (!isReadonly) {
-      return <EmptyViewport onCreateFrame={handleCreateFrame} busy={creatingFrame} />;
-    }
-    // Readonly + not running: should never happen but fall back to waiting message.
-    return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "100%",
-          color: "var(--fg-neutral-subtle)",
-        }}
-      >
-        Waiting for the host to generate frames…
-      </div>
-    );
+    // Empty + idle: show the "+ New frame" CTA.
+    return <EmptyViewport onCreateFrame={handleCreateFrame} busy={creatingFrame} />;
   }
 
   return (
@@ -235,15 +188,11 @@ export function Viewport({
             projectMode={project.mode}
             zoom={zoom}
             highlighted={highlight?.slug === f.slug ? highlight.kind : null}
-            readonly={isReadonly}
-            srcOverride={frameSrcOverride}
             phase={phase}
-            onDelete={isReadonly ? undefined : handleDeleteFrame}
+            onDelete={handleDeleteFrame}
           />
         ))}
-        {!isReadonly && (
-          <NewFrameCard onClick={handleCreateFrame} busy={creatingFrame} />
-        )}
+        <NewFrameCard onClick={handleCreateFrame} busy={creatingFrame} />
       </div>
     </ViewportPreview>
   );

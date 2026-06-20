@@ -109,13 +109,6 @@ export async function getNode(fileKey: string, nodeId: string): Promise<unknown>
   catch { throw new Error(`figmanage get-nodes returned unparseable JSON: ${r.stdout.slice(0, 200)}`); }
 }
 
-export async function nodeTree(fileKey: string, nodeId: string, depth = 3): Promise<unknown> {
-  const r = await runFigmanage(["reading", "get-nodes", fileKey, nodeId, "--depth", String(depth), "--json"]);
-  if (r.code !== 0) throw new Error(`figmanage get-nodes (tree) failed (${r.code}): ${r.stderr}`);
-  try { return JSON.parse(r.stdout); }
-  catch { throw new Error(`figmanage get-nodes (tree) returned unparseable JSON: ${r.stdout.slice(0, 200)}`); }
-}
-
 export async function exportNodePng(
   fileKey: string,
   nodeId: string,

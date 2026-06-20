@@ -6,7 +6,7 @@
 > template source; if a prop signature here is enough, skip the extra
 > `Read`. Open the `.tsx` only when you need the full rendered markup.
 
-_34 entries — 30 composites, 4 templates._
+_37 entries — 33 composites, 4 templates._
 
 ## Templates
 
@@ -135,6 +135,10 @@ type ComputerPageProps = {
   chatInput: ReactNode;
   children: ReactNode;
   panel?: ReactNode;
+  /** Called when the user dismisses the canvas drawer (backdrop click or the
+   *  drawer's close button) — only reachable below 600px where the canvas is
+   *  an overlay. Typically flips the canvas-open state in the caller. */
+  onCanvasClose?: () => void;
 }
 ```
 
@@ -155,6 +159,8 @@ Canvas tokens most likely to be referenced inside the body slot:
 | Sidebar surface             | `--surface-shallow` (already applied via ComputerSidebar) |
 | Window backdrop             | `--surface-backdrop`            |
 | Divider / border            | `--stroke-neutral-subtle`       |
+
+The root is a `@container` element; descendants can query its width. The canvas panel auto-converts from a docked column to a fixed overlay drawer below 600px container width.
 
 ## SettingsPage (template)
 _source: `templates/SettingsPage.tsx`_
@@ -355,6 +361,43 @@ Canvas tokens most likely to be referenced inside `children`:
 | Window backdrop             | `--surface-backdrop`            |
 | Divider / border            | `--stroke-neutral-subtle`       |
 
+## ArtefactCard (composite)
+_source: `composites/ArtefactCard.tsx`_
+
+ArtefactCard — a file/document preview card embedded in an agent chat
+message. Borrowed from the DeReGilz/responsive prototype's "artefact card":
+a red filetype tag + title + "Open in canvas" CTA on the left, and a fanned
+three-page thumbnail on the right.
+
+Responsive: the card must sit inside a `@container/chat` element (the
+ComputerPage chat column establishes it). As the chat column narrows (e.g.
+when the canvas docks), `--stack-scale` steps down so the thumbnail scales
+proportionally (anchored top-right) instead of squishing, and at ≤900px the
+card snaps flush to the column edges. All via Tailwind utilities — no CSS
+file (the kit build is tsc-only and does not bundle CSS).
+
+The two expressive borrows (pink #FFE5DB surface, red #FF342D tag) are
+deliberately confined to this composite; everywhere else stays on DevRev
+arcade-gen tokens.
+
+Usage:
+  <ChatMessages.Agent thoughts={…}>
+    Here's the launch brief I drafted:
+    <ArtefactCard tag="DOC" title="Q3 launch brief" onOpen={() => openCanvas()} />
+  </ChatMessages.Agent>
+
+
+```ts
+type ArtefactCardProps = {
+  /** Filetype label shown in the red tag pill, e.g. "DOC". */
+  tag: string;
+  /** Document title. */
+  title: string;
+  /** "Open in canvas" CTA handler. When omitted, the CTA is not rendered. */
+  onOpen?: () => void;
+}
+```
+
 ## BreadcrumbBar (composite)
 _source: `composites/BreadcrumbBar.tsx`_
 
@@ -443,6 +486,34 @@ Compound:
   callers don't need to inline their own SVGs or pill shapes.
 
 **Compound:** `CanvasPanel.Step`, `CanvasPanel.Group`, `CanvasPanel.GroupAddButton`, `CanvasPanel.Item`, `CanvasPanel.FileIcon`, `CanvasPanel.FolderIcon`, `CanvasPanel.StatusDot`, `CanvasPanel.CountBadge`
+
+## CanvasTabs (composite)
+_source: `composites/CanvasTabs.tsx`_
+
+CanvasTabs — tab strip for the Computer canvas pane. Connected-tab styling
+(active tab merges into the body via white fill + no bottom rule; inactive
+tabs + a trailing filler carry an inset bottom rule). Tabs shrink + ellipsis
++ horizontally scroll as the canvas narrows — no JS for that.
+
+Usage:
+  <CanvasTabs tabs={[{id:"canvas",label:"Canvas"},{id:"docs",label:"Docs"}]}>
+    {(active) => active === "docs" ? <DocsBody/> : <CanvasPanel .../>}
+  </CanvasTabs>
+
+
+```ts
+type CanvasTabsProps = {
+  tabs: CanvasTab[];
+  defaultTabId?: string;
+  /** Docked width in px (user-resizable). Applied inline; in the narrow
+   *  drawer mode a container query overrides it to a wide overlay. Default 320. */
+  width?: number;
+  /** Fired during drag of the left-edge resize handle with the new width. */
+  onResize?: (width: number) => void;
+  /** Render-prop: receives the active tab id, returns that tab's body. */
+  children: (activeId: string) => React.ReactNode;
+}
+```
 
 ## CapabilitySection (composite)
 _source: `composites/CapabilitySection.tsx`_
@@ -796,6 +867,13 @@ type ComputerSceneProps = {
   sessions?: Session[];
   /** Placeholder for the bottom command bar. */
   chatInputPlaceholder?: string;
+  /**
+   * Called when the user picks "Settings" from the account menu (avatar/name
+   * footer). When provided, the Settings item is wired to it — typically the
+   * host swaps the whole pane to the Computer settings view. When omitted, the
+   * Settings item is inert (the menu still renders).
+   */
+  onOpenSettings?: () => void;
 }
 ```
 
@@ -1220,42 +1298,56 @@ _source: `composites/NavSidebar.tsx`_
 
 NavSidebar — DevRev navigation sidebar composite.
 
-Matches Figma "Sidebar / My Work + Teams + Multiplayer Sidebar". Replaces
-the bare `arcade.Sidebar` for prototype use. This composite lives BELOW
-the TitleBar in AppShell, so it does NOT render traffic lights or a
-collapse button — those are the TitleBar's responsibility.
+Matches Figma "Option_2_Interim_reduced(June)" (node 10:3508) — the current
+DevRev SoR left nav. Replaces the bare `arcade.Sidebar` for prototype use.
+Lives BELOW the window chrome in AppShell, so it owns its own top toolbar
+(collapse / ⌘K search / add) but NOT the mac traffic lights.
+
+Default chrome (rendered top→bottom):
+- Toolbar (top): collapse IconButton + ⌘K search field + "add" IconButton.
+- Computer pill: a full-width muted rounded button with the "computer"
+  wordmark — the product switcher.
+- Nav body (scrollable): the canonical DevRev nav (Work / Teams / Views +
+  Explore) by default, or NavSidebar.Section + NavSidebar.Item children if
+  you pass your own tree.
+- User footer (bottom): avatar + status dot + a chat FAB.
+
+IMPORTANT: `<NavSidebar />` with NO children renders the full standard
+DevRev nav out of the box — prefer this. Only pass Section/Item children
+when the frame genuinely needs a DIFFERENT set of nav items. Do NOT
+hand-author the standard Work/Teams/Views items; you'll just reproduce the
+default less accurately.
 
 Intentional opinions:
-- Three zones: a header (top), nav body (scrollable middle), footer (bottom).
-  Two header/footer chrome variants are supported — Computer (brand chip +
-  "computer ⌘.") and Settings (← back + title, "Agent Studio" footer).
-- Uses --surface-shallow so the sidebar reads as a muted panel against
-  the body's --surface-overlay.
-- Nav body accepts NavSidebar.Section and NavSidebar.Item children —
-  same compound pattern as arcade.Sidebar for familiarity.
-- Active item is a SUBTLE neutral selection (--control-bg-neutral-subtle-active
-  + --fg-neutral-prominent), matching the Settings sidenav — NOT a solid blue
-  pill. (The blue --bg-info-prominent was drift; corrected 2026-06.)
-- Section titles render small/subtle (text-caption + --fg-neutral-subtle),
-  matching the Figma "Personal"/"Organization" group labels.
+- Surface is --surface-shallow so the sidebar reads as a muted panel.
+- Group labels (Work / Teams / Views) render as small, 60%-opacity chips
+  (text-system-small), matching the Figma "_Group Label".
+- Items are 28px rows, padded px-4, label in --text-interactive-navigation-
+  resting; the active/hover state is a subtle neutral wash (NOT a blue pill).
+- Items support a leading icon, a trailing slot (count Tag, or a chevron for
+  expandable groups), and `indent` for nested rows.
 
-Slots:
-- `workspace` (optional) — label in the default brand header (e.g. "DevRev").
-  When omitted or falsy, the brand header is NOT rendered.
-- `header` (optional) — custom header node replacing the brand header. Use
-  `<NavSidebar.BackHeader title="Settings" />` for the Settings chrome.
-- `showFooter` (optional, default true) — when false, the Computer footer is
-  not rendered.
-- `footer` (optional) — custom footer node replacing the Computer footer. Use
-  `<NavSidebar.AppFooter />` for the "Agent Studio" Settings chrome.
-- `children` — NavSidebar.Section / NavSidebar.Item tree.
+Slots (all optional — sensible defaults render the full Figma design):
+- `workspace` — accepted for back-compat but IGNORED. The pill is the
+  "computer" product switcher and always shows the computer wordmark; it is
+  not a workspace-name label. (Pass a custom `pill` to change the switcher.)
+- `toolbar` — replace the default top toolbar. Pass `false` to hide it.
+- `pill` — replace the default computer pill. Pass `false` to hide it.
+- `header` — legacy: a custom node ABOVE the toolbar (e.g.
+  `<NavSidebar.BackHeader>` for the Settings "← Title" chrome). When set,
+  the default toolbar + pill are suppressed (the Settings chrome owns the top).
+- `footer` — replace the default user footer. Pass `false` to hide it.
+  `<NavSidebar.AppFooter>` is still available for the "Agent Studio" chrome.
+- `children` — OPTIONAL custom NavSidebar.Section / NavSidebar.Item tree.
+  Omit entirely to get the standard DevRev nav (Work / Teams / Views +
+  Explore). Only provide children for a genuinely different item set.
 
-**Compound:** `NavSidebar.Section`, `NavSidebar.Item`, `NavSidebar.BackHeader`, `NavSidebar.AppFooter`
+**Compound:** `NavSidebar.Section`, `NavSidebar.Item`, `NavSidebar.Toolbar`, `NavSidebar.ComputerPill`, `NavSidebar.UserFooter`, `NavSidebar.ExpandChevron`, `NavSidebar.BackHeader`, `NavSidebar.AppFooter`
 
 **When NOT to use this:**
 - When Figma shows a chat-style sidebar (with "New Chat" and chat history), use `ComputerSidebar` instead. That composite owns its own window chrome; do NOT also render a `TitleBar` alongside it.
-- Never use `arcade.Sidebar` directly for the main app sidebar — it's the bare primitive. `NavSidebar` adds the workspace dropdown, Computer footer, and correct tokens.
-- Do not pass `workspace=""` to hide the brand header. Composites check truthiness; the empty string counts as "present but empty". Omit the prop entirely.
+- Never use `arcade.Sidebar` directly for the main app sidebar — it's the bare primitive. `NavSidebar` adds the toolbar, computer pill, user footer, and correct tokens.
+- To hide a default slot, pass `false` (e.g. `toolbar={false}`), NOT an empty string. Composites check for `false` explicitly; other falsy values still render the default.
 
 ## PageBody (composite)
 _source: `composites/PageBody.tsx`_
@@ -1373,6 +1465,35 @@ type PickerModalProps = {
 | Element | Token |
 | Search field | arcade `Input` defaults |
 | Tab bar | arcade `Tabs` defaults |
+
+## ResizeHandle (composite)
+_source: `composites/ResizeHandle.tsx`_
+
+ResizeHandle — a thin draggable divider for resizing a sibling pane.
+
+Internal helper for ComputerSidebar (right edge) and CanvasTabs (left edge).
+NOT exported from the kit barrel — it's pane chrome, not a standalone
+composite. Pointer-drag updates a width via `onResize(px)`; the caller owns
+the width state and applies it (as an inline width on the resized pane).
+
+`side` controls drag direction:
+- "right": handle on the pane's right edge; dragging right grows the pane
+  (sidebar). delta = +dx.
+- "left": handle on the pane's left edge; dragging left grows the pane
+  (canvas, which sits on the right). delta = -dx.
+
+
+```ts
+type ResizeHandleProps = {
+  side: "left" | "right";
+  width: number;
+  min: number;
+  max: number;
+  onResize: (width: number) => void;
+  /** Extra classes (e.g. container-query hides in the rail/drawer states). */
+  className?: string;
+}
+```
 
 ## SettingsCard (composite)
 _source: `composites/SettingsCard.tsx`_

@@ -8,6 +8,55 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.37.2] — 2026-06-17
+
+### Fixed
+- **The navigation sidebar now matches the DevRev design faithfully.** The 0.37.1 redesign had several gaps: the product-switcher button showed a workspace name (e.g. "DevRev") instead of the **computer** logo; the ⌘K search hint rendered as "⌘ + K" with a stray plus; the search icon was too faint; and frames passing the old `workspace` prop lost the computer branding. The switcher now always shows the computer wordmark, the ⌘K hint and search icon match the design, and the grouped nav (Work / Teams / Views + Explore) renders as intended.
+
+## [0.37.1] — 2026-06-17
+
+### Changed
+- **The navigation sidebar matches the current DevRev look.** The left nav in generated frames (and in the Assets panel preview) was redesigned to the latest DevRev styling: a top toolbar with a ⌘K search and add button, a "computer" product switcher, lightweight grouped sections (Work / Teams / Views), and a person + chat footer. Prototypes that use the sidebar pick this up automatically — nothing to change in your prompts.
+
+## [0.37.0] — 2026-06-17
+
+### Added
+- **An Assets tab to see everything you can build with.** The left pane now has a second tab, *Assets*, next to Chat — a browsable gallery of every building block Studio knows: the 34 ready-made composites (forms, modals, cards, page layouts…), the underlying component library, and all the icons, each with a real rendered preview. Search across the lot by name. Open a composite or component and hit **Use this** to drop a starter prompt into chat (it flips you back to Chat, ready to finish the sentence); click an icon to copy its name. No more guessing what already exists — you can see it.
+
+## [0.36.0] — 2026-06-16
+
+### Added
+- **A "what's new" note when the app updates.** Updates still install silently in the background, but now the first time you open a newly-updated version, a short "Updated to X" note shows you what changed. Nothing to click through on every launch — it appears once per new version, so when a release ships you can tell at a glance that you're on it.
+
+### Fixed
+- **Imported screens no longer white-screen on certain icons.** Some Figma designs (e.g. ones using a sidebar-toggle icon) imported a component the app couldn't actually draw, which crashed the whole frame to a blank red error — and a restart didn't help. Those icons now fall back to a faithful image, and a safeguard makes this class of crash impossible going forward.
+- **Clearer message when generation is rate-limited.** If AWS Bedrock throttles your account (usually after a burst of generations), the app used to just hang for minutes and then fail vaguely. It now detects the rate limit quickly and tells you plainly: wait ~30 seconds and resend — it's a temporary AWS limit, not a problem with your project, and a restart won't clear it.
+
+### Fixed
+- **Figma prompts that ask to wire an interaction now actually wire it.** If you imported a screen and said “when you click X, this modal should appear” (with a second Figma link for the modal), Studio used to import only the screen and silently ignore the interaction — and asking again would import the modal as a separate frame instead. Now Studio imports both the screen and the modal pixel-exact into the *same* frame, then wires the click→show-modal behavior for you, on that one frame. Plain “implement this screen precisely” prompts are unchanged.
+
+### Fixed
+- **Figma import now reproduces multi-color titles and the right fonts.** When a single text layer mixed colors — like the OAuth title where “next meeting.” is red and the rest is purple — import used to flatten the whole line to one color and drop the accent. It now carries each colored run through exactly, so partial highlights land where the design has them.
+- **Headings keep their font after you recolor text.** Imported headings used the “Chip” display/body fonts written as an inline style; a later edit (e.g. changing a color) could mangle that and the text would silently fall back to a plain system font. Fonts now ride on a stable style that edits can’t corrupt, so the right typeface stays put.
+- **Imported text keeps its line breaks.** Hard line breaks inside a text layer were collapsing to a space on import; they’re now preserved.
+
+### Fixed
+- **Hotfix for 0.34.0, which failed to open with a red error screen.** The 0.34.0 cleanup removed a dependency (`react-day-picker`) that looked unused but is required by the component library under the hood — so the packaged app couldn't load any frame. Restored it. If you landed on 0.34.0, this update fixes it automatically.
+
+## [0.34.0] — 2026-06-15
+
+### Changed
+- **A big internal cleanup — leaner, more reliable, no change to how you use it.** We removed a large amount of dead and half-finished code that had built up: an old, unused way of pushing frames into Figma; a thumbnail feature that never actually worked; and the early live-sharing/spectator feature, which we're rebuilding properly from scratch. Everything you use day to day — generating frames, the `@Computer` agent, Figma import, sharing a frame to a web link — is untouched and still here.
+
+### Fixed
+- **Generating in two projects at once no longer mixes up their live progress.** Previously, if two projects were generating at the same time, the "writing…" preview from one could bleed into the other. Each generation now stays cleanly in its own lane.
+- **A malformed request can no longer cause a silent stuck turn.** A bad submission now returns a clear error instead of failing invisibly and leaving the chat pane frozen.
+- **Production hand-off (Lift) now points at the correct DevRev import paths.** Two cases were emitting an old path that no longer resolves, which quietly broke the hand-off for unmapped components and overlays. Also added the two surface tokens (sidebar + window backdrop) the generator is told to use, so they translate correctly on lift.
+- **Figma export now uses the correct badge style options**, instead of options that didn't exist on the component.
+
+### Removed
+- The legacy live-sharing/spectator feature and the older Figma-export path (both slated for a proper rebuild). No effect on current workflows.
+
 ## [0.33.0] — 2026-06-15
 
 ### Added

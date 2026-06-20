@@ -4,17 +4,9 @@ import { mapPathToFrame } from "../lib/agentCursor";
 /**
  * Pure reducer for the chat stream state.
  *
- * Extracted from `useChatStream` so that both the host shell
- * (`useProjectFromHost`) and the spectator shell (`useProjectFromMirror`)
- * can drive the exact same `StreamState` shape from a single source of
- * truth. Two independent hooks reducing the same events in different
- * places would silently diverge over time — this module pins the
- * behaviour for both.
- *
- * Inputs:
- *   - host: `StudioEvent`s arriving as SSE frames from `/api/chat/stream/:slug`.
- *   - spectator: `StudioEvent`s arriving wrapped inside `agent_event` relay
- *     events on `/api/shared-projects/:id/stream`.
+ * Extracted from `useChatStream` so the host shell (`useProjectFromHost`)
+ * drives the `StreamState` shape from a single source of truth. The reducer
+ * consumes `StudioEvent`s arriving as SSE frames from `/api/chat/stream/:slug`.
  *
  * The reducer is intentionally side-effect-free; callers wrap it with
  * their own `setState` or `useReducer`.
@@ -139,8 +131,7 @@ function attachResultToLastTool(
  * Reducer step: fold one `StudioEvent` into the running `StreamState`.
  *
  * Replayed and live events go through the same reducer so a reconnect
- * (host) or initial `cache_replay` (spectator) reconstructs the exact
- * same UI as a live stream.
+ * reconstructs the exact same UI as a live stream.
  *
  * `frames` is the project's current frame list. Used to resolve
  * `tool_input_partial` filePaths to a frame slug via `mapPathToFrame`

@@ -1,34 +1,32 @@
 # Roadmap
 
-Prioritized list of enhancements for Arcade Studio. Items are grouped by priority (P0–P2) and roughly ordered within each tier.
+Prioritized list of enhancements for Arcade Studio. Items are grouped by
+priority (P0–P2) and roughly ordered within each tier. Shipped items are no
+longer listed here — see [STATUS.md](./STATUS.md) for what works today.
 
-## P0 — Stability and trust
+## P0 — Rebuilds
 
-- **Studio shell theme switching.** The toggle in the top bar currently switches only the iframe. Extend it to re-theme the Studio chrome (chat pane, viewport header, dev panel) so dark mode is usable end to end.
-- **Consistent chat history across turns.** Some tool calls and narrations vanish or fail to re-render after the agent finishes. Audit the SSE → `chat-history.json` → UI path and make the post-turn state authoritative.
+- **Multiplayer (live sharing + spectator).** The legacy session-invite (Plan 2a) and shared-project relay (Plan 2b) implementations were removed to clear the tree. Rebuild from scratch: a host shares a project, invited teammates watch frames generate live and leave comments.
+- **Richer Figma export.** The legacy "swap" export strategy was removed; the fiber-walk export remains. Extend it toward higher-fidelity, round-trippable export (layout + component swap with containment matching).
 
-## P1 — Readable streaming output
+## P0 — Generation fidelity
 
-Rewrite the agent-activity rendering in the chat pane to be structured and scannable. Tool calls should show the verb + truncated args; results should be summarized rather than dumped as raw JSON. Reference: Claude.ai's activity feed or Lovable's console output. This unblocks designers to understand what the agent is doing at a glance.
-
-## P1 — Loading and success feedback
-
-Replace silent long operations with explicit states:
-- Creating a project — spinner + "creating…" copy.
-- Frame generation — progress indicator in the viewport area, not just the chat pane.
-- Vercel deploy — toast on publish with a click-to-copy link.
-- Figma fetch — inline chip status (loading / attached / failed).
+Systemic accuracy over per-frame patching. Grow the kit-emit `kitMappings`
+coverage, keep the drift audit (`pnpm run studio:audit`) green, and close the
+gaps between a Figma reference and the generated frame.
 
 ## P1 — Project dashboard polish
 
-- Replace placeholder tint cover images on the project list with the latest generated frame thumbnail (`thumbnails/` already holds PNGs — wire them in).
+- Cover images for the project list (a frame preview, generated on demand — the old `thumbnails/` capture path was removed because it depended on an uninstalled puppeteer).
 - Surface the active DevRev PAT / AWS SSO status from the project list so users can tell at a glance whether the environment is ready before they open a project.
 
 ## P2 — Multi-frame workflows
 
-- "Duplicate frame" is stubbed (`FrameCard.duplicateFrame` is a TODO) — implement server-side copy.
+- "Duplicate frame" — server-side copy of a frame within a project.
 - Frame reorder within a project.
 
 ## P2 — Cross-platform support
 
-Today everything assumes macOS paths (`~/Library/Application Support/...`) and dependencies (`brew`). Port the project storage root and preflight checks to Linux/Windows so the tool is usable outside DevRev laptops.
+Today everything assumes macOS paths (`~/Library/Application Support/...`) and
+dependencies. Port the project storage root and preflight checks to
+Linux/Windows so the tool is usable outside DevRev laptops.

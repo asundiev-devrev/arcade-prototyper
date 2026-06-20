@@ -52,7 +52,7 @@ Vite's file watcher, a Chokidar watcher, and its websocket HMR loop tie these to
 `ProjectList` "+ New project" button → `POST /api/projects` → `server/projects.ts:createProject()`:
 
 1. Slugify the name, ensure unique.
-2. `mkdir` `{projectDir}/{frames,shared,thumbnails}`.
+2. `mkdir` `{projectDir}/{frames,shared}`.
 3. Write `project.json` (theme, mode, empty frames).
 4. Render `templates/CLAUDE.md.tpl` with `{{PROJECT_NAME}}` and `{{THEME}}`, write `CLAUDE.md`.
 5. Write empty `chat-history.json` and `theme-overrides.css`.
@@ -155,7 +155,6 @@ Frontend stream events (in `src/lib/streamJson.ts`): `session | narration | tool
 | `awsPreflight.ts`       | `ssoIsValid()` — cached `aws sts get-caller-identity`; env escape hatch `ARCADE_STUDIO_SKIP_SSO_CHECK=1`        |
 | `firstRun.ts`           | `ensureDeps()` — checks `brew` (macOS), `node`, `pnpm`, `figmanage`                                             |
 | `buildErrorReporter.ts` | `attachBuildErrorReporter`, `parseBuildError`, `handleViteError` — rate-limited auto-fix dispatcher             |
-| `thumbnails.ts`         | `placeholderTint(theme)` — gradient strings per theme                                                           |
 | `paths.ts`              | `studioRoot()`, `projectsRoot()`, `projectDir()`, `frameDir()`, `sharedDir()`, `chatHistoryPath()`              |
 | `types.ts`              | Zod schemas: `Project`, `Frame`, `ChatMessage`                                                                  |
 

@@ -77,6 +77,36 @@ describe("POST /api/chat", () => {
     });
     expect(res.status).toBe(404);
   });
+
+  it("returns 400 (not a 500 crash) when prompt is missing", async () => {
+    const res = await fetch(`http://localhost:${port}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug: "demo" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error.code).toBe("bad_request");
+  });
+
+  it("returns 400 when slug is missing", async () => {
+    const res = await fetch(`http://localhost:${port}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: "hi" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when images is not an array of strings", async () => {
+    const p = await createProject({ name: "ImgVal", theme: "arcade", mode: "light" });
+    const res = await fetch(`http://localhost:${port}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug: p.slug, prompt: "hi", images: [1, 2, 3] }),
+    });
+    expect(res.status).toBe(400);
+  });
 });
 
 describe("GET /api/chat/stream/:slug", () => {

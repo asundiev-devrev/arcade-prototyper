@@ -1,41 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Project, ChatMessage } from "../../server/types";
 import { useChatStream, type StreamState } from "./useChatStream";
-import { useProjectPresence } from "./useProjectPresence";
-
-interface PresenceConnection {
-  devu: string;
-  displayName: string;
-}
 
 type ChatStream = ReturnType<typeof useChatStream>;
 
-/**
- * Shared shape returned by both `useProjectFromHost` (this hook) and
- * `useProjectFromMirror` (Task 3 follow-up). The author shell and the
- * spectator shell consume the same `ProjectShellSource` so the layout
- * (`ProjectDetail`) doesn't need to fork on `mode`.
- *
- * Conventions:
- *   - host returns `send` defined and `postComment` undefined.
- *   - spectator returns the inverse and may produce a synthetic `project`.
- *   - `status` is `"online"` for the host (we always have a live session
- *     to ourselves); the spectator hook may toggle `"offline"` when the
- *     mirror SSE drops.
- *
- * `chatStream` is the full `useChatStream` return; the host route hands it
- * to `<ChatStreamProvider value={…}>` so descendants like `ChatPane` keep
- * their existing context API without spinning up a second SSE connection.
- */
 export interface ProjectShellSource {
   project: Project | null;
   chatHistory: ChatMessage[];
   chat: StreamState;
   chatStream: ChatStream;
-  presence: { host: PresenceConnection | null; guests: PresenceConnection[] };
-  status: "online" | "offline" | "unknown";
-  send?: (prompt: string, images?: string[]) => void;
-  postComment?: (text: string) => Promise<void>;
+  send: (prompt: string, images?: string[]) => void;
   refresh: () => Promise<void>;
 }
 
@@ -46,7 +20,6 @@ export interface ProjectShellSource {
  *     theme, viewport mode, share/devmode chrome).
  *   - `GET /api/projects/:slug/history` for persisted chat messages.
  *   - `useChatStream(slug)` for the live SSE turn stream + `send()`.
- *   - `useProjectPresence(slug)` for the host/guest pill strip.
  *
  * Frame polling stays in `useFrames` (1.5s) and is consumed inside
  * `Viewport` — that's intentional: it'd waste a render cycle to lift
@@ -64,7 +37,6 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
   const projectFrames = project?.frames ?? [];
   const chatStream = useChatStream(slug, projectFrames);
   const { state: chat, send } = chatStream;
-  const { host, guests } = useProjectPresence(slug);
 
   // Generation counter guards `refresh` against two races:
   //   - slug change mid-flight (a stale response would otherwise overwrite
@@ -125,51 +97,12 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
     };
   }, [slug, chat.phase]);
 
-  // Subscribe to the host-side relay SSE so spectator comments paint live
-  // in the host's chat pane. Server already persists comments into
-  // `chat-history.json` via the host comment inbox, so the next history
-  // pull would also pick them up — but appending here gives instant
-  // feedback without waiting for the next turn to end. Dedupe by id so
-  // the eventual history reload doesn't double-render.
-  useEffect(() => {
-    if (!slug) return;
-    const es = new EventSource(`/api/projects/${slug}/presence-stream`);
-    const onRelay = (e: MessageEvent) => {
-      try {
-        const ev = JSON.parse(e.data);
-        if (!ev || ev.type !== "comment_posted") return;
-        const id = `comment:${String(ev.id ?? "")}`;
-        if (id === "comment:") return;
-        const text = String(ev.text ?? "");
-        if (!text) return;
-        const ts = typeof ev.ts === "number" ? ev.ts : Date.now();
-        const msg: ChatMessage = {
-          id,
-          role: "user",
-          content: text,
-          createdAt: new Date(ts).toISOString(),
-        };
-        setChatHistory((h) => (h.some((m) => m.id === id) ? h : [...h, msg]));
-      } catch {
-        // ignore malformed frames
-      }
-    };
-    es.addEventListener("relay", onRelay as EventListener);
-    return () => {
-      es.removeEventListener("relay", onRelay as EventListener);
-      es.close();
-    };
-  }, [slug]);
-
   return {
     project,
     chatHistory,
     chat,
     chatStream,
-    presence: { host, guests },
-    status: "online",
     send,
-    postComment: undefined,
     refresh,
   };
 }

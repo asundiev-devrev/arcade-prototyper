@@ -14,6 +14,7 @@ import {
   BADGE_VARIANT_MAP,
   TAG_INTENT_MAP,
   TAG_APPEARANCE_MAP,
+  NON_RENDERABLE_KIT_EXPORTS,
 } from "../../../server/figma/kitMappings";
 import {
   kitExportNames,
@@ -264,6 +265,66 @@ describe("emitKitFrame", () => {
     const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map() });
     expect(r.source).toContain('"ellipsis"');
     expect(r.source).toContain('"nowrap"');
+  });
+
+  it("emits a kit font as a class, not an inline fontFamily string", () => {
+    // Regression: an imported title used inline fontFamily: "'Chip Display
+    // Variable', …"; a follow-up edit smart-quoted the family ('→’) and the
+    // heading fell back to system font. A class has no quotes to corrupt.
+    const doc = frameNode("0", [{
+      id: "t1", type: "TEXT", characters: "Heading",
+      absoluteBoundingBox: bbox(0, 0, 200, 80),
+      style: { fontFamily: "Chip Display Variable", fontSize: 72, fontWeight: 650 },
+      fills: [{ type: "SOLID", color: { r: 0.27, g: 0, b: 0.67, a: 1 } }],
+    }]);
+    const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map() });
+    expect(r.source).toContain('className="font-display"');
+    expect(r.source).not.toContain("Chip Display Variable");
+  });
+
+  it("keeps an inline fontFamily for a non-kit font", () => {
+    const doc = frameNode("0", [{
+      id: "t1", type: "TEXT", characters: "Body",
+      absoluteBoundingBox: bbox(0, 0, 100, 16),
+      style: { fontFamily: "Inter", fontSize: 13 },
+    }]);
+    const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map() });
+    expect(r.source).not.toContain("font-display");
+    expect(r.source).toContain("'Inter', -apple-system, sans-serif");
+  });
+
+  it("emits per-character style runs (accent color) as <span> (no prose needed)", () => {
+    // The real OAuth title: chars 23–35 ("next meeting.") carry a red fill via
+    // characterStyleOverrides → styleOverrideTable[108]. The whole layer's base
+    // fill is purple. The accent run must come through as a colored <span>.
+    const characters = "Let’s prepare\nfor your next meeting.";
+    const overrides = Array.from(characters).map((_, i) => (i >= 23 ? 108 : 0));
+    const doc = frameNode("0", [{
+      id: "title", type: "TEXT", characters,
+      absoluteBoundingBox: bbox(0, 0, 600, 192),
+      style: { fontFamily: "Chip Display Variable", fontSize: 72, fontWeight: 650 },
+      fills: [{ type: "SOLID", color: { r: 0.27, g: 0, b: 0.67, a: 1 } }],
+      characterStyleOverrides: overrides,
+      styleOverrideTable: {
+        "108": { fills: [{ type: "SOLID", color: { r: 0.82, g: 0, b: 0, a: 1 } }] },
+      },
+    }]);
+    const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map() });
+    // The accent run is wrapped and colored; the exact boundary is "next
+    // meeting." (not just "meeting."), which the prose-driven LLM got wrong.
+    expect(r.source).toMatch(/<span style=\{\{color: "#d10000"\}\}>next meeting\.<\/span>/);
+    expect(r.source).toContain("for your "); // base run stays unwrapped
+  });
+
+  it("preserves hard line breaks in imported text", () => {
+    const doc = frameNode("0", [{
+      id: "t1", type: "TEXT", characters: "Line one\nLine two",
+      absoluteBoundingBox: bbox(0, 0, 200, 40),
+      style: { fontFamily: "Chip Display Variable", fontSize: 24 },
+    }]);
+    const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map() });
+    // A raw \n in JSX collapses to a space; the renderer must emit {"\n"}.
+    expect(r.source).toContain('Line one{"\\n"}Line two');
   });
 
   it("exports an IconButton's glyph as SVG when it has no kit-icon match (never blank)", () => {
@@ -925,6 +986,42 @@ describe("kit mappings hygiene", () => {
       (v) => !names.has(v),
     );
     expect(missing, `Icon mappings pointing at non-existent kit exports: ${missing.join(", ")}`)
+      .toEqual([]);
+  });
+
+  it("no ICON mapping resolves to a NON-RENDERABLE compound export", () => {
+    // The Sidebar.Left crash: `Sidebar` IS a real export (so the membership
+    // test above passes) but it's a compound object {Root,Section,Item}, not a
+    // glyph. Emitting `<Sidebar size=…/>` throws "Element type is invalid …
+    // got: object". An icon mapping must NEVER point at one of these.
+    const bad = Object.entries(ICON_SET_NAME_TO_KIT).filter(
+      ([, kit]) => NON_RENDERABLE_KIT_EXPORTS.has(kit),
+    );
+    expect(bad, `Icon mappings pointing at compound objects: ${bad.map(([k, v]) => `${k}→${v}`).join(", ")}`)
+      .toEqual([]);
+  });
+
+  it("matchKit drops an icon match that resolves to a compound object (SVG fallback)", () => {
+    // Even if a bad icon row slips back in, the runtime guard must refuse to
+    // emit it as an icon — returning null routes the node to its exported SVG,
+    // which always renders. Drive matchKit with a setName the icon map points at
+    // a compound object via a temporary entry.
+    const SENTINEL = "__test/compound.icon__";
+    (ICON_SET_NAME_TO_KIT as Record<string, string>)[SENTINEL] = "Sidebar";
+    try {
+      expect(matchKit(undefined, SENTINEL)).toBeNull();
+    } finally {
+      delete (ICON_SET_NAME_TO_KIT as Record<string, string>)[SENTINEL];
+    }
+  });
+
+  it("NON_RENDERABLE_KIT_EXPORTS entries are all real arcade-gen exports", () => {
+    // The guard list must track the kit: every name in it should actually be an
+    // export (else we're guarding against a phantom and a real compound could be
+    // missing). Catches a typo or a removed compound on a kit bump.
+    const names = kitExportNames();
+    const missing = [...NON_RENDERABLE_KIT_EXPORTS].filter((v) => !names.has(v));
+    expect(missing, `Guard list names not exported by the kit: ${missing.join(", ")}`)
       .toEqual([]);
   });
 

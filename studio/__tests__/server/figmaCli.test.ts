@@ -110,17 +110,6 @@ describe("figmaCli (figmanage bridge)", () => {
     );
   });
 
-  it("nodeTree passes --depth when specified", async () => {
-    spawnMock.mockImplementation(() => mockSpawn(JSON.stringify({ name: "root" }), 0) as any);
-    const { nodeTree } = await import("../../server/figmaCli");
-    await nodeTree("FILEKEY", "1:2", 4);
-    expect(spawnMock).toHaveBeenCalledWith(
-      "figmanage",
-      ["reading", "get-nodes", "FILEKEY", "1:2", "--depth", "4", "--json"],
-      expect.anything(),
-    );
-  });
-
   it("getVariables calls `variables list-local` and hoists meta.variables", async () => {
     // Figma's /variables/local nests under `meta`; getVariables hoists it to a
     // flat `.variables`. The command MUST be `variables list-local` — the old

@@ -1,8 +1,6 @@
 /**
  * Header back-arrow that replaces the previous "Studio" wordmark in
- * `StudioHeader`'s left slot. Used by both author (via `ProjectPicker`) and
- * spectator views so the navigation affordance is identical regardless of
- * which mode mounted the shell.
+ * `StudioHeader`'s left slot. Used via `ProjectPicker`.
  */
 export function BackButton({ onClick }: { onClick?: () => void }) {
   const enabled = typeof onClick === "function";

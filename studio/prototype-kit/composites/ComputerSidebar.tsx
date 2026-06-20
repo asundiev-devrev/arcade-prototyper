@@ -41,7 +41,7 @@
  * - Chat items should use the arcade `<Avatar name="..." src="..." size="sm" />`
  *   component for leading content — never a raw string letter placeholder.
  */
-import { forwardRef, type ReactNode } from "react";
+import { forwardRef, createContext, useContext, type ReactNode } from "react";
 import {
   ChevronDownSmall,
   ChevronLeftSmall,
@@ -54,7 +54,13 @@ import {
   Button,
   ThreeDotsHorizontal,
   DotInLeftWindow,
+  Menu,
 } from "@xorkavi/arcade-gen";
+import { ResizeHandle } from "./ResizeHandle";
+
+/* ─── Context for canvas-aware collapse threshold ──────────────────────── */
+
+const SidebarCtx = createContext(false);
 
 /* ─── Root ──────────────────────────────────────────────────────────────── */
 
@@ -70,6 +76,20 @@ type RootProps = {
    *  Daily Digest" banner on the Computer web surface. Pass a
    *  `<ComputerSidebar.Banner />` here. */
   banner?: ReactNode;
+  /** When true, the sidebar renders as a 64px icon-rail (labels hidden, New
+   *  Chat → circle). A container query ALSO forces the rail below ~600px
+   *  regardless of this prop, so a width-forced collapse auto-restores. */
+  collapsed?: boolean;
+  /** Callback fired when the user clicks the window-chrome collapse toggle. */
+  onToggleCollapse?: () => void;
+  /** When the canvas is docked, collapse to the rail earlier (at 900px container
+   *  width instead of 600) — the docked canvas steals horizontal room. */
+  canvasOpen?: boolean;
+  /** Expanded width in px (user-resizable). Applied inline; the rail width
+   *  (`!w-16`) overrides it via !important at narrow widths. Default 256. */
+  width?: number;
+  /** Fired during drag of the right-edge resize handle with the new width. */
+  onResize?: (width: number) => void;
   children?: ReactNode;
 };
 
@@ -84,6 +104,11 @@ function Root({
   user,
   footerAction,
   banner,
+  collapsed = false,
+  onToggleCollapse,
+  canvasOpen = false,
+  width = 256,
+  onResize,
   children,
 }: RootProps) {
   // The primary action row (New Chat + history) is Computer's defining feature.
@@ -97,51 +122,123 @@ function Root({
   const agentStudio =
     (agentStudioLink as unknown) === ACTION_ROW_UNSET ? <DefaultAgentStudioLink /> : agentStudioLink;
 
+  // Inline width drives the expanded, user-resized state. The rail width
+  // (`!w-16`) uses !important so it overrides this inline width at narrow
+  // widths (container query) or when React-collapsed (data-collapsed). When
+  // React-collapsed we drop the inline width so the rail class governs.
+  const inlineWidth = collapsed ? undefined : width;
   return (
-    <div className="flex flex-col h-full w-64 shrink-0 bg-(--surface-overlay) border-r border-(--stroke-neutral-subtle)">
-      {showWindowChrome ? <WindowChrome /> : null}
+    <SidebarCtx.Provider value={canvasOpen}>
+      <div
+        data-collapsed={collapsed ? "true" : undefined}
+        style={inlineWidth != null ? { width: inlineWidth } : undefined}
+        className={[
+          "group/sidebar flex flex-col h-full shrink-0 bg-(--surface-overlay) border-r border-(--stroke-neutral-subtle)",
+          "transition-[width] duration-200 ease-[cubic-bezier(0.33,1,0.68,1)] overflow-hidden",
+          collapsed ? "w-16" : "",
+          // Width-forced rail: when the container is narrow, force 64px even if
+          // not React-collapsed. !important beats the inline width above.
+          "@max-[600px]:!w-16",
+          canvasOpen ? "@max-[900px]:!w-16" : "",
+        ].join(" ")}
+      >
+        {showWindowChrome ? <WindowChrome onToggle={onToggleCollapse} /> : null}
 
-      {workspace ? <Brand label={workspace} /> : null}
+        {workspace ? <Brand label={workspace} /> : null}
 
-      {hasActionRow ? (
-        <div className="flex items-center gap-2 px-3 pt-2 pb-3">
-          {primary}
-          {history}
-        </div>
+        {hasActionRow ? (
+          <div className={[
+            "flex items-center gap-2 px-3 pt-2 pb-3",
+            "group-data-[collapsed=true]/sidebar:flex-col group-data-[collapsed=true]/sidebar:items-center group-data-[collapsed=true]/sidebar:gap-1.5 group-data-[collapsed=true]/sidebar:px-0",
+            "@max-[600px]:flex-col @max-[600px]:items-center @max-[600px]:gap-1.5 @max-[600px]:px-0",
+            canvasOpen ? "@max-[900px]:flex-col @max-[900px]:items-center @max-[900px]:gap-1.5 @max-[900px]:px-0" : "",
+          ].join(" ")}>
+            {primary}
+            {history}
+          </div>
+        ) : null}
+
+        <nav className="flex-1 min-h-0 overflow-auto">
+          {banner ? <div className="px-2 pt-2">{banner}</div> : null}
+          {children}
+        </nav>
+
+        {agentStudio ? <div className={[
+          "px-2 pb-1 shrink-0",
+          "group-data-[collapsed=true]/sidebar:px-0 @max-[600px]:px-0",
+          canvasOpen ? "@max-[900px]:px-0" : "",
+        ].join(" ")}>{agentStudio}</div> : null}
+
+        {user ? (
+          <div className={[
+            "flex items-center gap-2 px-2 py-2 shrink-0 group-data-[collapsed=true]/sidebar:justify-center",
+          ].join(" ")}>
+            <div className="flex-1 min-w-0 px-1">{user}</div>
+            {footerAction ? <div className={[
+              "shrink-0 group-data-[collapsed=true]/sidebar:hidden",
+              "@max-[600px]:hidden",
+              canvasOpen ? "@max-[900px]:hidden" : "",
+            ].join(" ")}>{footerAction}</div> : null}
+          </div>
+        ) : null}
+      </div>
+      {/* Right-edge resize handle — only in the expanded docked state. Hidden
+          when React-collapsed or width-forced to the rail. */}
+      {onResize && !collapsed ? (
+        <ResizeHandle
+          side="right"
+          width={width}
+          min={200}
+          max={400}
+          onResize={onResize}
+          className={[
+            "@max-[600px]:hidden",
+            canvasOpen ? "@max-[900px]:hidden" : "",
+          ].join(" ")}
+        />
       ) : null}
-
-      <nav className="flex-1 min-h-0 overflow-auto">
-        {banner ? <div className="px-2 pt-2">{banner}</div> : null}
-        {children}
-      </nav>
-
-      {agentStudio ? <div className="px-2 pb-1 shrink-0">{agentStudio}</div> : null}
-
-      {user ? (
-        <div className="flex items-center gap-2 px-2 py-2 shrink-0">
-          <div className="flex-1 min-w-0 px-1">{user}</div>
-          {footerAction ? <div className="shrink-0">{footerAction}</div> : null}
-        </div>
-      ) : null}
-    </div>
+    </SidebarCtx.Provider>
   );
 }
 
 /* ─── Window chrome ─────────────────────────────────────────────────────── */
 
-function WindowChrome() {
+function WindowChrome({ onToggle }: { onToggle?: () => void }) {
+  const canvasOpen = useContext(SidebarCtx);
   return (
-    <div className="flex items-center h-11 shrink-0 px-3 gap-2">
-      <TrafficLights />
+    <div className={[
+      "flex items-center h-11 shrink-0 px-3 gap-2",
+      "group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:px-0",
+      "@max-[600px]:justify-center @max-[600px]:px-0",
+      canvasOpen ? "@max-[900px]:justify-center @max-[900px]:px-0" : "",
+    ].join(" ")}>
+      <span className={[
+        "flex",
+        "group-data-[collapsed=true]/sidebar:hidden",
+        "@max-[600px]:hidden",
+        canvasOpen ? "@max-[900px]:hidden" : "",
+      ].join(" ")}>
+        <TrafficLights />
+      </span>
       <IconButton
         aria-label="Toggle sidebar"
         variant="tertiary"
         className="text-(--fg-neutral-prominent)"
+        onClick={onToggle}
       >
         <DotInLeftWindow size={16} aria-hidden="true" />
       </IconButton>
-      <div className="flex-1" />
-      <div className="flex items-center gap-0.5 text-(--fg-neutral-prominent)">
+      <div className={[
+        "flex-1",
+        "group-data-[collapsed=true]/sidebar:hidden",
+        "@max-[600px]:hidden",
+        canvasOpen ? "@max-[900px]:hidden" : "",
+      ].join(" ")} />
+      <div className={[
+        "flex items-center gap-0.5 text-(--fg-neutral-prominent) group-data-[collapsed=true]/sidebar:hidden",
+        "@max-[600px]:hidden",
+        canvasOpen ? "@max-[900px]:hidden" : "",
+      ].join(" ")}>
         <IconButton aria-label="Back" variant="tertiary" size="sm">
           <ChevronLeftSmall size={16} />
         </IconButton>
@@ -204,11 +301,20 @@ function DevRevMark() {
 /* ─── Default actions row children ──────────────────────────────────────── */
 
 function DefaultPrimaryAction() {
+  const canvasOpen = useContext(SidebarCtx);
   return (
-    <Button variant="secondary" size="lg" className="flex-1 justify-center">
+    <Button variant="secondary" size="lg" className={[
+      "flex-1 justify-center group-data-[collapsed=true]/sidebar:flex-none group-data-[collapsed=true]/sidebar:w-10 group-data-[collapsed=true]/sidebar:px-0 group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:rounded-full",
+      "@max-[600px]:flex-none @max-[600px]:w-10 @max-[600px]:px-0 @max-[600px]:justify-center @max-[600px]:rounded-full",
+      canvasOpen ? "@max-[900px]:flex-none @max-[900px]:w-10 @max-[900px]:px-0 @max-[900px]:justify-center @max-[900px]:rounded-full" : "",
+    ].join(" ")}>
       <span className="inline-flex items-center gap-2">
         <PlusInChatBubble size={16} />
-        New Chat
+        <span className={[
+          "group-data-[collapsed=true]/sidebar:hidden",
+          "@max-[600px]:hidden",
+          canvasOpen ? "@max-[900px]:hidden" : "",
+        ].join(" ")}>New Chat</span>
       </span>
     </Button>
   );
@@ -223,15 +329,26 @@ function DefaultHistoryAction() {
 }
 
 function DefaultAgentStudioLink() {
+  const canvasOpen = useContext(SidebarCtx);
   return (
     <button
       type="button"
-      className="flex items-center gap-2.5 w-full px-3 py-1.5 rounded-square text-body text-(--fg-neutral-prominent) hover:bg-(--control-bg-neutral-subtle-hover)"
+      className={[
+        "flex items-center gap-2.5 w-full px-3 py-1.5 rounded-square text-body text-(--fg-neutral-prominent) hover:bg-(--control-bg-neutral-subtle-hover)",
+        "group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:px-0",
+        "@max-[600px]:justify-center @max-[600px]:px-0",
+        canvasOpen ? "@max-[900px]:justify-center @max-[900px]:px-0" : "",
+      ].join(" ")}
     >
       <span className="shrink-0 w-5 h-5 flex items-center justify-center">
         <AgentStudio size={16} />
       </span>
-      <span className="flex-1 text-left">Agent Studio</span>
+      <span className={[
+        "flex-1 text-left",
+        "group-data-[collapsed=true]/sidebar:hidden",
+        "@max-[600px]:hidden",
+        canvasOpen ? "@max-[900px]:hidden" : "",
+      ].join(" ")}>Agent Studio</span>
     </button>
   );
 }
@@ -242,13 +359,26 @@ type GroupProps = {
   title?: ReactNode;
   trailing?: ReactNode;
   children: ReactNode;
+  /** When true, the ENTIRE group (title + items) hides in the icon-rail —
+   *  not just the title. Used for Sessions, which collapse away in the rail
+   *  leaving only the Chats avatar stack. */
+  hideOnCollapse?: boolean;
 };
 
-function Group({ title, trailing, children }: GroupProps) {
+function Group({ title, trailing, children, hideOnCollapse = false }: GroupProps) {
+  const canvasOpen = useContext(SidebarCtx);
   return (
-    <div className="pt-1.5 pb-1">
+    <div className={[
+      "pt-1.5 pb-1",
+      hideOnCollapse ? "group-data-[collapsed=true]/sidebar:hidden @max-[600px]:hidden" : "",
+      hideOnCollapse && canvasOpen ? "@max-[900px]:hidden" : "",
+    ].join(" ")}>
       {title || trailing ? (
-        <div className="flex items-center justify-between px-3 py-2 mx-1 rounded-square hover:bg-(--bg-neutral-soft) transition-colors">
+        <div className={[
+          "flex items-center justify-between px-3 py-2 mx-1 rounded-square hover:bg-(--bg-neutral-soft) transition-colors group-data-[collapsed=true]/sidebar:hidden",
+          "@max-[600px]:hidden",
+          canvasOpen ? "@max-[900px]:hidden" : "",
+        ].join(" ")}>
           <span className="text-caption text-(--fg-neutral-subtle)">
             {title}
           </span>
@@ -290,6 +420,7 @@ const Item = forwardRef<HTMLDivElement, ItemProps>(function Item(
   { leading, trailing, children, active, emphasis = "normal", onClick, onMenu },
   ref,
 ) {
+  const canvasOpen = useContext(SidebarCtx);
   const strong = active || emphasis === "strong";
   return (
     <div
@@ -304,10 +435,17 @@ const Item = forwardRef<HTMLDivElement, ItemProps>(function Item(
           ? "bg-(--control-bg-neutral-subtle-active)"
           : "hover:bg-(--bg-neutral-soft)",
         strong ? "text-(--fg-neutral-prominent) font-semibold" : "text-(--fg-neutral-prominent)",
+        "group-data-[collapsed=true]/sidebar:justify-center",
+        "@max-[600px]:justify-center",
+        canvasOpen ? "@max-[900px]:justify-center" : "",
       ].join(" ")}
     >
       {leading ? <span className="shrink-0 w-5 h-5 flex items-center justify-center text-(--fg-neutral-subtle)">{leading}</span> : null}
-      <span className="flex-1 min-w-0 truncate">{children}</span>
+      <span className={[
+        "min-w-0 flex-1 truncate group-data-[collapsed=true]/sidebar:hidden",
+        "@max-[600px]:hidden",
+        canvasOpen ? "@max-[900px]:hidden" : "",
+      ].join(" ")}>{children}</span>
       {onMenu || trailing ? (
         <span className="shrink-0 flex items-center gap-1.5">
           {trailing ? (
@@ -340,26 +478,64 @@ type UserProps = {
   subtitle?: ReactNode;
   /** Render a green presence dot bottom-right of the avatar. Default true. */
   presence?: boolean;
+  /** Menu contents (Menu.Item / Menu.Separator children). When present the
+   *  AVATAR becomes a menu trigger; when omitted the footer renders exactly as
+   *  before (backward-compatible, no trigger, no behavior change). */
+  menu?: ReactNode;
 };
 
-function User({ avatar, name, subtitle, presence = true }: UserProps) {
+function User({ avatar, name, subtitle, presence = true, menu }: UserProps) {
+  const canvasOpen = useContext(SidebarCtx);
+  const avatarBlock = (
+    <div className="relative shrink-0">
+      {avatar}
+      {presence ? (
+        <span
+          className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-circle bg-(--bg-success-prominent) ring-2 ring-(--surface-shallow)"
+          aria-label="Online"
+        />
+      ) : null}
+    </div>
+  );
+  const textBlock = (
+    <div className={[
+      "flex flex-col min-w-0 text-left",
+      "group-data-[collapsed=true]/sidebar:hidden",
+      "@max-[600px]:hidden",
+      canvasOpen ? "@max-[900px]:hidden" : "",
+    ].join(" ")}>
+      <span className="text-body-medium text-(--fg-neutral-prominent) truncate">{name}</span>
+      {subtitle ? (
+        <span className="text-system text-(--fg-neutral-subtle) truncate">{subtitle}</span>
+      ) : null}
+    </div>
+  );
+  // With a menu, the WHOLE row (avatar + name + subtitle) is the trigger — not
+  // just the avatar. In the collapsed rail the text block hides itself, so the
+  // trigger naturally shrinks to the avatar. Without a menu, render the inert row.
+  if (menu != null) {
+    return (
+      <Menu.Root>
+        <Menu.Trigger asChild>
+          <button
+            type="button"
+            aria-label="Account menu"
+            className="flex items-center gap-2.5 min-w-0 w-full rounded-square text-left"
+          >
+            {avatarBlock}
+            {textBlock}
+          </button>
+        </Menu.Trigger>
+        <Menu.Content side="top" align="start" sideOffset={4}>
+          {menu}
+        </Menu.Content>
+      </Menu.Root>
+    );
+  }
   return (
     <div className="flex items-center gap-2.5 min-w-0">
-      <div className="relative shrink-0">
-        {avatar}
-        {presence ? (
-          <span
-            className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-circle bg-(--bg-success-prominent) ring-2 ring-(--surface-shallow)"
-            aria-label="Online"
-          />
-        ) : null}
-      </div>
-      <div className="flex flex-col min-w-0">
-        <span className="text-body-medium text-(--fg-neutral-prominent) truncate">{name}</span>
-        {subtitle ? (
-          <span className="text-system text-(--fg-neutral-subtle) truncate">{subtitle}</span>
-        ) : null}
-      </div>
+      {avatarBlock}
+      {textBlock}
     </div>
   );
 }

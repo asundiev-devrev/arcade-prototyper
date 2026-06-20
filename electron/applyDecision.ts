@@ -23,3 +23,42 @@ export function decideApply(ctx: ApplyContext): "restart" | "wait" | "force" {
   if (ctx.deferredMs >= DEFER_CAP_MS) return "force";
   return "wait";
 }
+
+/**
+ * Compare two `0.x.y` semver strings. >0 if a>b, <0 if a<b, 0 if equal.
+ * Missing/non-numeric segments sort as 0. Not a full semver impl (no
+ * pre-release tags) — Studio versions are plain `MAJOR.MINOR.PATCH`.
+ */
+export function compareVersions(a: string, b: string): number {
+  const seg = (v: string) =>
+    (v ?? "").split(".").slice(0, 3).map((p) => {
+      const n = Number.parseInt(p, 10);
+      return Number.isFinite(n) ? n : 0;
+    });
+  const pa = seg(a);
+  const pb = seg(b);
+  for (let i = 0; i < 3; i++) {
+    const x = pa[i] ?? 0;
+    const y = pb[i] ?? 0;
+    if (x !== y) return x - y;
+  }
+  return 0;
+}
+
+/**
+ * Should we quitAndInstall a downloaded update?
+ *
+ * ONLY when the downloaded version is strictly NEWER than the running one.
+ * This is the guard that breaks the restart loop: when quitAndInstall can't
+ * actually swap the app on disk (the app runs from a read-only / translocated
+ * path, or the relaunch races the old instance's port), the relaunched process
+ * finds the SAME version still "available", applies again, and loops — users
+ * see the app restart every minute and get bounced through the AWS sign-in gate
+ * each time. Refusing to apply a version we're already running (or older) makes
+ * the loop impossible: a failed swap just means we keep running the current
+ * version, no restart. Equal / older / empty versions all return false.
+ */
+export function shouldApplyUpdate(currentVersion: string, downloadedVersion: string): boolean {
+  if (!downloadedVersion || !currentVersion) return false;
+  return compareVersions(downloadedVersion, currentVersion) > 0;
+}

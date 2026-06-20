@@ -13,8 +13,6 @@ beforeEach(async () => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "arcade-studio-figma-mw-"));
   process.env.ARCADE_STUDIO_ROOT = tmp;
   vi.spyOn(cli, "figmaWhoami").mockResolvedValue({ authenticated: true, user: { email: "a@b.com" } });
-  vi.spyOn(cli, "getNode").mockResolvedValue({ name: "Button" });
-  vi.spyOn(cli, "nodeTree").mockResolvedValue({ name: "root" });
   server = http.createServer(figmaMiddleware());
   await new Promise<void>((r) => server.listen(0, () => r()));
   port = (server.address() as any).port;
@@ -43,49 +41,10 @@ describe("/api/figma", () => {
     expect(body.authenticated).toBe(false);
   });
 
-  it("reads a node by fileKey + nodeId", async () => {
-    const res = await fetch(`http://localhost:${port}/api/figma/node/FILEKEY/1:2`);
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ name: "Button" });
-    expect(cli.getNode).toHaveBeenCalledWith("FILEKEY", "1:2");
-  });
-
-  it("tree endpoint requires fileKey in the path", async () => {
-    const res = await fetch(`http://localhost:${port}/api/figma/tree/FILEKEY/1:2?d=4`);
-    expect(res.status).toBe(200);
-    expect(cli.nodeTree).toHaveBeenCalledWith("FILEKEY", "1:2", 4);
-  });
-
-  it("export requires fileKey in the body", async () => {
-    const res = await fetch(`http://localhost:${port}/api/figma/export`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nodeId: "1:2", outFile: "/etc/evil.png", scale: 2 }),
-    });
-    expect(res.status).toBe(400);
+  it("returns 404 for unknown figma routes", async () => {
+    const res = await fetch(`http://localhost:${port}/api/figma/bogus`);
+    expect(res.status).toBe(404);
     const body = await res.json();
-    expect(body.error.code).toBe("bad_request");
-  });
-
-  it("rejects export outFile outside the projects root with 400", async () => {
-    const res = await fetch(`http://localhost:${port}/api/figma/export`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fileKey: "F1", nodeId: "1:2", outFile: "/etc/evil.png", scale: 2 }),
-    });
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.error.code).toBe("invalid_path");
-  });
-
-  it("rejects malformed JSON body with 400", async () => {
-    const res = await fetch(`http://localhost:${port}/api/figma/export`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: "{not valid json",
-    });
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.error.code).toBe("bad_request");
+    expect(body.error.code).toBe("not_found");
   });
 });

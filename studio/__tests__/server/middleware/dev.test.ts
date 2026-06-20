@@ -59,7 +59,9 @@ describe("GET /api/projects/:slug/tree", () => {
     fs.writeFileSync(path.join(projDir, ".hidden"), "secret");
     fs.mkdirSync(path.join(projDir, "_uploads"), { recursive: true });
     fs.writeFileSync(path.join(projDir, "_uploads", "x.png"), "");
-    // thumbnails dir already exists
+    // Legacy projects may still carry a thumbnails dir on disk; the tree
+    // listing must keep excluding it even though Studio no longer creates it.
+    fs.mkdirSync(path.join(projDir, "thumbnails"), { recursive: true });
     fs.writeFileSync(path.join(projDir, "thumbnails", "a.png"), "");
 
     const r = await req("GET", `/api/projects/${slug}/tree`);

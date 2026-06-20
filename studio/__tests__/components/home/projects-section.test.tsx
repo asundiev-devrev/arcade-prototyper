@@ -49,7 +49,7 @@ describe("ProjectsSection", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("renders the heading and one card per project", () => {
+  it("renders one card per project (no heading — the tab labels the section)", () => {
     render(
       <ProjectsSection
         projects={[fixture({ slug: "a", name: "Alpha" }), fixture({ slug: "b", name: "Beta" })]}
@@ -58,7 +58,7 @@ describe("ProjectsSection", () => {
         onDelete={vi.fn()}
       />,
     );
-    expect(screen.getByRole("heading", { name: /projects/i })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: /projects/i })).toBeNull();
     expect(screen.getByText("Alpha")).toBeTruthy();
     expect(screen.getByText("Beta")).toBeTruthy();
   });
