@@ -27,6 +27,11 @@ import { designMdPath } from "../paths";
 import { startTurn, subscribe, getTurn, cancelTurn } from "../turnRegistry";
 import { hasDeviationsSection, DEVIATIONS_MISSING_TRAILER } from "../deviationsContract";
 import { prependEditContext } from "../editContext";
+import {
+  shouldRetryPhantomEdit,
+  isMemoryOnlyPrompt,
+  PHANTOM_EDIT_RETRY_PROMPT,
+} from "../phantomEditRetry";
 import type { Frame } from "../types";
 import {
   snapshotProjectFiles,
@@ -793,7 +798,53 @@ async function runClaudeBranch(ctx: {
     // agent sometimes responds by paraphrasing what it "would have done"
     // instead of retrying.
     if (joined && afterDiff) {
-      const diff = afterDiff;
+      let diff = afterDiff;
+
+      // Phantom-edit self-correction: the agent emitted a complete reply (with
+      // a ### Deviations section) but no file moved. Re-run the turn ONCE on
+      // the same session with a corrective instruction before falling back to
+      // the visible warning. Gated on a captured session id — a corrective
+      // prompt on a fresh session would have no context and make things worse.
+      if (
+        capturedSessionId &&
+        shouldRetryPhantomEdit({
+          fileChanged: hasAnyChange(diff),
+          claimsEdit: hasDeviationsSection(joined),
+          memoryOnly: isMemoryOnlyPrompt(ctx.prompt),
+          alreadyRetried: false,
+        })
+      ) {
+        emit({ kind: "narration", text: "That change didn't land — reapplying it now…" });
+        try {
+          await runClaudeTurnWithRetry({
+            cwd: projectDir(slug),
+            prompt: PHANTOM_EDIT_RETRY_PROMPT,
+            sessionId: capturedSessionId,
+            bin: resolveClaudeBin(),
+            model,
+            signal,
+            onEvent: (ev) => {
+              if (ev.kind === "session") capturedSessionId = ev.sessionId;
+              if (ev.kind === "narration") narrationTexts.push(ev.text);
+              if (ev.kind === "tool_call") toolLabels.push(ev.pretty);
+              // Keep the first attempt's metrics; the retry's end is
+              // supplementary and must not flip the turn's terminal result.
+              if (ev.kind === "turn_metrics") return;
+              if (ev.kind === "end") return;
+              emit(ev);
+            },
+          });
+        } catch (err) {
+          console.warn(`[studio] phantom-edit retry failed for ${slug}:`, err);
+        }
+        try {
+          const afterRetry = await snapshotProjectFiles(projectDir(slug));
+          diff = diffSnapshots(beforeSnapshot, afterRetry);
+        } catch {
+          /* snapshot best-effort — keep the prior diff */
+        }
+      }
+
       if (!hasAnyChange(diff)) {
         emit({ kind: "narration", text: NO_CHANGES_TRAILER.trimStart() });
         narrationTexts.push(NO_CHANGES_TRAILER.trimStart());
