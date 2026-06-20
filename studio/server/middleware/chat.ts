@@ -805,6 +805,10 @@ async function runClaudeBranch(ctx: {
       // the same session with a corrective instruction before falling back to
       // the visible warning. Gated on a captured session id — a corrective
       // prompt on a fresh session would have no context and make things worse.
+      //
+      // One-shot: this branch is not inside a loop, so `alreadyRetried` is
+      // hardcoded false — the retry can run at most once per turn. If this ever
+      // gets refactored into a retry loop, thread a real flag through instead.
       if (
         capturedSessionId &&
         shouldRetryPhantomEdit({
