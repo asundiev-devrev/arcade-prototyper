@@ -8,6 +8,14 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.39.0] — 2026-06-20
+
+### Changed
+- **Your edits are now followed literally — even when they break the kit.** Asking for an exact colour, a custom size, or an element our design system has no slot for used to get quietly "corrected" to the nearest kit equivalent (or ignored). Now the kit is only the *default* for things you didn't specify; anything you explicitly ask for is built exactly as requested and noted as one line under Deviations. The first generation stays as faithful to the kit and your Figma as before — this only changes how follow-up edits are handled. (The one thing still off-limits: pulling in an outside icon set or library we don't ship — Studio will hand-roll the closest thing and tell you.)
+
+### Fixed
+- **"I changed it" now means it actually changed.** Occasionally the assistant would say it applied your edit while nothing in the frame moved. Studio now catches that the moment it happens and silently re-runs the change once before replying — so a claimed edit is a real edit. If it genuinely can't make the change, it tells you plainly instead of pretending.
+
 ## [0.38.0] — 2026-06-20
 
 ### Added
