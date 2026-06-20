@@ -97,8 +97,13 @@ for (const item of studioContents) {
 // real-file tree with the hoisted linker: deduped, transitive deps included,
 // devDependencies skipped, no top-level symlinks for vsce to drop. All of the
 // server/kit/figmanage runtime deps live in `dependencies` (not devDeps), so
-// --prod is correct. Reuses the local store (no network). ~638 MB, ~7 s.
+// --prod is correct — including esbuild, which the cloudflare bundler imports
+// eagerly at server boot (it must be a declared dependency, not just a
+// transitive edge of vite). Reuses the local store (no network). ~638 MB, ~7 s.
 // A final rsync -aL flattens the handful of nested symlinks pnpm still leaves.
+// --ignore-scripts is safe: esbuild ships its platform binary via the
+// optionalDependency @esbuild/<platform> (selected at install, no postinstall);
+// any future runtime dep needing a postinstall would break this assumption.
 const nodeModulesDest = path.join(stage, "node_modules");
 fs.mkdirSync(nodeModulesDest, { recursive: true });
 
@@ -167,9 +172,9 @@ fs.chmodSync(path.join(binDir, "figmanage"), 0o755);
 fs.cpSync(path.join(repoRoot, "studio/packaging/aws-cli"), path.join(stage, "aws-cli"), { recursive: true });
 // cloudflared intentionally NOT staged (share out of scope for v1).
 
-// 7. Package with --no-dependencies (we supply node_modules manually).
-//    Run vsce from the repo root's node_modules (the staging dir's node_modules
-//    excludes vsce since it's dev-only), but operate on the staging dir.
+// 7. Package. vsce's default dependency inclusion packs the staged hoisted
+//    node_modules. Run the repo-root vsce binary (it's dev-only, so it's not in
+//    the staged node_modules) but operate on the staging dir via cwd.
 fs.mkdirSync(dist, { recursive: true });
 // NOTE: do NOT pass --no-dependencies. That flag tells vsce "deps are already
 // bundled, skip them" → it DROPS node_modules entirely (verified: only ~2
