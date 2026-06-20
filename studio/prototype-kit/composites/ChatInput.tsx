@@ -116,7 +116,11 @@ function Root({
   maxRows = 8,
 }: RootProps) {
   return (
-    <div className="flex flex-col gap-2 w-full px-4 py-3 border-t border-(--stroke-neutral-subtle) bg-(--surface-overlay)">
+    // Outer bar spans full width (border-top + surface edge-to-edge, matching
+    // production); inner content centers in the same 860px column as the
+    // transcript so the composer aligns with the messages above it.
+    <div className="w-full px-4 py-3 border-t border-(--stroke-neutral-subtle) bg-(--surface-overlay)">
+      <div className="flex flex-col gap-2 w-full max-w-[860px] mx-auto">
       {attachments ? (
         <div className="flex items-center gap-2 overflow-x-auto scrollbar-none -mx-1 px-1">
           {attachments}
@@ -163,6 +167,7 @@ function Root({
         {trailing ? (
           <div className="shrink-0 flex items-center gap-1">{trailing}</div>
         ) : null}
+      </div>
       </div>
     </div>
   );
