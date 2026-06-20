@@ -11,6 +11,6 @@
     "resolveJsonModule": true,
     "types": ["node"]
   },
-  "include": ["main.ts", "viteRunner.ts", "updater.ts", "applyDecision.ts", "telemetry.ts", "shared/awsBootstrap.ts"],
+  "include": ["main.ts", "viteRunner.ts", "updater.ts", "applyDecision.ts", "telemetry.ts", "shared/awsBootstrap.ts", "shared/freePort.ts"],
   "exclude": ["dist"]
 }

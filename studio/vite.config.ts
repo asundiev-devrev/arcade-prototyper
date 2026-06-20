@@ -131,13 +131,11 @@ export default defineConfig({
     ],
   },
   server: {
-    port: 5556,
-    // Bind 5556 or FAIL — never silently drift to another port. The Electron
-    // wrapper (electron/viteRunner.ts) hardcodes 5556 and loads the renderer
-    // from it; if Vite drifted to 5557 on a collision, the app would load a
-    // DIFFERENT server (e.g. a stale leftover instance) than the one it spawned
-    // — telemetry, project state, everything would silently point at the wrong
-    // process. strictPort makes the collision loud instead.
+    port: Number(process.env.ARCADE_STUDIO_PORT ?? 5556),
+    // strictPort keeps a collision LOUD: the host spawns us on a specific
+    // port and loads the renderer from it. Drift would load a DIFFERENT
+    // server. The host (electron/viteRunner.ts, extension/serverHost.ts)
+    // passes ARCADE_STUDIO_PORT; plain `pnpm run studio` defaults to 5556.
     strictPort: true,
     // Auto-open is gated on ARCADE_STUDIO_OPEN_BROWSER. The Electron
     // wrapper sets this to "0" so Vite doesn't open a browser tab in
