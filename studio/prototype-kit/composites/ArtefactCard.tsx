@@ -85,18 +85,25 @@ export function ArtefactCard({ tag, title, onOpen }: ArtefactCardProps) {
           <button
             type="button"
             onClick={onOpen}
-            className="mt-1 inline-flex h-7 w-fit items-center rounded-[4px] bg-(--control-bg-neutral-subtle) px-3 text-body-small text-(--fg-neutral-prominent) hover:bg-(--control-bg-neutral-subtle-hover)"
+            // Solid translucent-dark fill (prototype value rgba(62,60,61,0.09)) —
+            // DevRev neutral-subtle control tokens are near-invisible on the pink
+            // surface, so the CTA used a literal fill here for contrast.
+            className="mt-1 inline-flex h-7 w-fit items-center rounded-[4px] bg-[rgba(62,60,61,0.09)] px-3 text-body-small text-(--fg-neutral-prominent) hover:bg-[rgba(62,60,61,0.14)]"
           >
             Open in canvas
           </button>
         ) : null}
       </div>
 
-      {/* Right column: fanned thumbnail; flex-basis scales with --stack-scale */}
+      {/* Right column: fanned thumbnail; flex-basis scales with --stack-scale.
+          The fan intentionally bleeds off the card's right edge (clipped by the
+          card's overflow-hidden) — same as the prototype. The back layers are
+          PALE pink washes (≈70–75% white over the red) so the clipped edge reads
+          soft, and the white front page dominates the visible area. */}
       <div className="relative flex-[0_0_calc(410px*var(--stack-scale))]">
-        <div className="absolute right-0 top-0 h-full w-[410px] origin-top-right scale-[var(--stack-scale)]">
-          <PageLayer className="rotate-[4deg]" tone="rgba(255,52,45,0.30)" />
-          <PageLayer className="-rotate-[3deg]" tone="rgba(255,52,45,0.25)" />
+        <div className="absolute right-0 top-4 h-full w-[410px] origin-top-right scale-[var(--stack-scale)]">
+          <PageLayer className="rotate-[4deg]" tone="rgba(255,52,45,0.16)" />
+          <PageLayer className="-rotate-[3deg]" tone="rgba(255,52,45,0.12)" />
           <PageLayer className="-rotate-[6deg] !shadow-[0_12px_32px_rgba(0,0,0,0.14)]" tone="#FFFFFF">
             {/* miniature replica scene */}
             <div className="flex h-full flex-col gap-2 p-5">

@@ -123,7 +123,13 @@ const CHATS: Chat[] = [
 
 type Message =
   | { id: number; role: "user"; text: string }
-  | { id: number; role: "assistant"; text: string };
+  | {
+      id: number;
+      role: "assistant";
+      text: string;
+      /** When set, render an ArtefactCard with this title below the text. */
+      artefact?: { tag: string; title: string };
+    };
 
 const SEED_TRANSCRIPT: Message[] = [
   {
@@ -135,6 +141,7 @@ const SEED_TRANSCRIPT: Message[] = [
     id: 2,
     role: "assistant",
     text: "Here's a starting outline — I can expand any section. Want me to draft slide copy, build a structure, or pull together visual references?",
+    artefact: { tag: "DOC", title: "Q3 launch brief" },
   },
   { id: 3, role: "user", text: "Build the structure first." },
   {
@@ -180,6 +187,13 @@ export type ComputerSceneProps = {
   sessions?: Session[];
   /** Placeholder for the bottom command bar. */
   chatInputPlaceholder?: string;
+  /**
+   * Called when the user picks "Settings" from the account menu (avatar/name
+   * footer). When provided, the Settings item is wired to it — typically the
+   * host swaps the whole pane to the Computer settings view. When omitted, the
+   * Settings item is inert (the menu still renders).
+   */
+  onOpenSettings?: () => void;
 };
 
 export function ComputerScene({
@@ -192,6 +206,7 @@ export function ComputerScene({
   activeSessionId: activeSessionIdProp = "strategic",
   sessions = DEFAULT_SESSIONS,
   chatInputPlaceholder = "Ask me anything",
+  onOpenSettings,
 }: ComputerSceneProps = {}) {
   const [activeId, setActiveId] = React.useState(activeSessionIdProp);
   const activeSession =
@@ -240,7 +255,7 @@ export function ComputerScene({
   const accountMenu = (
     <>
       <Menu.Group>
-        <Menu.Item>
+        <Menu.Item onSelect={onOpenSettings}>
           <span className="inline-flex items-center gap-2">
             <Cog size={16} aria-hidden="true" />
             Settings
@@ -458,8 +473,8 @@ function Transcript({ messages, streaming, onOpenArtefact }: { messages: Message
             thoughts={<ChatMessages.Thoughts label="Thought for 4s" />}
           >
             {m.text}
-            {m.id === 2 ? (
-              <ArtefactCard tag="DOC" title="Q3 launch brief" onOpen={onOpenArtefact} />
+            {m.artefact ? (
+              <ArtefactCard tag={m.artefact.tag} title={m.artefact.title} onOpen={onOpenArtefact} />
             ) : null}
             <ChatMessages.Actions />
           </ChatMessages.Agent>
