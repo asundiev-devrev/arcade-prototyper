@@ -26,6 +26,8 @@ import { renderDesignMd } from "../figma/systemRender";
 import { designMdPath } from "../paths";
 import { startTurn, subscribe, getTurn, cancelTurn } from "../turnRegistry";
 import { hasDeviationsSection, DEVIATIONS_MISSING_TRAILER } from "../deviationsContract";
+import { prependEditContext } from "../editContext";
+import type { Frame } from "../types";
 import {
   snapshotProjectFiles,
   diffSnapshots,
@@ -570,7 +572,7 @@ async function runClaudeBranch(ctx: {
   slug: string;
   prompt: string;
   images?: string[];
-  project: { sessionId?: string };
+  project: { sessionId?: string; frames?: Frame[] };
   signal: AbortSignal;
 }): Promise<{ ok: boolean; error?: string }> {
   const { emit, slug, project, signal } = ctx;
@@ -595,7 +597,12 @@ async function runClaudeBranch(ctx: {
   });
 
   const enriched = await enrichPromptWithFigmaContext(ctx.prompt, ctx.images ?? [], narrate);
-  const { prompt, images } = enriched;
+  const { images } = enriched;
+  // Established projects (existing frames) get a prompt-region edit-context
+  // block that (a) names the frames and (b) restates the two hard edit rules.
+  // No-op on the first build and on right-click edits — see editContext.ts.
+  const frameSlugs = (project.frames ?? []).map((f) => f.slug);
+  const prompt = prependEditContext(enriched.prompt, frameSlugs);
   let capturedSessionId: string | undefined;
   const narrationTexts: string[] = [];
   const toolLabels: string[] = [];
