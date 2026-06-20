@@ -9,6 +9,7 @@ describe("buildServerEnv", () => {
     storageRoot: "/store",
     basePath: "/usr/bin:/bin",
     nodeBin: "/path/to/code-electron",
+    appVersion: "0.39.0",
   });
 
   it("prefixes PATH with the vendored bin dirs", () => {
@@ -27,5 +28,11 @@ describe("buildServerEnv", () => {
     // In a VSIX there is no Electron .app, so the wrapper cannot use the
     // old Contents/MacOS path — it uses the host editor's Electron instead.
     expect(env.ARCADE_NODE_BIN).toBe("/path/to/code-electron");
+  });
+  it("passes the app version through for server telemetry", () => {
+    // The extension host never inherits ARCADE_APP_VERSION, so it must be
+    // sourced from the manifest and passed explicitly — else telemetry
+    // reports "0.0.0".
+    expect(env.ARCADE_APP_VERSION).toBe("0.39.0");
   });
 });

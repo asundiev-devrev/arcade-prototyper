@@ -12,12 +12,17 @@ export function buildServerEnv(opts: {
   storageRoot: string;
   basePath: string;
   nodeBin: string;
+  appVersion: string;
 }): Record<string, string> {
   return {
     PATH: `${opts.binDirs.join(":")}:${opts.basePath}`,
     ARCADE_STUDIO_ROOT: opts.storageRoot,
     ARCADE_IS_PACKAGED: "1",
-    ARCADE_APP_VERSION: process.env.ARCADE_APP_VERSION ?? "",
+    // The extension never inherits ARCADE_APP_VERSION (electron/main.ts sets it
+    // from app.getVersion(); the extension host doesn't). Pass the manifest
+    // version explicitly so the Vite child's telemetry reports the real version
+    // instead of falling through to "0.0.0".
+    ARCADE_APP_VERSION: opts.appVersion,
     ARCADE_STUDIO_CLAUDE_BIN: path.join(opts.binDirs[0], "claude"),
     // The staged bin/figmanage wrapper runs figmanage's JS entry via this
     // node binary (the host editor's Electron, which honors
@@ -56,6 +61,7 @@ export class ServerHost {
       storageRoot,
       basePath: process.env.PATH ?? "",
       nodeBin: process.execPath,
+      appVersion: (context.extension?.packageJSON?.version as string) ?? "",
     });
     Object.assign(process.env, overrides);
 

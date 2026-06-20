@@ -35,4 +35,17 @@ describe("stage-vsix script", () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf-8"));
     expect(pkg.scripts["studio:pack-vsix"]).toContain("stage-vsix.mjs");
   });
+
+  it("copies the INNER aws-cli dir so the binary lands at aws-cli/aws (on PATH)", () => {
+    // resolveBinDirs() prefixes PATH with <ext>/aws-cli, so the aws binary must
+    // sit at <ext>/aws-cli/aws — one level. The source layout is nested
+    // (aws-cli/aws-cli/aws), so the script must copy the INNER dir. Copying the
+    // outer dir double-nests it (aws-cli/aws-cli/aws), off PATH, and spawn("aws")
+    // silently falls back to the user's system aws → SSO login fails on testers.
+    const script = fs.readFileSync(
+      path.join(root, "studio/packaging/scripts/stage-vsix.mjs"),
+      "utf-8",
+    );
+    expect(script).toContain('"studio/packaging/aws-cli/aws-cli"');
+  });
 });

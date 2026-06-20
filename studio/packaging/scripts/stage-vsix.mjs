@@ -168,8 +168,14 @@ exec env ELECTRON_RUN_AS_NODE=1 "\${ARCADE_NODE_BIN:-node}" "\$FIGMANAGE_ENTRY" 
 fs.writeFileSync(path.join(binDir, "figmanage"), figmanageWrapper);
 fs.chmodSync(path.join(binDir, "figmanage"), 0o755);
 
-//    aws CLI v2 expanded layout (nested aws-cli/aws per fetch-cli-deps.sh).
-fs.cpSync(path.join(repoRoot, "studio/packaging/aws-cli"), path.join(stage, "aws-cli"), { recursive: true });
+//    aws CLI v2: fetch-cli-deps.sh produces a NESTED layout —
+//    studio/packaging/aws-cli/aws-cli/aws (the inner aws-cli/ is the package's
+//    own root). Copy the INNER dir so the binary lands at <ext>/aws-cli/aws —
+//    one level, matching what resolveBinDirs() puts on PATH (<ext>/aws-cli).
+//    Copying the outer dir would nest it to <ext>/aws-cli/aws-cli/aws, off PATH,
+//    and `spawn("aws")` would silently fall back to the user's system aws.
+//    Mirrors electron-builder.yml's `from: studio/packaging/aws-cli/aws-cli`.
+fs.cpSync(path.join(repoRoot, "studio/packaging/aws-cli/aws-cli"), path.join(stage, "aws-cli"), { recursive: true });
 // cloudflared intentionally NOT staged (share out of scope for v1).
 
 // 7. Package. vsce's default dependency inclusion packs the staged hoisted
