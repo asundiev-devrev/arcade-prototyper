@@ -1,22 +1,24 @@
 // extension/src/panel.ts
 import * as vscode from "vscode";
+import { randomBytes } from "node:crypto";
 import type { ServerHost } from "./serverHost";
 
 /** Pure: the webview document that frames the localhost Studio server. CSP is
  *  scoped to localhost (http for the page, ws for Vite HMR) — no wider host.
  *
- *  'unsafe-inline' script-src is needed for the tiny clipboard-bridge script
- *  below: VS Code intercepts Cmd+V before it reaches the cross-origin iframe,
- *  so paste into the studio inputs does nothing. The extension reads the system
- *  clipboard on Cmd+V (arcade.paste command) and posts it here; this script
- *  relays it into the iframe, which inserts it at the caret. */
-export function buildPanelHtml(url: string): string {
+ *  The inline clipboard-bridge script runs under a per-load NONCE (the
+ *  VS Code-recommended pattern — 'unsafe-inline' is unreliable in webviews).
+ *  Why the bridge: VS Code intercepts Cmd+V before it reaches the cross-origin
+ *  iframe, so paste into the studio inputs does nothing. The extension reads
+ *  the system clipboard on Cmd+V (arcade.paste command) and posts it here; this
+ *  script relays it into the iframe, which inserts it at the caret. */
+export function buildPanelHtml(url: string, nonce: string): string {
   const csp = [
     "default-src 'none'",
     "frame-src http://localhost:*",
     "connect-src http://localhost:* ws://localhost:*",
     "style-src 'unsafe-inline'",
-    "script-src 'unsafe-inline'",
+    `script-src 'nonce-${nonce}'`,
   ].join("; ");
   return `<!DOCTYPE html>
 <html>
@@ -27,7 +29,7 @@ export function buildPanelHtml(url: string): string {
 </head>
 <body>
   <iframe id="arcade-frame" src="${url}" allow="clipboard-read; clipboard-write"></iframe>
-  <script>
+  <script nonce="${nonce}">
     // Clipboard bridge: the extension host posts {type:'arcade:paste', text}
     // when the user hits Cmd+V over this panel; relay it to the localhost
     // iframe, which inserts the text at the caret of its focused input.
@@ -41,6 +43,12 @@ export function buildPanelHtml(url: string): string {
   </script>
 </body>
 </html>`;
+}
+
+/** Cryptographically-random nonce for the panel's inline script. */
+function makeNonce(): string {
+  const bytes = randomBytes(16);
+  return bytes.toString("base64").replace(/[^a-zA-Z0-9]/g, "").slice(0, 22);
 }
 
 let panel: vscode.WebviewPanel | null = null;
@@ -69,7 +77,7 @@ export async function openOrReveal(
 
   try {
     const url = await serverHost.start(context);
-    panel.webview.html = buildPanelHtml(url);
+    panel.webview.html = buildPanelHtml(url, makeNonce());
   } catch (err) {
     panel.webview.html =
       `<body style="font-family:sans-serif;padding:24px;color:#eee;background:#0d0d0d">` +

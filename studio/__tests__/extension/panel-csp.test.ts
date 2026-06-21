@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import { buildPanelHtml } from "../../../extension/src/panel";
 
 describe("buildPanelHtml", () => {
-  const html = buildPanelHtml("http://localhost:51234");
+  const html = buildPanelHtml("http://localhost:51234", "testnonce123");
 
   it("embeds the localhost server in an iframe", () => {
     expect(html).toContain('<iframe');
@@ -15,10 +15,13 @@ describe("buildPanelHtml", () => {
     // No wildcard host that would let arbitrary remote content frame in.
     expect(html).not.toMatch(/frame-src[^;]*\shttps?:\/\/\*[\s;]/);
   });
-  it("relays clipboard paste to the iframe (Cmd+V bridge)", () => {
+  it("relays clipboard paste to the iframe (Cmd+V bridge) under a nonce", () => {
     // The extension posts {type:'arcade:paste'} on Cmd+V; the panel script
-    // forwards it into the iframe. Needs script-src for the inline relay.
-    expect(html).toMatch(/script-src 'unsafe-inline'/);
+    // forwards it into the iframe. The inline relay runs under a CSP nonce
+    // (the VS Code-recommended pattern), not 'unsafe-inline'.
+    expect(html).toMatch(/script-src 'nonce-testnonce123'/);
+    expect(html).toContain('<script nonce="testnonce123">');
+    expect(html).not.toMatch(/script-src 'unsafe-inline'/);
     expect(html).toContain("arcade:paste");
     expect(html).toContain("contentWindow.postMessage");
   });
