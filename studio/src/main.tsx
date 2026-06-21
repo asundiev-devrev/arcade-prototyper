@@ -6,6 +6,11 @@ import "./styles/arcade-gen-patches.css";
 import "./styles/studio.css";
 import { App } from "./App";
 import { initRendererTelemetry } from "./lib/telemetry/renderer";
+import { installWebviewPasteBridge } from "./lib/webviewPasteBridge";
+
+// Enable Cmd+V into our inputs when running inside the Cursor/VS Code webview
+// (inert in a normal browser/Electron, where native paste already works).
+installWebviewPasteBridge();
 
 async function boot() {
   try {

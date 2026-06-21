@@ -24,6 +24,18 @@
       {
         "command": "arcade.reload",
         "title": "Arcade: Reload"
+      },
+      {
+        "command": "arcade.paste",
+        "title": "Arcade: Paste"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "arcade.paste",
+        "key": "cmd+v",
+        "mac": "cmd+v",
+        "when": "activeWebviewPanelId == 'arcadePrototyper'"
       }
     ]
   },

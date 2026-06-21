@@ -15,4 +15,14 @@ describe("buildPanelHtml", () => {
     // No wildcard host that would let arbitrary remote content frame in.
     expect(html).not.toMatch(/frame-src[^;]*\shttps?:\/\/\*[\s;]/);
   });
+  it("relays clipboard paste to the iframe (Cmd+V bridge)", () => {
+    // The extension posts {type:'arcade:paste'} on Cmd+V; the panel script
+    // forwards it into the iframe. Needs script-src for the inline relay.
+    expect(html).toMatch(/script-src 'unsafe-inline'/);
+    expect(html).toContain("arcade:paste");
+    expect(html).toContain("contentWindow.postMessage");
+  });
+  it("pins scale to 100% so the editor zoom level doesn't enlarge content", () => {
+    expect(html).toMatch(/viewport[^>]*initial-scale=1\.0/);
+  });
 });
