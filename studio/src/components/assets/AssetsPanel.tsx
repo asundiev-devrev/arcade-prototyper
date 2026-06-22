@@ -277,7 +277,12 @@ export function AssetsPanel({
                 <div key={comp.name} style={{ position: "relative" }}>
                   <AssetCard
                     item={{ name: comp.name, doc: comp.description, thumb: null }}
-                    onClick={() => onSeed(`Use the ${comp.name} component to `)}
+                    onClick={() =>
+                      setSelected({
+                        item: { name: comp.name, doc: comp.description, thumb: null },
+                        kind: "component",
+                      })
+                    }
                   />
                   <button
                     type="button"
