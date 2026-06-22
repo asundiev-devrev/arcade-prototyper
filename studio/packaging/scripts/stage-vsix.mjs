@@ -122,10 +122,13 @@ execFileSync(
 );
 
 // Flatten into the staging node_modules, dereferencing any residual symlinks so
-// the VSIX carries only real files.
+// the VSIX carries only real files. Exclude Vite's dep-optimize cache: shipping
+// a pre-warmed .vite makes the installed extension serve stale pre-bundled
+// modules (it doesn't always re-optimize on a fresh install), which can mask
+// code updates — the extension looks unchanged after a reinstall.
 execFileSync(
   "rsync",
-  ["-aL", `${path.join(nmBuild, "node_modules")}/`, `${nodeModulesDest}/`],
+  ["-aL", "--exclude=.vite", "--exclude=.cache", `${path.join(nmBuild, "node_modules")}/`, `${nodeModulesDest}/`],
   { stdio: "inherit" },
 );
 fs.rmSync(nmBuild, { recursive: true, force: true });

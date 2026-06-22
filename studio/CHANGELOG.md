@@ -8,6 +8,15 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.40.0] — 2026-06-22
+
+### Fixed (Cursor / VS Code extension)
+- **Delete & rename work in the extension.** The browser confirm/prompt dialogs they relied on are no-ops inside the editor's webview, so nothing happened. Replaced with in-app dialogs.
+- **Stop button renders as a round button again** (was a black rectangle with no icon) — it now uses the design-system Button like the send button.
+- **Templates and the Studio UI render at the right size.** A viewport tag added in an earlier zoom attempt made the embedded app lay out at the wrong (device-pixel) width inside the editor pane — squishing the nav and dropping elements like the window dots and preview cards. Removed it.
+- **Paste (incl. Figma links) into the prompt** — added a clipboard bridge so Cmd+V reaches the inputs (the editor was intercepting it).
+- **Reinstalls actually take effect.** Every prior build shipped as version 0.39.0, so reinstalling over an existing 0.39.0 made the editor reuse the cached copy and your retests hit stale code. The version now bumps (0.40.0) and the stale Vite cache is no longer bundled, so an update is a real update.
+
 ## [0.39.0] — 2026-06-20
 
 ### Changed

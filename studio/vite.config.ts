@@ -121,6 +121,15 @@ function apiPlugin(): import("vite").Plugin {
 // stay readable. Studio's own source imports @xorkavi/arcade-gen directly.
 export default defineConfig({
   root: path.resolve(__dirname),
+  // In the packaged extension the app lives in a READ-ONLY install dir, so
+  // Vite's default cacheDir (node_modules/.vite there) can't be written fresh —
+  // it risks serving a stale dep-optimize cache and masking code updates after
+  // a reinstall. When ARCADE_STUDIO_ROOT is set (packaged hosts), put the cache
+  // under that writable per-version storage dir instead. Dev (env unset) keeps
+  // the default.
+  cacheDir: process.env.ARCADE_STUDIO_ROOT
+    ? path.join(process.env.ARCADE_STUDIO_ROOT, `.vite-cache-${process.env.ARCADE_APP_VERSION || "dev"}`)
+    : undefined,
   plugins: [injectStudioSourcePlugin(), kitManifestPlugin(), react(), tailwindcss(), frameMountPlugin(), projectWatchPlugin(), liftEmitPlugin(), apiPlugin()],
   resolve: {
     alias: [
