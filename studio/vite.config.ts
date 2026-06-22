@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
+import os from "node:os";
 import { studioRoot } from "./server/paths";
 import { projectsMiddleware } from "./server/middleware/projects";
 import { templatesMiddleware } from "./server/middleware/templates";
@@ -137,6 +138,16 @@ export default defineConfig({
       { find: /^arcade$/,              replacement: path.resolve(__dirname, "prototype-kit/arcade-components.tsx") },
       { find: "arcade-studio",         replacement: path.resolve(__dirname, "src") },
       { find: "arcade-prototypes",     replacement: path.resolve(__dirname, "prototype-kit") },
+      // User-saved components live in the writable studio root, resolved on
+      // the fly like a generated frame. `arcade-user/Foo` → user-kit/composites/Foo.
+      {
+        find: /^arcade-user\/(.+)$/,
+        replacement: path.join(
+          process.env.ARCADE_STUDIO_ROOT ??
+            path.join(os.homedir(), "Library", "Application Support", "arcade-studio"),
+          "user-kit/composites/$1",
+        ),
+      },
     ],
   },
   server: {

@@ -10,15 +10,17 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Plugin } from "vite";
-import { writeManifest } from "../kitManifest";
+import { writeMergedManifest } from "../kitManifest";
+import { userKitDir, userKitCompositesDir } from "../paths";
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 // studio/server/plugins/ → studio/prototype-kit/
 const KIT_ROOT = path.resolve(MODULE_DIR, "..", "..", "prototype-kit");
 
 function isKitSourceFile(file: string): boolean {
+  const userCompositesDir = userKitCompositesDir();
   return (
-    file.startsWith(KIT_ROOT) &&
+    (file.startsWith(KIT_ROOT) || file.startsWith(userCompositesDir)) &&
     (file.endsWith(".tsx") || file.endsWith(".ts")) &&
     !file.endsWith("KIT-MANIFEST.md") &&
     !file.endsWith("index.ts")
@@ -31,7 +33,7 @@ export function kitManifestPlugin(): Plugin {
     if (regenerating) return;
     regenerating = true;
     try {
-      await writeManifest(KIT_ROOT);
+      await writeMergedManifest(KIT_ROOT, userKitDir());
       console.log(`[studio] kit manifest regenerated (${reason})`);
     } catch (err) {
       console.warn("[studio] kit manifest regeneration failed:", err);

@@ -338,3 +338,15 @@ export async function writeManifest(kitRoot: string): Promise<string> {
   }
   return outPath;
 }
+
+/** Build the merged manifest (shipped + user) and write it next to the
+ *  shipped barrel. Returns the path. No-ops when unchanged. */
+export async function writeMergedManifest(shippedRoot: string, userRoot?: string): Promise<string> {
+  const entries = await buildMergedManifestEntries(shippedRoot, userRoot);
+  const content = renderManifestMarkdown(entries);
+  const outPath = path.join(shippedRoot, "KIT-MANIFEST.md");
+  let existing = "";
+  try { existing = await fs.readFile(outPath, "utf-8"); } catch {}
+  if (existing !== content) await fs.writeFile(outPath, content);
+  return outPath;
+}
