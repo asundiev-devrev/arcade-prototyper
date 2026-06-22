@@ -28,6 +28,13 @@ vi.mock("@xorkavi/arcade-gen", async () => {
   };
 });
 
+// Thumbnail capture is a post-save UI side-effect (renders the component in a
+// hidden iframe + rasterizes) — not the modal's contract and unrunnable in
+// jsdom. Stub it so the save path resolves deterministically.
+vi.mock("../../src/components/assets/captureComponentThumb", () => ({
+  captureComponentThumb: vi.fn(async () => true),
+}));
+
 import { SaveComponentModal } from "../../src/components/assets/SaveComponentModal";
 
 const target = { file: "/x/frames/01-home/index.tsx", line: 5, column: 3, componentName: "Card", tagName: "div", frameSlug: "01-home" };

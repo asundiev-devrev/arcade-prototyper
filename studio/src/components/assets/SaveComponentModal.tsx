@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Modal, Button, Input, IconButton, CrossSmall } from "@xorkavi/arcade-gen";
 import type { TargetSelection } from "../../hooks/targetSelectionContext";
+import { captureComponentThumb } from "./captureComponentThumb";
 
 interface SaveComponentModalProps {
   target: TargetSelection;
@@ -80,7 +81,8 @@ export function SaveComponentModal({
         return;
       }
 
-        // Success
+        // Success — capture a thumbnail (best-effort; never blocks the save).
+        await captureComponentThumb(data.name);
         onSaved(data.name);
       } catch (err: any) {
         setError(err.message || "Failed to save component");

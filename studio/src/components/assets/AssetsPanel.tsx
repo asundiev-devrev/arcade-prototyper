@@ -4,9 +4,12 @@ import type { AssetItem, IconItem } from "./useAssetsCatalog";
 import { AssetCard } from "./AssetCard";
 import { AssetDetail } from "./AssetDetail";
 import { IconGrid } from "./IconGrid";
+import { captureComponentThumb } from "./captureComponentThumb";
 
 type CardKind = "composite" | "component";
-type Selected = { item: AssetItem; kind: CardKind };
+// `userThumb`, when set, is the /api/components/<name>/thumb URL for a saved
+// component (shipped composites resolve their thumb from the asset route).
+type Selected = { item: AssetItem; kind: CardKind; userThumb?: string };
 
 function matchesAsset(item: AssetItem, q: string): boolean {
   if (!q) return true;
@@ -105,6 +108,7 @@ export function AssetsPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tsx }),
       });
+      let importedName: string | undefined;
       if (res.status === 409) {
         // Collision - confirm replace
         if (confirm(`A component with this name already exists. Replace it?`)) {
@@ -118,6 +122,7 @@ export function AssetsPanel({
             setImportError((err as any).error?.message || "Import failed");
             return;
           }
+          importedName = (await retryRes.json().catch(() => ({})))?.name;
         } else {
           return;
         }
@@ -125,8 +130,12 @@ export function AssetsPanel({
         const err = await res.json().catch(() => ({}));
         setImportError((err as any).error?.message || "Import failed");
         return;
+      } else {
+        importedName = (await res.json().catch(() => ({})))?.name;
       }
       setImportError(null);
+      // Capture a thumbnail for the imported component (best-effort).
+      if (importedName) await captureComponentThumb(importedName);
       userComps.reload();
     } catch (err) {
       setImportError(err instanceof Error ? err.message : "Import failed");
@@ -180,6 +189,7 @@ export function AssetsPanel({
         <AssetDetail
           item={selected.item}
           kind={selected.kind}
+          thumbSrc={selected.userThumb}
           onBack={() => setSelected(null)}
           onUse={() => {
             onSeed(`Use the ${selected.item.name} ${selected.kind} to `);
@@ -276,11 +286,15 @@ export function AssetsPanel({
               {userComps.items.map((comp) => (
                 <div key={comp.name} style={{ position: "relative" }}>
                   <AssetCard
-                    item={{ name: comp.name, doc: comp.description, thumb: null }}
+                    item={{ name: comp.name, doc: comp.description, thumb: comp.thumb ? "1" : null }}
+                    thumbSrc={comp.thumb ? `/api/components/${encodeURIComponent(comp.name)}/thumb` : undefined}
                     onClick={() =>
                       setSelected({
-                        item: { name: comp.name, doc: comp.description, thumb: null },
+                        item: { name: comp.name, doc: comp.description, thumb: comp.thumb ? "1" : null },
                         kind: "component",
+                        userThumb: comp.thumb
+                          ? `/api/components/${encodeURIComponent(comp.name)}/thumb`
+                          : undefined,
                       })
                     }
                   />

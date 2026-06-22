@@ -51,6 +51,8 @@ export interface UserComponent {
   description: string;
   createdAt: string;
   origin: string;
+  /** True when a rendered PNG thumbnail exists for this component. */
+  thumb?: boolean;
 }
 
 export function useUserComponents(): { items: UserComponent[]; reload: () => void } {

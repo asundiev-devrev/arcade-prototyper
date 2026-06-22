@@ -13,14 +13,18 @@ export function AssetDetail({
   kind,
   onBack,
   onUse,
+  thumbSrc,
 }: {
   item: AssetItem;
   kind: "composite" | "component";
   onBack: () => void;
   onUse: () => void;
+  /** Explicit thumbnail URL (user components); defaults to the shipped route. */
+  thumbSrc?: string;
 }) {
   const [imgError, setImgError] = useState(false);
-  const showImage = !!item.thumb && !imgError;
+  const src = thumbSrc ?? `/api/assets/thumbs/${encodeURIComponent(item.name)}.png`;
+  const showImage = (!!item.thumb || !!thumbSrc) && !imgError;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: 12 }}>
@@ -67,7 +71,7 @@ export function AssetDetail({
       >
         {showImage ? (
           <img
-            src={`/api/assets/thumbs/${encodeURIComponent(item.name)}.png`}
+            src={src}
             alt={item.name}
             onError={() => setImgError(true)}
             style={{ width: "100%", height: "100%", objectFit: "contain" }}

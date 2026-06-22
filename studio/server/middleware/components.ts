@@ -5,11 +5,18 @@ import { userKitCompositesDir, userKitDir } from "../paths";
 import {
   listComponents, saveComponentFile, deleteComponent,
   componentExists, isValidComponentName, ComponentCompileError,
+  componentThumbPath, saveComponentThumb,
 } from "../componentStore";
 import { buildExtractPrompt } from "../componentExtract";
+import { packFromSource } from "../sidecar/packFromSource";
 
 async function readJson(req: IncomingMessage): Promise<any> {
   let buf = ""; for await (const c of req) buf += c; return buf ? JSON.parse(buf) : {};
+}
+async function readBinary(req: IncomingMessage): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  for await (const c of req) chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c));
+  return Buffer.concat(chunks);
 }
 function send(res: ServerResponse, status: number, body?: unknown) {
   res.writeHead(status, { "Content-Type": "application/json" });
@@ -128,6 +135,49 @@ export function componentsMiddleware() {
         throw err;
       }
       return send(res, 200, { imported: true, name: parsed.name });
+    }
+
+    // Rendered HTML for a component — used as the source for the client-side
+    // thumbnail capture (and as a live preview). Reuses the shipped esbuild +
+    // Tailwind bundler (packFromSource), so it works in the packaged DMG.
+    const previewMatch = url.match(/^\/api\/components\/([A-Za-z][A-Za-z0-9]*)\/preview$/);
+    if (previewMatch && req.method === "GET") {
+      const name = previewMatch[1];
+      if (!(await componentExists(name))) return send(res, 404, { error: { code: "not_found" } });
+      const tsx = await fs.readFile(path.join(userKitCompositesDir(), `${name}.tsx`), "utf-8");
+      // The stored file exports the component as default; render it directly.
+      try {
+        const html = await packFromSource({ tsx });
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(html);
+      } catch {
+        return send(res, 422, { error: { code: "preview_failed" } });
+      }
+      return;
+    }
+
+    const thumbMatch = url.match(/^\/api\/components\/([A-Za-z][A-Za-z0-9]*)\/thumb$/);
+    if (thumbMatch && req.method === "GET") {
+      const name = thumbMatch[1];
+      try {
+        const buf = await fs.readFile(componentThumbPath(name));
+        res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "no-cache" });
+        res.end(buf);
+      } catch {
+        return send(res, 404, { error: { code: "thumb_not_found" } });
+      }
+      return;
+    }
+    if (thumbMatch && req.method === "POST") {
+      const name = thumbMatch[1];
+      if (!(await componentExists(name))) return send(res, 404, { error: { code: "not_found" } });
+      const png = await readBinary(req);
+      // Cheap PNG magic-byte guard so a stray body can't poison the cache.
+      if (png.length < 8 || png[0] !== 0x89 || png[1] !== 0x50 || png[2] !== 0x4e || png[3] !== 0x47) {
+        return send(res, 422, { error: { code: "not_png" } });
+      }
+      await saveComponentThumb(name, png);
+      return send(res, 200, { thumb: true });
     }
 
     const delMatch = url.match(/^\/api\/components\/([A-Za-z][A-Za-z0-9]*)$/);
