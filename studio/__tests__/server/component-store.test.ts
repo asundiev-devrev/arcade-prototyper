@@ -10,6 +10,7 @@ import {
 
 const GOOD_TSX = `export default function PriceTag() { return <div className="text-sm">$9</div>; }\n`;
 const BAD_TSX = `export function Broken( { return <div>;`; // syntax error
+const UNRESOLVABLE_TSX = `import { Nope } from "./does-not-exist-anywhere";\nexport function Bad(){ return <div>{Nope}</div>; }\n`;
 
 describe("componentStore", () => {
   let root: string;
@@ -44,6 +45,14 @@ describe("componentStore", () => {
       origin: "saved", createdAt: "2026-06-22T00:00:00.000Z",
     })).rejects.toBeInstanceOf(ComponentCompileError);
     expect(await componentExists("Broken")).toBe(false);
+  });
+
+  it("rejects valid-syntax-but-unbundleable tsx and writes nothing", async () => {
+    await expect(saveComponentFile({
+      name: "Bad", description: "x", tsx: UNRESOLVABLE_TSX,
+      origin: "saved", createdAt: "2026-06-22T00:00:00.000Z",
+    })).rejects.toBeInstanceOf(ComponentCompileError);
+    expect(await componentExists("Bad")).toBe(false);
   });
 
   it("deletes a component and its manifest entry", async () => {
