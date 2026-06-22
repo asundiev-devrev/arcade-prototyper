@@ -166,28 +166,45 @@ async function parseFile(file: string, kind: "composite" | "template"): Promise<
   };
 }
 
+async function scanDir(dir: string, kind: "composite" | "template"): Promise<KitManifestEntry[]> {
+  let names: string[];
+  try {
+    names = await fs.readdir(dir);
+  } catch {
+    return []; // dir absent (e.g. user-kit never created) — not an error
+  }
+  const files = names.filter((n) => n.endsWith(".tsx")).sort().map((n) => path.join(dir, n));
+  const out: KitManifestEntry[] = [];
+  for (const f of files) {
+    const entry = await parseFile(f, kind);
+    if (entry) out.push(entry);
+  }
+  return out;
+}
+
 export async function buildManifestEntries(kitRoot: string): Promise<KitManifestEntry[]> {
   const compositeDir = path.join(kitRoot, "composites");
   const templateDir = path.join(kitRoot, "templates");
-  const [compositeFiles, templateFiles] = await Promise.all([
-    fs.readdir(compositeDir).then((names) =>
-      names.filter((n) => n.endsWith(".tsx")).sort().map((n) => path.join(compositeDir, n)),
-    ),
-    fs.readdir(templateDir).then((names) =>
-      names.filter((n) => n.endsWith(".tsx")).sort().map((n) => path.join(templateDir, n)),
-    ),
-  ]);
+  const composites = await scanDir(compositeDir, "composite");
+  const templates = await scanDir(templateDir, "template");
+  return [...composites, ...templates];
+}
 
-  const entries: KitManifestEntry[] = [];
-  for (const f of compositeFiles) {
-    const entry = await parseFile(f, "composite");
-    if (entry) entries.push(entry);
-  }
-  for (const f of templateFiles) {
-    const entry = await parseFile(f, "template");
-    if (entry) entries.push(entry);
-  }
-  return entries;
+/**
+ * Merge shipped kit entries with the writable per-user kit. Shipped first;
+ * user composites appended; on a name clash the shipped entry wins (a user
+ * can't shadow a built-in). A missing/empty user root is fine.
+ */
+export async function buildMergedManifestEntries(
+  shippedRoot: string,
+  userRoot?: string,
+): Promise<KitManifestEntry[]> {
+  const shipped = await buildManifestEntries(shippedRoot);
+  if (!userRoot) return shipped;
+  const userComposites = await scanDir(path.join(userRoot, "composites"), "composite");
+  const have = new Set(shipped.map((e) => e.name));
+  const fresh = userComposites.filter((e) => !have.has(e.name));
+  return [...shipped, ...fresh];
 }
 
 function renderEntry(entry: KitManifestEntry): string {
