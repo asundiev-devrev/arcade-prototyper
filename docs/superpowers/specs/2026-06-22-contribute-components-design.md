@@ -60,9 +60,13 @@ button, modal, toast, and doc string the designer sees says "component".
   `tagName`) via React 19 fiber `_debugStack`. Result flows to
   `src/hooks/targetSelectionContext.tsx`. Today it feeds scoped chat edits; we
   add a second consumer.
-- **The thumbnail render pipeline already exists** (Assets panel, 0.37.0):
-  headless render of an example element → Playwright screenshot → PNG. Reused
-  here as both the thumbnail source AND the compile gate.
+- **The runtime bundler is the compile gate.** `server/cloudflare/bundler.ts`
+  `buildFrameBundle()` (esbuild + Tailwind v4) IS shipped in the DMG — the
+  share-to-web flow uses it at runtime. `packFromSource({ tsx })`
+  (`server/sidecar/packFromSource.ts`) wraps it: bad TSX → it throws. That is
+  the save-time validity check. **Playwright (the 0.37.0 thumbnail
+  screenshotter) is build-time only / NOT shipped**, so v1 shows a placeholder
+  tile for saved components; real screenshots are a follow-up.
 - **The generator subprocess already authors house-style composites** — that IS
   the current developer loop. We reuse it (`server/claudeCode.ts`), pointed at
   the writable dir with a scoped extract instruction.
@@ -103,8 +107,10 @@ button, modal, toast, and doc string the designer sees says "component".
    > compose `arcade/components` primitives (never re-implement), tokens not
    > hex, hardcoded strings/counts → a `<Name>Props` type. Write to
    > `user-kit/composites/<Name>.tsx`.
-5. Deterministic, no agent: headless render → `<Name>.png` (compile gate);
-   append `user-kit/manifest.json`; regenerate `KIT-MANIFEST.md`.
+5. Deterministic, no agent: bundle the written `.tsx` via `packFromSource()`
+   as the **compile gate** (throws → reject, write nothing); append
+   `user-kit/manifest.json`; regenerate `KIT-MANIFEST.md`. v1 thumbnail is a
+   placeholder tile (real screenshot deferred — Playwright not shipped).
 
 **Why agent-extract, not raw JSX copy:** the picker gives the *boundary*; the
 agent gives the *parameterization* (data → props) and house-style match. A raw
@@ -131,22 +137,25 @@ The generator needs no special-casing: once the `.tsx` is in `user-kit/`, it is
 in the KIT-MANIFEST catalog the agent already reads. "Use this" just seeds a
 prompt naming it.
 
-### Export / Import (native dialogs only — hard constraint)
+### Export / Import (browser-native — hard constraint: no hidden folders)
 
 The user must NEVER be asked to unhide or navigate to
-`~/Library/Application Support`. Both directions go through native OS panels via
-Electron's `dialog` API (main process):
+`~/Library/Application Support`. **There is no Electron IPC in this app by
+design** (renderer talks to Vite middleware over HTTP only; `nodeIntegration:
+false`, no preload — `electron/main.ts`). So both directions use browser-native
+mechanisms, which already satisfy the constraint and require no new IPC:
 
-- **Export** (card ⋯ menu): native Save panel, default Downloads → writes
-  `<Name>.arcade.tsx`. Self-contained: recipe source + a header comment block
-  carrying name + description so import reads them back.
-- **Import** (button atop "Your components"): native Open panel → pick a
-  teammate's `.arcade.tsx` from anywhere → copied into `user-kit/`, thumbnail
-  re-rendered, manifest refreshed. Now reusable by the importer.
+- **Export** (card ⋯ menu): `GET /api/components/<Name>/export` responds with
+  `Content-Disposition: attachment; filename="<Name>.arcade.tsx"`. The browser
+  downloads it to the visible `~/Downloads`. Self-contained: recipe source + a
+  header comment block carrying name + description so import reads them back.
+- **Import** (button atop "Your components"): an `<input type="file">`
+  (`accept=".tsx"`) — this IS the OS's native open panel, already the pattern
+  used for image uploads in `PromptInput.tsx`. The chosen file is POSTed to
+  `/api/components/import`, which validates it, copies it into `user-kit/`, and
+  refreshes the manifest. Now reusable by the importer.
 
-`POST /api/components/export` and `/import` bridge to Electron `dialog` over
-IPC. In the rare plain-browser dev mode (no Electron host): export degrades to a
-normal browser download; import shows "available in the app".
+The user never sees or types the `user-kit/` path in either direction.
 
 ## Data flow
 
@@ -155,16 +164,17 @@ Pick element (existing picker) → {file, line, column, componentName, tagName}
    │  + name + description (SaveComponentModal)
    ▼
 POST /api/components/save
-   ├─ spawn generator subprocess (claudeCode.ts), scoped extract prompt
+   ├─ spawn generator subprocess (runClaudeTurnWithRetry), scoped extract prompt
    │     → user-kit/composites/<Name>.tsx
-   ├─ headless render (0.37.0 thumbnail pipeline) → <Name>.png   [compile gate]
+   ├─ packFromSource({ tsx }) bundles it           [compile gate — throws → reject]
    └─ append user-kit/manifest.json
    ▼
 KIT-MANIFEST regenerates (kitManifest.ts walks BOTH roots)
    ▼
 Assets "Your components" refreshes · generator sees it next turn
 
-Export/Import → POST /api/components/{export,import} → Electron dialog → copy
+Export → GET  /api/components/<Name>/export → Content-Disposition download (~/Downloads)
+Import → <input type=file> → POST /api/components/import → validate → copy into user-kit/
 ```
 
 ## Surfaces touched / added
@@ -175,37 +185,32 @@ Export/Import → POST /api/components/{export,import} → Electron dialog → c
 | `server/kitManifest.ts` | accept + merge a 2nd (user) root |
 | `server/plugins/kitManifestPlugin.ts` | watch the user root too |
 | `vite.config.ts` | `arcade-user` alias → `user-kit/` |
-| `server/middleware/components.ts` | NEW — save / export / import / delete / rename |
-| `electron/` main | `dialog` IPC for native Save/Open panels |
-| `src/components/assets/AssetsPanel.tsx` | "Your components" section + section relabels |
+| `server/middleware/components.ts` | NEW — save / list / export / import / delete / rename |
+| `src/components/assets/AssetsPanel.tsx` | "Your components" section + section relabels + Import button |
 | `src/components/assets/SaveComponentModal.tsx` | NEW — name + description |
 | `src/components/viewport/FrameCard.tsx` | "Save as component" action on picked element |
+
+(No `electron/` change — export/import are browser-native, no IPC.)
 
 ## Error handling
 
 Every failure surfaces a plain-language message and writes nothing broken.
 
-- **Extraction won't compile** → thumbnail render fails → "Couldn't turn this
-  into a clean component — try a different element." No file kept.
+- **Extraction won't compile** → `packFromSource()` throws → "Couldn't turn
+  this into a clean component — try a different element." No file kept.
 - **Name collision** in `user-kit/` → "You already have a component named X.
   Replace or rename?"
 - **Bad import** (won't parse / not one exported component / disallowed import)
-  → "This doesn't look like an exported component." Light validation reuses the
-  existing `validateArcadeImports` guard.
-- **Plain-browser mode** (no Electron) → export → browser download; import →
-  "available in the app".
+  → "This doesn't look like an exported component." Validation = the same
+  `packFromSource()` bundle attempt used on save.
 
 ## Testing (repo discipline: every behavior gets a test)
 
 - `kitManifest` merging two roots — unit (`__tests__/server/...`).
-- `components` middleware — save writes file + thumbnail + manifest entry;
-  name collision; malformed import rejected — server tests.
-- Import allowlist guard — reuse the `validateArcadeImports` test pattern.
+- `components` middleware — save writes file + manifest entry; name collision;
+  malformed import rejected — server tests.
 - `AssetsPanel` renders "Your components" + opens Save modal — component test
   (add any new component to the `@xorkavi/arcade-gen` mock — known gotcha).
-- Packaging guard — `user-kit/` is per-user (not bundled), but confirm the
-  thumbnail pipeline + electron-builder image globs aren't broken (the 0.37.0
-  image-exclusion trap).
 
 ## Scope summary
 
