@@ -3,7 +3,7 @@
   "displayName": "Arcade Prototyper",
   "description": "Generate DevRev-design-system prototypes from a sentence, inside your editor.",
   "publisher": "devrev",
-  "version": "0.39.0",
+  "version": "0.40.0",
   "engines": {
     "vscode": "^1.90.0"
   },
