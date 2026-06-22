@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useAssetsCatalog } from "./useAssetsCatalog";
+import { useMemo, useState, useRef, type ChangeEvent } from "react";
+import { useAssetsCatalog, useUserComponents } from "./useAssetsCatalog";
 import type { AssetItem, IconItem } from "./useAssetsCatalog";
 import { AssetCard } from "./AssetCard";
 import { AssetDetail } from "./AssetDetail";
@@ -66,8 +66,11 @@ export function AssetsPanel({
   onSeeded: () => void;
 }) {
   const state = useAssetsCatalog();
+  const userComps = useUserComponents();
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Selected | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const catalog = state.status === "ready" ? state.catalog : null;
 
@@ -91,6 +94,58 @@ export function AssetsPanel({
   const filteredComposites = composites.filter((i) => matchesAsset(i, q));
   const filteredComponents = components.filter((i) => matchesAsset(i, q));
   const filteredIcons = icons.filter((i) => matchesIcon(i, q));
+
+  async function handleImport(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const tsx = await file.text();
+      const res = await fetch("/api/components/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tsx }),
+      });
+      if (res.status === 409) {
+        // Collision - confirm replace
+        if (confirm(`A component with this name already exists. Replace it?`)) {
+          const retryRes = await fetch("/api/components/import", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tsx, replace: true }),
+          });
+          if (!retryRes.ok) {
+            const err = await retryRes.json().catch(() => ({}));
+            setImportError((err as any).error?.message || "Import failed");
+            return;
+          }
+        } else {
+          return;
+        }
+      } else if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setImportError((err as any).error?.message || "Import failed");
+        return;
+      }
+      setImportError(null);
+      userComps.reload();
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      e.target.value = "";
+    }
+  }
+
+  async function handleDelete(name: string) {
+    if (!confirm(`Delete ${name}?`)) return;
+    try {
+      await fetch(`/api/components/${encodeURIComponent(name)}`, {
+        method: "DELETE",
+      });
+      userComps.reload();
+    } catch (err) {
+      console.error("Delete failed:", err);
+    }
+  }
 
   const container: React.CSSProperties = {
     display: "flex",
@@ -147,24 +202,61 @@ export function AssetsPanel({
   return (
     <div style={container}>
       <div style={{ padding: 12, borderBottom: "1px solid var(--stroke-neutral-subtle)" }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+          <input
+            type="text"
+            aria-label="Search assets"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search assets…"
+            style={{
+              flex: 1,
+              boxSizing: "border-box",
+              padding: "6px 10px",
+              fontSize: 13,
+              border: "1px solid var(--stroke-neutral-subtle)",
+              borderRadius: 6,
+              background: "var(--surface-shallow)",
+              color: "var(--fg-neutral-prominent)",
+              outline: "none",
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            title="Import component"
+            style={{
+              padding: "6px 10px",
+              fontSize: 13,
+              border: "1px solid var(--stroke-neutral-subtle)",
+              borderRadius: 6,
+              background: "var(--surface-shallow)",
+              color: "var(--fg-neutral-prominent)",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Import
+          </button>
+        </div>
         <input
-          type="text"
-          aria-label="Search assets"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search assets…"
-          style={{
-            width: "100%",
-            boxSizing: "border-box",
-            padding: "6px 10px",
-            fontSize: 13,
-            border: "1px solid var(--stroke-neutral-subtle)",
-            borderRadius: 6,
-            background: "var(--surface-shallow)",
-            color: "var(--fg-neutral-prominent)",
-            outline: "none",
-          }}
+          ref={fileInputRef}
+          type="file"
+          accept=".tsx"
+          hidden
+          onChange={handleImport}
         />
+        {importError && (
+          <div
+            style={{
+              fontSize: 12,
+              color: "var(--fg-alert-prominent)",
+              marginTop: 4,
+            }}
+          >
+            {importError}
+          </div>
+        )}
       </div>
 
       <div
@@ -178,8 +270,48 @@ export function AssetsPanel({
           gap: 20,
         }}
       >
+        {userComps.items.length > 0 && (
+          <Section label="Your components" count={userComps.items.length}>
+            <div style={gridStyle}>
+              {userComps.items.map((comp) => (
+                <div key={comp.name} style={{ position: "relative" }}>
+                  <AssetCard
+                    item={{ name: comp.name, doc: comp.description, thumb: null }}
+                    onClick={() => onSeed(`Use the ${comp.name} component to `)}
+                  />
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(comp.name);
+                    }}
+                    title="Delete"
+                    style={{
+                      position: "absolute",
+                      top: 4,
+                      right: 4,
+                      width: 24,
+                      height: 24,
+                      padding: 0,
+                      border: "1px solid var(--stroke-neutral-subtle)",
+                      borderRadius: 4,
+                      background: "var(--surface-shallow)",
+                      color: "var(--fg-neutral-subtle)",
+                      cursor: "pointer",
+                      fontSize: 16,
+                      lineHeight: 1,
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
+
         {(!q || filteredComposites.length > 0) && (
-          <Section label="Composites" count={filteredComposites.length}>
+          <Section label="Components" count={filteredComposites.length}>
             <div style={gridStyle}>
               {filteredComposites.map((item) => (
                 <AssetCard
@@ -193,7 +325,7 @@ export function AssetsPanel({
         )}
 
         {(!q || filteredComponents.length > 0) && (
-          <Section label="Components" count={filteredComponents.length}>
+          <Section label="Elements" count={filteredComponents.length}>
             <div style={gridStyle}>
               {filteredComponents.map((item) => (
                 <AssetCard

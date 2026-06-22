@@ -45,3 +45,30 @@ export function useAssetsCatalog(): State {
   }, []);
   return state;
 }
+
+export interface UserComponent {
+  name: string;
+  description: string;
+  createdAt: string;
+  origin: string;
+}
+
+export function useUserComponents(): { items: UserComponent[]; reload: () => void } {
+  const [items, setItems] = useState<UserComponent[]>([]);
+  const [nonce, setNonce] = useState(0);
+  useEffect(() => {
+    let live = true;
+    fetch("/api/components")
+      .then((r) => r.json())
+      .then((d) => {
+        if (live) setItems(Array.isArray(d.components) ? d.components : []);
+      })
+      .catch(() => {
+        if (live) setItems([]);
+      });
+    return () => {
+      live = false;
+    };
+  }, [nonce]);
+  return { items, reload: () => setNonce((n) => n + 1) };
+}
