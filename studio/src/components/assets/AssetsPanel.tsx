@@ -11,6 +11,13 @@ type CardKind = "composite" | "component";
 // component (shipped composites resolve their thumb from the asset route).
 type Selected = { item: AssetItem; kind: CardKind; userThumb?: string };
 
+// Thumbnail URL keyed on createdAt so a re-saved component (new capture, same
+// name → same URL) busts the browser image cache instead of showing the stale
+// PNG. The thumb endpoint serves no-cache, but the <img> still dedupes by URL.
+function userThumbUrl(name: string, createdAt: string): string {
+  return `/api/components/${encodeURIComponent(name)}/thumb?v=${encodeURIComponent(createdAt)}`;
+}
+
 function matchesAsset(item: AssetItem, q: string): boolean {
   if (!q) return true;
   return (
@@ -287,14 +294,12 @@ export function AssetsPanel({
                 <div key={comp.name} style={{ position: "relative" }}>
                   <AssetCard
                     item={{ name: comp.name, doc: comp.description, thumb: comp.thumb ? "1" : null }}
-                    thumbSrc={comp.thumb ? `/api/components/${encodeURIComponent(comp.name)}/thumb` : undefined}
+                    thumbSrc={comp.thumb ? userThumbUrl(comp.name, comp.createdAt) : undefined}
                     onClick={() =>
                       setSelected({
                         item: { name: comp.name, doc: comp.description, thumb: comp.thumb ? "1" : null },
                         kind: "component",
-                        userThumb: comp.thumb
-                          ? `/api/components/${encodeURIComponent(comp.name)}/thumb`
-                          : undefined,
+                        userThumb: comp.thumb ? userThumbUrl(comp.name, comp.createdAt) : undefined,
                       })
                     }
                   />
