@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { Modal, Button, Input, IconButton, CrossSmall } from "@xorkavi/arcade-gen";
 import type { TargetSelection } from "../../hooks/targetSelectionContext";
 
@@ -23,17 +23,10 @@ export function SaveComponentModal({
   const [error, setError] = useState<string | null>(null);
   const [showReplace, setShowReplace] = useState(false);
 
-  // Use ref to ensure handleSave always sees the latest name value
-  const nameRef = useRef(name);
-  useEffect(() => {
-    nameRef.current = name;
-  }, [name]);
-
   const isValidName = NAME_PATTERN.test(name);
 
   function handleSave(replace = false) {
-    // Re-check validation here using ref to avoid stale closure issues
-    if (!NAME_PATTERN.test(nameRef.current)) {
+    if (!NAME_PATTERN.test(name)) {
       setError("Name must be PascalCase: start with uppercase letter, contain only letters and numbers, 2-40 characters");
       return;
     }
@@ -51,9 +44,9 @@ export function SaveComponentModal({
           frameSlug: target.frameSlug,
           line: target.line,
           column: target.column,
-          name: nameRef.current,
+          name,
           description,
-          ...(replace ? { replace: true } : {}),
+          ...(replace && { replace: true }),
         }),
       });
 
@@ -129,9 +122,7 @@ export function SaveComponentModal({
                 id="component-name"
                 value={name}
                 onChange={(e) => {
-                  const newName = e.target.value;
-                  setName(newName);
-                  nameRef.current = newName; // Update ref immediately for validation
+                  setName(e.target.value);
                   setError(null);
                   setShowReplace(false);
                 }}

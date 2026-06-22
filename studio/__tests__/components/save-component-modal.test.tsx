@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor, act, cleanup } from "@testing-library/react";
+import { render, screen, waitFor, cleanup } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 // Mock @xorkavi/arcade-gen to avoid gridstack ESM resolution issues
 vi.mock("@xorkavi/arcade-gen", async () => {
@@ -38,26 +39,37 @@ afterEach(() => {
 
 describe("SaveComponentModal", () => {
   it("prefills the name and posts a save", async () => {
+    const user = userEvent.setup();
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ saved: true, name: "Card" }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     const onSaved = vi.fn();
     render(<SaveComponentModal target={target as any} projectSlug="demo" onClose={() => {}} onSaved={onSaved} />);
     const nameInput = screen.getByLabelText(/name/i) as HTMLInputElement;
     expect(nameInput.value).toBe("Card");
-    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+    await user.click(screen.getByRole("button", { name: /save/i }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith("Card"));
     const [, opts] = fetchMock.mock.calls[0];
     expect(JSON.parse((opts as any).body)).toMatchObject({ projectSlug: "demo", frameSlug: "01-home", line: 5, column: 3, name: "Card" });
   });
 
   it("blocks an invalid name", async () => {
-    vi.stubGlobal("fetch", vi.fn());
-    // Render with an invalid name from the start
-    const invalidTarget = { ...target, componentName: "invalidname", tagName: "div" };
-    render(<SaveComponentModal target={invalidTarget as any} projectSlug="demo" onClose={() => {}} onSaved={() => {}} />);
+    const user = userEvent.setup();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    render(<SaveComponentModal target={target as any} projectSlug="demo" onClose={() => {}} onSaved={() => {}} />);
 
-    // Button should be disabled for invalid name (lowercase start)
-    const saveButton = screen.getByRole("button", { name: /save/i }) as HTMLButtonElement;
-    expect(saveButton.disabled).toBe(true);
+    // Clear and type an invalid name (lowercase start)
+    const nameInput = screen.getByLabelText(/name/i) as HTMLInputElement;
+    await user.clear(nameInput);
+    await user.type(nameInput, "invalidname");
+
+    // Wait for state to settle and verify button is disabled (blocks submission)
+    await waitFor(() => {
+      const saveButton = screen.getByRole("button", { name: /save/i }) as HTMLButtonElement;
+      expect(saveButton.disabled).toBe(true);
+    });
+
+    // Verify NO POST was made (button disabled = no submission possible)
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
