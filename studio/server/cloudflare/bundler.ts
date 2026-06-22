@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { compile as tailwindCompile } from "@tailwindcss/node";
 import { Scanner as TailwindScanner } from "@tailwindcss/oxide";
-import { studioRoot } from "../paths";
+import { studioRoot, userKitCompositesDir } from "../paths";
 import { generateDevRevStubs } from "./stubDevRev";
 
 // The DevRev font CDN Referer-whitelists its origins. Browsers loading a
@@ -138,8 +138,9 @@ function devrevStubPlugin(): Plugin {
 // Mirror studio/vite.config.ts's path aliases for esbuild. Studio's generated
 // frames import from `arcade` and `arcade/components` (readable aliases the
 // agent is told to use in CLAUDE.md.tpl); `arcade-prototypes` maps to the
-// prototype-kit tree. Vite resolves these at dev time; esbuild needs the same
-// mapping explicitly or bundling fails with "Could not resolve 'arcade/...'".
+// prototype-kit tree; `arcade-user` maps to the per-user saved-components dir.
+// Vite resolves these at dev time; esbuild needs the same mapping explicitly
+// or bundling fails with "Could not resolve 'arcade/...'".
 //
 // esbuild's built-in `alias` option rewrites the specifier BEFORE the
 // resolution walk, so the result still passes through node_modules / nodePaths
@@ -152,6 +153,7 @@ const ARCADE_ALIASES = {
   "arcade": ARCADE_SHIM_PATH,
   "arcade/components": ARCADE_SHIM_PATH,
   "arcade-prototypes": path.join(REPO_ROOT, "studio", "prototype-kit"),
+  "arcade-user": userKitCompositesDir(),
 } as const;
 
 interface BuildContext {
