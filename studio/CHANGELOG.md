@@ -10,6 +10,13 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0.40.0] — 2026-06-22
 
+### Added
+- **Contribute components.** Pick any element in a prototype and "Save as component" — it becomes a reusable, named component you can drop into any other prototype right away. Saved components appear under "Your components" in the Assets panel.
+- **Share components.** Export a saved component to a file and import a teammate's, so a component built once can be reused by everyone.
+
+### Changed
+- Assets panel sections renamed for clarity: "Your components" / "Components" / "Elements".
+
 ### Fixed (Cursor / VS Code extension)
 - **Delete & rename work in the extension.** The browser confirm/prompt dialogs they relied on are no-ops inside the editor's webview, so nothing happened. Replaced with in-app dialogs.
 - **Stop button renders as a round button again** (was a black rectangle with no icon) — it now uses the design-system Button like the send button.
