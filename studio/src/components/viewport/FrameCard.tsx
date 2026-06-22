@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowUpRightSmall, IconButton, Tooltip, TrashBin, useToast } from "@xorkavi/arcade-gen";
+import { ArrowUpRightSmall, IconButton, Tooltip, TrashBin, useToast, Button } from "@xorkavi/arcade-gen";
 import type { Frame } from "../../../server/types";
 import { useTargetSelection } from "../../hooks/targetSelectionContext";
 import type { TurnPhase } from "../../hooks/chatStreamReducer";
+import { SaveComponentModal } from "../assets/SaveComponentModal";
 
 const FRAME_WIDTH_MIN = 320;
 const FRAME_WIDTH_MAX = 2560;
@@ -56,6 +57,7 @@ export function FrameCard({
   const [resizing, setResizing] = useState(false);
   const [hoverHandle, setHoverHandle] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const wipeWrapperRef = useRef<HTMLDivElement | null>(null);
@@ -255,6 +257,18 @@ export function FrameCard({
               <CrosshairIcon />
             </IconButton>
           </Tooltip>
+          {isTargetedFrame && (
+            <Tooltip content="Save as component">
+              <Button
+                variant="tertiary"
+                size="sm"
+                onClick={() => setShowSaveModal(true)}
+                style={{ fontSize: 11, padding: "4px 8px" }}
+              >
+                Save as component
+              </Button>
+            </Tooltip>
+          )}
           <IconButton
             aria-label="Open frame in new tab"
             variant="tertiary"
@@ -367,6 +381,18 @@ export function FrameCard({
             inset: 0,
             cursor: "col-resize",
             zIndex: 9999,
+          }}
+        />
+      )}
+      {showSaveModal && target && isTargetedFrame && (
+        <SaveComponentModal
+          target={target}
+          projectSlug={projectSlug}
+          onClose={() => setShowSaveModal(false)}
+          onSaved={(name) => {
+            setTarget(null);
+            setShowSaveModal(false);
+            toast({ title: `Saved ${name}` });
           }}
         />
       )}
