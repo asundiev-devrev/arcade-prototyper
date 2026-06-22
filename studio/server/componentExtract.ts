@@ -25,6 +25,9 @@ export function buildExtractPrompt(args: {
     `- Lift hardcoded strings, counts, and repeated data into a props type named`,
     `  ${args.name}Props, with sensible defaults so <${args.name} /> renders standalone.`,
     `- Do not import anything from the original frame; the file must stand alone.`,
+    `- Export it BOTH ways: \`export function ${args.name}(...)\` (named) AND end the`,
+    `  file with \`export default ${args.name};\`. Both are required — the named export`,
+    `  is how other prototypes import it, the default export is how it renders standalone.`,
     ``,
     `Write ONLY that one file. A reply without a Write tool call is a failed turn.`,
   ].join("\n");

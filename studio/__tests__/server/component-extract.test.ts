@@ -19,4 +19,8 @@ describe("buildExtractPrompt", () => {
   it("carries the description for the JSDoc", () => {
     expect(p).toContain("A price tag");
   });
+  it("requires both named and default export", () => {
+    expect(p).toMatch(/export function PriceTag/);
+    expect(p).toMatch(/export default PriceTag/);
+  });
 });

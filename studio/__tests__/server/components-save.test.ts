@@ -23,7 +23,8 @@ describe("save extraction", () => {
     __setExtractionRunner(async ({ name }) => {
       const dir = path.join(root, "user-kit", "composites");
       await fs.mkdir(dir, { recursive: true });
-      await fs.writeFile(path.join(dir, `${name}.tsx`), `export default function ${name}(){return <div className="p-2">hi</div>}`, "utf-8");
+      await fs.writeFile(path.join(dir, `${name}.tsx`),
+        `export function ${name}(){return <div className="p-2">hi</div>}\nexport default ${name};`, "utf-8");
     });
     const r = await handleSaveForTest({ projectSlug: "demo", frameSlug: "01-home", line: 1, column: 1, name: "PriceTag", description: "d" });
     expect(r.status).toBe(200);
