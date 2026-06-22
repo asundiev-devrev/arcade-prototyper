@@ -2,14 +2,18 @@ import { describe, it, expect } from "vitest";
 import { buildExtractPrompt } from "../../server/componentExtract";
 
 describe("buildExtractPrompt", () => {
-  const p = buildExtractPrompt({ name: "PriceTag", description: "A price tag", frameSlug: "01-home", line: 42, column: 7 });
+  const outPath = "/abs/user-kit/composites/PriceTag.tsx";
+  const p = buildExtractPrompt({ name: "PriceTag", description: "A price tag", frameSlug: "01-home", line: 42, column: 7, outPath });
   it("anchors to the picked location", () => {
     expect(p).toContain("frames/01-home/index.tsx");
     expect(p).toContain("42:7");
   });
   it("names the output file and component", () => {
-    expect(p).toContain("user-kit/composites/PriceTag.tsx");
+    expect(p).toContain(outPath);
     expect(p).toContain("PriceTag");
+  });
+  it("does not instruct a relative write (guards against the cwd-mismatch bug)", () => {
+    expect(p).not.toMatch(/Write a new file at user-kit\/composites\//);
   });
   it("enforces house-style rules", () => {
     expect(p).toMatch(/arcade\/components/);

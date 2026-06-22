@@ -5,7 +5,7 @@
  * read the file, the line:column identifies the element, act narrowly.
  */
 export function buildExtractPrompt(args: {
-  name: string; description: string; frameSlug: string; line: number; column: number;
+  name: string; description: string; frameSlug: string; line: number; column: number; outPath: string;
 }): string {
   const rel = `frames/${args.frameSlug}/index.tsx`;
   return [
@@ -16,7 +16,7 @@ export function buildExtractPrompt(args: {
     `the root element of the sub-tree to extract. Extract ONLY that element and its`,
     `children.`,
     ``,
-    `Write a new file at user-kit/composites/${args.name}.tsx that exports a single`,
+    `Write a new file at ${args.outPath} that exports a single`,
     `component named ${args.name}. Requirements:`,
     `- Start with a JSDoc header comment whose first line is: ${args.description}`,
     `- Compose primitives from "arcade/components" and existing composites from`,

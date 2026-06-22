@@ -42,11 +42,13 @@ async function defaultExtraction(args: Parameters<ExtractionRunner>[0]): Promise
   const { runClaudeTurnWithRetry } = await import("../claudeCode");
   const { resolveClaudeBin } = await import("../claudeBin");
   const { projectDir } = await import("../paths");
+  const outPath = path.join(userKitCompositesDir(), `${args.name}.tsx`);
   await runClaudeTurnWithRetry({
     cwd: projectDir(args.projectSlug),
     prompt: buildExtractPrompt({
       name: args.name, description: args.description,
       frameSlug: args.frameSlug, line: args.line, column: args.column,
+      outPath,
     }),
     bin: resolveClaudeBin(),
     addDirs: [userKitDir()],
