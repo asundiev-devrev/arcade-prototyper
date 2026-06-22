@@ -25,7 +25,12 @@ describe("buildPanelHtml", () => {
     expect(html).toContain("arcade:paste");
     expect(html).toContain("contentWindow.postMessage");
   });
-  it("pins scale to 100% so the editor zoom level doesn't enlarge content", () => {
-    expect(html).toMatch(/viewport[^>]*initial-scale=1\.0/);
+  it("does NOT set width=device-width (it inflates the iframe under webview DPR)", () => {
+    // A `width=device-width` viewport meta makes the VS Code webview lay the
+    // iframe out at device-pixel width (e.g. 1438px in a 977px pane at DPR 2.4),
+    // so the studio app renders at the wrong width → squished nav, dropped
+    // elements, broken max-width containers. The webview should size the iframe
+    // to the actual CSS window width, so we ship no viewport meta.
+    expect(html).not.toMatch(/width=device-width/);
   });
 });

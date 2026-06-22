@@ -24,7 +24,6 @@ export function buildPanelHtml(url: string, nonce: string): string {
 <html>
 <head>
   <meta http-equiv="Content-Security-Policy" content="${csp}">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <style>html,body,iframe{margin:0;padding:0;border:0;width:100%;height:100vh;background:#0d0d0d}</style>
 </head>
 <body>
