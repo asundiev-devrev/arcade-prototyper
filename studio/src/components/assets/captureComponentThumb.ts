@@ -21,10 +21,10 @@ import { toPng } from "html-to-image";
 export async function captureComponentThumb(name: string): Promise<boolean> {
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
-  // Offscreen but laid out at a real size so the component paints. A 4:3 box
-  // matches the card's aspect ratio.
+  // Lay out at a generous width so wide components paint at full size; the
+  // capture is then cropped tight to the rendered content (see below).
   iframe.style.cssText =
-    "position:fixed;left:-10000px;top:0;width:480px;height:360px;border:0;visibility:hidden;";
+    "position:fixed;left:-10000px;top:0;width:1000px;height:800px;border:0;visibility:hidden;";
   iframe.src = `/api/components/${encodeURIComponent(name)}/preview`;
   document.body.appendChild(iframe);
 
@@ -44,28 +44,34 @@ export async function captureComponentThumb(name: string): Promise<boolean> {
     });
 
     const doc = iframe.contentDocument;
-    const target = doc?.body;
-    if (!doc || !target) throw new Error("no preview document");
-    // Center the rendered component within the capture box. The preview body
-    // otherwise top-aligns its content, leaving dead space below short/wide
-    // components (e.g. a pill). Flex-centering both axes frames it like the
-    // shipped-composite thumbnails.
-    target.style.margin = "0";
-    // Explicit height (not just min-height) is required for flex vertical
-    // centering — short components (e.g. a 21px pill) otherwise pin to the top.
-    target.style.height = "360px";
-    target.style.display = "flex";
-    target.style.alignItems = "center";
-    target.style.justifyContent = "center";
-    // Let fonts/async layout settle (and the React mount complete) before
+    const root = doc?.getElementById("root");
+    if (!doc || !root) throw new Error("no preview document");
+    // Let fonts/async layout settle and the React mount complete before
     // snapshotting. The bundle is large; a short wait avoids a blank capture.
     await new Promise((r) => setTimeout(r, 500));
 
-    const dataUrl = await toPng(target, {
+    // Shrink-wrap the body around the rendered component (inline-block) with
+    // comfortable padding, then crop the capture to those exact bounds. A small
+    // component otherwise becomes a speck in a fixed 4:3 box; cropping tight and
+    // letting the card's object-fit:contain scale it UP makes it big and
+    // readable while preserving the component's own background/shape (we do NOT
+    // restyle the component itself — only the body wrapper).
+    const body = doc.body;
+    body.style.margin = "0";
+    body.style.padding = "40px";
+    body.style.display = "inline-block";
+    body.style.background = "#ffffff";
+    await new Promise((r) => setTimeout(r, 50)); // reflow after sizing change
+
+    const rect = body.getBoundingClientRect();
+    const w = Math.max(1, Math.ceil(rect.width));
+    const h = Math.max(1, Math.ceil(rect.height));
+
+    const dataUrl = await toPng(body, {
       backgroundColor: "#ffffff",
-      pixelRatio: 1,
-      width: 480,
-      height: 360,
+      pixelRatio: 2, // crisp when the card scales it up
+      width: w,
+      height: h,
     });
 
     const png = await (await fetch(dataUrl)).blob();
