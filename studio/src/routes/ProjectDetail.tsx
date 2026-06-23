@@ -11,7 +11,7 @@ import { CanvasToggle } from "../components/shell/CanvasToggle";
 import { ChatToggle } from "../components/shell/ChatToggle";
 import { ProjectPicker } from "../components/shell/ProjectPicker";
 import { ChatStreamProvider } from "../hooks/chatStreamContext";
-import { TargetSelectionProvider, useTargetSelection } from "../hooks/targetSelectionContext";
+import { EditSessionProvider, useEditSession } from "../hooks/editSessionContext";
 import { useProjectFromHost } from "../hooks/useProjectFromHost";
 import type { Project, ChimeIn } from "../../server/types";
 import { takePendingPrompt, peekPendingPrompt } from "../lib/pendingPrompt";
@@ -75,14 +75,14 @@ export function ProjectDetail({ slug, onBack, onOpenProject }: ProjectDetailProp
   }, [slug, send]);
 
   return (
-    <TargetSelectionProvider>
+    <EditSessionProvider>
       <ProjectDetailShell
         routeKey={slug}
         source={source}
         onBack={onBack}
         onOpenProject={onOpenProject}
       />
-    </TargetSelectionProvider>
+    </EditSessionProvider>
   );
 }
 
@@ -97,7 +97,7 @@ function ProjectDetailShell({
   onBack: () => void;
   onOpenProject: (slug: string) => void;
 }) {
-  const { inspectorOpen } = useTargetSelection();
+  const { inspectorOpen, inspectorWidth } = useEditSession();
   // Optimistic local override for the theme toggle.
   const [localModeOverride, setLocalModeOverride] =
     useState<"light" | "dark" | null>(null);
@@ -355,7 +355,7 @@ function ProjectDetailShell({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: `${chatOpen ? `${chatWidth}px` : "0px"} 1fr${devOpen ? " auto" : ""}${inspectorOpen ? " auto" : ""}`,
+          gridTemplateColumns: `${chatOpen ? `${chatWidth}px` : "0px"} 1fr${devOpen ? " auto" : ""}${inspectorOpen ? ` ${inspectorWidth}px` : ""}`,
           minHeight: 0,
           transition: resizing ? "none" : "grid-template-columns 0.2s ease",
           position: "relative",
