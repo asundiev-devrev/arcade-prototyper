@@ -3,12 +3,13 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { userKitCompositesDir, userKitDir } from "../paths";
 import {
-  listComponents, saveComponentFile, deleteComponent,
+  listComponents, saveComponentFile,
   componentExists, isValidComponentName, ComponentCompileError,
   componentThumbPath, saveComponentThumb,
 } from "../componentStore";
 import { buildExtractPrompt } from "../componentExtract";
 import { packFromSource } from "../sidecar/packFromSource";
+import { clearAllProjectSessions } from "../projects";
 
 async function readJson(req: IncomingMessage): Promise<any> {
   let buf = ""; for await (const c of req) buf += c; return buf ? JSON.parse(buf) : {};
@@ -87,6 +88,9 @@ export async function handleSaveForTest(input: {
     }
     throw err;
   }
+  // The kit catalog rides in the cached system prompt; clear resume sessions so
+  // the next turn sees the new component instead of resuming a stale prompt.
+  await clearAllProjectSessions().catch(() => {});
   return { status: 200, body: { saved: true, name: input.name } };
 }
 
@@ -134,6 +138,7 @@ export function componentsMiddleware() {
         }
         throw err;
       }
+      await clearAllProjectSessions().catch(() => {});
       return send(res, 200, { imported: true, name: parsed.name });
     }
 
@@ -182,8 +187,15 @@ export function componentsMiddleware() {
 
     const delMatch = url.match(/^\/api\/components\/([A-Za-z][A-Za-z0-9]*)$/);
     if (delMatch && req.method === "DELETE") {
-      await deleteComponent(delMatch[1]);
-      return send(res, 200, { deleted: true });
+      // Rewrite-first deletion: if frames use this component, strip it from
+      // them in the background before removing the file, so none go blank.
+      const { deleteComponentAndRewriteFrames } = await import("../componentDeletion");
+      const result = await deleteComponentAndRewriteFrames(delMatch[1]);
+      return send(res, 200, {
+        deleted: result.status === "deleted",
+        rewriting: result.status === "rewriting",
+        frames: result.frames.map((f) => ({ slug: f.slug, frame: f.frameSlug })),
+      });
     }
 
     if (url === "/api/components/save" && req.method === "POST") {

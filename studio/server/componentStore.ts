@@ -101,6 +101,19 @@ export async function deleteComponent(name: string): Promise<void> {
   await writeManifest(entries.filter((e) => e.name !== name));
 }
 
+/**
+ * Remove a component's manifest entry WITHOUT deleting its files. Used during
+ * graceful deletion: the card disappears from the library immediately, but the
+ * .tsx stays on disk so frames that still import it keep resolving until they
+ * are rewritten. The file is removed later by deleteComponent once no frame
+ * references it.
+ */
+export async function removeComponentFromManifest(name: string): Promise<void> {
+  if (!isValidComponentName(name)) return;
+  const entries = await readManifest();
+  await writeManifest(entries.filter((e) => e.name !== name));
+}
+
 /** Persist a captured PNG thumbnail for a component. `png` is the raw bytes. */
 export async function saveComponentThumb(name: string, png: Buffer): Promise<void> {
   if (!isValidComponentName(name)) {
