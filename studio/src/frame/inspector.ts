@@ -22,6 +22,9 @@ export interface StyleSnapshot {
   paddingTop: string; paddingRight: string; paddingBottom: string; paddingLeft: string;
   marginTop: string; marginRight: string; marginBottom: string; marginLeft: string;
   gap: string; width: string; height: string;
+  minWidth: string; maxWidth: string; minHeight: string; maxHeight: string;
+  display: string; flexDirection: string;
+  opacity: string; borderRadius: string;
 }
 
 const STYLE_FIELDS = [
@@ -29,6 +32,7 @@ const STYLE_FIELDS = [
   "backgroundColor", "borderColor", "paddingTop", "paddingRight",
   "paddingBottom", "paddingLeft", "marginTop", "marginRight",
   "marginBottom", "marginLeft", "gap", "width", "height",
+  "minWidth", "maxWidth", "minHeight", "maxHeight", "display", "flexDirection", "opacity", "borderRadius",
 ] as const;
 
 const EDIT_ID_ATTR = "data-arcade-edit-id";
@@ -64,6 +68,9 @@ export function readStyleSnapshot(node: Element): StyleSnapshot {
     marginTop: cs.marginTop, marginRight: cs.marginRight,
     marginBottom: cs.marginBottom, marginLeft: cs.marginLeft,
     gap: cs.gap, width: cs.width, height: cs.height,
+    minWidth: cs.minWidth, maxWidth: cs.maxWidth, minHeight: cs.minHeight, maxHeight: cs.maxHeight,
+    display: cs.display, flexDirection: cs.flexDirection,
+    opacity: cs.opacity, borderRadius: cs.borderTopLeftRadius,
   };
 }
 

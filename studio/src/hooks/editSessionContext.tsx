@@ -7,6 +7,9 @@ export interface StyleSnapshot {
   paddingTop: string; paddingRight: string; paddingBottom: string; paddingLeft: string;
   marginTop: string; marginRight: string; marginBottom: string; marginLeft: string;
   gap: string; width: string; height: string;
+  minWidth: string; maxWidth: string; minHeight: string; maxHeight: string;
+  display: string; flexDirection: string;
+  opacity: string; borderRadius: string;
 }
 export type PendingEdits = Partial<Record<keyof StyleSnapshot, string>>;
 

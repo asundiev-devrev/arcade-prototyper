@@ -9,6 +9,9 @@ const LABELS: Record<keyof StyleSnapshot, string> = {
   marginTop: "margin top", marginRight: "margin right",
   marginBottom: "margin bottom", marginLeft: "margin left",
   gap: "gap", width: "width", height: "height",
+  minWidth: "min width", maxWidth: "max width", minHeight: "min height", maxHeight: "max height",
+  display: "display", flexDirection: "flex direction",
+  opacity: "opacity", borderRadius: "corner radius",
 };
 
 function elementBlock(e: EditedElement): string | null {

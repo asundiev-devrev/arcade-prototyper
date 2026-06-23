@@ -15,6 +15,18 @@ describe("readStyleSnapshot", () => {
     expect(snap.fontSize).toBe("18px");
     expect(typeof snap.gap).toBe("string");
   });
+
+  it("reads the slice-1 layout/appearance fields", () => {
+    const el = document.createElement("div");
+    el.style.minWidth = "10px"; el.style.opacity = "0.5"; el.style.display = "flex";
+    document.body.appendChild(el);
+    const snap = readStyleSnapshot(el);
+    expect(snap.minWidth).toBe("10px");
+    expect(snap.opacity).toBe("0.5");
+    expect(snap.display).toBe("flex");
+    expect(typeof snap.flexDirection).toBe("string");
+    expect(typeof snap.borderRadius).toBe("string");
+  });
 });
 
 describe("isTextEditable", () => {
