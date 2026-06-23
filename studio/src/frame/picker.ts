@@ -17,6 +17,7 @@
  */
 
 import { capture } from "./inspector";
+import * as overlay from "./overlay";
 
 interface PickerSelection {
   editId: number;
@@ -29,39 +30,16 @@ interface PickerSelection {
   styles: import("./inspector").StyleSnapshot;
 }
 
-const OUTLINE_ID = "__arcade-studio-picker-outline";
-const STYLE_ID = "__arcade-studio-picker-style";
-
-function ensureOverlay(): { outline: HTMLDivElement } {
-  let outline = document.getElementById(OUTLINE_ID) as HTMLDivElement | null;
-  if (!outline) {
-    outline = document.createElement("div");
-    outline.id = OUTLINE_ID;
-    outline.style.cssText = [
-      "position:fixed",
-      "pointer-events:none",
-      "z-index:2147483646",
-      "border:2px solid #3b82f6",
-      "background:rgba(59,130,246,0.08)",
-      "border-radius:2px",
-      "transition:top 60ms linear,left 60ms linear,width 60ms linear,height 60ms linear",
-      "display:none",
-    ].join(";");
-    document.body.appendChild(outline);
-  }
-  let style = document.getElementById(STYLE_ID) as HTMLStyleElement | null;
-  if (!style) {
-    style = document.createElement("style");
-    style.id = STYLE_ID;
-    style.textContent = `html[data-arcade-picker="on"] * { cursor: crosshair !important; }`;
-    document.head.appendChild(style);
-  }
-  return { outline };
+const CURSOR_STYLE_ID = "__arcade-studio-picker-cursor";
+function addCursorStyle() {
+  if (document.getElementById(CURSOR_STYLE_ID)) return;
+  const style = document.createElement("style");
+  style.id = CURSOR_STYLE_ID;
+  style.textContent = `html[data-arcade-picker="on"] * { cursor: crosshair !important; }`;
+  document.head.appendChild(style);
 }
-
-function removeOverlay() {
-  document.getElementById(OUTLINE_ID)?.remove();
-  document.getElementById(STYLE_ID)?.remove();
+function removeCursorStyle() {
+  document.getElementById(CURSOR_STYLE_ID)?.remove();
 }
 
 type FiberLike = {
@@ -167,35 +145,18 @@ function resolveSelection(fiber: FiberLike, domNode: HTMLElement): PickerSelecti
 let active = false;
 let hoverTarget: Element | null = null;
 
-function positionOutline(target: Element | null) {
-  const { outline } = ensureOverlay();
-  if (!target) {
-    outline.style.display = "none";
-    return;
-  }
-  const rect = target.getBoundingClientRect();
-  if (rect.width === 0 && rect.height === 0) {
-    outline.style.display = "none";
-    return;
-  }
-  outline.style.display = "block";
-  outline.style.top = `${rect.top}px`;
-  outline.style.left = `${rect.left}px`;
-  outline.style.width = `${rect.width}px`;
-  outline.style.height = `${rect.height}px`;
-}
-
 function onMouseOver(e: MouseEvent) {
   if (!active) return;
   const t = e.target as Element | null;
   if (!t || t === hoverTarget) return;
+  if (overlay.isOverlayElement(t as HTMLElement)) return;
   hoverTarget = t;
-  positionOutline(t);
+  overlay.showHover(t as HTMLElement);
 }
 
 function onScroll() {
   if (!active) return;
-  positionOutline(hoverTarget);
+  overlay.reposition(hoverTarget as HTMLElement | null);
 }
 
 function postPicked(sel: PickerSelection) {
@@ -210,20 +171,6 @@ function postCancel(reason: string) {
   } catch {}
 }
 
-function flashOutlineAndFinish(ok: boolean, finish: () => void) {
-  const { outline } = ensureOverlay();
-  if (outline.style.display === "none") {
-    finish();
-    return;
-  }
-  const color = ok ? "#10b981" : "#ef4444";
-  const bg = ok ? "rgba(16,185,129,0.18)" : "rgba(239,68,68,0.18)";
-  outline.style.transition = "none";
-  outline.style.borderColor = color;
-  outline.style.background = bg;
-  window.setTimeout(finish, 180);
-}
-
 function onClick(e: MouseEvent) {
   if (!active) return;
   e.preventDefault();
@@ -231,33 +178,23 @@ function onClick(e: MouseEvent) {
   e.stopImmediatePropagation?.();
   const target = e.target as Element | null;
   if (!target) {
-    flashOutlineAndFinish(false, () => {
-      postCancel("no-target");
-      deactivate();
-    });
+    postCancel("no-target");
     return;
   }
   const fiber = getFiberFromNode(target);
   if (!fiber) {
-    flashOutlineAndFinish(false, () => {
-      postCancel("no-fiber");
-      deactivate();
-    });
+    postCancel("no-fiber");
     return;
   }
   const sel = resolveSelection(fiber, target as HTMLElement);
   if (!sel) {
-    flashOutlineAndFinish(false, () => {
-      postCancel("no-source");
-      deactivate();
-    });
+    postCancel("no-source");
     return;
   }
-  flashOutlineAndFinish(true, () => {
-    postPicked(sel);
-    // Do NOT deactivate — bulk editing keeps the picker live until the panel
-    // is closed/committed/discarded (parent sends frame-pick-stop) or Escape.
-  });
+  overlay.showSelection(target as HTMLElement);
+  postPicked(sel);
+  // Do NOT deactivate — bulk editing keeps the picker live until the panel
+  // is closed/committed/discarded (parent sends frame-pick-stop) or Escape.
 }
 
 function onKeyDown(e: KeyboardEvent) {
@@ -272,7 +209,8 @@ function onKeyDown(e: KeyboardEvent) {
 export function activate() {
   if (active) return;
   active = true;
-  ensureOverlay();
+  overlay.setEnabled(true);
+  addCursorStyle();
   document.documentElement.setAttribute("data-arcade-picker", "on");
   document.addEventListener("mouseover", onMouseOver, true);
   document.addEventListener("click", onClick, true);
@@ -291,7 +229,9 @@ export function deactivate() {
   document.removeEventListener("keydown", onKeyDown, true);
   window.removeEventListener("scroll", onScroll, true);
   window.removeEventListener("resize", onScroll);
-  removeOverlay();
+  overlay.clear();
+  overlay.setEnabled(false);
+  removeCursorStyle();
 }
 
 function onParentMessage(e: MessageEvent) {
