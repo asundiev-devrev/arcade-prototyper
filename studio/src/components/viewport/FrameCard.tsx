@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowUpRightSmall, IconButton, Tooltip, TrashBin, useToast, Button } from "@xorkavi/arcade-gen";
 import type { Frame } from "../../../server/types";
-import { useTargetSelection } from "../../hooks/targetSelectionContext";
+import { useEditSession } from "../../hooks/editSessionContext";
 import type { TurnPhase } from "../../hooks/chatStreamReducer";
 import { SaveComponentModal } from "../assets/SaveComponentModal";
 
@@ -61,7 +61,7 @@ export function FrameCard({
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const wipeWrapperRef = useRef<HTMLDivElement | null>(null);
-  const { target, setTarget, setInspectorOpen, setFrameWindow, clear, frameWindow } = useTargetSelection();
+  const { batch, frameSlug: sessionFrameSlug, addOrFocus, setInspectorOpen, clear, frameWindow } = useEditSession();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -104,27 +104,20 @@ export function FrameCard({
       if (!data || typeof data !== "object") return;
       const t = (data as { type?: unknown }).type;
       if (t === "arcade-studio:frame-picked") {
-        const sel = (data as {
-          selection?: {
-            file: string;
-            line: number;
-            column: number;
-            componentName: string;
-            tagName: string;
-            styles: import("../../hooks/targetSelectionContext").StyleSnapshot;
-          };
-        }).selection;
-        if (sel) {
-          const newWindow = iframeRef.current?.contentWindow ?? null;
-          // If switching from a different frame, reset the old frame's preview.
-          if (frameWindow && frameWindow !== newWindow) {
-            frameWindow.postMessage({ type: "arcade-studio:preview-reset" }, "*");
+        const selection = (data as { selection?: import("../../hooks/editSessionContext").ElementSelection }).selection;
+        if (selection) {
+          const win = iframeRef.current?.contentWindow ?? null;
+          // Cross-frame guard: a batch is single-frame. If the user picks in a
+          // different frame than the active batch, reset the old frame's
+          // previews and start fresh in this frame.
+          if (sessionFrameSlug && sessionFrameSlug !== frame.slug) {
+            frameWindow?.postMessage({ type: "arcade-studio:preview-reset", all: true }, "*");
+            clear();
           }
-          setTarget({ ...sel, frameSlug: frame.slug });
-          setFrameWindow(newWindow);
+          addOrFocus(selection, frame.slug, win);
           setInspectorOpen(true);
         }
-        setPicking(false);
+        // NOTE: do NOT setPicking(false) — bulk picking stays active.
       } else if (t === "arcade-studio:frame-pick-cancelled") {
         const reason = (data as { reason?: string }).reason;
         if (reason && reason !== "escape" && reason !== "no-target") {
@@ -152,7 +145,7 @@ export function FrameCard({
         "*",
       );
     };
-  }, [picking, frame.slug, setTarget, setFrameWindow, setInspectorOpen, frameWindow]);
+  }, [picking, frame.slug, addOrFocus, setInspectorOpen, clear, frameWindow, sessionFrameSlug]);
 
   function onIframeLoad() {
     if (phase !== "running") return;
@@ -181,8 +174,8 @@ export function FrameCard({
   );
   const handleVisible = hoverHandle || resizing;
   const frameUrl = `/api/frames/${projectSlug}/${frame.slug}?mode=${projectMode}`;
-  const isTargetedFrame =
-    target !== null && target.frameSlug === frame.slug;
+  const isTargetedFrame = sessionFrameSlug === frame.slug && batch.length > 0;
+  const lastSelection = batch[batch.length - 1]?.selection ?? null;
 
   return (
     <div
@@ -231,7 +224,7 @@ export function FrameCard({
               picking
                 ? "Cancel (Esc)"
                 : isTargetedFrame
-                ? `Targeting <${target?.componentName}> — click to clear`
+                ? `Editing ${batch.length} element(s) — click to clear`
                 : "Pick an element to target in chat"
             }
           >
@@ -246,17 +239,9 @@ export function FrameCard({
               aria-pressed={picking || isTargetedFrame}
               variant={picking || isTargetedFrame ? "primary" : "tertiary"}
               onClick={() => {
-                if (picking) {
-                  setPicking(false);
-                  setInspectorOpen(false);
-                  return;
-                }
-                if (isTargetedFrame) {
-                  clear();
-                  return;
-                }
-                setInspectorOpen(true);
-                setPicking(true);
+                if (picking) { setPicking(false); setInspectorOpen(false); return; }
+                if (isTargetedFrame) { clear(); return; }
+                setInspectorOpen(true); setPicking(true);
               }}
             >
               <CrosshairIcon />
@@ -389,13 +374,14 @@ export function FrameCard({
           }}
         />
       )}
-      {showSaveModal && target && isTargetedFrame && (
+      {showSaveModal && lastSelection && isTargetedFrame && (
         <SaveComponentModal
-          target={target}
+          target={lastSelection}
+          frameSlug={frame.slug}
           projectSlug={projectSlug}
           onClose={() => setShowSaveModal(false)}
           onSaved={(name) => {
-            setTarget(null);
+            clear();
             setShowSaveModal(false);
             toast({ title: `Saved ${name}` });
           }}

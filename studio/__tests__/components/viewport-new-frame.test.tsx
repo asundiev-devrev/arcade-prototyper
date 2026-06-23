@@ -41,11 +41,15 @@ vi.mock("../../src/hooks/useFrames", () => ({
   useFrames: (project: Project) => ({ frames: project.frames, refresh: () => {} }),
 }));
 
-// Mock the targetSelectionContext to avoid provider errors
-vi.mock("../../src/hooks/targetSelectionContext", () => ({
-  useTargetSelection: () => ({
-    target: null,
-    setTarget: () => {},
+// Mock the editSessionContext to avoid provider errors
+vi.mock("../../src/hooks/editSessionContext", () => ({
+  useEditSession: () => ({
+    batch: [],
+    frameSlug: null,
+    addOrFocus: () => {},
+    setInspectorOpen: () => {},
+    clear: () => {},
+    frameWindow: null,
   }),
 }));
 
