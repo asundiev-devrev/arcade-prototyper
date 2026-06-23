@@ -78,4 +78,11 @@ describe("editSessionContext", () => {
     act(() => result.current.setInspectorWidth(420));
     expect(result.current.inspectorWidth).toBe(420);
   });
+
+  it("clear() preserves inspectorWidth (width persists across sessions)", () => {
+    const { result } = renderHook(() => useEditSession(), { wrapper: wrap });
+    act(() => result.current.setInspectorWidth(500));
+    act(() => result.current.clear());
+    expect(result.current.inspectorWidth).toBe(500);
+  });
 });

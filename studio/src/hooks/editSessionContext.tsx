@@ -65,14 +65,13 @@ export function EditSessionProvider({ children }: { children: ReactNode }) {
         setFocusedEditId(sel.editId);
       },
       focus: (id) => setFocusedEditId(id),
-      removeElement: (id) =>
-        setBatch((b) => {
-          const next = b.filter((e) => e.selection.editId !== id);
-          setFocusedEditId((cur) =>
-            cur === id ? (next.length ? next[next.length - 1].selection.editId : null) : cur,
-          );
-          return next;
-        }),
+      removeElement: (id) => {
+        const next = batch.filter((e) => e.selection.editId !== id);
+        setBatch(next);
+        setFocusedEditId((cur) =>
+          cur === id ? (next.length ? next[next.length - 1].selection.editId : null) : cur,
+        );
+      },
       setField: (id, key, val) =>
         setBatch((b) =>
           b.map((e) =>
