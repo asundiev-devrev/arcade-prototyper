@@ -30,7 +30,20 @@ export function Section({
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div>
-      <div style={HEADER} onClick={() => setOpen((o) => !o)} role="button" aria-expanded={open}>
+      <div
+        style={HEADER}
+        onClick={() => setOpen((o) => !o)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setOpen((o) => !o);
+          }
+        }}
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+      >
+        {/* borderTop is a section separator */}
         {icon && <span style={{ display: "flex", color: "var(--fg-neutral-medium)" }} aria-hidden="true">{icon}</span>}
         <span style={TITLE}>{title}</span>
         <Chevron open={open} />

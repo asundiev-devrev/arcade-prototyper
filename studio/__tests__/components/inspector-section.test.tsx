@@ -22,4 +22,12 @@ describe("Section", () => {
     render(<Section title="Layout" defaultOpen={false}><div>body-content</div></Section>);
     expect(screen.queryByText("body-content")).toBeNull();
   });
+  it("toggles on keyboard Enter", () => {
+    render(<Section title="Layout"><div>body-content</div></Section>);
+    const header = screen.getByRole("button");
+    fireEvent.keyDown(header, { key: "Enter" });
+    expect(screen.queryByText("body-content")).toBeNull();
+    fireEvent.keyDown(header, { key: "Enter" });
+    expect(screen.getByText("body-content")).toBeTruthy();
+  });
 });
