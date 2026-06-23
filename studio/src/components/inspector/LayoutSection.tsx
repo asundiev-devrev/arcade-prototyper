@@ -14,6 +14,8 @@ const FREE = ICON(<rect x="3" y="3" width="18" height="18" rx="2" strokeDasharra
 const ROW = ICON(<><rect x="3" y="4" width="7" height="16" rx="1" /><rect x="14" y="4" width="7" height="16" rx="1" /></>);
 const COL = ICON(<><rect x="4" y="3" width="16" height="7" rx="1" /><rect x="4" y="14" width="16" height="7" rx="1" /></>);
 const GRID = ICON(<><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>);
+const LOCK = ICON(<><rect x="6" y="10" width="12" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></>);
+const UNLOCK = ICON(<><rect x="6" y="10" width="12" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 7.5-2" /></>);
 
 function px(v: string): number { const n = parseFloat(v); return Number.isFinite(n) ? n : NaN; }
 
@@ -70,8 +72,14 @@ export function LayoutSection({ styles, pending, change }: {
   function uniform(side4: ("Top"|"Right"|"Bottom"|"Left")[], base: "margin"|"padding", pxVal: string) {
     for (const s of side4) change(`${base}${s}` as keyof StyleSnapshot, pxVal);
   }
+  function sidesEqual(base: "margin"|"padding"): boolean {
+    const [t, r, b, l] = ["Top","Right","Bottom","Left"].map((s) => fieldValue(styles, pending, `${base}${s}` as keyof StyleSnapshot));
+    return t === r && r === b && b === l;
+  }
 
   const showGap = display === "flex" || display === "grid";
+  const marginMixed = !sidesEqual("margin");
+  const paddingMixed = !sidesEqual("padding");
 
   return (
     <div style={SECTION_BODY_LOCAL}>
@@ -87,7 +95,7 @@ export function LayoutSection({ styles, pending, change }: {
         <NumberField id="ins-w" label="W" valuePx={fieldValue(styles, pending, "width")} onChange={onW} />
         <button type="button" aria-label={aspectLocked ? "Unlock aspect ratio" : "Lock aspect ratio"}
           aria-pressed={aspectLocked} onClick={toggleLock} style={{ ...EXPAND_BTN, color: aspectLocked ? "var(--fg-neutral-prominent)" : "var(--fg-neutral-subtle)" }} title="Lock aspect">
-          {aspectLocked ? "🔒" : "🔓"}
+          {aspectLocked ? LOCK : UNLOCK}
         </button>
         <NumberField id="ins-h" label="H" valuePx={fieldValue(styles, pending, "height")} onChange={onH} />
       </div>
@@ -99,19 +107,25 @@ export function LayoutSection({ styles, pending, change }: {
 
       {/* Margin */}
       <div style={FIELD_ROW}>
-        <NumberField id="ins-margin" label="Margin" valuePx={fieldValue(styles, pending, "marginTop")} onChange={(v) => uniform(["Top","Right","Bottom","Left"], "margin", v)} />
+        <NumberField id="ins-margin" label="Margin"
+          valuePx={sidesEqual("margin") ? fieldValue(styles, pending, "marginTop") : ""}
+          placeholder={marginMixed ? "Mixed" : undefined}
+          onChange={(v) => uniform(["Top","Right","Bottom","Left"], "margin", v)} />
         <button type="button" aria-label="Expand margin" onClick={() => setMarginExpanded((x) => !x)} style={EXPAND_BTN} title="Per-side">⤢</button>
       </div>
-      {marginExpanded && (["Top","Right","Bottom","Left"] as const).map((s) => (
+      {(marginExpanded || marginMixed) && (["Top","Right","Bottom","Left"] as const).map((s) => (
         <NumberField key={s} id={`ins-margin-${s}`} label={`Margin ${s.toLowerCase()}`} valuePx={fieldValue(styles, pending, `margin${s}` as keyof StyleSnapshot)} onChange={(v) => change(`margin${s}` as keyof StyleSnapshot, v)} />
       ))}
 
       {/* Padding */}
       <div style={FIELD_ROW}>
-        <NumberField id="ins-padding" label="Padding" valuePx={fieldValue(styles, pending, "paddingTop")} onChange={(v) => uniform(["Top","Right","Bottom","Left"], "padding", v)} />
+        <NumberField id="ins-padding" label="Padding"
+          valuePx={sidesEqual("padding") ? fieldValue(styles, pending, "paddingTop") : ""}
+          placeholder={paddingMixed ? "Mixed" : undefined}
+          onChange={(v) => uniform(["Top","Right","Bottom","Left"], "padding", v)} />
         <button type="button" aria-label="Expand padding" onClick={() => setPaddingExpanded((x) => !x)} style={EXPAND_BTN} title="Per-side">⤢</button>
       </div>
-      {paddingExpanded && (["Top","Right","Bottom","Left"] as const).map((s) => (
+      {(paddingExpanded || paddingMixed) && (["Top","Right","Bottom","Left"] as const).map((s) => (
         <NumberField key={s} id={`ins-padding-${s}`} label={`Padding ${s.toLowerCase()}`} valuePx={fieldValue(styles, pending, `padding${s}` as keyof StyleSnapshot)} onChange={(v) => change(`padding${s}` as keyof StyleSnapshot, v)} />
       ))}
 

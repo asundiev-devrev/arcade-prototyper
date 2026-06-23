@@ -58,4 +58,14 @@ describe("LayoutSection", () => {
     expect(screen.getByLabelText("Padding top")).toBeTruthy();
     expect(screen.getByLabelText("Padding left")).toBeTruthy();
   });
+  it("mixed padding shows empty uniform field with placeholder + auto-expands sides", () => {
+    const change = vi.fn();
+    const mixedStyles = { ...STYLES, paddingTop: "12px", paddingLeft: "24px" };
+    render(<LayoutSection styles={mixedStyles} pending={{}} change={change} />);
+    const uniformField = screen.getByLabelText("Padding") as HTMLInputElement;
+    expect(uniformField.value).toBe("");
+    expect(uniformField.placeholder).toBe("Mixed");
+    expect(screen.getByLabelText("Padding left")).toBeTruthy();
+    expect(screen.getByLabelText("Padding top")).toBeTruthy();
+  });
 });

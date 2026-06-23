@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import type { StyleSnapshot, PendingEdits } from "../../hooks/editSessionContext";
 
-export const SECTION_BODY: React.CSSProperties = { display: "flex", flexDirection: "column", gap: 10 };
 export const FIELD_ROW: React.CSSProperties = { display: "flex", alignItems: "center", gap: 8 };
 export const COL_LABEL: React.CSSProperties = { width: 84, fontSize: 12, color: "var(--fg-neutral-medium)", flex: "none" };
 export const INPUT: React.CSSProperties = {
@@ -18,14 +17,15 @@ export function fieldValue(styles: StyleSnapshot, pending: PendingEdits, key: ke
 
 export type ChangeFn = (key: keyof StyleSnapshot, rawValue: string) => void;
 
-export function NumberField({ id, label, valuePx, onChange }: {
-  id: string; label: string; valuePx: string; onChange: (px: string) => void;
+export function NumberField({ id, label, valuePx, onChange, placeholder }: {
+  id: string; label: string; valuePx: string; onChange: (px: string) => void; placeholder?: string;
 }) {
   return (
     <div style={FIELD_ROW}>
       <label htmlFor={id} style={COL_LABEL}>{label}</label>
       <input id={id} type="number" aria-label={label} style={INPUT}
         value={toNumberInput(valuePx)}
+        placeholder={placeholder}
         onChange={(e) => onChange(fromNumberInput(e.target.value))} />
     </div>
   );
