@@ -19,10 +19,14 @@ vi.mock("@xorkavi/arcade-gen", async () => {
   };
 });
 
-vi.mock("../../src/hooks/targetSelectionContext", () => ({
-  useTargetSelection: () => ({
-    target: null,
-    setTarget: () => {},
+vi.mock("../../src/hooks/editSessionContext", () => ({
+  useEditSession: () => ({
+    batch: [],
+    frameSlug: null,
+    addOrFocus: () => {},
+    setInspectorOpen: () => {},
+    clear: () => {},
+    frameWindow: null,
   }),
 }));
 

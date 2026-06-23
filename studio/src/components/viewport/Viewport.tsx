@@ -8,7 +8,7 @@ import { ViewportPreview } from "./ViewportPreview";
 import { NewFrameCard } from "./NewFrameCard";
 import { api } from "../../lib/api";
 import { LoadingShow } from "./LoadingShow";
-import { useTargetSelection } from "../../hooks/targetSelectionContext";
+import { useEditSession } from "../../hooks/editSessionContext";
 import { useDialogs } from "../feedback/Dialogs";
 import type { TurnPhase } from "../../hooks/chatStreamReducer";
 
@@ -31,7 +31,7 @@ export function Viewport({
 }) {
   const { frames, refresh } = useFrames(project);
   const [creatingFrame, setCreatingFrame] = useState(false);
-  const { target, setTarget } = useTargetSelection();
+  const { frameSlug, clear } = useEditSession();
   const { toast } = useToast();
   const { confirm } = useDialogs();
   const [highlight, setHighlight] = useState<{
@@ -53,9 +53,9 @@ export function Viewport({
     }
   }
 
-  async function handleDeleteFrame(frameSlug: string) {
-    const frame = frames.find((f) => f.slug === frameSlug);
-    const label = frame?.name ?? frameSlug;
+  async function handleDeleteFrame(deletedFrameSlug: string) {
+    const frame = frames.find((f) => f.slug === deletedFrameSlug);
+    const label = frame?.name ?? deletedFrameSlug;
     const ok = await confirm({
       title: `Delete "${label}"?`,
       description: "This cannot be undone.",
@@ -64,8 +64,8 @@ export function Viewport({
     });
     if (!ok) return;
     try {
-      await api.deleteFrame(project.slug, frameSlug);
-      if (target?.frameSlug === frameSlug) setTarget(null);
+      await api.deleteFrame(project.slug, deletedFrameSlug);
+      if (frameSlug === deletedFrameSlug) clear();
       void refresh();
       toast({ title: "Frame deleted", intent: "success" });
     } catch (e) {

@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Modal, Button, Input, IconButton, CrossSmall } from "@xorkavi/arcade-gen";
-import type { TargetSelection } from "../../hooks/targetSelectionContext";
+import type { ElementSelection } from "../../hooks/editSessionContext";
 import { captureComponentThumb } from "./captureComponentThumb";
 
 interface SaveComponentModalProps {
-  target: TargetSelection;
+  target: ElementSelection;
+  frameSlug: string;
   projectSlug: string;
   onClose: () => void;
   onSaved: (name: string) => void;
@@ -14,6 +15,7 @@ const NAME_PATTERN = /^[A-Z][A-Za-z0-9]{1,39}$/;
 
 export function SaveComponentModal({
   target,
+  frameSlug,
   projectSlug,
   onClose,
   onSaved,
@@ -42,7 +44,7 @@ export function SaveComponentModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           projectSlug,
-          frameSlug: target.frameSlug,
+          frameSlug,
           line: target.line,
           column: target.column,
           name,

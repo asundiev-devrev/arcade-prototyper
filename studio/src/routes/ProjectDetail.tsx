@@ -3,6 +3,7 @@ import { Viewport } from "../components/viewport/Viewport";
 import { LeftPaneTabs, type LeftPaneTab, LEFT_PANE_TAB_KEY } from "../components/shell/LeftPaneTabs";
 import { LeftPaneTabToggle } from "../components/shell/LeftPaneTabToggle";
 import { DevModePanel } from "../components/devmode/DevModePanel";
+import { InspectorPanel } from "../components/inspector/InspectorPanel";
 import { StudioHeader } from "../components/shell/StudioHeader";
 import { ThemeToggle } from "../components/shell/ThemeToggle";
 import { ShareButton } from "../components/shell/ShareButton";
@@ -10,7 +11,7 @@ import { CanvasToggle } from "../components/shell/CanvasToggle";
 import { ChatToggle } from "../components/shell/ChatToggle";
 import { ProjectPicker } from "../components/shell/ProjectPicker";
 import { ChatStreamProvider } from "../hooks/chatStreamContext";
-import { TargetSelectionProvider } from "../hooks/targetSelectionContext";
+import { EditSessionProvider, useEditSession } from "../hooks/editSessionContext";
 import { useProjectFromHost } from "../hooks/useProjectFromHost";
 import type { Project, ChimeIn } from "../../server/types";
 import { takePendingPrompt, peekPendingPrompt } from "../lib/pendingPrompt";
@@ -74,12 +75,14 @@ export function ProjectDetail({ slug, onBack, onOpenProject }: ProjectDetailProp
   }, [slug, send]);
 
   return (
-    <ProjectDetailShell
-      routeKey={slug}
-      source={source}
-      onBack={onBack}
-      onOpenProject={onOpenProject}
-    />
+    <EditSessionProvider>
+      <ProjectDetailShell
+        routeKey={slug}
+        source={source}
+        onBack={onBack}
+        onOpenProject={onOpenProject}
+      />
+    </EditSessionProvider>
   );
 }
 
@@ -94,6 +97,7 @@ function ProjectDetailShell({
   onBack: () => void;
   onOpenProject: (slug: string) => void;
 }) {
+  const { inspectorOpen, inspectorWidth } = useEditSession();
   // Optimistic local override for the theme toggle.
   const [localModeOverride, setLocalModeOverride] =
     useState<"light" | "dark" | null>(null);
@@ -312,7 +316,6 @@ function ProjectDetailShell({
 
   return (
     <ChatStreamProvider value={chatStream}>
-    <TargetSelectionProvider>
     <div style={{ display: "grid", gridTemplateRows: "48px 1fr", height: "100vh" }}>
       <StudioHeader
         title={
@@ -352,7 +355,7 @@ function ProjectDetailShell({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: `${chatOpen ? `${chatWidth}px` : "0px"} 1fr${devOpen ? " auto" : ""}`,
+          gridTemplateColumns: `${chatOpen ? `${chatWidth}px` : "0px"} 1fr${devOpen ? " auto" : ""}${inspectorOpen ? ` ${inspectorWidth}px` : ""}`,
           minHeight: 0,
           transition: resizing ? "none" : "grid-template-columns 0.2s ease",
           position: "relative",
@@ -424,9 +427,9 @@ function ProjectDetailShell({
           />
         </main>
         {devOpen && <DevModePanel slug={project.slug} />}
+        <InspectorPanel onSend={(p, imgs) => source.send(p, imgs)} busy={chatStream.state.phase === "running"} />
       </div>
     </div>
-    </TargetSelectionProvider>
     </ChatStreamProvider>
   );
 }

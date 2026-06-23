@@ -37,7 +37,7 @@ vi.mock("../../src/components/assets/captureComponentThumb", () => ({
 
 import { SaveComponentModal } from "../../src/components/assets/SaveComponentModal";
 
-const target = { file: "/x/frames/01-home/index.tsx", line: 5, column: 3, componentName: "Card", tagName: "div", frameSlug: "01-home" };
+const target = { file: "/x/frames/01-home/index.tsx", line: 5, column: 3, componentName: "Card", tagName: "div", editId: 1, textEditable: false };
 
 afterEach(() => {
   cleanup();
@@ -50,7 +50,7 @@ describe("SaveComponentModal", () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ saved: true, name: "Card" }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     const onSaved = vi.fn();
-    render(<SaveComponentModal target={target as any} projectSlug="demo" onClose={() => {}} onSaved={onSaved} />);
+    render(<SaveComponentModal target={target as any} frameSlug="01-home" projectSlug="demo" onClose={() => {}} onSaved={onSaved} />);
     const nameInput = screen.getByLabelText(/name/i) as HTMLInputElement;
     expect(nameInput.value).toBe("Card");
     await user.click(screen.getByRole("button", { name: /save/i }));
@@ -63,7 +63,7 @@ describe("SaveComponentModal", () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    render(<SaveComponentModal target={target as any} projectSlug="demo" onClose={() => {}} onSaved={() => {}} />);
+    render(<SaveComponentModal target={target as any} frameSlug="01-home" projectSlug="demo" onClose={() => {}} onSaved={() => {}} />);
 
     // Clear and type an invalid name (lowercase start)
     const nameInput = screen.getByLabelText(/name/i) as HTMLInputElement;

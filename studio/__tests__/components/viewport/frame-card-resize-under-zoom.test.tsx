@@ -19,7 +19,7 @@ vi.mock("@xorkavi/arcade-gen", async () => {
 });
 
 import { FrameCard } from "../../../src/components/viewport/FrameCard";
-import { TargetSelectionProvider } from "../../../src/hooks/targetSelectionContext";
+import { EditSessionProvider } from "../../../src/hooks/editSessionContext";
 
 beforeEach(() => {
   cleanup();
@@ -27,7 +27,7 @@ beforeEach(() => {
 
 function renderCard(zoom: number, onFrameWidthChange: (n: number) => void) {
   return render(
-    <TargetSelectionProvider>
+    <EditSessionProvider>
       <FrameCard
         projectSlug="slug"
         frame={{ slug: "f", name: "Frame", path: "", width: 1440, height: 900 } as any}
@@ -36,7 +36,7 @@ function renderCard(zoom: number, onFrameWidthChange: (n: number) => void) {
         projectMode="light"
         zoom={zoom}
       />
-    </TargetSelectionProvider>,
+    </EditSessionProvider>,
   );
 }
 

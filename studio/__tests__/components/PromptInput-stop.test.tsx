@@ -56,7 +56,6 @@ vi.mock("../../prototype-kit/composites/ChatInput", () => {
 });
 
 import { PromptInput } from "../../src/components/chat/PromptInput";
-import { TargetSelectionProvider } from "../../src/hooks/targetSelectionContext";
 
 beforeEach(() => {
   vi.stubGlobal(
@@ -77,14 +76,12 @@ afterEach(() => {
 
 function Harness(props: Partial<React.ComponentProps<typeof PromptInput>>) {
   return (
-    <TargetSelectionProvider>
-      <PromptInput
-        busy={false}
-        projectSlug="alpha"
-        onSend={() => {}}
-        {...props}
-      />
-    </TargetSelectionProvider>
+    <PromptInput
+      busy={false}
+      projectSlug="alpha"
+      onSend={() => {}}
+      {...props}
+    />
   );
 }
 
