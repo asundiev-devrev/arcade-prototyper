@@ -75,66 +75,77 @@ idiomatic (tokens, not raw hex) — which protects the LIFT → production hando
 
 ## Live preview mechanism
 
-Live overrides must survive the frame re-rendering itself mid-session (React
-re-renders, Vite HMR). Inline `style={}` on the node is wiped on any re-render —
-**rejected**.
+Preview is throwaway, applied directly to the **retained DOM node** that
+`inspector.ts` keeps after a pick: `node.style.fontSize = "18px"`,
+`node.textContent = "Save"`, etc. No managed stylesheet, no selector, no stamped
+id.
 
-Adopt design-mode's proven approach: a **managed `<style>` element** injected
-into the iframe `document.head`, holding rules keyed to a **CSS selector** that
-uniquely identifies the picked element. Override rules are written/cleared by
-editing that stylesheet's text, never by touching inline styles. This survives
-re-renders because the selector re-matches the freshly-rendered node.
+**Why inline is enough here** (this was the main over-engineering risk, examined
+and rejected):
 
-Text-content preview is the one exception: text lives in a text node, not a
-style. Preview text by setting `textContent` on the picked node; it may be
-re-clobbered on HMR, which is acceptable (preview-only, source is authoritative
-on commit). The committed text always comes from the pending list, not the DOM.
+- **React re-renders the same node** — an out-of-band inline `style` we set
+  *survives*. React only reconciles the `style` prop it owns, and Studio frames
+  style via `className`, not `style`. React never re-writes the node's `style`,
+  so it never clobbers ours.
+- **Vite HMR reload** — only fires when *source* changes, which only happens on
+  **Commit**, where we clear overrides anyway. No preview is expected to survive
+  HMR.
+- **Full unmount/remount** (a timer/animation in the prototype swaps the
+  subtree) — inline styles are lost, but so would a stamped `data-*` id be (both
+  are DOM mutations, not source). A keyed stylesheet would only survive via a
+  brittle structural selector, so it doesn't actually buy the robustness it
+  appears to. And the window is tiny: during an edit session the picker
+  intercepts clicks, so the user isn't driving the prototype's own state and
+  autonomous re-renders are near-zero.
 
-**Selector strategy:** build a stable-ish selector for the picked node at pick
-time (tag + nth-of-type chain up to the frame root, or a generated
-`data-arcade-edit-id` stamped on the node). A stamped attribute is the most
-robust and is the recommended approach — `inspector.ts` adds
-`data-arcade-edit-id="<n>"` to the picked node and keys overrides off
-`[data-arcade-edit-id="<n>"]`.
+If remount ever proves to clobber previews in practice, the cheap fallback is a
+`MutationObserver` that re-applies the `pending` values to the re-rendered node —
+deferred until observed, not built up front.
 
-## Architecture — five focused units
+The committed result always comes from the `pending` state in the shell, never
+read back from the DOM — so preview fragility can never corrupt a commit.
+
+## Architecture — three units + one pure function
 
 | Unit | Location | Responsibility | Depends on |
 |---|---|---|---|
-| `inspector.ts` | inside iframe — sibling to `picker.ts` | After a pick: retain the DOM node (today's `picker.ts` discards it), stamp `data-arcade-edit-id`, read computed styles, build the override stylesheet, apply/clear override rules, set preview text. Reuses `picker.ts`'s fiber→source resolution. | `picker.ts` |
-| `EditSessionContext` | shell — extends `targetSelectionContext.tsx` | Single source of truth: the current target **plus** the ordered pending-override list. Panel binds to it; Commit reads it. | — |
-| `InspectorPanel.tsx` | shell — new, right edge | The UI. arcade-gen controls grouped Text / Typography / Color / Spacing + pending-changes list + Commit / Discard. Reads initial values from the inspect report; emits override messages to the iframe; pushes pending changes into `EditSessionContext`. | `EditSessionContext`, arcade-gen |
-| `buildVisualEditPreamble()` | shell — pure fn, sibling to `buildTargetPreamble()` | Serialize pending overrides + target `file:line:column` into one Claude instruction. Pure → unit-testable. | — |
-| Commit | reuses existing `onSend` / `/api/chat` | No new server endpoint. Overrides ride the same edit path the typed flow already uses (`buildTargetPreamble` → `onSend`). | existing chat pipeline |
+| `inspector.ts` | inside iframe — sibling to `picker.ts` | After a pick: retain the DOM node (today's `picker.ts` discards it), read its computed styles, post the inspect report, and apply/clear inline preview (`node.style.*`, `node.textContent`) on message. Reuses `picker.ts`'s fiber→source resolution. | `picker.ts` |
+| `targetSelectionContext.tsx` (extended) | shell — existing context, add a `pending` field | Single source of truth: the current target **plus** the pending edits (the set of control values that differ from their originals). Panel binds to it; commit reads it. No new context — just a new field + setters. | — |
+| `InspectorPanel.tsx` | shell — new, right edge | The UI. arcade-gen controls grouped Text / Typography / Color / Spacing + Commit / Discard. Reads initial values from the inspect report; on each control change updates `pending` and posts a preview message to the iframe. The controls *are* the pending state — resetting a control to its original removes that change. No separate stacked list. | extended context, arcade-gen |
+| `buildVisualEditPreamble()` | shell — pure fn, sibling to `buildTargetPreamble()` | Serialize the pending edits + target `file:line:column` into one Claude instruction. Pure → unit-testable. | — |
+
+**Commit is not a unit** — it reuses the existing `onSend` / `/api/chat` path
+the typed flow already uses (`buildTargetPreamble` → `onSend`). No new server
+endpoint.
 
 ### postMessage protocol (extends the existing `*`-origin pattern in `picker.ts`)
 
 Parent → iframe:
 - `arcade-studio:frame-pick-start` / `-stop` *(exists)*
-- `arcade-studio:apply-override` — `{ editId, property, value }`
-- `arcade-studio:set-text` — `{ editId, text }`
-- `arcade-studio:clear-overrides` — `{ editId }` (Discard / panel close)
+- `arcade-studio:preview` — `{ property, value }` (one verb covers style props
+  and `text`; `inspector.ts` applies to the retained node; clearing = sending
+  the original values back, or a `reset` payload)
 
 iframe → parent:
-- `arcade-studio:frame-picked` *(exists — extended with `editId` + computed-style snapshot, becomes the "inspect report")*
+- `arcade-studio:frame-picked` *(exists — extended with a computed-style snapshot, becoming the "inspect report")*
 - `arcade-studio:frame-pick-cancelled` *(exists)*
 
 ### Data flow
 
 **Pick:** crosshair → panel slides in (empty) → element click → `inspector.ts`
-stamps `editId`, reads computed styles, posts inspect report → `EditSessionContext`
+retains the node, reads computed styles, posts the inspect report → context
 stores target + initial values → panel populates.
 
-**Edit (live):** panel control change → push to pending list in context → post
-`apply-override` / `set-text` to iframe → `inspector.ts` rewrites the managed
-stylesheet → frame updates instantly.
+**Edit (live):** panel control change → update `pending` in context → post
+`preview` to iframe → `inspector.ts` sets `node.style.*` / `textContent` → frame
+updates instantly.
 
 **Commit:** `buildVisualEditPreamble(target, pending)` → `onSend(...)` → existing
 Claude subprocess rewrites source → Vite HMR reloads frame with real code →
-context clears overrides → `inspector.ts` removes the managed stylesheet.
+context clears.
 
-**Discard / close:** post `clear-overrides` → stylesheet emptied → frame snaps
-back to source → context cleared.
+**Discard / close:** post `preview` with the original values (reset) → frame
+snaps back → context cleared.
 
 ## Error handling
 
@@ -143,9 +154,9 @@ back to source → context cleared.
 - **Commit produces no edit** (phantom edit): already covered by
   `server/phantomEditRetry.ts` — the visual-edit path inherits the same retry,
   because it rides `onSend`.
-- **Override on a node that vanishes** (HMR replaced subtree, `editId` gone):
-  selector simply stops matching → preview reverts harmlessly. Panel still holds
-  the pending value; commit is unaffected (source-driven, not DOM-driven).
+- **Override on a node that vanishes** (remount replaced the subtree): the
+  inline style is lost → preview reverts harmlessly. Panel still holds the
+  pending value; commit is unaffected (it reads `pending`, not the DOM).
 - **Off-scale values** (e.g. font-size 17px with no exact Tailwind step): the
   pending list keeps the raw value; Claude maps it to the nearest idiomatic
   token/class on commit (this is *why* we chose Claude translation over a
@@ -155,10 +166,8 @@ back to source → context cleared.
 
 - `buildVisualEditPreamble()` — pure unit tests (`__tests__/`): correct
   serialization of each category, multiple stacked changes, file:line inclusion.
-- `EditSessionContext` — reducer-style tests: add / remove / clear pending
-  changes, target switch resets pending.
-- `inspector.ts` selector/stamp logic — unit test the `editId` stamping and
-  override-rule string building (DOM-light, jsdom).
+- `targetSelectionContext.tsx` `pending` field — tests: set / reset / clear
+  pending values, target switch resets pending.
 - Component: `InspectorPanel.tsx` with arcade-gen mocked (per studio test
   discipline — mock must export the controls used).
 - Manual: dev-only feature → verify live in `pnpm run studio` (picker uses React
@@ -179,8 +188,13 @@ back to source → context cleared.
    coordinate/scroll/zoom geometry sync — significant work for marginal v1 value.
 4. **Right-side inspector**, opposite the left chat pane — familiar design-tool
    layout, doesn't crowd the frame.
-5. **Managed stylesheet keyed by `data-arcade-edit-id`** for live preview —
-   survives re-renders, copied from design-mode's battle-tested approach.
+5. **Inline `node.style.*` preview on the retained node** — not design-mode's
+   managed keyed stylesheet. That machinery solves re-render churn on arbitrary
+   production SPAs; Studio frames are className-styled static prototypes with the
+   picker intercepting clicks, so the churn it guards against barely exists, and
+   the stamped-id version wouldn't survive remount anyway. Commit reads `pending`
+   state, not the DOM, so preview fragility can't corrupt a commit. See Live
+   preview mechanism for the full rejection.
 
 ## Open implementation notes (for the plan, not blockers)
 
@@ -191,7 +205,6 @@ back to source → context cleared.
 - `targetSelectionContext.tsx` is global (one target at a time across all
   frames) — keep that; the panel is singular.
 - Confirm frames are same-origin (they are: served from `/api/frames/...` on the
-  same Vite origin) so `inspector.ts` can read computed styles without CORS
-  issues. The managed-stylesheet approach works regardless, but computed-style
-  *reading* needs same-origin — verified by today's `picker.ts` already reading
-  fiber internals across the boundary.
+  same Vite origin) so `inspector.ts` can read computed styles. Reading
+  `getComputedStyle` needs same-origin — already satisfied, since today's
+  `picker.ts` reads fiber internals across the same boundary.
