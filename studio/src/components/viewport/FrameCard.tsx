@@ -61,7 +61,7 @@ export function FrameCard({
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const wipeWrapperRef = useRef<HTMLDivElement | null>(null);
-  const { target, setTarget } = useTargetSelection();
+  const { target, setTarget, setInspectorOpen, setFrameWindow, clear } = useTargetSelection();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -111,15 +111,13 @@ export function FrameCard({
             column: number;
             componentName: string;
             tagName: string;
+            styles: import("../../hooks/targetSelectionContext").StyleSnapshot;
           };
         }).selection;
         if (sel) {
           setTarget({ ...sel, frameSlug: frame.slug });
-          const name = sel.componentName || sel.tagName || "element";
-          toast({
-            title: `Targeted <${name}>`,
-            description: "Added to the chat input as context",
-          });
+          setFrameWindow(iframeRef.current?.contentWindow ?? null);
+          setInspectorOpen(true);
         }
         setPicking(false);
       } else if (t === "arcade-studio:frame-pick-cancelled") {
@@ -245,12 +243,14 @@ export function FrameCard({
               onClick={() => {
                 if (picking) {
                   setPicking(false);
+                  setInspectorOpen(false);
                   return;
                 }
                 if (isTargetedFrame) {
-                  setTarget(null);
+                  clear();
                   return;
                 }
+                setInspectorOpen(true);
                 setPicking(true);
               }}
             >

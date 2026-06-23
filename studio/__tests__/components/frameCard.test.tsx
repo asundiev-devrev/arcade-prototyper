@@ -23,6 +23,9 @@ vi.mock("../../src/hooks/targetSelectionContext", () => ({
   useTargetSelection: () => ({
     target: null,
     setTarget: () => {},
+    setInspectorOpen: () => {},
+    setFrameWindow: () => {},
+    clear: () => {},
   }),
 }));
 
