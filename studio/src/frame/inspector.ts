@@ -25,6 +25,7 @@ export interface StyleSnapshot {
   borderColor: string;
   paddingTop: string; paddingRight: string; paddingBottom: string; paddingLeft: string;
   marginTop: string; marginRight: string; marginBottom: string; marginLeft: string;
+  gap: string;
   width: string; height: string;
 }
 
@@ -34,7 +35,7 @@ const STYLE_FIELDS = [
   "fontSize", "fontWeight", "fontStyle", "textAlign", "color",
   "backgroundColor", "borderColor", "paddingTop", "paddingRight",
   "paddingBottom", "paddingLeft", "marginTop", "marginRight",
-  "marginBottom", "marginLeft", "width", "height",
+  "marginBottom", "marginLeft", "gap", "width", "height",
 ] as const;
 
 /** Direct (own) text of an element, trimmed — descendant text excluded. */
@@ -62,6 +63,7 @@ export function readStyleSnapshot(node: Element): StyleSnapshot {
     paddingBottom: cs.paddingBottom, paddingLeft: cs.paddingLeft,
     marginTop: cs.marginTop, marginRight: cs.marginRight,
     marginBottom: cs.marginBottom, marginLeft: cs.marginLeft,
+    gap: cs.gap,
     width: cs.width, height: cs.height,
   };
 }
@@ -71,6 +73,15 @@ let originalSnapshot: StyleSnapshot | null = null;
 
 /** Called by picker.ts on a successful pick. Retains the node + returns its snapshot. */
 export function capture(node: HTMLElement): StyleSnapshot {
+  // If we had a previous edit session, auto-reset that old node before capturing the new one.
+  if (editingNode && originalSnapshot && editingNode !== node) {
+    for (const field of STYLE_FIELDS) {
+      (editingNode.style as unknown as Record<string, string>)[field] = "";
+    }
+    editingNode.style.borderStyle = "";
+    editingNode.style.borderWidth = "";
+    editingNode.textContent = originalSnapshot.text;
+  }
   editingNode = node;
   originalSnapshot = readStyleSnapshot(node);
   return originalSnapshot;

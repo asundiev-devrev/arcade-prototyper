@@ -14,6 +14,7 @@ const LABELS: Record<keyof StyleSnapshot, string> = {
   paddingBottom: "padding bottom", paddingLeft: "padding left",
   marginTop: "margin top", marginRight: "margin right",
   marginBottom: "margin bottom", marginLeft: "margin left",
+  gap: "gap",
   width: "width", height: "height",
 };
 

@@ -61,7 +61,7 @@ export function FrameCard({
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const wipeWrapperRef = useRef<HTMLDivElement | null>(null);
-  const { target, setTarget, setInspectorOpen, setFrameWindow, clear } = useTargetSelection();
+  const { target, setTarget, setInspectorOpen, setFrameWindow, clear, frameWindow } = useTargetSelection();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -115,8 +115,13 @@ export function FrameCard({
           };
         }).selection;
         if (sel) {
+          const newWindow = iframeRef.current?.contentWindow ?? null;
+          // If switching from a different frame, reset the old frame's preview.
+          if (frameWindow && frameWindow !== newWindow) {
+            frameWindow.postMessage({ type: "arcade-studio:preview-reset" }, "*");
+          }
           setTarget({ ...sel, frameSlug: frame.slug });
-          setFrameWindow(iframeRef.current?.contentWindow ?? null);
+          setFrameWindow(newWindow);
           setInspectorOpen(true);
         }
         setPicking(false);
@@ -147,7 +152,7 @@ export function FrameCard({
         "*",
       );
     };
-  }, [picking, frame.slug, setTarget]);
+  }, [picking, frame.slug, setTarget, setFrameWindow, setInspectorOpen, frameWindow]);
 
   function onIframeLoad() {
     if (phase !== "running") return;

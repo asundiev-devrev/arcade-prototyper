@@ -198,7 +198,7 @@ export function InspectorPanel({
             {/* Spacing & size */}
             <div style={SECTION}>
               <span style={LABEL}>Spacing &amp; size</span>
-              {(["paddingTop", "paddingRight", "paddingBottom", "paddingLeft", "width", "height"] as const).map((key) => (
+              {(["paddingTop", "paddingRight", "paddingBottom", "paddingLeft", "marginTop", "marginRight", "marginBottom", "marginLeft", "gap", "width", "height"] as const).map((key) => (
                 <div style={FIELD_ROW} key={key}>
                   <label htmlFor={`ins-${key}`} style={{ width: 72, fontSize: 12, color: "var(--fg-neutral-medium)" }}>{key}</label>
                   <input

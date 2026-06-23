@@ -11,6 +11,7 @@ export interface StyleSnapshot {
   borderColor: string;
   paddingTop: string; paddingRight: string; paddingBottom: string; paddingLeft: string;
   marginTop: string; marginRight: string; marginBottom: string; marginLeft: string;
+  gap: string;
   width: string; height: string;
 }
 

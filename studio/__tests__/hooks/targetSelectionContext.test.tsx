@@ -12,7 +12,7 @@ const STYLES: StyleSnapshot = {
   textAlign: "left", color: "rgb(0, 0, 0)", backgroundColor: "rgba(0, 0, 0, 0)",
   borderColor: "rgb(0, 0, 0)", paddingTop: "0px", paddingRight: "0px",
   paddingBottom: "0px", paddingLeft: "0px", marginTop: "0px", marginRight: "0px",
-  marginBottom: "0px", marginLeft: "0px", width: "80px", height: "32px",
+  marginBottom: "0px", marginLeft: "0px", gap: "0px", width: "80px", height: "32px",
 };
 
 function wrap({ children }: { children: React.ReactNode }) {
