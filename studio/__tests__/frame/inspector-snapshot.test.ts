@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { readStyleSnapshot, isTextEditable, capture } from "../../src/frame/inspector";
 
 beforeEach(() => { document.body.innerHTML = ""; });
@@ -75,5 +75,56 @@ describe("capture + preview", () => {
     expect(a.style.fontSize).toBe("40px");
     expect(b.style.fontSize).toBe("");
     expect(cb.editId).not.toBe(ca.editId);
+  });
+});
+
+describe("contenteditable on interactive elements", () => {
+  beforeEach(() => {
+    // Mock document.execCommand since jsdom doesn't implement it
+    document.execCommand = vi.fn();
+  });
+
+  it("allows Space in contenteditable button", () => {
+    const button = document.createElement("button");
+    button.textContent = "Click";
+    document.body.appendChild(button);
+    const { editId } = capture(button);
+
+    // Double-click to enter edit mode
+    const dblEvent = new MouseEvent("dblclick", { bubbles: true, cancelable: true });
+    Object.defineProperty(dblEvent, "target", { value: button, writable: false });
+    document.dispatchEvent(dblEvent);
+
+    expect(button.getAttribute("contenteditable")).toBe("true");
+
+    // Try to insert a space
+    const spaceEvent = new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true });
+    const prevented = !button.dispatchEvent(spaceEvent);
+
+    expect(prevented).toBe(true);
+    expect(document.execCommand).toHaveBeenCalledWith("insertText", false, " ");
+  });
+
+  it("commits edit on Enter in contenteditable button", () => {
+    const button = document.createElement("button");
+    button.textContent = "Click";
+    document.body.appendChild(button);
+    capture(button);
+
+    // Enter edit mode
+    const dblEvent = new MouseEvent("dblclick", { bubbles: true, cancelable: true });
+    Object.defineProperty(dblEvent, "target", { value: button, writable: false });
+    document.dispatchEvent(dblEvent);
+
+    expect(button.getAttribute("contenteditable")).toBe("true");
+
+    // Press Enter (should commit)
+    const enterEvent = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    const prevented = !button.dispatchEvent(enterEvent);
+
+    expect(prevented).toBe(true);
+    // blur() should have been called, which removes contenteditable
+    // In jsdom, blur is synchronous
+    expect(button.getAttribute("contenteditable")).toBeNull();
   });
 });

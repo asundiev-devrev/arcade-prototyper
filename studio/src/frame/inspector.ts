@@ -138,15 +138,30 @@ function onDblClick(e: MouseEvent) {
   e.stopPropagation();
   node.setAttribute("contenteditable", "true");
   node.focus();
+  const onEditKeyDown = (ke: KeyboardEvent) => {
+    // Interactive elements (button/a/summary) consume Space/Enter for native
+    // activation instead of editing text. Handle them manually.
+    if (ke.key === " ") {
+      ke.preventDefault();
+      ke.stopPropagation();
+      document.execCommand("insertText", false, " ");
+    } else if (ke.key === "Enter") {
+      ke.preventDefault();
+      ke.stopPropagation();
+      node.blur(); // commit (single-line inline edit)
+    }
+  };
   const finish = () => {
     node.removeAttribute("contenteditable");
     node.removeEventListener("blur", finish);
+    node.removeEventListener("keydown", onEditKeyDown, true);
     try {
       window.parent?.postMessage(
         { type: "arcade-studio:text-changed", editId, text: ownText(node) }, "*",
       );
     } catch { /* ignore */ }
   };
+  node.addEventListener("keydown", onEditKeyDown, true);
   node.addEventListener("blur", finish);
 }
 
