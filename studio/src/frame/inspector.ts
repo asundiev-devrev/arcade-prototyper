@@ -56,6 +56,7 @@ export function readStyleSnapshot(node: Element): StyleSnapshot {
     textAlign: cs.textAlign,
     color: cs.color,
     backgroundColor: cs.backgroundColor,
+    // getComputedStyle().borderColor returns "" when sides differ; use top as stable proxy
     borderColor: cs.borderTopColor,
     paddingTop: cs.paddingTop, paddingRight: cs.paddingRight,
     paddingBottom: cs.paddingBottom, paddingLeft: cs.paddingLeft,
@@ -88,6 +89,8 @@ function applyField(field: string, value: string) {
       if (editingNode.style.borderWidth === "") editingNode.style.borderWidth = "1px";
     }
     (editingNode.style as unknown as Record<string, string>)[field] = value;
+  } else {
+    console.warn(`[inspector] ignored unknown preview field "${field}"`);
   }
 }
 
