@@ -16,15 +16,17 @@
  *   fine for a dev-only feature, would not survive a production build.
  */
 
-import { capture, type StyleSnapshot } from "./inspector";
+import { capture } from "./inspector";
 
 interface PickerSelection {
+  editId: number;
   file: string;
   line: number;
   column: number;
   componentName: string;
   tagName: string;
-  styles: StyleSnapshot;
+  textEditable: boolean;
+  styles: import("./inspector").StyleSnapshot;
 }
 
 const OUTLINE_ID = "__arcade-studio-picker-outline";
@@ -150,7 +152,11 @@ function resolveSelection(fiber: FiberLike, domNode: HTMLElement): PickerSelecti
           (node._debugOwner && componentNameFromType(node._debugOwner.type)) ||
           tagName ||
           "Element";
-        return { ...parsed, componentName, tagName, styles: capture(domNode) };
+        const cap = capture(domNode);
+        return {
+          ...parsed, componentName, tagName,
+          editId: cap.editId, textEditable: cap.textEditable, styles: cap.styles,
+        };
       }
     }
     node = node.return ?? null;
@@ -249,7 +255,8 @@ function onClick(e: MouseEvent) {
   }
   flashOutlineAndFinish(true, () => {
     postPicked(sel);
-    deactivate();
+    // Do NOT deactivate — bulk editing keeps the picker live until the panel
+    // is closed/committed/discarded (parent sends frame-pick-stop) or Escape.
   });
 }
 
