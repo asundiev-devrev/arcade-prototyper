@@ -43,5 +43,8 @@ describe("overlay facade", () => {
     const distanceLayer = document.getElementById("dm-distance");
     expect(distanceLayer).not.toBeNull();
     expect(distanceLayer!.children.length).toBeGreaterThan(0);
+    // Assert at least one pill has numeric distance label
+    const pillWithDigit = Array.from(distanceLayer!.children).some(node => /\d/.test((node as HTMLElement).textContent || ""));
+    expect(pillWithDigit).toBe(true);
   });
 });
