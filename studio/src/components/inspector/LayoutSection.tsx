@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import type { StyleSnapshot, PendingEdits } from "../../hooks/editSessionContext";
 import {
-  NumberField, SegmentedToggle, fieldValue, toNumberInput, fromNumberInput,
+  NumberField, SegmentedToggle, fieldValue,
   FIELD_ROW, COL_LABEL, type ChangeFn,
 } from "./inspectorControls";
 

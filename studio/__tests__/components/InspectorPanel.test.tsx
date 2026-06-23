@@ -56,6 +56,8 @@ describe("InspectorPanel (batch)", () => {
   it("seeds focused controls and records a pending edit on the focused element", () => {
     render(<EditSessionProvider><Harness onSend={vi.fn()} /></EditSessionProvider>);
     fireEvent.click(screen.getByText("open1"));
+    expect(screen.getByText("Layout")).toBeTruthy(); // Layout section present
+    expect(screen.getByLabelText("W")).toBeTruthy(); // Width field from Layout section
     const fontSize = screen.getByLabelText(/font size/i) as HTMLInputElement;
     expect(fontSize.value).toBe("14");
     fireEvent.change(fontSize, { target: { value: "18" } });

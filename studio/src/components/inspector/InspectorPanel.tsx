@@ -4,14 +4,13 @@ import {
   useEditSession, type StyleSnapshot, type PendingEdits, type EditedElement,
 } from "../../hooks/editSessionContext";
 import { buildVisualEditPreamble } from "../../lib/visualEditPreamble";
+import { fieldValue, toNumberInput, fromNumberInput } from "./inspectorControls";
+import { Section } from "./Section";
+import { LayoutSection } from "./LayoutSection";
+import { AppearanceSection } from "./AppearanceSection";
 
 const MIN_W = 280, MAX_W = 560;
 
-function toNumberInput(v: string): string { return v.endsWith("px") ? v.slice(0, -2) : v; }
-function fromNumberInput(v: string): string { return v === "" ? "" : `${v}px`; }
-function fieldValue(styles: StyleSnapshot, pending: PendingEdits, key: keyof StyleSnapshot): string {
-  return pending[key] ?? styles[key];
-}
 function countChanges(e: EditedElement): number {
   return Object.values(e.pending).filter((v) => v !== undefined).length;
 }
@@ -186,9 +185,15 @@ export function InspectorPanel({
                   </div>
                 )}
 
-                {/* Typography */}
-                <div style={SECTION}>
-                  <span style={LABEL}>Typography</span>
+                <Section title="Layout">
+                  <LayoutSection styles={styles} pending={pending} change={change} />
+                </Section>
+
+                <Section title="Appearance">
+                  <AppearanceSection styles={styles} pending={pending} change={change} />
+                </Section>
+
+                <Section title="Typography">
                   <div style={FIELD_ROW}>
                     <label htmlFor="ins-fontSize" style={COL_LABEL}>Font size</label>
                     <input id="ins-fontSize" type="number" aria-label="Font size" style={INPUT}
@@ -217,11 +222,9 @@ export function InspectorPanel({
                       checked={fieldValue(styles, pending, "fontStyle") === "italic"}
                       onChange={(e) => change("fontStyle", e.target.checked ? "italic" : "normal")} />
                   </div>
-                </div>
+                </Section>
 
-                {/* Color */}
-                <div style={SECTION}>
-                  <span style={LABEL}>Color</span>
+                <Section title="Color">
                   {(["color","backgroundColor","borderColor"] as const).map((key) => (
                     <div style={FIELD_ROW} key={key}>
                       <label htmlFor={`ins-${key}`} style={COL_LABEL}>
@@ -232,20 +235,7 @@ export function InspectorPanel({
                         onChange={(e) => change(key, e.target.value)} />
                     </div>
                   ))}
-                </div>
-
-                {/* Spacing & size */}
-                <div style={SECTION}>
-                  <span style={LABEL}>Spacing &amp; size</span>
-                  {(["paddingTop","paddingRight","paddingBottom","paddingLeft","marginTop","marginRight","marginBottom","marginLeft","gap","width","height"] as const).map((key) => (
-                    <div style={FIELD_ROW} key={key}>
-                      <label htmlFor={`ins-${key}`} style={COL_LABEL}>{key.replace(/([A-Z])/g, " $1").toLowerCase()}</label>
-                      <input id={`ins-${key}`} type="number" aria-label={key} style={INPUT}
-                        value={toNumberInput(fieldValue(styles, pending, key))}
-                        onChange={(e) => change(key, fromNumberInput(e.target.value))} />
-                    </div>
-                  ))}
-                </div>
+                </Section>
               </>
             )}
           </>
