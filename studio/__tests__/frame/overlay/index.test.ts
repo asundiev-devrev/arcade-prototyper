@@ -34,4 +34,14 @@ describe("overlay facade", () => {
     overlay.setEnabled(false);
     expect(document.getElementById("dm-hover")).toBeNull();
   });
+
+  it("showHover with a selected element renders distance pills", () => {
+    const el1 = document.createElement("div"); stubRect(el1); document.body.appendChild(el1);
+    const el2 = document.createElement("button"); el2.getBoundingClientRect = () => ({ top: 30, left: 10, width: 40, height: 15, bottom: 45, right: 50, x: 10, y: 30, toJSON() {} }) as DOMRect; document.body.appendChild(el2);
+    overlay.showSelection(el1);
+    overlay.showHover(el2);
+    const distanceLayer = document.getElementById("dm-distance");
+    expect(distanceLayer).not.toBeNull();
+    expect(distanceLayer!.children.length).toBeGreaterThan(0);
+  });
 });

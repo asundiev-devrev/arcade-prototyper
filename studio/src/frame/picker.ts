@@ -156,7 +156,7 @@ function onMouseOver(e: MouseEvent) {
 
 function onScroll() {
   if (!active) return;
-  overlay.reposition(hoverTarget as HTMLElement | null);
+  overlay.reposition();
 }
 
 function postPicked(sel: PickerSelection) {
