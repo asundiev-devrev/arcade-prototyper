@@ -28,7 +28,7 @@ function elementBlock(e: EditedElement): string | null {
       ? `  - text content: "${from}" -> "${to}"`
       : `  - ${LABELS[k]}: ${from} -> ${to}`;
   });
-  return [`Element ${label} at line :${s.line}:${s.column}:`, ...lines].join("\n");
+  return [`Element ${label} at line ${s.line}:${s.column}:`, ...lines].join("\n");
 }
 
 /**

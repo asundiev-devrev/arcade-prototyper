@@ -27,15 +27,19 @@ function sel(editId: number): ElementSelection {
     componentName: "Button", tagName: "button", textEditable: true, styles: STYLES,
   };
 }
+const stubWindow = { postMessage: vi.fn() } as unknown as Window;
+
 function Harness({ onSend }: { onSend: any }) {
   const ctx = useEditSession();
   return (
     <>
       <button onClick={() => { ctx.setInspectorOpen(true); ctx.addOrFocus(sel(1), "home", null); }}>open1</button>
+      <button onClick={() => { ctx.setInspectorOpen(true); ctx.addOrFocus(sel(1), "home", stubWindow); }}>open1-with-window</button>
       <button onClick={() => ctx.addOrFocus(sel(2), "home", null)}>add2</button>
       <InspectorPanel onSend={onSend} busy={false} />
       <span data-testid="count">{ctx.batch.length}</span>
       <span data-testid="focused">{ctx.focusedEditId ?? ""}</span>
+      <span data-testid="width">{ctx.inspectorWidth}</span>
     </>
   );
 }
@@ -81,5 +85,29 @@ describe("InspectorPanel (batch)", () => {
     render(<EditSessionProvider><Harness onSend={vi.fn()} /></EditSessionProvider>);
     fireEvent.click(screen.getByText("open1"));
     expect(screen.queryByLabelText(/text content/i)).toBeNull();
+  });
+
+  it("resize handle widens the panel when dragged left", () => {
+    render(<EditSessionProvider><Harness onSend={vi.fn()} /></EditSessionProvider>);
+    fireEvent.click(screen.getByText("open1"));
+    const initialWidth = parseInt(screen.getByTestId("width").textContent || "360", 10);
+    const handle = screen.getByRole("separator", { name: /resize inspector/i });
+    fireEvent.mouseDown(handle, { clientX: 100 });
+    fireEvent.mouseMove(window, { clientX: 50 }); // drag left
+    const newWidth = parseInt(screen.getByTestId("width").textContent || "360", 10);
+    expect(newWidth).toBeGreaterThan(initialWidth);
+  });
+
+  it("removing an element sends preview-reset postMessage", () => {
+    vi.clearAllMocks();
+    render(<EditSessionProvider><Harness onSend={vi.fn()} /></EditSessionProvider>);
+    fireEvent.click(screen.getByText("open1-with-window"));
+    const removeBtn = screen.getByLabelText(/remove element 1/i);
+    fireEvent.click(removeBtn);
+    expect(stubWindow.postMessage).toHaveBeenCalledWith(
+      { type: "arcade-studio:preview-reset", editId: 1 },
+      "*",
+    );
+    expect(screen.getByTestId("count").textContent).toBe("0");
   });
 });

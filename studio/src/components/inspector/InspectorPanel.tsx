@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@xorkavi/arcade-gen";
 import {
   useEditSession, type StyleSnapshot, type PendingEdits, type EditedElement,
@@ -41,7 +41,8 @@ export function InspectorPanel({
     batch, focusedEditId, frameWindow, inspectorOpen, inspectorWidth,
     setField, resetField, removeElement, focus, clear, setInspectorWidth,
   } = useEditSession();
-  const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const [isResizing, setIsResizing] = useState(false);
+  const dragOrigin = useRef<{ startX: number; startWidth: number } | null>(null);
 
   // In-place text edits arrive from the iframe as text-changed messages.
   useEffect(() => {
@@ -58,19 +59,23 @@ export function InspectorPanel({
 
   // Resize drag (mirrors the chat-pane handle in ProjectDetail).
   useEffect(() => {
-    if (!resizeRef.current) return;
+    if (!isResizing) return;
     function onMove(e: MouseEvent) {
-      const s = resizeRef.current;
+      const s = dragOrigin.current;
       if (!s) return;
       // Panel is on the RIGHT, handle on its LEFT edge → dragging left widens.
       const next = s.startWidth + (s.startX - e.clientX);
       setInspectorWidth(Math.min(MAX_W, Math.max(MIN_W, next)));
     }
-    function onUp() { resizeRef.current = null; document.body.style.cursor = ""; document.body.style.userSelect = ""; }
+    function onUp() {
+      setIsResizing(false);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    }
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
     return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
-  }, []);
+  }, [isResizing, setInspectorWidth]);
 
   if (!inspectorOpen) return null;
 
@@ -104,7 +109,8 @@ export function InspectorPanel({
   }
   function startResize(e: React.MouseEvent) {
     e.preventDefault();
-    resizeRef.current = { startX: e.clientX, startWidth: inspectorWidth };
+    dragOrigin.current = { startX: e.clientX, startWidth: inspectorWidth };
+    setIsResizing(true);
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
   }
@@ -159,7 +165,11 @@ export function InspectorPanel({
                       &lt;{e.selection.tagName || e.selection.componentName}&gt;{n ? ` · ${n}` : ""}
                     </span>
                     <button type="button" aria-label={`Remove element ${e.selection.editId}`}
-                      onClick={(ev) => { ev.stopPropagation(); removeElement(e.selection.editId); }}
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        frameWindow?.postMessage({ type: "arcade-studio:preview-reset", editId: e.selection.editId }, "*");
+                        removeElement(e.selection.editId);
+                      }}
                       style={{ background: "transparent", border: "none", color: "var(--fg-neutral-subtle)", cursor: "pointer", fontSize: 14, lineHeight: 1 }}>×</button>
                   </div>
                 );

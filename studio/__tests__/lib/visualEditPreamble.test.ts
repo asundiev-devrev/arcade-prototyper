@@ -31,16 +31,16 @@ describe("buildVisualEditPreamble (batch)", () => {
       "home/index.tsx",
     );
     expect(out).toContain("frames/home/index.tsx");
-    expect(out).toContain(":10:3");
+    expect(out).toContain("10:3");
     expect(out).toContain("font size: 14px -> 18px");
-    expect(out).toContain(":20:3");
+    expect(out).toContain("20:3");
     expect(out).toContain("text color: rgb(0,0,0) -> rgb(37,99,235)");
   });
 
   it("skips elements with no pending changes but keeps changed ones", () => {
     const out = buildVisualEditPreamble([el(1, {}), el(2, { fontSize: "20px" })], "home/index.tsx");
-    expect(out).toContain(":20:3");
-    expect(out).not.toContain(":10:3");
+    expect(out).toContain("20:3");
+    expect(out).not.toContain("10:3");
   });
 
   it("renders a text change in quotes and demands token-idiomatic output", () => {
