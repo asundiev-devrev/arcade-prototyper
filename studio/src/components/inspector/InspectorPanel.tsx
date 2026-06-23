@@ -70,22 +70,25 @@ export function InspectorPanel({
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
     return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
-  });
+  }, []);
 
   if (!inspectorOpen) return null;
 
-  const focused = batch.find((e) => e.selection.editId === focusedEditId) ?? null;
-
   function change(key: keyof StyleSnapshot, rawValue: string) {
-    if (!focused) return;
-    const id = focused.selection.editId;
-    const original = focused.selection.styles[key];
+    const id = focusedEditId;
+    if (id == null) return;
+    const elem = batch.find((e) => e.selection.editId === id);
+    if (!elem) return;
+    const original = elem.selection.styles[key];
     if (rawValue === original || rawValue === "") resetField(id, key);
     else setField(id, key, rawValue);
     frameWindow?.postMessage(
-      { type: "arcade-studio:preview", editId: id, field: key, value: rawValue || original }, "*",
+      { type: "arcade-studio:preview", editId: id, field: key, value: rawValue || original },
+      "*",
     );
   }
+
+  const focused = batch.find((e) => e.selection.editId === focusedEditId) ?? null;
   function discard() {
     frameWindow?.postMessage({ type: "arcade-studio:preview-reset", all: true }, "*");
     clear();
