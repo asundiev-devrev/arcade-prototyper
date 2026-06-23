@@ -21,10 +21,12 @@ import { toPng } from "html-to-image";
 export async function captureComponentThumb(name: string): Promise<boolean> {
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
-  // Lay out at a generous width so wide components paint at full size; the
-  // capture is then cropped tight to the rendered content (see below).
+  // A modest viewport width so a full-width component (e.g. a pill whose
+  // width caps at ~208px) lays out near its intended size in NORMAL BLOCK
+  // FLOW. Do NOT use a huge width or inline-block — both distort the
+  // component (stretch it full-bleed or collapse it to its text).
   iframe.style.cssText =
-    "position:fixed;left:-10000px;top:0;width:1000px;height:800px;border:0;visibility:hidden;";
+    "position:fixed;left:-10000px;top:0;width:360px;height:600px;border:0;visibility:hidden;";
   iframe.src = `/api/components/${encodeURIComponent(name)}/preview`;
   document.body.appendChild(iframe);
 
@@ -50,22 +52,25 @@ export async function captureComponentThumb(name: string): Promise<boolean> {
     // snapshotting. The bundle is large; a short wait avoids a blank capture.
     await new Promise((r) => setTimeout(r, 500));
 
-    // Shrink-wrap the body around the rendered component (inline-block) with
-    // comfortable padding, then crop the capture to those exact bounds. A small
-    // component otherwise becomes a speck in a fixed 4:3 box; cropping tight and
-    // letting the card's object-fit:contain scale it UP makes it big and
-    // readable while preserving the component's own background/shape (we do NOT
-    // restyle the component itself — only the body wrapper).
+    // Pad the body and crop the capture to the component's own bounding box.
+    // Keep the body in NORMAL BLOCK FLOW (no inline-block) so the component
+    // renders at its intended width/shape — only add padding for breathing
+    // room. Then size the capture to the rendered content's height so a short
+    // component isn't lost in a tall frame; the card's object-fit:contain
+    // scales the result up to fill the tile, big and readable.
     const body = doc.body;
     body.style.margin = "0";
     body.style.padding = "40px";
-    body.style.display = "inline-block";
     body.style.background = "#ffffff";
+    body.style.boxSizing = "border-box";
     await new Promise((r) => setTimeout(r, 50)); // reflow after sizing change
 
-    const rect = body.getBoundingClientRect();
-    const w = Math.max(1, Math.ceil(rect.width));
-    const h = Math.max(1, Math.ceil(rect.height));
+    // Measure the rendered content (everything inside #root) so the capture
+    // height hugs it plus the body padding, instead of the 600px iframe.
+    const contentRect = root.getBoundingClientRect();
+    const PAD = 40;
+    const w = Math.max(1, Math.ceil(body.getBoundingClientRect().width));
+    const h = Math.max(1, Math.ceil(contentRect.height + PAD * 2));
 
     const dataUrl = await toPng(body, {
       backgroundColor: "#ffffff",

@@ -27,4 +27,9 @@ describe("buildExtractPrompt", () => {
     expect(p).toMatch(/export function PriceTag/);
     expect(p).toMatch(/export default PriceTag/);
   });
+  it("requires every prop optional with a default so prop-less render isn't blank", () => {
+    expect(p).toMatch(/EVERY prop MUST be optional/);
+    expect(p).toMatch(/default\s+value/i);
+    expect(p).toMatch(/renders empty without props is wrong/i);
+  });
 });
