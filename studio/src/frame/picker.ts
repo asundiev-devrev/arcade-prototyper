@@ -16,12 +16,15 @@
  *   fine for a dev-only feature, would not survive a production build.
  */
 
+import { capture, type StyleSnapshot } from "./inspector";
+
 interface PickerSelection {
   file: string;
   line: number;
   column: number;
   componentName: string;
   tagName: string;
+  styles: StyleSnapshot;
 }
 
 const OUTLINE_ID = "__arcade-studio-picker-outline";
@@ -134,7 +137,7 @@ function parseFirstUserFrame(stack: string): { file: string; line: number; colum
  * Walk the fiber chain starting at the DOM node's fiber, finding the nearest
  * ancestor whose `_debugStack` parses cleanly to a user source file.
  */
-function resolveSelection(fiber: FiberLike): PickerSelection | null {
+function resolveSelection(fiber: FiberLike, domNode: HTMLElement): PickerSelection | null {
   let node: FiberLike | null = fiber;
   while (node) {
     const stack = node._debugStack?.stack;
@@ -147,7 +150,7 @@ function resolveSelection(fiber: FiberLike): PickerSelection | null {
           (node._debugOwner && componentNameFromType(node._debugOwner.type)) ||
           tagName ||
           "Element";
-        return { ...parsed, componentName, tagName };
+        return { ...parsed, componentName, tagName, styles: capture(domNode) };
       }
     }
     node = node.return ?? null;
@@ -236,7 +239,7 @@ function onClick(e: MouseEvent) {
     });
     return;
   }
-  const sel = resolveSelection(fiber);
+  const sel = resolveSelection(fiber, target as HTMLElement);
   if (!sel) {
     flashOutlineAndFinish(false, () => {
       postCancel("no-source");
