@@ -1,4 +1,5 @@
 import { useMemo, useState, useRef, type ChangeEvent } from "react";
+import { useToast } from "@xorkavi/arcade-gen";
 import { useAssetsCatalog, useUserComponents } from "./useAssetsCatalog";
 import type { AssetItem, IconItem } from "./useAssetsCatalog";
 import { AssetCard } from "./AssetCard";
@@ -17,6 +18,20 @@ type Selected = { item: AssetItem; kind: CardKind; userThumb?: string };
 function userThumbUrl(name: string, createdAt: string): string {
   return `/api/components/${encodeURIComponent(name)}/thumb?v=${encodeURIComponent(createdAt)}`;
 }
+
+// Shared style for the small per-card action buttons (export ↓, delete ×).
+const cardActionBtnStyle: React.CSSProperties = {
+  width: 24,
+  height: 24,
+  padding: 0,
+  border: "1px solid var(--stroke-neutral-subtle)",
+  borderRadius: 4,
+  background: "var(--surface-shallow)",
+  color: "var(--fg-neutral-subtle)",
+  cursor: "pointer",
+  fontSize: 15,
+  lineHeight: 1,
+};
 
 function matchesAsset(item: AssetItem, q: string): boolean {
   if (!q) return true;
@@ -75,6 +90,7 @@ export function AssetsPanel({
   onSeed: (text: string) => void;
   onSeeded: () => void;
 }) {
+  const { toast } = useToast();
   const state = useAssetsCatalog();
   const userComps = useUserComponents();
   const [query, setQuery] = useState("");
@@ -144,11 +160,28 @@ export function AssetsPanel({
       // Capture a thumbnail for the imported component (best-effort).
       if (importedName) await captureComponentThumb(importedName);
       userComps.reload();
+      toast({ title: importedName ? `Imported ${importedName}` : "Component imported" });
     } catch (err) {
       setImportError(err instanceof Error ? err.message : "Import failed");
+      toast({ title: "Import failed", intent: "alert" });
     } finally {
       e.target.value = "";
     }
+  }
+
+  function handleExport(name: string) {
+    // Navigate straight to the export endpoint. The server sends
+    // `Content-Disposition: attachment; filename="<name>.arcade.tsx"`, so the
+    // browser downloads it (rather than navigating the SPA) and takes the
+    // filename from that header.
+    //
+    // We deliberately do NOT use `URL.createObjectURL` + a synthesized <a download>:
+    // in some hosts the `download` attribute is ignored and the browser names the
+    // file after the blob's internal UUID (the "f596b444-…" with no extension the
+    // user saw). window.location relies only on the server header, which is
+    // host-independent and verified correct.
+    window.location.href = `/api/components/${encodeURIComponent(name)}/export`;
+    toast({ title: `Exported ${name}`, description: "Saved to your Downloads as a .arcade.tsx file." });
   }
 
   async function handleDelete(name: string) {
@@ -259,7 +292,11 @@ export function AssetsPanel({
         <input
           ref={fileInputRef}
           type="file"
-          accept=".tsx"
+          // Accept .arcade.tsx / .tsx / .ts plus text/plain. A narrow `.tsx`
+          // filter greyed out exported files whose name lacked an extension in
+          // some hosts; the server validates content regardless, so a permissive
+          // filter just keeps the file selectable.
+          accept=".arcade.tsx,.tsx,.ts,text/plain"
           hidden
           onChange={handleImport}
         />
@@ -303,31 +340,38 @@ export function AssetsPanel({
                       })
                     }
                   />
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(comp.name);
-                    }}
-                    title="Delete"
+                  <div
                     style={{
                       position: "absolute",
                       top: 4,
                       right: 4,
-                      width: 24,
-                      height: 24,
-                      padding: 0,
-                      border: "1px solid var(--stroke-neutral-subtle)",
-                      borderRadius: 4,
-                      background: "var(--surface-shallow)",
-                      color: "var(--fg-neutral-subtle)",
-                      cursor: "pointer",
-                      fontSize: 16,
-                      lineHeight: 1,
+                      display: "flex",
+                      gap: 4,
                     }}
                   >
-                    ×
-                  </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleExport(comp.name);
+                      }}
+                      title="Export — download as a .tsx file to share"
+                      style={cardActionBtnStyle}
+                    >
+                      ↓
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(comp.name);
+                      }}
+                      title="Delete"
+                      style={cardActionBtnStyle}
+                    >
+                      ×
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
