@@ -171,16 +171,15 @@ function buildElementCss(elementId: string, layers: LayoutGuideLayer[]): string 
     }
   }
   if (!gradients.length) return '';
-  // position: relative is needed for the fixed-positioned ::before
-  // to anchor against the viewport. !important so we win over the
-  // page's static positioning; absolutely-positioned children may need
-  // the user to hide guides if their offsetParent chain breaks.
+  // position: relative is needed for the absolutely-positioned ::before
+  // to anchor against the element's box. !important so we win over the
+  // page's static positioning.
   return `[data-dm-id="${elementId}"][data-dm-id] {\n` +
     `  position: relative !important;\n` +
     `}\n` +
     `[data-dm-id="${elementId}"]::before {\n` +
     `  content: '' !important;\n` +
-    `  position: fixed !important;\n` +
+    `  position: absolute !important;\n` +
     `  inset: 0 !important;\n` +
     `  pointer-events: none !important;\n` +
     `  z-index: ${Z_INDEX.GUIDES} !important;\n` +
