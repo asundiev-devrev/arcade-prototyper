@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import { useToast } from "@xorkavi/arcade-gen";
 import type { Project } from "../../../server/types";
 import { api } from "../../lib/api";
 import { BackButton } from "./BackButton";
+import { useDialogs } from "../feedback/Dialogs";
 
 export function ProjectPicker({
   project,
@@ -17,13 +19,19 @@ export function ProjectPicker({
   const [open, setOpen] = useState(false);
   const [projects, setProjects] = useState<Project[] | null>(null);
   const rootRef = useRef<HTMLSpanElement>(null);
+  const { toast } = useToast();
+  const { promptText } = useDialogs();
 
   async function handleRename() {
-    const next = prompt("Rename project", project.name);
     setOpen(false);
-    if (!next || !next.trim() || next.trim() === project.name) return;
+    const next = await promptText({
+      title: "Rename project",
+      defaultValue: project.name,
+      confirmLabel: "Rename",
+    });
+    if (!next || next === project.name) return;
     try {
-      const renamed = await api.renameProject(project.slug, next.trim());
+      const renamed = await api.renameProject(project.slug, next);
       // Rename may move the project to a new slug. Navigate to the new URL
       // before firing `onRenamed`, otherwise the caller refreshes against
       // the old slug and renders a 404.
@@ -32,7 +40,11 @@ export function ProjectPicker({
       }
       if (onRenamed) onRenamed();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Rename failed");
+      toast({
+        title: "Rename failed",
+        description: err instanceof Error ? err.message : String(err),
+        intent: "alert",
+      });
     }
   }
 

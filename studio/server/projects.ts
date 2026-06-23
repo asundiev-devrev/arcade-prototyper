@@ -422,6 +422,26 @@ export async function refreshStaleClaudeMd(): Promise<number> {
   return refreshed;
 }
 
+/**
+ * Clear the resume session of every project so the next claude turn re-reads
+ * the system prompt instead of resuming a stale one. Called when the user-kit
+ * changes (a component saved/imported/deleted): the kit catalog rides in the
+ * cached `--append-system-prompt`, so a resumed session would never see the
+ * new/removed component. Same mechanism as refreshStaleClaudeMd. Returns the
+ * number of sessions cleared.
+ */
+export async function clearAllProjectSessions(): Promise<number> {
+  const ps = await listProjects();
+  let cleared = 0;
+  for (const p of ps) {
+    if (p.sessionId) {
+      await updateProject(p.slug, { sessionId: undefined });
+      cleared += 1;
+    }
+  }
+  return cleared;
+}
+
 const TEXT_EXTENSIONS = new Set([
   ".ts",
   ".tsx",

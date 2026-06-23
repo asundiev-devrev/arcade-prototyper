@@ -1,0 +1,10 @@
+# extension/.vscodeignore — what NOT to ship in the VSIX.
+# Keep: dist/, the studio/ core, prototype-kit, node_modules, vendored bins.
+src/**
+tsconfig.json
+**/*.map
+../**/__tests__/**
+../**/*.test.*
+../.git/**
+../.claude/**
+../studio/packaging/dist/**

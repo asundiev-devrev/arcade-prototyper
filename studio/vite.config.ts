@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
+import os from "node:os";
 import { studioRoot } from "./server/paths";
 import { projectsMiddleware } from "./server/middleware/projects";
 import { templatesMiddleware } from "./server/middleware/templates";
@@ -26,6 +27,7 @@ import { liftMiddleware } from "./server/middleware/lift";
 import { exportMiddleware } from "./server/middleware/export";
 import { figmaExportMiddleware } from "./server/middleware/figmaExport";
 import { assetsMiddleware } from "./server/middleware/assets";
+import { componentsMiddleware } from "./server/middleware/components";
 import { cloudflareMiddleware } from "./server/middleware/cloudflare";
 import { runtimeErrorMiddleware } from "./server/middleware/runtimeError";
 import { versionMiddleware, logVersionOnBoot } from "./server/middleware/version";
@@ -65,6 +67,7 @@ function apiPlugin(): import("vite").Plugin {
       server.middlewares.use(exportMiddleware());
       server.middlewares.use(figmaExportMiddleware());
       server.middlewares.use(assetsMiddleware());
+      server.middlewares.use(componentsMiddleware());
       server.middlewares.use(preflightMiddleware());
       server.middlewares.use(metricsMiddleware());
       server.middlewares.use(fontsMiddleware());
@@ -121,6 +124,15 @@ function apiPlugin(): import("vite").Plugin {
 // stay readable. Studio's own source imports @xorkavi/arcade-gen directly.
 export default defineConfig({
   root: path.resolve(__dirname),
+  // In the packaged extension the app lives in a READ-ONLY install dir, so
+  // Vite's default cacheDir (node_modules/.vite there) can't be written fresh —
+  // it risks serving a stale dep-optimize cache and masking code updates after
+  // a reinstall. When ARCADE_STUDIO_ROOT is set (packaged hosts), put the cache
+  // under that writable per-version storage dir instead. Dev (env unset) keeps
+  // the default.
+  cacheDir: process.env.ARCADE_STUDIO_ROOT
+    ? path.join(process.env.ARCADE_STUDIO_ROOT, `.vite-cache-${process.env.ARCADE_APP_VERSION || "dev"}`)
+    : undefined,
   plugins: [injectStudioSourcePlugin(), kitManifestPlugin(), react(), tailwindcss(), frameMountPlugin(), projectWatchPlugin(), liftEmitPlugin(), apiPlugin()],
   resolve: {
     alias: [
@@ -128,16 +140,24 @@ export default defineConfig({
       { find: /^arcade$/,              replacement: path.resolve(__dirname, "prototype-kit/arcade-components.tsx") },
       { find: "arcade-studio",         replacement: path.resolve(__dirname, "src") },
       { find: "arcade-prototypes",     replacement: path.resolve(__dirname, "prototype-kit") },
+      // User-saved components live in the writable studio root, resolved on
+      // the fly like a generated frame. `arcade-user/Foo` → user-kit/composites/Foo.
+      {
+        find: /^arcade-user\/(.+)$/,
+        replacement: path.join(
+          process.env.ARCADE_STUDIO_ROOT ??
+            path.join(os.homedir(), "Library", "Application Support", "arcade-studio"),
+          "user-kit/composites/$1",
+        ),
+      },
     ],
   },
   server: {
-    port: 5556,
-    // Bind 5556 or FAIL — never silently drift to another port. The Electron
-    // wrapper (electron/viteRunner.ts) hardcodes 5556 and loads the renderer
-    // from it; if Vite drifted to 5557 on a collision, the app would load a
-    // DIFFERENT server (e.g. a stale leftover instance) than the one it spawned
-    // — telemetry, project state, everything would silently point at the wrong
-    // process. strictPort makes the collision loud instead.
+    port: Number(process.env.ARCADE_STUDIO_PORT ?? 5556),
+    // strictPort keeps a collision LOUD: the host spawns us on a specific
+    // port and loads the renderer from it. Drift would load a DIFFERENT
+    // server. The host (electron/viteRunner.ts, extension/serverHost.ts)
+    // passes ARCADE_STUDIO_PORT; plain `pnpm run studio` defaults to 5556.
     strictPort: true,
     // Auto-open is gated on ARCADE_STUDIO_OPEN_BROWSER. The Electron
     // wrapper sets this to "0" so Vite doesn't open a browser tab in

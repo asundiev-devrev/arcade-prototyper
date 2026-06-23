@@ -10,6 +10,7 @@ vi.mock("@xorkavi/arcade-gen", async () => {
       React.createElement(tag, { ...props, ref }),
     );
   return {
+    Button: passthrough("button"),
     IconButton: passthrough("button"),
     ArrowUpRightSmall: () => null,
     TrashBin: () => null,

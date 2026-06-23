@@ -5,6 +5,9 @@ import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/re
 
 vi.mock("@xorkavi/arcade-gen", () => ({
   Button: ({ children, onClick }: any) => React.createElement("button", { onClick }, children),
+  // AssetsPanel calls useToast() for import/export feedback; stub it so the
+  // component renders without a real ToastProvider in the test tree.
+  useToast: () => ({ toast: vi.fn() }),
 }));
 
 import { AssetsPanel } from "../../src/components/assets/AssetsPanel";

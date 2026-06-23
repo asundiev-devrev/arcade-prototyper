@@ -9,6 +9,7 @@ import { NewFrameCard } from "./NewFrameCard";
 import { api } from "../../lib/api";
 import { LoadingShow } from "./LoadingShow";
 import { useTargetSelection } from "../../hooks/targetSelectionContext";
+import { useDialogs } from "../feedback/Dialogs";
 import type { TurnPhase } from "../../hooks/chatStreamReducer";
 
 export function Viewport({
@@ -32,6 +33,7 @@ export function Viewport({
   const [creatingFrame, setCreatingFrame] = useState(false);
   const { target, setTarget } = useTargetSelection();
   const { toast } = useToast();
+  const { confirm } = useDialogs();
   const [highlight, setHighlight] = useState<{
     slug: string;
     kind: "target" | "missing";
@@ -54,7 +56,13 @@ export function Viewport({
   async function handleDeleteFrame(frameSlug: string) {
     const frame = frames.find((f) => f.slug === frameSlug);
     const label = frame?.name ?? frameSlug;
-    if (!confirm(`Delete "${label}"? This cannot be undone.`)) return;
+    const ok = await confirm({
+      title: `Delete "${label}"?`,
+      description: "This cannot be undone.",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       await api.deleteFrame(project.slug, frameSlug);
       if (target?.frameSlug === frameSlug) setTarget(null);

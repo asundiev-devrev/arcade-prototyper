@@ -108,3 +108,22 @@ export function projectMemoryDir(projectSlug: string): string {
   return path.join(projectDir(projectSlug), "memory");
 }
 
+/**
+ * Writable per-user kit — holds components a designer saved or imported.
+ * Lives at the studio root (sibling of projects/), NOT in the read-only .app
+ * bundle, so contributing a component needs no DMG. The generator sees these
+ * via the merged KIT-MANIFEST (see kitManifest.ts), and frames import them
+ * through the `arcade-user` Vite alias.
+ */
+export function userKitDir(): string {
+  return path.join(studioRoot(), "user-kit");
+}
+
+export function userKitCompositesDir(): string {
+  return path.join(userKitDir(), "composites");
+}
+
+export function userKitManifestPath(): string {
+  return path.join(userKitDir(), "manifest.json");
+}
+

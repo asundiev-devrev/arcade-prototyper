@@ -1,0 +1,35 @@
+import { describe, it, expect } from "vitest";
+import { buildExtractPrompt } from "../../server/componentExtract";
+
+describe("buildExtractPrompt", () => {
+  const outPath = "/abs/user-kit/composites/PriceTag.tsx";
+  const p = buildExtractPrompt({ name: "PriceTag", description: "A price tag", frameSlug: "01-home", line: 42, column: 7, outPath });
+  it("anchors to the picked location", () => {
+    expect(p).toContain("frames/01-home/index.tsx");
+    expect(p).toContain("42:7");
+  });
+  it("names the output file and component", () => {
+    expect(p).toContain(outPath);
+    expect(p).toContain("PriceTag");
+  });
+  it("does not instruct a relative write (guards against the cwd-mismatch bug)", () => {
+    expect(p).not.toMatch(/Write a new file at user-kit\/composites\//);
+  });
+  it("enforces house-style rules", () => {
+    expect(p).toMatch(/arcade\/components/);
+    expect(p).toMatch(/PriceTagProps/);
+    expect(p).toMatch(/JSDoc|header comment/i);
+  });
+  it("carries the description for the JSDoc", () => {
+    expect(p).toContain("A price tag");
+  });
+  it("requires both named and default export", () => {
+    expect(p).toMatch(/export function PriceTag/);
+    expect(p).toMatch(/export default PriceTag/);
+  });
+  it("requires every prop optional with a default so prop-less render isn't blank", () => {
+    expect(p).toMatch(/EVERY prop MUST be optional/);
+    expect(p).toMatch(/default\s+value/i);
+    expect(p).toMatch(/renders empty without props is wrong/i);
+  });
+});

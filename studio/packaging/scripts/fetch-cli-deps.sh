@@ -17,22 +17,26 @@ case "$ARCH" in
 esac
 
 # cloudflared
-if [ ! -x "$CF_DIR/cloudflared" ]; then
-  echo "==> Fetching cloudflared ($CF_ARCH)"
-  mkdir -p "$CF_DIR"
-  curl -fsSL -o "$CF_DIR/cloudflared" \
-    "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-${CF_ARCH}.tgz"
-  # The download is a tarball despite no .tgz suffix in the URL on some
-  # mirrors; guard with a magic-byte check.
-  if file "$CF_DIR/cloudflared" | grep -q "gzip compressed"; then
-    mv "$CF_DIR/cloudflared" "$CF_DIR/cloudflared.tgz"
-    tar -xzf "$CF_DIR/cloudflared.tgz" -C "$CF_DIR"
-    rm "$CF_DIR/cloudflared.tgz"
+if [ "${ARCADE_SKIP_CLOUDFLARED:-0}" != "1" ]; then
+  if [ ! -x "$CF_DIR/cloudflared" ]; then
+    echo "==> Fetching cloudflared ($CF_ARCH)"
+    mkdir -p "$CF_DIR"
+    curl -fsSL -o "$CF_DIR/cloudflared" \
+      "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-${CF_ARCH}.tgz"
+    # The download is a tarball despite no .tgz suffix in the URL on some
+    # mirrors; guard with a magic-byte check.
+    if file "$CF_DIR/cloudflared" | grep -q "gzip compressed"; then
+      mv "$CF_DIR/cloudflared" "$CF_DIR/cloudflared.tgz"
+      tar -xzf "$CF_DIR/cloudflared.tgz" -C "$CF_DIR"
+      rm "$CF_DIR/cloudflared.tgz"
+    fi
+    chmod +x "$CF_DIR/cloudflared"
+    echo "    cloudflared installed: $($CF_DIR/cloudflared --version 2>&1 | head -1)"
+  else
+    echo "==> cloudflared already in place"
   fi
-  chmod +x "$CF_DIR/cloudflared"
-  echo "    cloudflared installed: $($CF_DIR/cloudflared --version 2>&1 | head -1)"
 else
-  echo "==> cloudflared already in place"
+  echo "==> Skipping cloudflared (ARCADE_SKIP_CLOUDFLARED=1)"
 fi
 
 # AWS CLI v2

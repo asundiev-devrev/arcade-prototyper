@@ -10,6 +10,8 @@ export default defineConfig({
       { find: "arcade-prototypes",     replacement: path.resolve(__dirname, "prototype-kit") },
       // keytar is a native module used by keychain.ts; mock it for tests
       { find: "keytar", replacement: path.resolve(__dirname, "__tests__/__mocks__/keytar.ts") },
+      // vscode module is extension-only; mock it for tests
+      { find: "vscode", replacement: path.resolve(__dirname, "__tests__/__mocks__/vscode.ts") },
     ],
     extensions: [".mjs", ".js", ".mts", ".ts", ".jsx", ".tsx", ".json"],
   },

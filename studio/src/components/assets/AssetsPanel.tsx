@@ -1,12 +1,37 @@
-import { useMemo, useState } from "react";
-import { useAssetsCatalog } from "./useAssetsCatalog";
+import { useMemo, useState, useRef, type ChangeEvent } from "react";
+import { useToast } from "@xorkavi/arcade-gen";
+import { useAssetsCatalog, useUserComponents } from "./useAssetsCatalog";
 import type { AssetItem, IconItem } from "./useAssetsCatalog";
 import { AssetCard } from "./AssetCard";
 import { AssetDetail } from "./AssetDetail";
 import { IconGrid } from "./IconGrid";
+import { captureComponentThumb } from "./captureComponentThumb";
 
 type CardKind = "composite" | "component";
-type Selected = { item: AssetItem; kind: CardKind };
+// `userThumb`, when set, is the /api/components/<name>/thumb URL for a saved
+// component (shipped composites resolve their thumb from the asset route).
+type Selected = { item: AssetItem; kind: CardKind; userThumb?: string };
+
+// Thumbnail URL keyed on createdAt so a re-saved component (new capture, same
+// name → same URL) busts the browser image cache instead of showing the stale
+// PNG. The thumb endpoint serves no-cache, but the <img> still dedupes by URL.
+function userThumbUrl(name: string, createdAt: string): string {
+  return `/api/components/${encodeURIComponent(name)}/thumb?v=${encodeURIComponent(createdAt)}`;
+}
+
+// Shared style for the small per-card action buttons (export ↓, delete ×).
+const cardActionBtnStyle: React.CSSProperties = {
+  width: 24,
+  height: 24,
+  padding: 0,
+  border: "1px solid var(--stroke-neutral-subtle)",
+  borderRadius: 4,
+  background: "var(--surface-shallow)",
+  color: "var(--fg-neutral-subtle)",
+  cursor: "pointer",
+  fontSize: 15,
+  lineHeight: 1,
+};
 
 function matchesAsset(item: AssetItem, q: string): boolean {
   if (!q) return true;
@@ -65,9 +90,13 @@ export function AssetsPanel({
   onSeed: (text: string) => void;
   onSeeded: () => void;
 }) {
+  const { toast } = useToast();
   const state = useAssetsCatalog();
+  const userComps = useUserComponents();
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Selected | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const catalog = state.status === "ready" ? state.catalog : null;
 
@@ -91,6 +120,81 @@ export function AssetsPanel({
   const filteredComposites = composites.filter((i) => matchesAsset(i, q));
   const filteredComponents = components.filter((i) => matchesAsset(i, q));
   const filteredIcons = icons.filter((i) => matchesIcon(i, q));
+
+  async function handleImport(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const tsx = await file.text();
+      const res = await fetch("/api/components/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tsx }),
+      });
+      let importedName: string | undefined;
+      if (res.status === 409) {
+        // Collision - confirm replace
+        if (confirm(`A component with this name already exists. Replace it?`)) {
+          const retryRes = await fetch("/api/components/import", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tsx, replace: true }),
+          });
+          if (!retryRes.ok) {
+            const err = await retryRes.json().catch(() => ({}));
+            setImportError((err as any).error?.message || "Import failed");
+            return;
+          }
+          importedName = (await retryRes.json().catch(() => ({})))?.name;
+        } else {
+          return;
+        }
+      } else if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setImportError((err as any).error?.message || "Import failed");
+        return;
+      } else {
+        importedName = (await res.json().catch(() => ({})))?.name;
+      }
+      setImportError(null);
+      // Capture a thumbnail for the imported component (best-effort).
+      if (importedName) await captureComponentThumb(importedName);
+      userComps.reload();
+      toast({ title: importedName ? `Imported ${importedName}` : "Component imported" });
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Import failed");
+      toast({ title: "Import failed", intent: "alert" });
+    } finally {
+      e.target.value = "";
+    }
+  }
+
+  function handleExport(name: string) {
+    // Navigate straight to the export endpoint. The server sends
+    // `Content-Disposition: attachment; filename="<name>.arcade.tsx"`, so the
+    // browser downloads it (rather than navigating the SPA) and takes the
+    // filename from that header.
+    //
+    // We deliberately do NOT use `URL.createObjectURL` + a synthesized <a download>:
+    // in some hosts the `download` attribute is ignored and the browser names the
+    // file after the blob's internal UUID (the "f596b444-…" with no extension the
+    // user saw). window.location relies only on the server header, which is
+    // host-independent and verified correct.
+    window.location.href = `/api/components/${encodeURIComponent(name)}/export`;
+    toast({ title: `Exported ${name}`, description: "Saved to your Downloads as a .arcade.tsx file." });
+  }
+
+  async function handleDelete(name: string) {
+    if (!confirm(`Delete ${name}?`)) return;
+    try {
+      await fetch(`/api/components/${encodeURIComponent(name)}`, {
+        method: "DELETE",
+      });
+      userComps.reload();
+    } catch (err) {
+      console.error("Delete failed:", err);
+    }
+  }
 
   const container: React.CSSProperties = {
     display: "flex",
@@ -125,6 +229,7 @@ export function AssetsPanel({
         <AssetDetail
           item={selected.item}
           kind={selected.kind}
+          thumbSrc={selected.userThumb}
           onBack={() => setSelected(null)}
           onUse={() => {
             onSeed(`Use the ${selected.item.name} ${selected.kind} to `);
@@ -147,24 +252,65 @@ export function AssetsPanel({
   return (
     <div style={container}>
       <div style={{ padding: 12, borderBottom: "1px solid var(--stroke-neutral-subtle)" }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+          <input
+            type="text"
+            aria-label="Search assets"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search assets…"
+            style={{
+              flex: 1,
+              boxSizing: "border-box",
+              padding: "6px 10px",
+              fontSize: 13,
+              border: "1px solid var(--stroke-neutral-subtle)",
+              borderRadius: 6,
+              background: "var(--surface-shallow)",
+              color: "var(--fg-neutral-prominent)",
+              outline: "none",
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            title="Import component"
+            style={{
+              padding: "6px 10px",
+              fontSize: 13,
+              border: "1px solid var(--stroke-neutral-subtle)",
+              borderRadius: 6,
+              background: "var(--surface-shallow)",
+              color: "var(--fg-neutral-prominent)",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Import
+          </button>
+        </div>
         <input
-          type="text"
-          aria-label="Search assets"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search assets…"
-          style={{
-            width: "100%",
-            boxSizing: "border-box",
-            padding: "6px 10px",
-            fontSize: 13,
-            border: "1px solid var(--stroke-neutral-subtle)",
-            borderRadius: 6,
-            background: "var(--surface-shallow)",
-            color: "var(--fg-neutral-prominent)",
-            outline: "none",
-          }}
+          ref={fileInputRef}
+          type="file"
+          // Accept .arcade.tsx / .tsx / .ts plus text/plain. A narrow `.tsx`
+          // filter greyed out exported files whose name lacked an extension in
+          // some hosts; the server validates content regardless, so a permissive
+          // filter just keeps the file selectable.
+          accept=".arcade.tsx,.tsx,.ts,text/plain"
+          hidden
+          onChange={handleImport}
         />
+        {importError && (
+          <div
+            style={{
+              fontSize: 12,
+              color: "var(--fg-alert-prominent)",
+              marginTop: 4,
+            }}
+          >
+            {importError}
+          </div>
+        )}
       </div>
 
       <div
@@ -178,8 +324,62 @@ export function AssetsPanel({
           gap: 20,
         }}
       >
+        {userComps.items.length > 0 && (
+          <Section label="Your components" count={userComps.items.length}>
+            <div style={gridStyle}>
+              {userComps.items.map((comp) => (
+                <div key={comp.name} style={{ position: "relative" }}>
+                  <AssetCard
+                    item={{ name: comp.name, doc: comp.description, thumb: comp.thumb ? "1" : null }}
+                    thumbSrc={comp.thumb ? userThumbUrl(comp.name, comp.createdAt) : undefined}
+                    onClick={() =>
+                      setSelected({
+                        item: { name: comp.name, doc: comp.description, thumb: comp.thumb ? "1" : null },
+                        kind: "component",
+                        userThumb: comp.thumb ? userThumbUrl(comp.name, comp.createdAt) : undefined,
+                      })
+                    }
+                  />
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: 4,
+                      right: 4,
+                      display: "flex",
+                      gap: 4,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleExport(comp.name);
+                      }}
+                      title="Export — download as a .tsx file to share"
+                      style={cardActionBtnStyle}
+                    >
+                      ↓
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(comp.name);
+                      }}
+                      title="Delete"
+                      style={cardActionBtnStyle}
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
+
         {(!q || filteredComposites.length > 0) && (
-          <Section label="Composites" count={filteredComposites.length}>
+          <Section label="Components" count={filteredComposites.length}>
             <div style={gridStyle}>
               {filteredComposites.map((item) => (
                 <AssetCard
@@ -193,7 +393,7 @@ export function AssetsPanel({
         )}
 
         {(!q || filteredComponents.length > 0) && (
-          <Section label="Components" count={filteredComponents.length}>
+          <Section label="Elements" count={filteredComponents.length}>
             <div style={gridStyle}>
               {filteredComponents.map((item) => (
                 <AssetCard

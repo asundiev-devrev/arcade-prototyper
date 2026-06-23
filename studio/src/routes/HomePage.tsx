@@ -8,11 +8,13 @@ import { StudioHeader } from "../components/shell/StudioHeader";
 import { AppSettingsButton } from "../components/shell/SettingsButton";
 import { HeroPromptInput, type HeroPromptSubmitArgs } from "../components/home/HeroPromptInput";
 import { HomeShelf } from "../components/home/HomeShelf";
+import { useDialogs } from "../components/feedback/Dialogs";
 import type { Project } from "../../server/types";
 
 export function HomePage({ onOpen }: { onOpen: (slug: string) => void }) {
   const { projects, refresh } = useProjects();
   const { toast } = useToast();
+  const { confirm, promptText } = useDialogs();
   const [submitting, setSubmitting] = useState(false);
 
   async function handleHeroSubmit(args: HeroPromptSubmitArgs) {
@@ -46,10 +48,14 @@ export function HomePage({ onOpen }: { onOpen: (slug: string) => void }) {
   }
 
   async function handleRename(p: Project) {
-    const next = prompt("New name", p.name);
-    if (!next || !next.trim()) return;
+    const next = await promptText({
+      title: "Rename project",
+      defaultValue: p.name,
+      confirmLabel: "Rename",
+    });
+    if (!next) return;
     try {
-      await api.renameProject(p.slug, next.trim());
+      await api.renameProject(p.slug, next);
       void refresh();
       toast({ title: "Project renamed", intent: "success" });
     } catch (e) {
@@ -62,7 +68,13 @@ export function HomePage({ onOpen }: { onOpen: (slug: string) => void }) {
   }
 
   async function handleDelete(p: Project) {
-    if (!confirm(`Delete "${p.name}"? This cannot be undone.`)) return;
+    const ok = await confirm({
+      title: `Delete "${p.name}"?`,
+      description: "This cannot be undone.",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       await api.deleteProject(p.slug);
       void refresh();

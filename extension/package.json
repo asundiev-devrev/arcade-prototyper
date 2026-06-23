@@ -1,0 +1,45 @@
+{
+  "name": "arcade-prototyper",
+  "displayName": "Arcade Prototyper",
+  "description": "Generate DevRev-design-system prototypes from a sentence, inside your editor.",
+  "publisher": "devrev",
+  "version": "0.40.0",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onCommand:arcade.open",
+    "onCommand:arcade.reload"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "arcade.open",
+        "title": "Arcade: Open Prototyper"
+      },
+      {
+        "command": "arcade.reload",
+        "title": "Arcade: Reload"
+      },
+      {
+        "command": "arcade.paste",
+        "title": "Arcade: Paste"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "arcade.paste",
+        "key": "cmd+v",
+        "mac": "cmd+v",
+        "when": "activeWebviewPanelId == 'arcadePrototyper'"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "tsc -p ./tsconfig.json"
+  }
+}

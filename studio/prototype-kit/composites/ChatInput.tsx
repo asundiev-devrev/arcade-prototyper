@@ -352,22 +352,34 @@ function SendButton(props: {
 }
 
 function StopButton(props: { onClick?: () => void }) {
-  // Use the prominent/on-prominent pair so the glyph contrasts with the
-  // dark fill in both light and dark themes. Earlier the button used
-  // `bg-neutral-medium` + `fg-neutral-prominent`, which collapse to the
-  // same dark hue in light mode and the same light hue in dark mode —
-  // either way the square inside became invisible.
+  // Mirror SendButton: use the arcade-gen <Button> so the circular shape, dark
+  // fill, and icon color come from the design-system's COMPILED styles. The
+  // earlier hand-rolled <button> relied on `bg-(--bg-neutral-prominent)` /
+  // `text-(--fg-neutral-on-prominent)` utility classes — the Tailwind v4
+  // CSS-var shorthand that studio's build does NOT generate (arcade-gen ships
+  // some of them in its styles.css, but not `text-(--fg-neutral-on-prominent)`,
+  // and `rounded-circle-x2` is only a 20px radius — not a circle on a 36px
+  // button). The result was a black rectangle with an invisible glyph. `variant
+  // "primary"` gives the dark neutral-prominent fill; the Button supplies the
+  // round shape + on-prominent icon color the same way SendButton does.
+  // The square glyph is an inline SVG (arcade-gen ships no stop/square icon).
+  // It uses an EXPLICIT currentColor-independent fill — the earlier
+  // `text-(--fg-neutral-on-prominent)` class never compiled in studio's
+  // Tailwind, so `fill="currentColor"` resolved to nothing and the glyph was
+  // invisible. The Button's `primary` variant fill is dark, so a light fill
+  // here keeps the square visible in both themes.
   return (
-    <button
+    <Button
       type="button"
+      variant="primary"
       aria-label="Stop"
       onClick={props.onClick}
-      className="shrink-0 flex items-center justify-center w-9 h-9 rounded-circle-x2 bg-(--bg-neutral-prominent) text-(--fg-neutral-on-prominent) hover:bg-(--bg-neutral-medium) transition"
+      className="shrink-0 w-10 h-10 p-0 rounded-circle-x2"
     >
-      <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="var(--fg-neutral-on-prominent)" aria-hidden="true">
         <rect x="2" y="2" width="8" height="8" rx="1.5" />
       </svg>
-    </button>
+    </Button>
   );
 }
 

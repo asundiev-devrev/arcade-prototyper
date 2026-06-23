@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createStreamParser, type StudioEvent } from "../src/lib/streamJson";
-import { globalMemoryDir } from "./paths";
+import { globalMemoryDir, userKitManifestPath } from "./paths";
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 // Prototyper root: contains studio/prototype-kit — where composites + templates live.
@@ -35,6 +35,36 @@ function loadKitManifest(): string {
     kitManifestCache = "";
   }
   return kitManifestCache;
+}
+
+/**
+ * Load the user-kit manifest addendum FRESHLY each turn (not cached).
+ * Returns a markdown block listing user-saved components, or "" if the file
+ * is absent/empty. Each component appears as an import bullet so the agent
+ * knows to import by NAME from its `arcade-user/<Name>` path.
+ */
+export function loadUserKitAddendum(): string {
+  let entries: Array<{ name: string; description: string }>;
+  try {
+    const raw = readFileSync(userKitManifestPath(), "utf-8");
+    entries = JSON.parse(raw);
+    if (!Array.isArray(entries) || entries.length === 0) return "";
+  } catch {
+    return "";
+  }
+
+  const bullets = entries
+    .map(
+      (e) =>
+        `- **${e.name}** — ${e.description}. Import: \`arcade-user/${e.name}\``,
+    )
+    .join("\n");
+
+  return `## Your saved components
+
+These are reusable components the designer saved. Import each by NAME from its \`arcade-user/<Name>\` path, e.g. \`import { PriceTag } from "arcade-user/PriceTag"\`. Treat them like kit composites.
+
+${bullets}`;
 }
 // PreToolUse hook that blocks `sips`/ImageMagick/PIL commands — the agent has
 // a recurring failure mode where it crops/rescales pasted screenshots into
@@ -271,8 +301,13 @@ export async function runClaudeTurn(opts: RunTurnOptions): Promise<void> {
   // on every Bedrock round-trip and is served from cache instead. Skipped only
   // if the file is unreadable (agent falls back to reading composite sources).
   const manifest = loadKitManifest();
-  if (manifest) {
-    args.push("--append-system-prompt", manifest);
+  // Append a LIVE user-kit addendum (not cached — must reflect components
+  // saved mid-session). Read from the writable studioRoot, not the .app
+  // bundle, so this works in the packaged DMG.
+  const addendum = loadUserKitAddendum();
+  const fullManifest = addendum ? `${manifest}\n\n${addendum}` : manifest;
+  if (fullManifest) {
+    args.push("--append-system-prompt", fullManifest);
   }
   if (model) args.push("--model", model);
   for (const dir of addDirs) args.push("--add-dir", dir);

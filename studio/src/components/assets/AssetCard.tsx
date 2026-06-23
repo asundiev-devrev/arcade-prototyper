@@ -11,12 +11,19 @@ import type { AssetItem } from "./useAssetsCatalog";
 export function AssetCard({
   item,
   onClick,
+  thumbSrc,
 }: {
   item: AssetItem;
   onClick: () => void;
+  /** Explicit thumbnail URL. Defaults to the shipped-asset thumb route; user
+   *  components pass their own /api/components/<name>/thumb URL. */
+  thumbSrc?: string;
 }) {
   const [imgError, setImgError] = useState(false);
-  const showImage = !!item.thumb && !imgError;
+  const src = thumbSrc ?? `/api/assets/thumbs/${encodeURIComponent(item.name)}.png`;
+  // A shipped item signals thumb presence via item.thumb; a user item passes
+  // thumbSrc directly. Either way, only attempt the image when we have a source.
+  const showImage = (!!item.thumb || !!thumbSrc) && !imgError;
 
   return (
     <button
@@ -56,7 +63,7 @@ export function AssetCard({
       >
         {showImage ? (
           <img
-            src={`/api/assets/thumbs/${encodeURIComponent(item.name)}.png`}
+            src={src}
             alt={item.name}
             onError={() => setImgError(true)}
             style={{ width: "100%", height: "100%", objectFit: "contain" }}
