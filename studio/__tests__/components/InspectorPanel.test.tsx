@@ -85,9 +85,9 @@ describe("InspectorPanel (batch)", () => {
     const onSend = vi.fn();
     render(<EditSessionProvider><Harness onSend={onSend} /></EditSessionProvider>);
     fireEvent.click(screen.getByText("open1"));
-    // Change width (font size is now in Style token)
+    // Change width (type style is now in Style token, not here)
     const widthInput = screen.getByLabelText("W") as HTMLInputElement;
-    fireEvent.change(widthInput, { target: { value: "100" } }); // NumberField strips/adds px
+    fireEvent.change(widthInput, { target: { value: "100" } });
     fireEvent.click(screen.getByText(/Commit/i));
     expect(onSend).toHaveBeenCalledTimes(1);
     const preamble = onSend.mock.calls[0][0];

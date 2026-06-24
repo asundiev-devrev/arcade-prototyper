@@ -66,7 +66,7 @@ function ColorRow({
           placeholder="— (no token)"
         />
       </Field>
-      <Field label="or raw value" htmlFor={`ins-${slot}-raw`}>
+      <Field label={`${label} (raw)`} htmlFor={`ins-${slot}-raw`}>
         <input
           id={`ins-${slot}-raw`}
           aria-label={`${label} raw`}
@@ -254,24 +254,22 @@ export function InspectorPanel({
 
                 <Section title="Typography">
                   <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                    <Field label="Style">
-                      <TokenSelect
-                        ariaLabel="Type style"
-                        value={
-                          isTokenPending(pending.typeStyle)
-                            ? tokenClass(pending.typeStyle!)
-                            : (styles.appliedTokens.typeStyle ?? null)
-                        }
-                        options={typeTokens().map((t) => ({ value: t.className, label: t.label }))}
-                        onPick={(cls) => {
-                          const current = isTokenPending(pending.typeStyle)
-                            ? tokenClass(pending.typeStyle!)
-                            : (styles.appliedTokens.typeStyle ?? null);
-                          changeToken("typeStyle", cls, current ?? undefined);
-                        }}
-                        placeholder="— (no token)"
-                      />
-                    </Field>
+                    {(() => {
+                      const current = isTokenPending(pending.typeStyle)
+                        ? tokenClass(pending.typeStyle!)
+                        : (styles.appliedTokens.typeStyle ?? null);
+                      return (
+                        <Field label="Style">
+                          <TokenSelect
+                            ariaLabel="Type style"
+                            value={current}
+                            options={typeTokens().map((t) => ({ value: t.className, label: t.label }))}
+                            onPick={(cls) => changeToken("typeStyle", cls, current ?? undefined)}
+                            placeholder="— (no token)"
+                          />
+                        </Field>
+                      );
+                    })()}
                     <div style={GRID_2}>
                       <Field label="Align" htmlFor="ins-textAlign">
                         <select id="ins-textAlign" aria-label="Text align" style={INPUT_COMPACT}
