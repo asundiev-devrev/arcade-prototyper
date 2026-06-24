@@ -8,6 +8,16 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.41.0] — 2026-06-24
+
+### Added
+- **Edit elements visually, not just by typing.** Pick any element in a prototype and a properties panel opens on the right — change its text, type, colour, and spacing with real controls and see it update live, then Commit to write the change back into the code. No more describing every tweak in a sentence.
+- **Bulk edits.** Keep picking — select several elements, edit each, and Commit them all in one go.
+- **Edit text in place.** Double-click a text element in the frame and type directly (spaces and Enter included).
+- **A richer element overlay.** Borrowed from [design-mode](https://github.com/SandeepBaskaran/design-mode): hovering and selecting now show a polished outline, a width×height badge, red/green margin & padding bands, measurement guides, and distance pills between elements — so you can see spacing as you work.
+- **Rich properties panel.** Collapsible sections — Layout (size, min/max, margin/padding, flex/grid mode), Appearance (opacity, corner radius), Typography, Colour — laid out like a real design tool.
+- **Design-system tokens in the controls.** Colour and typography controls show DevRev design tokens (e.g. "Neutral prominent", "Body small") read from the element itself, with a live colour swatch on every colour field and a raw value as a fallback. Commits prefer idiomatic tokens, keeping the code production-ready.
+
 ## [0.40.0] — 2026-06-22
 
 ### Added
