@@ -7,9 +7,9 @@
  * (collapse / ⌘K search / add) but NOT the mac traffic lights.
  *
  * Default chrome (rendered top→bottom):
- * - Toolbar (top): collapse IconButton + ⌘K search field + "add" IconButton.
- * - Computer pill: a full-width muted rounded button with the "computer"
- *   wordmark — the product switcher.
+ * - Toolbar (top, ONE row): collapse IconButton + the "computer" product-switcher
+ *   pill (flex-1, muted rounded button with the "computer" wordmark) + an "add"
+ *   IconButton + a search IconButton. The pill lives INSIDE the toolbar row.
  * - Nav body (scrollable): the canonical DevRev nav (Work / Teams / Views +
  *   Explore) by default, or NavSidebar.Section + NavSidebar.Item children if
  *   you pass your own tree.
@@ -34,8 +34,11 @@
  * - `workspace` — accepted for back-compat but IGNORED. The pill is the
  *   "computer" product switcher and always shows the computer wordmark; it is
  *   not a workspace-name label. (Pass a custom `pill` to change the switcher.)
- * - `toolbar` — replace the default top toolbar. Pass `false` to hide it.
- * - `pill` — replace the default computer pill. Pass `false` to hide it.
+ * - `toolbar` — replace the default top toolbar (collapse + pill + add +
+ *   search, all on one row). Pass `false` to hide it.
+ * - `pill` — replace the default computer pill that sits INSIDE the toolbar
+ *   row (flex-1, between the collapse button and the add/search cluster).
+ *   Pass `false` to hide just the pill.
  * - `header` — legacy: a custom node ABOVE the toolbar (e.g.
  *   `<NavSidebar.BackHeader>` for the Settings "← Title" chrome). When set,
  *   the default toolbar + pill are suppressed (the Settings chrome owns the top).
@@ -105,12 +108,13 @@ function Root({
   // wordmark, never a workspace name. (Older callers passed workspace="DevRev",
   // which previously — and wrongly — replaced the logo with plain text.)
   void workspace;
-  const topNode = header ?? (
-    <>
-      {toolbar === false ? null : (toolbar ?? <Toolbar />)}
-      {pill === false ? null : (pill ?? <ComputerPill />)}
-    </>
-  );
+  // The pill now lives INSIDE the toolbar row (flex-1, between collapse and the
+  // add/search cluster) — per Figma 3531:9027. The toolbar owns it so the
+  // `pill` slot (custom node or `false` to hide) still works.
+  const pillNode = pill === false ? null : (pill ?? <ComputerPill />);
+  const topNode =
+    header ??
+    (toolbar === false ? null : (toolbar ?? <Toolbar pill={pillNode} />));
   const footerNode = footer === false ? null : (footer ?? <UserFooter />);
   // Bake the canonical DevRev nav as the default. A prototype almost always
   // wants the real Work / Teams / Views + Explore tree, and asking the
@@ -182,41 +186,34 @@ function DefaultBottomNav() {
 /* ─── Toolbar (collapse / search / add) ─────────────────────────────────── */
 
 function Toolbar({
+  pill,
   onToggle,
   onAdd,
+  onSearch,
 }: {
+  /** The product-switcher pill, rendered flex-1 between the collapse button
+   *  and the add/search cluster. NavSidebar passes the computed pill node here;
+   *  pass `null` to omit it. */
+  pill?: ReactNode;
   onToggle?: () => void;
   onAdd?: () => void;
+  onSearch?: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-1 px-3 py-2.5 shrink-0">
-      {/* Left cluster hugs its content (collapse + search). It must NOT take
-          flex-1, or the search button's hover background stretches the full
-          sidebar width — the design's search is auto-width. */}
-      <div className="flex items-center gap-1 min-w-0">
-        <IconButton
-          aria-label="Collapse sidebar"
-          variant="tertiary"
-          onClick={onToggle}
-        >
-          <DotInLeftWindow size={16} />
-        </IconButton>
-        <button
-          type="button"
-          aria-label="Search"
-          // Auto-width (no flex-1): the hover wash only covers the icon + ⌘K.
-          className="inline-flex items-center gap-2 h-8 px-2 rounded-square text-(--fg-neutral-medium) hover:bg-(--control-bg-neutral-subtle-hover)"
-        >
-          {/* Full-weight search icon in the medium fg — the design's magnifier
-              reads clearly, not the faint subtle token. */}
-          <MagnifyingGlass size={16} className="shrink-0 text-(--fg-neutral-medium)" />
-          {/* Plain "⌘K" hint, NOT the KeyboardShortcut badge (which renders
-              "⌘ + K" with a separator the design doesn't use). */}
-          <span className="text-system text-(--fg-neutral-subtle)">⌘K</span>
-        </button>
-      </div>
-      {/* Secondary "add" button: the design gives it a soft neutral fill
-          (Figma BG/Neutral/Soft), not the near-invisible default. */}
+    // ONE row (Figma 3531:9027): collapse · pill (flex-1) · add · search.
+    // gap-2 between the clusters; the pill fills the slack so the add/search
+    // buttons pin to the right edge.
+    <div className="flex items-center gap-2 px-3 py-2.5 shrink-0">
+      <IconButton
+        aria-label="Collapse sidebar"
+        variant="tertiary"
+        onClick={onToggle}
+      >
+        <DotInLeftWindow size={16} />
+      </IconButton>
+      {pill}
+      {/* Add + search: two 28px squares with a soft neutral fill (Figma
+          BG/Neutral/Soft), not the near-invisible default. */}
       <IconButton
         aria-label="Add"
         variant="secondary"
@@ -224,6 +221,14 @@ function Toolbar({
         className="bg-(--bg-neutral-soft) hover:bg-(--control-bg-neutral-subtle-hover)"
       >
         <PlusLarge size={16} />
+      </IconButton>
+      <IconButton
+        aria-label="Search"
+        variant="secondary"
+        onClick={onSearch}
+        className="bg-(--bg-neutral-soft) hover:bg-(--control-bg-neutral-subtle-hover)"
+      >
+        <MagnifyingGlass size={16} />
       </IconButton>
     </div>
   );
@@ -237,21 +242,23 @@ function ComputerPill({
   onClick?: () => void;
 }) {
   return (
-    <div className="px-3 shrink-0">
-      <button
-        type="button"
-        onClick={onClick}
-        aria-label="computer"
-        // Figma pill fill is a LIGHT neutral wash (BG/Neutral/Soft). The
-        // kit's --bg-neutral-subtle reads too dark here, so use --bg-neutral-soft.
-        className="flex w-full items-center justify-center h-9 px-2 rounded-[20px] bg-(--bg-neutral-soft) hover:bg-(--control-bg-neutral-subtle-hover) text-(--fg-neutral-prominent)"
-      >
-        {/* The "computer" wordmark: "comp" + the Computer glyph as the "u" +
-            "ter", matching the Figma logo. This is the product switcher and
-            ALWAYS shows the computer brand — it is not a workspace-name label. */}
-        <ComputerWordmark />
-      </button>
-    </div>
+    // flex-1 so the pill fills the toolbar row between collapse and add/search
+    // (Figma 3531:9219 "Navigation Button"). min-w-0 lets it shrink gracefully.
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="computer"
+      // Figma pill fill is a LIGHT neutral wash (rgba(62,60,61,0.09)). The
+      // kit's --bg-neutral-subtle is #211e20 @ 15% — a far darker base AND
+      // higher alpha — so it reads too dark here. --bg-neutral-soft (#898587 @
+      // 10%) matches the design's light wash (and the add/search buttons).
+      className="flex flex-1 min-w-0 items-center justify-center h-9 px-2 rounded-[20px] bg-(--bg-neutral-soft) hover:bg-(--control-bg-neutral-subtle-hover) text-(--fg-neutral-prominent)"
+    >
+      {/* The "computer" wordmark: "comp" + the Computer glyph as the "u" +
+          "ter", matching the Figma logo. This is the product switcher and
+          ALWAYS shows the computer brand — it is not a workspace-name label. */}
+      <ComputerWordmark />
+    </button>
   );
 }
 
