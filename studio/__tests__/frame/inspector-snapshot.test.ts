@@ -15,6 +15,18 @@ describe("readStyleSnapshot", () => {
     expect(snap.fontSize).toBe("18px");
     expect(typeof snap.gap).toBe("string");
   });
+
+  it("reads the slice-1 layout/appearance fields", () => {
+    const el = document.createElement("div");
+    el.style.minWidth = "10px"; el.style.opacity = "0.5"; el.style.display = "flex";
+    document.body.appendChild(el);
+    const snap = readStyleSnapshot(el);
+    expect(snap.minWidth).toBe("10px");
+    expect(snap.opacity).toBe("0.5");
+    expect(snap.display).toBe("flex");
+    expect(typeof snap.flexDirection).toBe("string");
+    expect(typeof snap.borderRadius).toBe("string");
+  });
 });
 
 describe("isTextEditable", () => {
@@ -126,5 +138,57 @@ describe("contenteditable on interactive elements", () => {
     // blur() should have been called, which removes contenteditable
     // In jsdom, blur is synchronous
     expect(button.getAttribute("contenteditable")).toBeNull();
+  });
+});
+
+describe("appliedTokens scan", () => {
+  it("reads applied arcade token classes into appliedTokens", () => {
+    const el = document.createElement("p");
+    el.className = "text-body-medium text-(--fg-neutral-subtle) px-4";
+    el.textContent = "Hi";
+    document.body.appendChild(el);
+    const snap = readStyleSnapshot(el);
+    expect(snap.appliedTokens.typeStyle).toBe("text-body-medium");
+    expect(snap.appliedTokens.color).toBe("text-(--fg-neutral-subtle)");
+    expect(snap.appliedTokens.backgroundColor).toBeUndefined();
+  });
+
+  it("appliedTokens empty when element carries no token classes", () => {
+    const el = document.createElement("div");
+    el.className = "flex items-center";
+    document.body.appendChild(el);
+    expect(readStyleSnapshot(el).appliedTokens.typeStyle).toBeUndefined();
+    expect(readStyleSnapshot(el).appliedTokens.color).toBeUndefined();
+  });
+
+  it("preview-class toggles the token class on the captured node", () => {
+    const el = document.createElement("p");
+    el.className = "text-body";
+    el.textContent = "Hi";
+    document.body.appendChild(el);
+    const { editId } = capture(el);
+    window.dispatchEvent(new MessageEvent("message", {
+      data: { type: "arcade-studio:preview-class", editId, slot: "typeStyle", className: "text-title-large", prevClassName: "text-body" },
+    }));
+    expect(el.classList.contains("text-title-large")).toBe(true);
+    expect(el.classList.contains("text-body")).toBe(false);
+  });
+
+  it("REGRESSION: preview-class clears competing inline style for color slots", () => {
+    const el = document.createElement("p");
+    el.textContent = "Hi";
+    document.body.appendChild(el);
+    const { editId } = capture(el);
+    // First apply a raw backgroundColor preview (inline style)
+    window.dispatchEvent(new MessageEvent("message", {
+      data: { type: "arcade-studio:preview", editId, field: "backgroundColor", value: "#ff0000" },
+    }));
+    expect(el.style.backgroundColor).toBe("rgb(255, 0, 0)");
+    // Now apply a token class preview (should clear the inline style)
+    window.dispatchEvent(new MessageEvent("message", {
+      data: { type: "arcade-studio:preview-class", editId, slot: "backgroundColor", className: "bg-(--bg-success-medium)" },
+    }));
+    expect(el.style.backgroundColor).toBe("");
+    expect(el.classList.contains("bg-(--bg-success-medium)")).toBe(true);
   });
 });

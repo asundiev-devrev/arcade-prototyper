@@ -2,19 +2,33 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@xorkavi/arcade-gen";
 import {
   useEditSession, type StyleSnapshot, type PendingEdits, type EditedElement,
+  TOKEN_PREFIX, isTokenPending, tokenClass,
 } from "../../hooks/editSessionContext";
 import { buildVisualEditPreamble } from "../../lib/visualEditPreamble";
+import { fieldValue, toNumberInput, fromNumberInput, Field, NumberField, INPUT_COMPACT, GRID_2, SegmentedToggle } from "./inspectorControls";
+import { Section } from "./Section";
+import { LayoutSection } from "./LayoutSection";
+import { AppearanceSection } from "./AppearanceSection";
+import { colorTokens, typeTokens, colorClassName, colorTokenFromClass, resolveSwatch, type ColorSlot } from "./tokenCatalog";
+import { EditableTokenChip } from "./EditableTokenChip";
 
 const MIN_W = 280, MAX_W = 560;
+const RAW_LINE_INDENT = 22; // swatch 16 + gap 6
 
-function toNumberInput(v: string): string { return v.endsWith("px") ? v.slice(0, -2) : v; }
-function fromNumberInput(v: string): string { return v === "" ? "" : `${v}px`; }
-function fieldValue(styles: StyleSnapshot, pending: PendingEdits, key: keyof StyleSnapshot): string {
-  return pending[key] ?? styles[key];
-}
 function countChanges(e: EditedElement): number {
   return Object.values(e.pending).filter((v) => v !== undefined).length;
 }
+
+const ALIGN_ICON = (d: string) => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d={d} /></svg>
+);
+const ALIGN_OPTS = [
+  { value: "left",    label: "Left",    icon: ALIGN_ICON("M3 6h18M3 12h12M3 18h15") },
+  { value: "center",  label: "Center",  icon: ALIGN_ICON("M3 6h18M7 12h10M5 18h14") },
+  { value: "right",   label: "Right",   icon: ALIGN_ICON("M3 6h18M9 12h12M6 18h15") },
+  { value: "justify", label: "Justify", icon: ALIGN_ICON("M3 6h18M3 12h18M3 18h18") },
+];
 
 const SECTION: React.CSSProperties = {
   borderTop: "1px solid var(--stroke-neutral-subtle)", padding: "12px 14px",
@@ -24,12 +38,48 @@ const LABEL: React.CSSProperties = {
   fontSize: 11, color: "var(--fg-neutral-subtle)", textTransform: "uppercase", letterSpacing: 0.4,
 };
 const FIELD_ROW: React.CSSProperties = { display: "flex", alignItems: "center", gap: 8 };
-const COL_LABEL: React.CSSProperties = { width: 84, fontSize: 12, color: "var(--fg-neutral-medium)", flex: "none" };
-const INPUT: React.CSSProperties = {
-  flex: 1, minWidth: 0, height: 28, padding: "0 8px", borderRadius: 6,
-  border: "1px solid var(--stroke-neutral-subtle)", background: "var(--bg-neutral-soft)",
-  color: "var(--fg-neutral-prominent)", fontSize: 12,
-};
+
+function ColorRow({
+  slot, label, styles, pending, changeToken, change,
+}: {
+  slot: ColorSlot;
+  label: string;
+  styles: StyleSnapshot;
+  pending: PendingEdits;
+  changeToken: (key: ColorSlot, className: string, prevClassName?: string) => void;
+  change: (key: ColorSlot, rawValue: string) => void;
+}) {
+  const appliedCls = styles.appliedTokens[slot] ?? null;
+  const pendingTok = isTokenPending(pending[slot]) ? tokenClass(pending[slot]!) : undefined;
+  const currentToken = pendingTok ?? appliedCls ?? null;
+  const tokenOpts = colorTokens().map((t) => ({ value: colorClassName(t.token, slot), label: t.label }));
+  const rawComputed = isTokenPending(pending[slot]) ? styles[slot] : fieldValue(styles, pending, slot);
+  // swatch ALWAYS: token's live value if a token is current, else the computed color
+  let swatch = rawComputed;
+  if (currentToken) {
+    const parsed = colorTokenFromClass(currentToken);
+    if (parsed) swatch = resolveSwatch(parsed.token, document.documentElement) || rawComputed;
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+      <Field label={label}>
+        <EditableTokenChip
+          ariaLabel={label}
+          tokenValue={currentToken}
+          tokenOptions={tokenOpts}
+          rawValue={rawComputed}
+          onPickToken={(cls) => changeToken(slot, cls, currentToken ?? undefined)}
+          onRawChange={(raw) => change(slot, raw)}
+          swatch={swatch}
+          placeholder="— (no token)"
+        />
+      </Field>
+      <span style={{ fontSize: 11, color: "var(--fg-neutral-subtle)", fontVariantNumeric: "tabular-nums", paddingLeft: RAW_LINE_INDENT }}>
+        {rawComputed}
+      </span>
+    </div>
+  );
+}
 
 export function InspectorPanel({
   onSend, busy,
@@ -89,6 +139,16 @@ export function InspectorPanel({
     else setField(id, key, rawValue);
     frameWindow?.postMessage(
       { type: "arcade-studio:preview", editId: id, field: key, value: rawValue || original },
+      "*",
+    );
+  }
+
+  function changeToken(key: keyof StyleSnapshot | "typeStyle", className: string, prevClassName?: string) {
+    const id = focusedEditId;
+    if (id == null) return;
+    setField(id, key, `${TOKEN_PREFIX}${className}`);
+    frameWindow?.postMessage(
+      { type: "arcade-studio:preview-class", editId: id, slot: key, className, prevClassName },
       "*",
     );
   }
@@ -186,66 +246,72 @@ export function InspectorPanel({
                   </div>
                 )}
 
-                {/* Typography */}
-                <div style={SECTION}>
-                  <span style={LABEL}>Typography</span>
-                  <div style={FIELD_ROW}>
-                    <label htmlFor="ins-fontSize" style={COL_LABEL}>Font size</label>
-                    <input id="ins-fontSize" type="number" aria-label="Font size" style={INPUT}
-                      value={toNumberInput(fieldValue(styles, pending, "fontSize"))}
-                      onChange={(e) => change("fontSize", fromNumberInput(e.target.value))} />
-                  </div>
-                  <div style={FIELD_ROW}>
-                    <label htmlFor="ins-fontWeight" style={COL_LABEL}>Weight</label>
-                    <select id="ins-fontWeight" aria-label="Font weight" style={INPUT}
-                      value={fieldValue(styles, pending, "fontWeight")}
-                      onChange={(e) => change("fontWeight", e.target.value)}>
-                      {["300","400","500","600","700"].map((w) => <option key={w} value={w}>{w}</option>)}
-                    </select>
-                  </div>
-                  <div style={FIELD_ROW}>
-                    <label htmlFor="ins-textAlign" style={COL_LABEL}>Align</label>
-                    <select id="ins-textAlign" aria-label="Text align" style={INPUT}
-                      value={fieldValue(styles, pending, "textAlign")}
-                      onChange={(e) => change("textAlign", e.target.value)}>
-                      {["left","center","right","justify"].map((a) => <option key={a} value={a}>{a}</option>)}
-                    </select>
-                  </div>
-                  <div style={FIELD_ROW}>
-                    <label htmlFor="ins-fontStyle" style={COL_LABEL}>Italic</label>
-                    <input id="ins-fontStyle" type="checkbox" aria-label="Italic"
-                      checked={fieldValue(styles, pending, "fontStyle") === "italic"}
-                      onChange={(e) => change("fontStyle", e.target.checked ? "italic" : "normal")} />
-                  </div>
-                </div>
+                <Section title="Layout">
+                  <LayoutSection styles={styles} pending={pending} change={change} />
+                </Section>
 
-                {/* Color */}
-                <div style={SECTION}>
-                  <span style={LABEL}>Color</span>
-                  {(["color","backgroundColor","borderColor"] as const).map((key) => (
-                    <div style={FIELD_ROW} key={key}>
-                      <label htmlFor={`ins-${key}`} style={COL_LABEL}>
-                        {key === "color" ? "Text" : key === "backgroundColor" ? "Fill" : "Border"}
-                      </label>
-                      <input id={`ins-${key}`} aria-label={key} style={INPUT}
-                        value={fieldValue(styles, pending, key)}
-                        onChange={(e) => change(key, e.target.value)} />
-                    </div>
-                  ))}
-                </div>
+                <Section title="Appearance">
+                  <AppearanceSection styles={styles} pending={pending} change={change} />
+                </Section>
 
-                {/* Spacing & size */}
-                <div style={SECTION}>
-                  <span style={LABEL}>Spacing &amp; size</span>
-                  {(["paddingTop","paddingRight","paddingBottom","paddingLeft","marginTop","marginRight","marginBottom","marginLeft","gap","width","height"] as const).map((key) => (
-                    <div style={FIELD_ROW} key={key}>
-                      <label htmlFor={`ins-${key}`} style={COL_LABEL}>{key.replace(/([A-Z])/g, " $1").toLowerCase()}</label>
-                      <input id={`ins-${key}`} type="number" aria-label={key} style={INPUT}
-                        value={toNumberInput(fieldValue(styles, pending, key))}
-                        onChange={(e) => change(key, fromNumberInput(e.target.value))} />
+                <Section title="Typography">
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {(() => {
+                      const typeOptValues = new Set(typeTokens().map((t) => t.className));
+                      const rawType = isTokenPending(pending.typeStyle)
+                        ? tokenClass(pending.typeStyle!)
+                        : (styles.appliedTokens.typeStyle ?? null);
+                      const current = rawType && typeOptValues.has(rawType) ? rawType : null;
+                      return (
+                        <Field label="Style">
+                          <EditableTokenChip
+                            ariaLabel="Type style"
+                            tokenValue={current}
+                            tokenOptions={typeTokens().map((t) => ({ value: t.className, label: t.label }))}
+                            rawValue=""
+                            rawEnabled={false}
+                            onPickToken={(cls) => changeToken("typeStyle", cls, rawType ?? undefined)}
+                            onRawChange={() => {}}
+                            placeholder="— (no token)"
+                          />
+                        </Field>
+                      );
+                    })()}
+                    <div style={GRID_2}>
+                      <NumberField id="ins-fontSize" label="Size" valuePx={fieldValue(styles, pending, "fontSize")}
+                        onChange={(v) => change("fontSize", v)} />
+                      <Field label="Weight" htmlFor="ins-fontWeight">
+                        <select id="ins-fontWeight" aria-label="Font weight" style={INPUT_COMPACT}
+                          value={fieldValue(styles, pending, "fontWeight")}
+                          onChange={(e) => change("fontWeight", e.target.value)}>
+                          {["300","400","500","600","700"].map((w) => <option key={w} value={w}>{w}</option>)}
+                        </select>
+                      </Field>
                     </div>
-                  ))}
-                </div>
+                    <div style={GRID_2}>
+                      <Field label="Align">
+                        <SegmentedToggle ariaLabel="Text align" value={fieldValue(styles, pending, "textAlign")}
+                          options={ALIGN_OPTS}
+                          onChange={(v) => change("textAlign", v)} />
+                      </Field>
+                      <Field label="Italic" htmlFor="ins-fontStyle">
+                        <div style={{ height: 28, display: "flex", alignItems: "center" }}>
+                          <input id="ins-fontStyle" type="checkbox" aria-label="Italic"
+                            checked={fieldValue(styles, pending, "fontStyle") === "italic"}
+                            onChange={(e) => change("fontStyle", e.target.checked ? "italic" : "normal")} />
+                        </div>
+                      </Field>
+                    </div>
+                  </div>
+                </Section>
+
+                <Section title="Color">
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <ColorRow slot="color" label="Text" styles={styles} pending={pending} changeToken={changeToken} change={change} />
+                    <ColorRow slot="backgroundColor" label="Fill" styles={styles} pending={pending} changeToken={changeToken} change={change} />
+                    <ColorRow slot="borderColor" label="Border" styles={styles} pending={pending} changeToken={changeToken} change={change} />
+                  </div>
+                </Section>
               </>
             )}
           </>

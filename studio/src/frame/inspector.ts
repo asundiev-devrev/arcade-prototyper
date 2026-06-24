@@ -22,6 +22,10 @@ export interface StyleSnapshot {
   paddingTop: string; paddingRight: string; paddingBottom: string; paddingLeft: string;
   marginTop: string; marginRight: string; marginBottom: string; marginLeft: string;
   gap: string; width: string; height: string;
+  minWidth: string; maxWidth: string; minHeight: string; maxHeight: string;
+  display: string; flexDirection: string;
+  opacity: string; borderRadius: string;
+  appliedTokens: { color?: string; backgroundColor?: string; borderColor?: string; typeStyle?: string };
 }
 
 const STYLE_FIELDS = [
@@ -29,6 +33,7 @@ const STYLE_FIELDS = [
   "backgroundColor", "borderColor", "paddingTop", "paddingRight",
   "paddingBottom", "paddingLeft", "marginTop", "marginRight",
   "marginBottom", "marginLeft", "gap", "width", "height",
+  "minWidth", "maxWidth", "minHeight", "maxHeight", "display", "flexDirection", "opacity", "borderRadius",
 ] as const;
 
 const EDIT_ID_ATTR = "data-arcade-edit-id";
@@ -51,6 +56,24 @@ export function isTextEditable(node: Element): boolean {
   return true;
 }
 
+const TYPE_CLASS_RE = /^text-(body|title|caption|heading|display|label)[a-z-]*$/;
+
+function scanAppliedTokens(node: Element): StyleSnapshot["appliedTokens"] {
+  const out: StyleSnapshot["appliedTokens"] = {};
+  for (const cls of Array.from(node.classList)) {
+    if (TYPE_CLASS_RE.test(cls)) out.typeStyle = cls;
+    else {
+      const m = /^(text|bg|border)-\((--[a-z0-9-]+)\)$/.exec(cls);
+      if (m) {
+        if (m[1] === "text") out.color = cls;
+        else if (m[1] === "bg") out.backgroundColor = cls;
+        else out.borderColor = cls;
+      }
+    }
+  }
+  return out;
+}
+
 export function readStyleSnapshot(node: Element): StyleSnapshot {
   const cs = window.getComputedStyle(node);
   return {
@@ -64,11 +87,16 @@ export function readStyleSnapshot(node: Element): StyleSnapshot {
     marginTop: cs.marginTop, marginRight: cs.marginRight,
     marginBottom: cs.marginBottom, marginLeft: cs.marginLeft,
     gap: cs.gap, width: cs.width, height: cs.height,
+    minWidth: cs.minWidth, maxWidth: cs.maxWidth, minHeight: cs.minHeight, maxHeight: cs.maxHeight,
+    display: cs.display, flexDirection: cs.flexDirection,
+    opacity: cs.opacity, borderRadius: cs.borderTopLeftRadius,
+    appliedTokens: scanAppliedTokens(node),
   };
 }
 
 interface Entry { node: HTMLElement; original: StyleSnapshot; }
 const edits = new Map<number, Entry>();
+const previewClasses = new Map<number, Set<string>>(); // editId -> classes we added
 let nextId = 1;
 
 /** Retain a clicked node under a stamped numeric editId (reused if already stamped). */
@@ -95,6 +123,26 @@ function applyPreview(editId: number, field: string, value: string) {
   (entry.node.style as unknown as Record<string, string>)[field] = value;
 }
 
+function applyPreviewClass(editId: number, className: string, prevClassName?: string, slot?: string) {
+  const entry = edits.get(editId);
+  if (!entry) return;
+  // remove the previous token class for this slot if present
+  if (prevClassName) entry.node.classList.remove(prevClassName);
+  entry.node.classList.add(className);
+  let set = previewClasses.get(editId);
+  if (!set) { set = new Set(); previewClasses.set(editId, set); }
+  set.add(className);
+
+  // Clear competing inline style for color slots so token class wins visually
+  if (slot === "color" || slot === "backgroundColor" || slot === "borderColor") {
+    entry.node.style[slot as "color" | "backgroundColor" | "borderColor"] = "";
+    if (slot === "borderColor") {
+      entry.node.style.borderStyle = "";
+      entry.node.style.borderWidth = "";
+    }
+  }
+}
+
 /** Reset one element's inline style overrides. NEVER touches textContent. */
 function resetOne(editId: number) {
   const entry = edits.get(editId);
@@ -104,6 +152,8 @@ function resetOne(editId: number) {
   }
   entry.node.style.borderStyle = "";
   entry.node.style.borderWidth = "";
+  const cls = previewClasses.get(editId);
+  if (cls) { for (const c of cls) entry.node.classList.remove(c); previewClasses.delete(editId); }
 }
 
 function resetAll() {
@@ -123,6 +173,12 @@ function onMessage(e: MessageEvent) {
     const { editId, all } = data as { editId?: number; all?: boolean };
     if (all) resetAll();
     else if (typeof editId === "number") resetOne(editId);
+  } else if (t === "arcade-studio:preview-class") {
+    const { editId, slot, className, prevClassName } = data as
+      { editId?: number; slot?: string; className?: string; prevClassName?: string };
+    if (typeof editId === "number" && typeof className === "string") {
+      applyPreviewClass(editId, className, prevClassName, slot);
+    }
   }
 }
 

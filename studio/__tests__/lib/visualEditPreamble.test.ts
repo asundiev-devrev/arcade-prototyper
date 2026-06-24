@@ -8,6 +8,9 @@ const STYLES: StyleSnapshot = {
   borderColor: "rgb(0,0,0)", paddingTop: "0px", paddingRight: "0px",
   paddingBottom: "0px", paddingLeft: "0px", marginTop: "0px", marginRight: "0px",
   marginBottom: "0px", marginLeft: "0px", gap: "0px", width: "80px", height: "32px",
+  minWidth: "0px", maxWidth: "none", minHeight: "0px", maxHeight: "none",
+  display: "block", flexDirection: "row", opacity: "1", borderRadius: "0px",
+  appliedTokens: {},
 };
 function el(editId: number, pending: EditedElement["pending"], over: Partial<StyleSnapshot> = {}): EditedElement {
   return {
@@ -48,5 +51,32 @@ describe("buildVisualEditPreamble (batch)", () => {
     expect(out).toContain(`text content: "Save" -> "Submit"`);
     expect(out).toMatch(/Tailwind|token/i);
     expect(out).toContain("Edit");
+  });
+
+  it("labels the slice-1 layout/appearance fields", () => {
+    const out = buildVisualEditPreamble(
+      [el(1, { minWidth: "100px", opacity: "0.5", display: "flex" })],
+      "home/index.tsx",
+    );
+    expect(out).toContain("min width:");
+    expect(out).toContain("opacity:");
+    expect(out).toContain("display:");
+  });
+
+  it("emits token-class edits as explicit class instructions (not raw-value mappings)", () => {
+    const out = buildVisualEditPreamble(
+      [el(1, { color: "tok:text-(--fg-success-prominent)" })],
+      "home/index.tsx",
+    );
+    expect(out).toContain("text color: apply class `text-(--fg-success-prominent)`");
+    expect(out).not.toContain("rgb");
+  });
+
+  it("labels typeStyle in pending keys", () => {
+    const out = buildVisualEditPreamble(
+      [el(1, { typeStyle: "tok:text-body-large" })],
+      "home/index.tsx",
+    );
+    expect(out).toContain("type style: apply class `text-body-large`");
   });
 });

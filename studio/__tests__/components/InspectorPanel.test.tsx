@@ -20,6 +20,9 @@ const STYLES: StyleSnapshot = {
   borderColor: "rgb(0, 0, 0)", paddingTop: "0px", paddingRight: "0px",
   paddingBottom: "0px", paddingLeft: "0px", marginTop: "0px", marginRight: "0px",
   marginBottom: "0px", marginLeft: "0px", gap: "0px", width: "80px", height: "32px",
+  minWidth: "0px", maxWidth: "none", minHeight: "0px", maxHeight: "none",
+  display: "block", flexDirection: "row", opacity: "1", borderRadius: "0px",
+  appliedTokens: {},
 };
 function sel(editId: number): ElementSelection {
   return {
@@ -54,9 +57,24 @@ describe("InspectorPanel (batch)", () => {
   it("seeds focused controls and records a pending edit on the focused element", () => {
     render(<EditSessionProvider><Harness onSend={vi.fn()} /></EditSessionProvider>);
     fireEvent.click(screen.getByText("open1"));
-    const fontSize = screen.getByLabelText(/font size/i) as HTMLInputElement;
-    expect(fontSize.value).toBe("14");
-    fireEvent.change(fontSize, { target: { value: "18" } });
+    expect(screen.getByText("Layout")).toBeTruthy(); // Layout section present
+    expect(screen.getByLabelText("W")).toBeTruthy(); // Width field from Layout section
+    // Typography now has Style picker (token select inside EditableTokenChip), and restored Size field
+    const typeStyle = screen.getByLabelText(/type style/i) as HTMLSelectElement;
+    expect(typeStyle).toBeTruthy();
+    const fontSize = screen.getByLabelText("Size") as HTMLInputElement;
+    expect(fontSize).toBeTruthy();
+    // Align is now a button group
+    const alignGroup = screen.getByRole("group", { name: /text align/i });
+    expect(alignGroup).toBeTruthy();
+    // Color now has token selects (inside EditableTokenChip) with swatches
+    const textColor = screen.getByLabelText("Text") as HTMLSelectElement;
+    expect(textColor).toBeTruthy();
+    const swatches = screen.getAllByTestId("token-chip-swatch");
+    expect(swatches.length).toBeGreaterThanOrEqual(1);
+    // Change a width value to test pending edits
+    const widthInput = screen.getByLabelText("W") as HTMLInputElement;
+    fireEvent.change(widthInput, { target: { value: "100" } });
     // batch element #1 now has the pending change; commit proves it (below)
     expect(screen.getByTestId("count").textContent).toBe("1");
   });
@@ -74,10 +92,13 @@ describe("InspectorPanel (batch)", () => {
     const onSend = vi.fn();
     render(<EditSessionProvider><Harness onSend={onSend} /></EditSessionProvider>);
     fireEvent.click(screen.getByText("open1"));
-    fireEvent.change(screen.getByLabelText(/font size/i), { target: { value: "18" } });
+    // Change width (type style is now in Style token, not here)
+    const widthInput = screen.getByLabelText("W") as HTMLInputElement;
+    fireEvent.change(widthInput, { target: { value: "100" } });
     fireEvent.click(screen.getByText(/Commit/i));
     expect(onSend).toHaveBeenCalledTimes(1);
-    expect(onSend.mock.calls[0][0]).toContain("font size: 14px -> 18px");
+    const preamble = onSend.mock.calls[0][0];
+    expect(preamble).toContain("width: 80px -> 100px");
     expect(screen.getByTestId("count").textContent).toBe("0");
   });
 
