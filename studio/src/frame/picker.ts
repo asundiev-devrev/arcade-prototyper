@@ -18,6 +18,7 @@
 
 import { capture } from "./inspector";
 import * as overlay from "./overlay";
+import { getFiberFromNode, componentNameFromType, type FiberLike } from "./fiber";
 
 interface PickerSelection {
   editId: number;
@@ -40,34 +41,6 @@ function addCursorStyle() {
 }
 function removeCursorStyle() {
   document.getElementById(CURSOR_STYLE_ID)?.remove();
-}
-
-type FiberLike = {
-  _debugStack?: { stack?: string } | null;
-  _debugOwner?: FiberLike | null;
-  type?: unknown;
-  elementType?: unknown;
-  stateNode?: unknown;
-  return?: FiberLike | null;
-};
-
-function getFiberFromNode(node: Element): FiberLike | null {
-  const key = Object.keys(node).find(
-    (k) => k.startsWith("__reactFiber$") || k.startsWith("__reactInternalInstance$"),
-  );
-  if (!key) return null;
-  return (node as unknown as Record<string, FiberLike>)[key] ?? null;
-}
-
-function componentNameFromType(type: unknown): string | null {
-  if (!type) return null;
-  if (typeof type === "string") return type;
-  const t = type as { displayName?: string; name?: string; render?: { displayName?: string; name?: string } };
-  if (t.displayName) return t.displayName;
-  if (t.name) return t.name;
-  if (t.render?.displayName) return t.render.displayName;
-  if (t.render?.name) return t.render.name;
-  return null;
 }
 
 /**
