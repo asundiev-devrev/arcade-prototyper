@@ -1,6 +1,7 @@
 import type { EditedElement, StyleSnapshot } from "../hooks/editSessionContext";
+import { isTokenPending, tokenClass } from "../hooks/editSessionContext";
 
-const LABELS: Record<keyof StyleSnapshot, string> = {
+const LABELS: Record<string, string> = {
   text: "text content", fontSize: "font size", fontWeight: "font weight",
   fontStyle: "font style", textAlign: "text align", color: "text color",
   backgroundColor: "background color", borderColor: "border color",
@@ -12,10 +13,11 @@ const LABELS: Record<keyof StyleSnapshot, string> = {
   minWidth: "min width", maxWidth: "max width", minHeight: "min height", maxHeight: "max height",
   display: "display", flexDirection: "flex direction",
   opacity: "opacity", borderRadius: "corner radius",
+  typeStyle: "type style",
 };
 
 function elementBlock(e: EditedElement): string | null {
-  const keys = (Object.keys(e.pending) as (keyof StyleSnapshot)[]).filter(
+  const keys = (Object.keys(e.pending) as (keyof StyleSnapshot | "typeStyle")[]).filter(
     (k) => e.pending[k] !== undefined,
   );
   if (keys.length === 0) return null;
@@ -25,11 +27,17 @@ function elementBlock(e: EditedElement): string | null {
       ? `<${s.tagName}> inside <${s.componentName}>`
       : `<${s.componentName}>`;
   const lines = keys.map((k) => {
-    const from = s.styles[k];
-    const to = e.pending[k] as string;
-    return k === "text"
-      ? `  - text content: "${from}" -> "${to}"`
-      : `  - ${LABELS[k]}: ${from} -> ${to}`;
+    const raw = e.pending[k] as string;
+    if (k === "text") {
+      return `  - text content: "${s.styles[k as keyof StyleSnapshot]}" -> "${raw}"`;
+    }
+    if (isTokenPending(raw)) {
+      const cls = tokenClass(raw);
+      return `  - ${LABELS[k] ?? k}: apply class \`${cls}\``;
+    }
+    // Raw value edits keep existing "label: from -> to" rendering
+    const from = s.styles[k as keyof StyleSnapshot];
+    return `  - ${LABELS[k] ?? k}: ${from} -> ${raw}`;
   });
   return [`Element ${label} at line ${s.line}:${s.column}:`, ...lines].join("\n");
 }

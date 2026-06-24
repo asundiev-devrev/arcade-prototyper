@@ -62,4 +62,21 @@ describe("buildVisualEditPreamble (batch)", () => {
     expect(out).toContain("opacity:");
     expect(out).toContain("display:");
   });
+
+  it("emits token-class edits as explicit class instructions (not raw-value mappings)", () => {
+    const out = buildVisualEditPreamble(
+      [el(1, { color: "tok:text-(--fg-success-prominent)" })],
+      "home/index.tsx",
+    );
+    expect(out).toContain("text color: apply class `text-(--fg-success-prominent)`");
+    expect(out).not.toContain("rgb");
+  });
+
+  it("labels typeStyle in pending keys", () => {
+    const out = buildVisualEditPreamble(
+      [el(1, { typeStyle: "tok:text-body-large" })],
+      "home/index.tsx",
+    );
+    expect(out).toContain("type style: apply class `text-body-large`");
+  });
 });
