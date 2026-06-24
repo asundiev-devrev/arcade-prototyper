@@ -1304,9 +1304,9 @@ Lives BELOW the window chrome in AppShell, so it owns its own top toolbar
 (collapse / ⌘K search / add) but NOT the mac traffic lights.
 
 Default chrome (rendered top→bottom):
-- Toolbar (top): collapse IconButton + ⌘K search field + "add" IconButton.
-- Computer pill: a full-width muted rounded button with the "computer"
-  wordmark — the product switcher.
+- Toolbar (top, ONE row): collapse IconButton + the "computer" product-switcher
+  pill (flex-1, muted rounded button with the "computer" wordmark) + an "add"
+  IconButton + a search IconButton. The pill lives INSIDE the toolbar row.
 - Nav body (scrollable): the canonical DevRev nav (Work / Teams / Views +
   Explore) by default, or NavSidebar.Section + NavSidebar.Item children if
   you pass your own tree.
@@ -1331,8 +1331,11 @@ Slots (all optional — sensible defaults render the full Figma design):
 - `workspace` — accepted for back-compat but IGNORED. The pill is the
   "computer" product switcher and always shows the computer wordmark; it is
   not a workspace-name label. (Pass a custom `pill` to change the switcher.)
-- `toolbar` — replace the default top toolbar. Pass `false` to hide it.
-- `pill` — replace the default computer pill. Pass `false` to hide it.
+- `toolbar` — replace the default top toolbar (collapse + pill + add +
+  search, all on one row). Pass `false` to hide it.
+- `pill` — replace the default computer pill that sits INSIDE the toolbar
+  row (flex-1, between the collapse button and the add/search cluster).
+  Pass `false` to hide just the pill.
 - `header` — legacy: a custom node ABOVE the toolbar (e.g.
   `<NavSidebar.BackHeader>` for the Settings "← Title" chrome). When set,
   the default toolbar + pill are suppressed (the Settings chrome owns the top).
