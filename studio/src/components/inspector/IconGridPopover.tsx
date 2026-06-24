@@ -29,7 +29,7 @@ export function IconGridPopover({ icons, onPick, onClose }: {
         style={{ width: "100%", boxSizing: "border-box", height: 28, padding: "0 8px", marginBottom: 10,
           borderRadius: 6, border: "1px solid var(--stroke-neutral-subtle)", background: "var(--bg-neutral-soft)",
           color: "var(--fg-neutral-prominent)", fontSize: 12 }} />
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4 }}>
         {filtered.map((i) => (
           <button key={i.name} type="button" aria-label={i.name} title={i.name}
             onClick={() => { onPick(i.name); onClose(); }}
