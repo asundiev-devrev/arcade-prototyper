@@ -79,4 +79,25 @@ describe("buildVisualEditPreamble (batch)", () => {
     );
     expect(out).toContain("type style: apply class `text-body-large`");
   });
+
+  it("renders an icon swap as a component + import instruction", () => {
+    const element: EditedElement = {
+      selection: {
+        editId: 1,
+        file: "/p/frames/home/index.tsx",
+        line: 8,
+        column: 4,
+        componentName: "Bell",
+        tagName: "svg",
+        textEditable: false,
+        styles: STYLES,
+        iconCandidate: "Bell",
+      },
+      pending: { iconSwap: "Star" },
+    };
+    const out = buildVisualEditPreamble([element], "home/index.tsx");
+    expect(out).toContain("Star");
+    expect(out).toMatch(/icon/i);
+    expect(out).toMatch(/import/i);
+  });
 });

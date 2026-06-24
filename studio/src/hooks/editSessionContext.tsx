@@ -20,7 +20,7 @@ export interface StyleSnapshot {
   opacity: string; borderRadius: string;
   appliedTokens: { color?: string; backgroundColor?: string; borderColor?: string; typeStyle?: string };
 }
-export type PendingEdits = Partial<Record<keyof StyleSnapshot | "typeStyle", string>>;
+export type PendingEdits = Partial<Record<keyof StyleSnapshot | "typeStyle" | "iconSwap", string>>;
 
 export interface ElementSelection {
   editId: number;
@@ -28,6 +28,7 @@ export interface ElementSelection {
   componentName: string; tagName: string;
   textEditable: boolean;
   styles: StyleSnapshot;
+  iconCandidate?: string;
 }
 export interface EditedElement {
   selection: ElementSelection;
@@ -46,8 +47,8 @@ interface Ctx {
   addOrFocus: (sel: ElementSelection, frameSlug: string, frameWindow: Window | null) => void;
   focus: (editId: number) => void;
   removeElement: (editId: number) => void;
-  setField: (editId: number, key: keyof StyleSnapshot | "typeStyle", value: string) => void;
-  resetField: (editId: number, key: keyof StyleSnapshot | "typeStyle") => void;
+  setField: (editId: number, key: keyof StyleSnapshot | "typeStyle" | "iconSwap", value: string) => void;
+  resetField: (editId: number, key: keyof StyleSnapshot | "typeStyle" | "iconSwap") => void;
   clear: () => void;
   setInspectorOpen: (open: boolean) => void;
   setInspectorWidth: (px: number) => void;

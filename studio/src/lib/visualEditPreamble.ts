@@ -14,10 +14,11 @@ const LABELS: Record<string, string> = {
   display: "display", flexDirection: "flex direction",
   opacity: "opacity", borderRadius: "corner radius",
   typeStyle: "type style",
+  iconSwap: "icon",
 };
 
 function elementBlock(e: EditedElement): string | null {
-  const keys = (Object.keys(e.pending) as (keyof StyleSnapshot | "typeStyle")[]).filter(
+  const keys = (Object.keys(e.pending) as (keyof StyleSnapshot | "typeStyle" | "iconSwap")[]).filter(
     (k) => e.pending[k] !== undefined,
   );
   if (keys.length === 0) return null;
@@ -28,6 +29,10 @@ function elementBlock(e: EditedElement): string | null {
       : `<${s.componentName}>`;
   const lines = keys.map((k) => {
     const raw = e.pending[k] as string;
+    if (k === "iconSwap") {
+      const oldName = e.selection.iconCandidate ?? "the current icon";
+      return `  - replace the <${oldName} /> icon with <${raw} /> and update the @xorkavi/arcade-gen import to import ${raw} (remove ${oldName} if no longer used)`;
+    }
     if (k === "text") {
       return `  - text content: "${s.styles[k as keyof StyleSnapshot]}" -> "${raw}"`;
     }

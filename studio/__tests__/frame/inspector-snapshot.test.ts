@@ -141,6 +141,53 @@ describe("contenteditable on interactive elements", () => {
   });
 });
 
+describe("icon detection + preview", () => {
+  it("capture reports iconCandidate = the single icon component name (self)", () => {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    function Bell() { return null; }
+    (svg as any).__reactFiber$x = { type: Bell };
+    document.body.appendChild(svg);
+    const cap = capture(svg as unknown as HTMLElement);
+    expect(cap.iconCandidate).toBe("Bell");
+  });
+
+  it("capture reports iconCandidate = the single icon descendant when the picked node contains one svg", () => {
+    const row = document.createElement("div");
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    function Star() { return null; }
+    (svg as any).__reactFiber$x = { type: Star };
+    row.appendChild(svg);
+    document.body.appendChild(row);
+    const cap = capture(row);
+    expect(cap.iconCandidate).toBe("Star");
+  });
+
+  it("capture reports no iconCandidate when zero or multiple svgs present", () => {
+    const none = document.createElement("div"); document.body.appendChild(none);
+    expect(capture(none).iconCandidate).toBeUndefined();
+    const multi = document.createElement("div");
+    multi.appendChild(document.createElementNS("http://www.w3.org/2000/svg","svg"));
+    multi.appendChild(document.createElementNS("http://www.w3.org/2000/svg","svg"));
+    document.body.appendChild(multi);
+    expect(capture(multi).iconCandidate).toBeUndefined();
+  });
+
+  it("preview-icon swaps the icon node innerHTML; reset restores it", () => {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.innerHTML = "<path d='M1'/>";
+    function Bell() { return null; }
+    (svg as any).__reactFiber$x = { type: Bell };
+    document.body.appendChild(svg);
+    const { editId } = capture(svg as unknown as HTMLElement);
+    window.dispatchEvent(new MessageEvent("message", {
+      data: { type: "arcade-studio:preview-icon", editId, svg: "<svg><path d='M2'/></svg>" },
+    }));
+    expect(svg.innerHTML).toContain("M2");
+    window.dispatchEvent(new MessageEvent("message", { data: { type: "arcade-studio:preview-reset", editId } }));
+    expect(svg.innerHTML).toContain("M1");
+  });
+});
+
 describe("appliedTokens scan", () => {
   it("reads applied arcade token classes into appliedTokens", () => {
     const el = document.createElement("p");
