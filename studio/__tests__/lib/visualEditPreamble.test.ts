@@ -10,6 +10,7 @@ const STYLES: StyleSnapshot = {
   marginBottom: "0px", marginLeft: "0px", gap: "0px", width: "80px", height: "32px",
   minWidth: "0px", maxWidth: "none", minHeight: "0px", maxHeight: "none",
   display: "block", flexDirection: "row", opacity: "1", borderRadius: "0px",
+  appliedTokens: {},
 };
 function el(editId: number, pending: EditedElement["pending"], over: Partial<StyleSnapshot> = {}): EditedElement {
   return {

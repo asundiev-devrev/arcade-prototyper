@@ -140,3 +140,37 @@ describe("contenteditable on interactive elements", () => {
     expect(button.getAttribute("contenteditable")).toBeNull();
   });
 });
+
+describe("appliedTokens scan", () => {
+  it("reads applied arcade token classes into appliedTokens", () => {
+    const el = document.createElement("p");
+    el.className = "text-body-medium text-(--fg-neutral-subtle) px-4";
+    el.textContent = "Hi";
+    document.body.appendChild(el);
+    const snap = readStyleSnapshot(el);
+    expect(snap.appliedTokens.typeStyle).toBe("text-body-medium");
+    expect(snap.appliedTokens.color).toBe("text-(--fg-neutral-subtle)");
+    expect(snap.appliedTokens.backgroundColor).toBeUndefined();
+  });
+
+  it("appliedTokens empty when element carries no token classes", () => {
+    const el = document.createElement("div");
+    el.className = "flex items-center";
+    document.body.appendChild(el);
+    expect(readStyleSnapshot(el).appliedTokens.typeStyle).toBeUndefined();
+    expect(readStyleSnapshot(el).appliedTokens.color).toBeUndefined();
+  });
+
+  it("preview-class toggles the token class on the captured node", () => {
+    const el = document.createElement("p");
+    el.className = "text-body";
+    el.textContent = "Hi";
+    document.body.appendChild(el);
+    const { editId } = capture(el);
+    window.dispatchEvent(new MessageEvent("message", {
+      data: { type: "arcade-studio:preview-class", editId, slot: "typeStyle", className: "text-title-large", prevClassName: "text-body" },
+    }));
+    expect(el.classList.contains("text-title-large")).toBe(true);
+    expect(el.classList.contains("text-body")).toBe(false);
+  });
+});

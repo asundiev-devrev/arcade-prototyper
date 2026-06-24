@@ -12,6 +12,7 @@ const STYLES: StyleSnapshot = {
   gap: "0px", width: "200px", height: "100px",
   minWidth: "0px", maxWidth: "none", minHeight: "0px", maxHeight: "none",
   display: "block", flexDirection: "row", opacity: "1", borderRadius: "0px",
+  appliedTokens: {},
 };
 afterEach(cleanup);
 

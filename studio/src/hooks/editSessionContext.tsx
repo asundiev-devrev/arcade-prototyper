@@ -1,5 +1,13 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 
+export const TOKEN_PREFIX = "tok:";
+export function isTokenPending(v: string | undefined): boolean {
+  return typeof v === "string" && v.startsWith(TOKEN_PREFIX);
+}
+export function tokenClass(v: string): string {
+  return v.startsWith(TOKEN_PREFIX) ? v.slice(TOKEN_PREFIX.length) : v;
+}
+
 export interface StyleSnapshot {
   text: string;
   fontSize: string; fontWeight: string; fontStyle: string; textAlign: string;
@@ -10,8 +18,9 @@ export interface StyleSnapshot {
   minWidth: string; maxWidth: string; minHeight: string; maxHeight: string;
   display: string; flexDirection: string;
   opacity: string; borderRadius: string;
+  appliedTokens: { color?: string; backgroundColor?: string; borderColor?: string; typeStyle?: string };
 }
-export type PendingEdits = Partial<Record<keyof StyleSnapshot, string>>;
+export type PendingEdits = Partial<Record<keyof StyleSnapshot | "typeStyle", string>>;
 
 export interface ElementSelection {
   editId: number;
@@ -37,8 +46,8 @@ interface Ctx {
   addOrFocus: (sel: ElementSelection, frameSlug: string, frameWindow: Window | null) => void;
   focus: (editId: number) => void;
   removeElement: (editId: number) => void;
-  setField: (editId: number, key: keyof StyleSnapshot, value: string) => void;
-  resetField: (editId: number, key: keyof StyleSnapshot) => void;
+  setField: (editId: number, key: keyof StyleSnapshot | "typeStyle", value: string) => void;
+  resetField: (editId: number, key: keyof StyleSnapshot | "typeStyle") => void;
   clear: () => void;
   setInspectorOpen: (open: boolean) => void;
   setInspectorWidth: (px: number) => void;

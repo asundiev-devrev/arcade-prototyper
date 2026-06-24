@@ -4,6 +4,7 @@ import { renderHook, act } from "@testing-library/react";
 import {
   EditSessionProvider, useEditSession,
   type ElementSelection, type StyleSnapshot,
+  isTokenPending, tokenClass,
 } from "../../src/hooks/editSessionContext";
 
 const STYLES: StyleSnapshot = {
@@ -86,5 +87,14 @@ describe("editSessionContext", () => {
     act(() => result.current.setInspectorWidth(500));
     act(() => result.current.clear());
     expect(result.current.inspectorWidth).toBe(500);
+  });
+});
+
+describe("token pending helpers", () => {
+  it("token pending helpers detect and unwrap the tok: sentinel", () => {
+    expect(isTokenPending("tok:text-body")).toBe(true);
+    expect(isTokenPending("16px")).toBe(false);
+    expect(isTokenPending(undefined)).toBe(false);
+    expect(tokenClass("tok:text-(--fg-neutral-subtle)")).toBe("text-(--fg-neutral-subtle)");
   });
 });
