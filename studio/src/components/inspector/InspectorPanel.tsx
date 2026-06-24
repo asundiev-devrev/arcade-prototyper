@@ -10,10 +10,10 @@ import { Section } from "./Section";
 import { LayoutSection } from "./LayoutSection";
 import { AppearanceSection } from "./AppearanceSection";
 import { colorTokens, typeTokens, colorClassName, colorTokenFromClass, resolveSwatch, type ColorSlot } from "./tokenCatalog";
-import { TokenSelect } from "./TokenSelect";
 import { EditableTokenChip } from "./EditableTokenChip";
 
 const MIN_W = 280, MAX_W = 560;
+const RAW_LINE_INDENT = 22; // swatch 16 + gap 6
 
 function countChanges(e: EditedElement): number {
   return Object.values(e.pending).filter((v) => v !== undefined).length;
@@ -67,14 +67,14 @@ function ColorRow({
           ariaLabel={label}
           tokenValue={currentToken}
           tokenOptions={tokenOpts}
-          rawValue={fieldValue(styles, pending, slot)}
+          rawValue={rawComputed}
           onPickToken={(cls) => changeToken(slot, cls, currentToken ?? undefined)}
           onRawChange={(raw) => change(slot, raw)}
           swatch={swatch}
           placeholder="— (no token)"
         />
       </Field>
-      <span style={{ fontSize: 11, color: "var(--fg-neutral-subtle)", fontVariantNumeric: "tabular-nums", paddingLeft: 22 }}>
+      <span style={{ fontSize: 11, color: "var(--fg-neutral-subtle)", fontVariantNumeric: "tabular-nums", paddingLeft: RAW_LINE_INDENT }}>
         {rawComputed}
       </span>
     </div>
