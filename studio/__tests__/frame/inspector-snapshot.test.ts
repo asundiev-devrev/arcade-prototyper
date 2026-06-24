@@ -173,4 +173,22 @@ describe("appliedTokens scan", () => {
     expect(el.classList.contains("text-title-large")).toBe(true);
     expect(el.classList.contains("text-body")).toBe(false);
   });
+
+  it("REGRESSION: preview-class clears competing inline style for color slots", () => {
+    const el = document.createElement("p");
+    el.textContent = "Hi";
+    document.body.appendChild(el);
+    const { editId } = capture(el);
+    // First apply a raw backgroundColor preview (inline style)
+    window.dispatchEvent(new MessageEvent("message", {
+      data: { type: "arcade-studio:preview", editId, field: "backgroundColor", value: "#ff0000" },
+    }));
+    expect(el.style.backgroundColor).toBe("rgb(255, 0, 0)");
+    // Now apply a token class preview (should clear the inline style)
+    window.dispatchEvent(new MessageEvent("message", {
+      data: { type: "arcade-studio:preview-class", editId, slot: "backgroundColor", className: "bg-(--bg-success-medium)" },
+    }));
+    expect(el.style.backgroundColor).toBe("");
+    expect(el.classList.contains("bg-(--bg-success-medium)")).toBe(true);
+  });
 });

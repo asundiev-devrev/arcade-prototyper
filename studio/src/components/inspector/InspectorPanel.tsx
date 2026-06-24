@@ -54,6 +54,8 @@ function ColorRow({
     }
   }
 
+  const rawDisplay = isTokenPending(pending[slot]) ? "" : fieldValue(styles, pending, slot);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       <Field label={label}>
@@ -71,7 +73,8 @@ function ColorRow({
           id={`ins-${slot}-raw`}
           aria-label={`${label} raw`}
           style={INPUT_COMPACT}
-          value={fieldValue(styles, pending, slot)}
+          value={rawDisplay}
+          placeholder={styles[slot]}
           onChange={(e) => change(slot, e.target.value)}
         />
       </Field>
@@ -255,16 +258,18 @@ export function InspectorPanel({
                 <Section title="Typography">
                   <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                     {(() => {
-                      const current = isTokenPending(pending.typeStyle)
+                      const typeOptValues = new Set(typeTokens().map((t) => t.className));
+                      const rawType = isTokenPending(pending.typeStyle)
                         ? tokenClass(pending.typeStyle!)
                         : (styles.appliedTokens.typeStyle ?? null);
+                      const current = rawType && typeOptValues.has(rawType) ? rawType : null;
                       return (
                         <Field label="Style">
                           <TokenSelect
                             ariaLabel="Type style"
                             value={current}
                             options={typeTokens().map((t) => ({ value: t.className, label: t.label }))}
-                            onPick={(cls) => changeToken("typeStyle", cls, current ?? undefined)}
+                            onPick={(cls) => changeToken("typeStyle", cls, rawType ?? undefined)}
                             placeholder="— (no token)"
                           />
                         </Field>

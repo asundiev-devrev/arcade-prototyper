@@ -57,7 +57,6 @@ export function isTextEditable(node: Element): boolean {
 }
 
 const TYPE_CLASS_RE = /^text-(body|title|caption|heading|display|label)[a-z-]*$/;
-const COLOR_CLASS_RE = /^(text|bg|border)-\(--[a-z0-9-]+\)$/;
 
 function scanAppliedTokens(node: Element): StyleSnapshot["appliedTokens"] {
   const out: StyleSnapshot["appliedTokens"] = {};
@@ -124,7 +123,7 @@ function applyPreview(editId: number, field: string, value: string) {
   (entry.node.style as unknown as Record<string, string>)[field] = value;
 }
 
-function applyPreviewClass(editId: number, className: string, prevClassName?: string) {
+function applyPreviewClass(editId: number, className: string, prevClassName?: string, slot?: string) {
   const entry = edits.get(editId);
   if (!entry) return;
   // remove the previous token class for this slot if present
@@ -133,6 +132,15 @@ function applyPreviewClass(editId: number, className: string, prevClassName?: st
   let set = previewClasses.get(editId);
   if (!set) { set = new Set(); previewClasses.set(editId, set); }
   set.add(className);
+
+  // Clear competing inline style for color slots so token class wins visually
+  if (slot === "color" || slot === "backgroundColor" || slot === "borderColor") {
+    entry.node.style[slot as "color" | "backgroundColor" | "borderColor"] = "";
+    if (slot === "borderColor") {
+      entry.node.style.borderStyle = "";
+      entry.node.style.borderWidth = "";
+    }
+  }
 }
 
 /** Reset one element's inline style overrides. NEVER touches textContent. */
@@ -169,7 +177,7 @@ function onMessage(e: MessageEvent) {
     const { editId, slot, className, prevClassName } = data as
       { editId?: number; slot?: string; className?: string; prevClassName?: string };
     if (typeof editId === "number" && typeof className === "string") {
-      applyPreviewClass(editId, className, prevClassName);
+      applyPreviewClass(editId, className, prevClassName, slot);
     }
   }
 }

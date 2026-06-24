@@ -58,9 +58,8 @@ export function colorClassName(token: string, slot: ColorSlot): string {
   return `${SLOT_PREFIX[slot]}-(${token})`;
 }
 
-const COLOR_CLASS_RE = /^(text|bg|border)-\((--[a-z0-9-]+)\)$/;
 export function colorTokenFromClass(cls: string): { token: string; slot: ColorSlot } | null {
-  const m = COLOR_CLASS_RE.exec(cls.trim());
+  const m = /^(text|bg|border)-\((--[a-z0-9-]+)\)$/.exec(cls.trim());
   if (!m) return null;
   const slot: ColorSlot = m[1] === "text" ? "color" : m[1] === "bg" ? "backgroundColor" : "borderColor";
   return { token: m[2], slot };
