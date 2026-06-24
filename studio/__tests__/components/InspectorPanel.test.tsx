@@ -59,12 +59,19 @@ describe("InspectorPanel (batch)", () => {
     fireEvent.click(screen.getByText("open1"));
     expect(screen.getByText("Layout")).toBeTruthy(); // Layout section present
     expect(screen.getByLabelText("W")).toBeTruthy(); // Width field from Layout section
-    // Typography now has Style picker (token select), not Font size
+    // Typography now has Style picker (token select inside EditableTokenChip), and restored Size field
     const typeStyle = screen.getByLabelText(/type style/i) as HTMLSelectElement;
     expect(typeStyle).toBeTruthy();
-    // Color now has token selects
+    const fontSize = screen.getByLabelText("Size") as HTMLInputElement;
+    expect(fontSize).toBeTruthy();
+    // Align is now a button group
+    const alignGroup = screen.getByRole("group", { name: /text align/i });
+    expect(alignGroup).toBeTruthy();
+    // Color now has token selects (inside EditableTokenChip) with swatches
     const textColor = screen.getByLabelText("Text") as HTMLSelectElement;
     expect(textColor).toBeTruthy();
+    const swatches = screen.getAllByTestId("token-chip-swatch");
+    expect(swatches.length).toBeGreaterThanOrEqual(1);
     // Change a width value to test pending edits
     const widthInput = screen.getByLabelText("W") as HTMLInputElement;
     fireEvent.change(widthInput, { target: { value: "100" } });

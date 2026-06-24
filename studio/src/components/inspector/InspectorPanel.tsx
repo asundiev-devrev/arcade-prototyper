@@ -5,18 +5,30 @@ import {
   TOKEN_PREFIX, isTokenPending, tokenClass,
 } from "../../hooks/editSessionContext";
 import { buildVisualEditPreamble } from "../../lib/visualEditPreamble";
-import { fieldValue, toNumberInput, fromNumberInput, Field, NumberField, INPUT_COMPACT, GRID_2 } from "./inspectorControls";
+import { fieldValue, toNumberInput, fromNumberInput, Field, NumberField, INPUT_COMPACT, GRID_2, SegmentedToggle } from "./inspectorControls";
 import { Section } from "./Section";
 import { LayoutSection } from "./LayoutSection";
 import { AppearanceSection } from "./AppearanceSection";
 import { colorTokens, typeTokens, colorClassName, colorTokenFromClass, resolveSwatch, type ColorSlot } from "./tokenCatalog";
 import { TokenSelect } from "./TokenSelect";
+import { EditableTokenChip } from "./EditableTokenChip";
 
 const MIN_W = 280, MAX_W = 560;
 
 function countChanges(e: EditedElement): number {
   return Object.values(e.pending).filter((v) => v !== undefined).length;
 }
+
+const ALIGN_ICON = (d: string) => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d={d} /></svg>
+);
+const ALIGN_OPTS = [
+  { value: "left",    label: "Left",    icon: ALIGN_ICON("M3 6h18M3 12h12M3 18h15") },
+  { value: "center",  label: "Center",  icon: ALIGN_ICON("M3 6h18M7 12h10M5 18h14") },
+  { value: "right",   label: "Right",   icon: ALIGN_ICON("M3 6h18M9 12h12M6 18h15") },
+  { value: "justify", label: "Justify", icon: ALIGN_ICON("M3 6h18M3 12h18M3 18h18") },
+];
 
 const SECTION: React.CSSProperties = {
   borderTop: "1px solid var(--stroke-neutral-subtle)", padding: "12px 14px",
@@ -39,45 +51,32 @@ function ColorRow({
 }) {
   const appliedCls = styles.appliedTokens[slot] ?? null;
   const pendingTok = isTokenPending(pending[slot]) ? tokenClass(pending[slot]!) : undefined;
-  const current = pendingTok ?? appliedCls ?? null;
-
-  const tokenOpts = colorTokens().map((t) => ({
-    value: colorClassName(t.token, slot),
-    label: t.label,
-  }));
-
-  let swatch: string | undefined;
-  if (current) {
-    const parsed = colorTokenFromClass(current);
-    if (parsed) {
-      swatch = resolveSwatch(parsed.token, document.documentElement);
-    }
+  const currentToken = pendingTok ?? appliedCls ?? null;
+  const tokenOpts = colorTokens().map((t) => ({ value: colorClassName(t.token, slot), label: t.label }));
+  const rawComputed = isTokenPending(pending[slot]) ? styles[slot] : fieldValue(styles, pending, slot);
+  // swatch ALWAYS: token's live value if a token is current, else the computed color
+  let swatch = rawComputed;
+  if (currentToken) {
+    const parsed = colorTokenFromClass(currentToken);
+    if (parsed) swatch = resolveSwatch(parsed.token, document.documentElement) || rawComputed;
   }
-
-  const rawDisplay = isTokenPending(pending[slot]) ? "" : fieldValue(styles, pending, slot);
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
       <Field label={label}>
-        <TokenSelect
+        <EditableTokenChip
           ariaLabel={label}
-          value={current}
-          options={tokenOpts}
+          tokenValue={currentToken}
+          tokenOptions={tokenOpts}
+          rawValue={fieldValue(styles, pending, slot)}
+          onPickToken={(cls) => changeToken(slot, cls, currentToken ?? undefined)}
+          onRawChange={(raw) => change(slot, raw)}
           swatch={swatch}
-          onPick={(cls) => changeToken(slot, cls, current ?? undefined)}
           placeholder="— (no token)"
         />
       </Field>
-      <Field label={`${label} (raw)`} htmlFor={`ins-${slot}-raw`}>
-        <input
-          id={`ins-${slot}-raw`}
-          aria-label={`${label} raw`}
-          style={INPUT_COMPACT}
-          value={rawDisplay}
-          placeholder={styles[slot]}
-          onChange={(e) => change(slot, e.target.value)}
-        />
-      </Field>
+      <span style={{ fontSize: 11, color: "var(--fg-neutral-subtle)", fontVariantNumeric: "tabular-nums", paddingLeft: 22 }}>
+        {rawComputed}
+      </span>
     </div>
   );
 }
@@ -265,23 +264,35 @@ export function InspectorPanel({
                       const current = rawType && typeOptValues.has(rawType) ? rawType : null;
                       return (
                         <Field label="Style">
-                          <TokenSelect
+                          <EditableTokenChip
                             ariaLabel="Type style"
-                            value={current}
-                            options={typeTokens().map((t) => ({ value: t.className, label: t.label }))}
-                            onPick={(cls) => changeToken("typeStyle", cls, rawType ?? undefined)}
+                            tokenValue={current}
+                            tokenOptions={typeTokens().map((t) => ({ value: t.className, label: t.label }))}
+                            rawValue=""
+                            rawEnabled={false}
+                            onPickToken={(cls) => changeToken("typeStyle", cls, rawType ?? undefined)}
+                            onRawChange={() => {}}
                             placeholder="— (no token)"
                           />
                         </Field>
                       );
                     })()}
                     <div style={GRID_2}>
-                      <Field label="Align" htmlFor="ins-textAlign">
-                        <select id="ins-textAlign" aria-label="Text align" style={INPUT_COMPACT}
-                          value={fieldValue(styles, pending, "textAlign")}
-                          onChange={(e) => change("textAlign", e.target.value)}>
-                          {["left","center","right","justify"].map((a) => <option key={a} value={a}>{a}</option>)}
+                      <NumberField id="ins-fontSize" label="Size" valuePx={fieldValue(styles, pending, "fontSize")}
+                        onChange={(v) => change("fontSize", v)} />
+                      <Field label="Weight" htmlFor="ins-fontWeight">
+                        <select id="ins-fontWeight" aria-label="Font weight" style={INPUT_COMPACT}
+                          value={fieldValue(styles, pending, "fontWeight")}
+                          onChange={(e) => change("fontWeight", e.target.value)}>
+                          {["300","400","500","600","700"].map((w) => <option key={w} value={w}>{w}</option>)}
                         </select>
+                      </Field>
+                    </div>
+                    <div style={GRID_2}>
+                      <Field label="Align">
+                        <SegmentedToggle ariaLabel="Text align" value={fieldValue(styles, pending, "textAlign")}
+                          options={ALIGN_OPTS}
+                          onChange={(v) => change("textAlign", v)} />
                       </Field>
                       <Field label="Italic" htmlFor="ins-fontStyle">
                         <div style={{ height: 28, display: "flex", alignItems: "center" }}>
