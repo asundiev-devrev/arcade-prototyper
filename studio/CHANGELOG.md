@@ -8,6 +8,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.41.1] — 2026-06-24
+
+### Added
+- **Swap an icon from the library.** Pick an icon in a prototype — or a row that contains one, like a nav item with a placeholder glyph — and an **Icon** section opens in the properties panel. Hit Replace to browse a searchable grid of every icon we ship, pick one, and it swaps live in the frame. Commit rewrites the code to use the new icon. No more describing the icon you want in a sentence.
+
 ## [0.41.0] — 2026-06-24
 
 ### Added
