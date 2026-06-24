@@ -11,6 +11,9 @@ import { LayoutSection } from "./LayoutSection";
 import { AppearanceSection } from "./AppearanceSection";
 import { colorTokens, typeTokens, colorClassName, colorTokenFromClass, resolveSwatch, type ColorSlot } from "./tokenCatalog";
 import { EditableTokenChip } from "./EditableTokenChip";
+import { useAssetsCatalog } from "../assets/useAssetsCatalog";
+import { iconNameSet, iconSvg, iconList } from "./iconCatalog";
+import { IconSwapSection } from "./IconSwapSection";
 
 const MIN_W = 280, MAX_W = 560;
 const RAW_LINE_INDENT = 22; // swatch 16 + gap 6
@@ -91,6 +94,8 @@ export function InspectorPanel({
     batch, focusedEditId, frameWindow, inspectorOpen, inspectorWidth,
     setField, resetField, removeElement, focus, clear, setInspectorWidth,
   } = useEditSession();
+  const catalogState = useAssetsCatalog();
+  const catalog = catalogState.status === "ready" ? catalogState.catalog : null;
   const [isResizing, setIsResizing] = useState(false);
   const dragOrigin = useRef<{ startX: number; startWidth: number } | null>(null);
 
@@ -151,6 +156,14 @@ export function InspectorPanel({
       { type: "arcade-studio:preview-class", editId: id, slot: key, className, prevClassName },
       "*",
     );
+  }
+
+  function changeIcon(name: string) {
+    const id = focusedEditId;
+    if (id == null || !catalog) return;
+    setField(id, "iconSwap", name);
+    const svg = iconSvg(catalog, name);
+    if (svg) frameWindow?.postMessage({ type: "arcade-studio:preview-icon", editId: id, svg }, "*");
   }
 
   const focused = batch.find((e) => e.selection.editId === focusedEditId) ?? null;
@@ -253,6 +266,24 @@ export function InspectorPanel({
                 <Section title="Appearance">
                   <AppearanceSection styles={styles} pending={pending} change={change} />
                 </Section>
+
+                {(() => {
+                  const cand = focused.selection.iconCandidate;
+                  if (!catalog || !cand || !iconNameSet(catalog).has(cand)) return null;
+                  // current shows the pending swap if any, else the detected icon
+                  const pendingIcon = pending.iconSwap;
+                  const currentName = pendingIcon ?? cand;
+                  return (
+                    <Section title="Icon">
+                      <IconSwapSection
+                        currentName={currentName}
+                        currentSvg={iconSvg(catalog, currentName)}
+                        icons={iconList(catalog)}
+                        onPickIcon={changeIcon}
+                      />
+                    </Section>
+                  );
+                })()}
 
                 <Section title="Typography">
                   <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>

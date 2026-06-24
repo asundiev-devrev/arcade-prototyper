@@ -24,10 +24,11 @@ const STYLES: StyleSnapshot = {
   display: "block", flexDirection: "row", opacity: "1", borderRadius: "0px",
   appliedTokens: {},
 };
-function sel(editId: number): ElementSelection {
+function sel(editId: number, iconCandidate?: string): ElementSelection {
   return {
     editId, file: "/p/frames/home/index.tsx", line: editId, column: 1,
     componentName: "Button", tagName: "button", textEditable: true, styles: STYLES,
+    ...(iconCandidate ? { iconCandidate } : {}),
   };
 }
 const stubWindow = { postMessage: vi.fn() } as unknown as Window;
@@ -46,7 +47,10 @@ function Harness({ onSend }: { onSend: any }) {
     </>
   );
 }
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe("InspectorPanel (batch)", () => {
   it("renders null when inspector closed", () => {
@@ -130,5 +134,36 @@ describe("InspectorPanel (batch)", () => {
       "*",
     );
     expect(screen.getByTestId("count").textContent).toBe("0");
+  });
+
+  it("shows the Icon section + grid when the focused element is a catalog icon", async () => {
+    // stub /api/assets
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({
+        sections: [{
+          kind: "icon",
+          items: [
+            { name: "Bell", category: "A", tags: [], svg: "<svg></svg>" },
+            { name: "Star", category: "A", tags: [], svg: "<svg></svg>" },
+          ],
+        }],
+      }),
+    })) as any);
+
+    function IconHarness() {
+      const ctx = useEditSession();
+      return (
+        <>
+          <button onClick={() => { ctx.setInspectorOpen(true); ctx.addOrFocus(sel(1, "Bell"), "home", null); }}>open-icon</button>
+          <InspectorPanel onSend={vi.fn()} busy={false} />
+        </>
+      );
+    }
+
+    render(<EditSessionProvider><IconHarness /></EditSessionProvider>);
+    fireEvent.click(screen.getByText("open-icon"));
+    expect(await screen.findByText("Icon")).toBeTruthy(); // the Section title
+    expect(screen.getByRole("button", { name: /replace/i })).toBeTruthy();
   });
 });
