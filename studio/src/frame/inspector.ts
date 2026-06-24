@@ -15,6 +15,8 @@
  * back from here. Dev-only — same React-internals constraints as picker.ts.
  */
 
+import { componentNameOf } from "./fiber";
+
 export interface StyleSnapshot {
   text: string;
   fontSize: string; fontWeight: string; fontStyle: string; textAlign: string;
@@ -94,19 +96,37 @@ export function readStyleSnapshot(node: Element): StyleSnapshot {
   };
 }
 
-interface Entry { node: HTMLElement; original: StyleSnapshot; }
+/** Resolve the swappable icon node: the single <svg> in the picked subtree
+ *  (inclusive) whose owning component has a name. Returns null if zero or >1. */
+function resolveIconNode(node: HTMLElement): { el: Element; name: string } | null {
+  const svgs: Element[] = [];
+  if (node.tagName.toLowerCase() === "svg") svgs.push(node);
+  node.querySelectorAll("svg").forEach((s) => svgs.push(s));
+  // de-dup (node itself may also match querySelectorAll on nested, but svg can't contain svg here)
+  const unique = Array.from(new Set(svgs));
+  if (unique.length !== 1) return null;
+  const el = unique[0];
+  const name = componentNameOf(el);
+  if (!name) return null;
+  return { el, name };
+}
+
+interface Entry { node: HTMLElement; original: StyleSnapshot; iconEl?: Element; iconOriginalHTML?: string; }
 const edits = new Map<number, Entry>();
 const previewClasses = new Map<number, Set<string>>(); // editId -> classes we added
 let nextId = 1;
 
 /** Retain a clicked node under a stamped numeric editId (reused if already stamped). */
-export function capture(node: HTMLElement): { editId: number; textEditable: boolean; styles: StyleSnapshot } {
+export function capture(node: HTMLElement): { editId: number; textEditable: boolean; styles: StyleSnapshot; iconCandidate?: string } {
   const existing = node.getAttribute(EDIT_ID_ATTR);
   const editId = existing ? Number(existing) : nextId++;
   if (!existing) node.setAttribute(EDIT_ID_ATTR, String(editId));
   const styles = readStyleSnapshot(node);
-  if (!edits.has(editId)) edits.set(editId, { node, original: styles });
-  return { editId, textEditable: isTextEditable(node), styles };
+  const icon = resolveIconNode(node);
+  if (!edits.has(editId)) {
+    edits.set(editId, { node, original: styles, iconEl: icon?.el, iconOriginalHTML: icon?.el.innerHTML });
+  }
+  return { editId, textEditable: isTextEditable(node), styles, iconCandidate: icon?.name };
 }
 
 function applyPreview(editId: number, field: string, value: string) {
@@ -143,6 +163,14 @@ function applyPreviewClass(editId: number, className: string, prevClassName?: st
   }
 }
 
+function applyPreviewIcon(editId: number, svg: string) {
+  const entry = edits.get(editId);
+  if (!entry?.iconEl) return;
+  // extract inner markup if a full <svg> wrapper was passed
+  const m = svg.match(/<svg[^>]*>([\s\S]*)<\/svg>/i);
+  entry.iconEl.innerHTML = m ? m[1] : svg;
+}
+
 /** Reset one element's inline style overrides. NEVER touches textContent. */
 function resetOne(editId: number) {
   const entry = edits.get(editId);
@@ -154,6 +182,7 @@ function resetOne(editId: number) {
   entry.node.style.borderWidth = "";
   const cls = previewClasses.get(editId);
   if (cls) { for (const c of cls) entry.node.classList.remove(c); previewClasses.delete(editId); }
+  if (entry.iconEl && entry.iconOriginalHTML != null) entry.iconEl.innerHTML = entry.iconOriginalHTML;
 }
 
 function resetAll() {
@@ -179,6 +208,9 @@ function onMessage(e: MessageEvent) {
     if (typeof editId === "number" && typeof className === "string") {
       applyPreviewClass(editId, className, prevClassName, slot);
     }
+  } else if (t === "arcade-studio:preview-icon") {
+    const { editId, svg } = data as { editId?: number; svg?: string };
+    if (typeof editId === "number" && typeof svg === "string") applyPreviewIcon(editId, svg);
   }
 }
 

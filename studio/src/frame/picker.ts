@@ -29,6 +29,7 @@ interface PickerSelection {
   tagName: string;
   textEditable: boolean;
   styles: import("./inspector").StyleSnapshot;
+  iconCandidate?: string;
 }
 
 const CURSOR_STYLE_ID = "__arcade-studio-picker-cursor";
@@ -107,6 +108,7 @@ function resolveSelection(fiber: FiberLike, domNode: HTMLElement): PickerSelecti
         return {
           ...parsed, componentName, tagName,
           editId: cap.editId, textEditable: cap.textEditable, styles: cap.styles,
+          iconCandidate: cap.iconCandidate,
         };
       }
     }
