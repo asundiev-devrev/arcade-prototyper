@@ -13,7 +13,7 @@ export function TokenSelect({ options, value, onPick, ariaLabel, placeholder, sw
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
       {swatch !== undefined && (
-        <span aria-hidden="true" style={{
+        <span data-testid="token-chip-swatch" aria-hidden="true" style={{
           width: 16, height: 16, flex: "none", borderRadius: 4,
           border: "1px solid var(--stroke-neutral-subtle)", background: swatch,
         }} />
