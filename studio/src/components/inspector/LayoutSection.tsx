@@ -1,8 +1,8 @@
 import { useState, useRef } from "react";
 import type { StyleSnapshot, PendingEdits } from "../../hooks/editSessionContext";
 import {
-  NumberField, SegmentedToggle, fieldValue,
-  FIELD_ROW, COL_LABEL, type ChangeFn,
+  NumberField, SegmentedToggle, Field, fieldValue,
+  GRID_2, GRID_4, type ChangeFn,
 } from "./inspectorControls";
 
 const ICON = (path: React.ReactNode) => (
@@ -16,10 +16,11 @@ const COL = ICON(<><rect x="4" y="3" width="16" height="7" rx="1" /><rect x="4" 
 const GRID = ICON(<><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>);
 const LOCK = ICON(<><rect x="6" y="10" width="12" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></>);
 const UNLOCK = ICON(<><rect x="6" y="10" width="12" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 7.5-2" /></>);
+const SIDES = ICON(<><rect x="4" y="4" width="16" height="16" rx="1" /><path d="M4 9h16M4 15h16M9 4v16M15 4v16" /></>);
 
 function px(v: string): number { const n = parseFloat(v); return Number.isFinite(n) ? n : NaN; }
 
-const EXPAND_BTN: React.CSSProperties = {
+const ICON_BTN: React.CSSProperties = {
   width: 28, height: 28, flex: "none", display: "flex", alignItems: "center", justifyContent: "center",
   border: "1px solid var(--stroke-neutral-subtle)", borderRadius: 6, background: "var(--bg-neutral-soft)",
   color: "var(--fg-neutral-subtle)", cursor: "pointer",
@@ -69,11 +70,11 @@ export function LayoutSection({ styles, pending, change }: {
       if (Number.isFinite(h)) change("width", `${Math.round(h / ratioRef.current)}px`);
     }
   }
-  function uniform(side4: ("Top"|"Right"|"Bottom"|"Left")[], base: "margin"|"padding", pxVal: string) {
-    for (const s of side4) change(`${base}${s}` as keyof StyleSnapshot, pxVal);
+  function uniform(base: "margin"|"padding", pxVal: string) {
+    for (const s of ["Top","Right","Bottom","Left"] as const) change(`${base}${s}` as keyof StyleSnapshot, pxVal);
   }
   function sidesEqual(base: "margin"|"padding"): boolean {
-    const [t, r, b, l] = ["Top","Right","Bottom","Left"].map((s) => fieldValue(styles, pending, `${base}${s}` as keyof StyleSnapshot));
+    const [t, r, b, l] = (["Top","Right","Bottom","Left"] as const).map((s) => fieldValue(styles, pending, `${base}${s}` as keyof StyleSnapshot));
     return t === r && r === b && b === l;
   }
 
@@ -82,7 +83,7 @@ export function LayoutSection({ styles, pending, change }: {
   const paddingMixed = !sidesEqual("padding");
 
   return (
-    <div style={SECTION_BODY_LOCAL}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <SegmentedToggle ariaLabel="Layout mode" value={mode} onChange={setMode}
         options={[
           { value: "free", label: "Free", icon: FREE },
@@ -91,49 +92,70 @@ export function LayoutSection({ styles, pending, change }: {
           { value: "grid", label: "Grid", icon: GRID },
         ]} />
 
-      <div style={{ ...FIELD_ROW }}>
+      {/* W │ lock │ H */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 28px 1fr", gap: 8, alignItems: "end" }}>
         <NumberField id="ins-w" label="W" valuePx={fieldValue(styles, pending, "width")} onChange={onW} />
         <button type="button" aria-label={aspectLocked ? "Unlock aspect ratio" : "Lock aspect ratio"}
-          aria-pressed={aspectLocked} onClick={toggleLock} style={{ ...EXPAND_BTN, color: aspectLocked ? "var(--fg-neutral-prominent)" : "var(--fg-neutral-subtle)" }} title="Lock aspect">
+          aria-pressed={aspectLocked} onClick={toggleLock}
+          style={{ ...ICON_BTN, color: aspectLocked ? "var(--fg-neutral-prominent)" : "var(--fg-neutral-subtle)" }}
+          title="Lock aspect">
           {aspectLocked ? LOCK : UNLOCK}
         </button>
         <NumberField id="ins-h" label="H" valuePx={fieldValue(styles, pending, "height")} onChange={onH} />
       </div>
 
-      <NumberField id="ins-minw" label="Min W" valuePx={fieldValue(styles, pending, "minWidth")} onChange={(v) => change("minWidth", v)} />
-      <NumberField id="ins-maxw" label="Max W" valuePx={fieldValue(styles, pending, "maxWidth")} onChange={(v) => change("maxWidth", v)} />
-      <NumberField id="ins-minh" label="Min H" valuePx={fieldValue(styles, pending, "minHeight")} onChange={(v) => change("minHeight", v)} />
-      <NumberField id="ins-maxh" label="Max H" valuePx={fieldValue(styles, pending, "maxHeight")} onChange={(v) => change("maxHeight", v)} />
+      {/* Min W │ Max W │ Min H │ Max H */}
+      <div style={GRID_4}>
+        <NumberField id="ins-minw" label="Min W" valuePx={fieldValue(styles, pending, "minWidth")} onChange={(v) => change("minWidth", v)} />
+        <NumberField id="ins-maxw" label="Max W" valuePx={fieldValue(styles, pending, "maxWidth")} onChange={(v) => change("maxWidth", v)} />
+        <NumberField id="ins-minh" label="Min H" valuePx={fieldValue(styles, pending, "minHeight")} onChange={(v) => change("minHeight", v)} />
+        <NumberField id="ins-maxh" label="Max H" valuePx={fieldValue(styles, pending, "maxHeight")} onChange={(v) => change("maxHeight", v)} />
+      </div>
 
-      {/* Margin */}
-      <div style={FIELD_ROW}>
+      {/* Margin │ Padding (each: input + per-side expand button) */}
+      <div style={GRID_2}>
         <NumberField id="ins-margin" label="Margin"
           valuePx={sidesEqual("margin") ? fieldValue(styles, pending, "marginTop") : ""}
           placeholder={marginMixed ? "Mixed" : undefined}
-          onChange={(v) => uniform(["Top","Right","Bottom","Left"], "margin", v)} />
-        <button type="button" aria-label="Expand margin" onClick={() => setMarginExpanded((x) => !x)} style={EXPAND_BTN} title="Per-side">⤢</button>
-      </div>
-      {(marginExpanded || marginMixed) && (["Top","Right","Bottom","Left"] as const).map((s) => (
-        <NumberField key={s} id={`ins-margin-${s}`} label={`Margin ${s.toLowerCase()}`} valuePx={fieldValue(styles, pending, `margin${s}` as keyof StyleSnapshot)} onChange={(v) => change(`margin${s}` as keyof StyleSnapshot, v)} />
-      ))}
-
-      {/* Padding */}
-      <div style={FIELD_ROW}>
+          onChange={(v) => uniform("margin", v)}
+          trailing={
+            <button type="button" aria-label="Expand margin" onClick={() => setMarginExpanded((x) => !x)} style={ICON_BTN} title="Per-side">{SIDES}</button>
+          } />
         <NumberField id="ins-padding" label="Padding"
           valuePx={sidesEqual("padding") ? fieldValue(styles, pending, "paddingTop") : ""}
           placeholder={paddingMixed ? "Mixed" : undefined}
-          onChange={(v) => uniform(["Top","Right","Bottom","Left"], "padding", v)} />
-        <button type="button" aria-label="Expand padding" onClick={() => setPaddingExpanded((x) => !x)} style={EXPAND_BTN} title="Per-side">⤢</button>
+          onChange={(v) => uniform("padding", v)}
+          trailing={
+            <button type="button" aria-label="Expand padding" onClick={() => setPaddingExpanded((x) => !x)} style={ICON_BTN} title="Per-side">{SIDES}</button>
+          } />
       </div>
-      {(paddingExpanded || paddingMixed) && (["Top","Right","Bottom","Left"] as const).map((s) => (
-        <NumberField key={s} id={`ins-padding-${s}`} label={`Padding ${s.toLowerCase()}`} valuePx={fieldValue(styles, pending, `padding${s}` as keyof StyleSnapshot)} onChange={(v) => change(`padding${s}` as keyof StyleSnapshot, v)} />
-      ))}
+
+      {(marginExpanded || marginMixed) && (
+        <Field label="Margin sides">
+          <div style={GRID_4}>
+            {(["Top","Right","Bottom","Left"] as const).map((s) => (
+              <NumberField key={s} id={`ins-margin-${s}`} label={`Margin ${s.toLowerCase()}`} displayLabel={s}
+                valuePx={fieldValue(styles, pending, `margin${s}` as keyof StyleSnapshot)} onChange={(v) => change(`margin${s}` as keyof StyleSnapshot, v)} />
+            ))}
+          </div>
+        </Field>
+      )}
+      {(paddingExpanded || paddingMixed) && (
+        <Field label="Padding sides">
+          <div style={GRID_4}>
+            {(["Top","Right","Bottom","Left"] as const).map((s) => (
+              <NumberField key={s} id={`ins-padding-${s}`} label={`Padding ${s.toLowerCase()}`} displayLabel={s}
+                valuePx={fieldValue(styles, pending, `padding${s}` as keyof StyleSnapshot)} onChange={(v) => change(`padding${s}` as keyof StyleSnapshot, v)} />
+            ))}
+          </div>
+        </Field>
+      )}
 
       {showGap && (
-        <NumberField id="ins-gap" label="Gap" valuePx={fieldValue(styles, pending, "gap")} onChange={(v) => change("gap", v)} />
+        <div style={GRID_2}>
+          <NumberField id="ins-gap" label="Gap" valuePx={fieldValue(styles, pending, "gap")} onChange={(v) => change("gap", v)} />
+        </div>
       )}
     </div>
   );
 }
-
-const SECTION_BODY_LOCAL: React.CSSProperties = { display: "flex", flexDirection: "column", gap: 10 };

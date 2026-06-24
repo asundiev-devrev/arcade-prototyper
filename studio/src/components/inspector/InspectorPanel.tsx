@@ -4,7 +4,7 @@ import {
   useEditSession, type StyleSnapshot, type PendingEdits, type EditedElement,
 } from "../../hooks/editSessionContext";
 import { buildVisualEditPreamble } from "../../lib/visualEditPreamble";
-import { fieldValue, toNumberInput, fromNumberInput } from "./inspectorControls";
+import { fieldValue, toNumberInput, fromNumberInput, Field, NumberField, INPUT_COMPACT, GRID_2 } from "./inspectorControls";
 import { Section } from "./Section";
 import { LayoutSection } from "./LayoutSection";
 import { AppearanceSection } from "./AppearanceSection";
@@ -23,12 +23,6 @@ const LABEL: React.CSSProperties = {
   fontSize: 11, color: "var(--fg-neutral-subtle)", textTransform: "uppercase", letterSpacing: 0.4,
 };
 const FIELD_ROW: React.CSSProperties = { display: "flex", alignItems: "center", gap: 8 };
-const COL_LABEL: React.CSSProperties = { width: 84, fontSize: 12, color: "var(--fg-neutral-medium)", flex: "none" };
-const INPUT: React.CSSProperties = {
-  flex: 1, minWidth: 0, height: 28, padding: "0 8px", borderRadius: 6,
-  border: "1px solid var(--stroke-neutral-subtle)", background: "var(--bg-neutral-soft)",
-  color: "var(--fg-neutral-prominent)", fontSize: 12,
-};
 
 export function InspectorPanel({
   onSend, busy,
@@ -194,47 +188,47 @@ export function InspectorPanel({
                 </Section>
 
                 <Section title="Typography">
-                  <div style={FIELD_ROW}>
-                    <label htmlFor="ins-fontSize" style={COL_LABEL}>Font size</label>
-                    <input id="ins-fontSize" type="number" aria-label="Font size" style={INPUT}
-                      value={toNumberInput(fieldValue(styles, pending, "fontSize"))}
-                      onChange={(e) => change("fontSize", fromNumberInput(e.target.value))} />
-                  </div>
-                  <div style={FIELD_ROW}>
-                    <label htmlFor="ins-fontWeight" style={COL_LABEL}>Weight</label>
-                    <select id="ins-fontWeight" aria-label="Font weight" style={INPUT}
-                      value={fieldValue(styles, pending, "fontWeight")}
-                      onChange={(e) => change("fontWeight", e.target.value)}>
-                      {["300","400","500","600","700"].map((w) => <option key={w} value={w}>{w}</option>)}
-                    </select>
-                  </div>
-                  <div style={FIELD_ROW}>
-                    <label htmlFor="ins-textAlign" style={COL_LABEL}>Align</label>
-                    <select id="ins-textAlign" aria-label="Text align" style={INPUT}
-                      value={fieldValue(styles, pending, "textAlign")}
-                      onChange={(e) => change("textAlign", e.target.value)}>
-                      {["left","center","right","justify"].map((a) => <option key={a} value={a}>{a}</option>)}
-                    </select>
-                  </div>
-                  <div style={FIELD_ROW}>
-                    <label htmlFor="ins-fontStyle" style={COL_LABEL}>Italic</label>
-                    <input id="ins-fontStyle" type="checkbox" aria-label="Italic"
-                      checked={fieldValue(styles, pending, "fontStyle") === "italic"}
-                      onChange={(e) => change("fontStyle", e.target.checked ? "italic" : "normal")} />
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <div style={GRID_2}>
+                      <NumberField id="ins-fontSize" label="Font size" valuePx={fieldValue(styles, pending, "fontSize")}
+                        onChange={(v) => change("fontSize", v)} />
+                      <Field label="Weight" htmlFor="ins-fontWeight">
+                        <select id="ins-fontWeight" aria-label="Font weight" style={INPUT_COMPACT}
+                          value={fieldValue(styles, pending, "fontWeight")}
+                          onChange={(e) => change("fontWeight", e.target.value)}>
+                          {["300","400","500","600","700"].map((w) => <option key={w} value={w}>{w}</option>)}
+                        </select>
+                      </Field>
+                    </div>
+                    <div style={GRID_2}>
+                      <Field label="Align" htmlFor="ins-textAlign">
+                        <select id="ins-textAlign" aria-label="Text align" style={INPUT_COMPACT}
+                          value={fieldValue(styles, pending, "textAlign")}
+                          onChange={(e) => change("textAlign", e.target.value)}>
+                          {["left","center","right","justify"].map((a) => <option key={a} value={a}>{a}</option>)}
+                        </select>
+                      </Field>
+                      <Field label="Italic" htmlFor="ins-fontStyle">
+                        <div style={{ height: 28, display: "flex", alignItems: "center" }}>
+                          <input id="ins-fontStyle" type="checkbox" aria-label="Italic"
+                            checked={fieldValue(styles, pending, "fontStyle") === "italic"}
+                            onChange={(e) => change("fontStyle", e.target.checked ? "italic" : "normal")} />
+                        </div>
+                      </Field>
+                    </div>
                   </div>
                 </Section>
 
                 <Section title="Color">
-                  {(["color","backgroundColor","borderColor"] as const).map((key) => (
-                    <div style={FIELD_ROW} key={key}>
-                      <label htmlFor={`ins-${key}`} style={COL_LABEL}>
-                        {key === "color" ? "Text" : key === "backgroundColor" ? "Fill" : "Border"}
-                      </label>
-                      <input id={`ins-${key}`} aria-label={key} style={INPUT}
-                        value={fieldValue(styles, pending, key)}
-                        onChange={(e) => change(key, e.target.value)} />
-                    </div>
-                  ))}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {(["color","backgroundColor","borderColor"] as const).map((key) => (
+                      <Field key={key} label={key === "color" ? "Text" : key === "backgroundColor" ? "Fill" : "Border"} htmlFor={`ins-${key}`}>
+                        <input id={`ins-${key}`} aria-label={key} style={INPUT_COMPACT}
+                          value={fieldValue(styles, pending, key)}
+                          onChange={(e) => change(key, e.target.value)} />
+                      </Field>
+                    ))}
+                  </div>
                 </Section>
               </>
             )}
