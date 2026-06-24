@@ -2,12 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@xorkavi/arcade-gen";
 import {
   useEditSession, type StyleSnapshot, type PendingEdits, type EditedElement,
+  TOKEN_PREFIX, isTokenPending, tokenClass,
 } from "../../hooks/editSessionContext";
 import { buildVisualEditPreamble } from "../../lib/visualEditPreamble";
 import { fieldValue, toNumberInput, fromNumberInput, Field, NumberField, INPUT_COMPACT, GRID_2 } from "./inspectorControls";
 import { Section } from "./Section";
 import { LayoutSection } from "./LayoutSection";
 import { AppearanceSection } from "./AppearanceSection";
+import { colorTokens, typeTokens, colorClassName, colorTokenFromClass, resolveSwatch, type ColorSlot } from "./tokenCatalog";
+import { TokenSelect } from "./TokenSelect";
 
 const MIN_W = 280, MAX_W = 560;
 
@@ -23,6 +26,58 @@ const LABEL: React.CSSProperties = {
   fontSize: 11, color: "var(--fg-neutral-subtle)", textTransform: "uppercase", letterSpacing: 0.4,
 };
 const FIELD_ROW: React.CSSProperties = { display: "flex", alignItems: "center", gap: 8 };
+
+function ColorRow({
+  slot, label, styles, pending, changeToken, change,
+}: {
+  slot: ColorSlot;
+  label: string;
+  styles: StyleSnapshot;
+  pending: PendingEdits;
+  changeToken: (key: ColorSlot, className: string, prevClassName?: string) => void;
+  change: (key: ColorSlot, rawValue: string) => void;
+}) {
+  const appliedCls = styles.appliedTokens[slot] ?? null;
+  const pendingTok = isTokenPending(pending[slot]) ? tokenClass(pending[slot]!) : undefined;
+  const current = pendingTok ?? appliedCls ?? null;
+
+  const tokenOpts = colorTokens().map((t) => ({
+    value: colorClassName(t.token, slot),
+    label: t.label,
+  }));
+
+  let swatch: string | undefined;
+  if (current) {
+    const parsed = colorTokenFromClass(current);
+    if (parsed) {
+      swatch = resolveSwatch(parsed.token, document.documentElement);
+    }
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <Field label={label}>
+        <TokenSelect
+          ariaLabel={label}
+          value={current}
+          options={tokenOpts}
+          swatch={swatch}
+          onPick={(cls) => changeToken(slot, cls, current ?? undefined)}
+          placeholder="— (no token)"
+        />
+      </Field>
+      <Field label="or raw value" htmlFor={`ins-${slot}-raw`}>
+        <input
+          id={`ins-${slot}-raw`}
+          aria-label={`${label} raw`}
+          style={INPUT_COMPACT}
+          value={fieldValue(styles, pending, slot)}
+          onChange={(e) => change(slot, e.target.value)}
+        />
+      </Field>
+    </div>
+  );
+}
 
 export function InspectorPanel({
   onSend, busy,
@@ -82,6 +137,16 @@ export function InspectorPanel({
     else setField(id, key, rawValue);
     frameWindow?.postMessage(
       { type: "arcade-studio:preview", editId: id, field: key, value: rawValue || original },
+      "*",
+    );
+  }
+
+  function changeToken(key: keyof StyleSnapshot | "typeStyle", className: string, prevClassName?: string) {
+    const id = focusedEditId;
+    if (id == null) return;
+    setField(id, key, `${TOKEN_PREFIX}${className}`);
+    frameWindow?.postMessage(
+      { type: "arcade-studio:preview-class", editId: id, slot: key, className, prevClassName },
       "*",
     );
   }
@@ -189,17 +254,24 @@ export function InspectorPanel({
 
                 <Section title="Typography">
                   <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                    <div style={GRID_2}>
-                      <NumberField id="ins-fontSize" label="Font size" valuePx={fieldValue(styles, pending, "fontSize")}
-                        onChange={(v) => change("fontSize", v)} />
-                      <Field label="Weight" htmlFor="ins-fontWeight">
-                        <select id="ins-fontWeight" aria-label="Font weight" style={INPUT_COMPACT}
-                          value={fieldValue(styles, pending, "fontWeight")}
-                          onChange={(e) => change("fontWeight", e.target.value)}>
-                          {["300","400","500","600","700"].map((w) => <option key={w} value={w}>{w}</option>)}
-                        </select>
-                      </Field>
-                    </div>
+                    <Field label="Style">
+                      <TokenSelect
+                        ariaLabel="Type style"
+                        value={
+                          isTokenPending(pending.typeStyle)
+                            ? tokenClass(pending.typeStyle!)
+                            : (styles.appliedTokens.typeStyle ?? null)
+                        }
+                        options={typeTokens().map((t) => ({ value: t.className, label: t.label }))}
+                        onPick={(cls) => {
+                          const current = isTokenPending(pending.typeStyle)
+                            ? tokenClass(pending.typeStyle!)
+                            : (styles.appliedTokens.typeStyle ?? null);
+                          changeToken("typeStyle", cls, current ?? undefined);
+                        }}
+                        placeholder="— (no token)"
+                      />
+                    </Field>
                     <div style={GRID_2}>
                       <Field label="Align" htmlFor="ins-textAlign">
                         <select id="ins-textAlign" aria-label="Text align" style={INPUT_COMPACT}
@@ -221,13 +293,9 @@ export function InspectorPanel({
 
                 <Section title="Color">
                   <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                    {(["color","backgroundColor","borderColor"] as const).map((key) => (
-                      <Field key={key} label={key === "color" ? "Text" : key === "backgroundColor" ? "Fill" : "Border"} htmlFor={`ins-${key}`}>
-                        <input id={`ins-${key}`} aria-label={key} style={INPUT_COMPACT}
-                          value={fieldValue(styles, pending, key)}
-                          onChange={(e) => change(key, e.target.value)} />
-                      </Field>
-                    ))}
+                    <ColorRow slot="color" label="Text" styles={styles} pending={pending} changeToken={changeToken} change={change} />
+                    <ColorRow slot="backgroundColor" label="Fill" styles={styles} pending={pending} changeToken={changeToken} change={change} />
+                    <ColorRow slot="borderColor" label="Border" styles={styles} pending={pending} changeToken={changeToken} change={change} />
                   </div>
                 </Section>
               </>

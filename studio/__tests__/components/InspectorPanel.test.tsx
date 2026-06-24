@@ -59,9 +59,15 @@ describe("InspectorPanel (batch)", () => {
     fireEvent.click(screen.getByText("open1"));
     expect(screen.getByText("Layout")).toBeTruthy(); // Layout section present
     expect(screen.getByLabelText("W")).toBeTruthy(); // Width field from Layout section
-    const fontSize = screen.getByLabelText(/font size/i) as HTMLInputElement;
-    expect(fontSize.value).toBe("14");
-    fireEvent.change(fontSize, { target: { value: "18" } });
+    // Typography now has Style picker (token select), not Font size
+    const typeStyle = screen.getByLabelText(/type style/i) as HTMLSelectElement;
+    expect(typeStyle).toBeTruthy();
+    // Color now has token selects
+    const textColor = screen.getByLabelText("Text") as HTMLSelectElement;
+    expect(textColor).toBeTruthy();
+    // Change a width value to test pending edits
+    const widthInput = screen.getByLabelText("W") as HTMLInputElement;
+    fireEvent.change(widthInput, { target: { value: "100" } });
     // batch element #1 now has the pending change; commit proves it (below)
     expect(screen.getByTestId("count").textContent).toBe("1");
   });
@@ -79,10 +85,13 @@ describe("InspectorPanel (batch)", () => {
     const onSend = vi.fn();
     render(<EditSessionProvider><Harness onSend={onSend} /></EditSessionProvider>);
     fireEvent.click(screen.getByText("open1"));
-    fireEvent.change(screen.getByLabelText(/font size/i), { target: { value: "18" } });
+    // Change width (font size is now in Style token)
+    const widthInput = screen.getByLabelText("W") as HTMLInputElement;
+    fireEvent.change(widthInput, { target: { value: "100" } }); // NumberField strips/adds px
     fireEvent.click(screen.getByText(/Commit/i));
     expect(onSend).toHaveBeenCalledTimes(1);
-    expect(onSend.mock.calls[0][0]).toContain("font size: 14px -> 18px");
+    const preamble = onSend.mock.calls[0][0];
+    expect(preamble).toContain("width: 80px -> 100px");
     expect(screen.getByTestId("count").textContent).toBe("0");
   });
 
