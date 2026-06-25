@@ -126,7 +126,7 @@ export function InspectorPanel({
       .then((d) => { if (!cancelled) setKitProps(d.props ?? []); })
       .catch(() => { if (!cancelled) setKitProps([]); });
     return () => { cancelled = true; };
-  }, [focusedEditId, batch]);
+  }, [focusedEditId, batch.find((e) => e.selection.editId === focusedEditId)?.selection.componentName]);
 
   // Resize drag (mirrors the chat-pane handle in ProjectDetail).
   useEffect(() => {
@@ -216,16 +216,26 @@ export function InspectorPanel({
   }
   async function move(el: EditedElement, dir: "up" | "down") {
     const frameSlug = el.selection.file.split("/frames/").pop()?.split("/")[0] ?? "";
-    await fetch(`/api/visual-edit/${slug}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ frameSlug, move: {
-        file: el.selection.file, line: el.selection.line, column: el.selection.column, dir,
-      } }),
-    });
-    // frame hot-reloads; the picked element's line moves, so drop the selection.
-    frameWindow?.postMessage({ type: "arcade-studio:preview-reset", all: true }, "*");
-    clear();
+    try {
+      const res = await fetch(`/api/visual-edit/${slug}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ frameSlug, move: {
+          file: el.selection.file, line: el.selection.line, column: el.selection.column, dir,
+        } }),
+      });
+      const result = await res.json();
+      if (result.ok) {
+        // frame hot-reloads; the picked element's line moves, so drop the selection.
+        frameWindow?.postMessage({ type: "arcade-studio:preview-reset", all: true }, "*");
+        clear();
+      } else {
+        // Server bailed (no sibling, dynamic parent, etc.) — preserve the batch and pending edits.
+        console.warn("[InspectorPanel] Move failed:", result.reason);
+      }
+    } catch (err) {
+      console.warn("[InspectorPanel] Move request failed:", err);
+    }
   }
   function startResize(e: React.MouseEvent) {
     e.preventDefault();
@@ -285,12 +295,16 @@ export function InspectorPanel({
                       &lt;{e.selection.tagName || e.selection.componentName}&gt;{n ? ` · ${n}` : ""}
                     </span>
                     <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                      <button type="button" aria-label="Move element up" title="Move up"
+                      <button type="button" aria-label="Move element up"
+                        title={totalChanges > 0 ? "Commit or discard edits before moving" : "Move up"}
+                        disabled={totalChanges > 0}
                         onClick={(ev) => { ev.stopPropagation(); void move(e, "up"); }}
-                        style={{ background: "transparent", border: "none", color: "var(--fg-neutral-subtle)", cursor: "pointer", fontSize: 13, lineHeight: 1 }}>↑</button>
-                      <button type="button" aria-label="Move element down" title="Move down"
+                        style={{ background: "transparent", border: "none", color: "var(--fg-neutral-subtle)", cursor: totalChanges > 0 ? "not-allowed" : "pointer", fontSize: 13, lineHeight: 1, opacity: totalChanges > 0 ? 0.4 : 1 }}>↑</button>
+                      <button type="button" aria-label="Move element down"
+                        title={totalChanges > 0 ? "Commit or discard edits before moving" : "Move down"}
+                        disabled={totalChanges > 0}
                         onClick={(ev) => { ev.stopPropagation(); void move(e, "down"); }}
-                        style={{ background: "transparent", border: "none", color: "var(--fg-neutral-subtle)", cursor: "pointer", fontSize: 13, lineHeight: 1 }}>↓</button>
+                        style={{ background: "transparent", border: "none", color: "var(--fg-neutral-subtle)", cursor: totalChanges > 0 ? "not-allowed" : "pointer", fontSize: 13, lineHeight: 1, opacity: totalChanges > 0 ? 0.4 : 1 }}>↓</button>
                       <button type="button" aria-label={`Remove element ${e.selection.editId}`}
                         onClick={(ev) => {
                           ev.stopPropagation();
