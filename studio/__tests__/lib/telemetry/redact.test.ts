@@ -30,4 +30,29 @@ describe("redact", () => {
     expect(out.extra.prompt).toBe("[redacted]");
     expect(out.extra.other).toBe("kept");
   });
+
+  it("sentryBeforeSend scrubs home paths + token-shaped strings from message and stack", () => {
+    const event: any = {
+      message: "failed at /Users/jdoe/Library/Application Support/arcade-studio/projects/foo/x.tsx",
+      exception: {
+        values: [
+          {
+            value: "auth failed with token ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+            stacktrace: { frames: [{ filename: "/Users/jdoe/app/main.ts", abs_path: "/Users/jdoe/app/main.ts" }] },
+          },
+        ],
+      },
+    };
+    const out = sentryBeforeSend(event);
+    expect(out.message).not.toContain("/Users/jdoe");
+    expect(out.message).not.toContain("/projects/foo/");
+    expect(out.exception.values[0].value).toContain("<gh-token>");
+    expect(out.exception.values[0].value).not.toContain("ghp_ABCDEF");
+    expect(out.exception.values[0].stacktrace.frames[0].filename).toBe("<home>/app/main.ts");
+  });
+
+  it("sentryBeforeSend never throws on malformed events", () => {
+    expect(() => sentryBeforeSend({} as any)).not.toThrow();
+    expect(() => sentryBeforeSend({ exception: { values: "nope" } } as any)).not.toThrow();
+  });
 });

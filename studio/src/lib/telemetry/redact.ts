@@ -1,5 +1,10 @@
 import { createHash } from "node:crypto";
 
+// stripPaths lives in the crypto-free scrub.ts so the browser bundle can use it;
+// re-exported here for existing importers (runtimeError.ts, chat.ts).
+export { stripPaths } from "./scrub";
+import { scrubSentryEvent } from "./scrub";
+
 /** sha1 of input, first 12 hex chars. Stable, non-reversible for our purposes.
  *  Used for project slugs + frame paths so we can correlate events for the same
  *  project without leaking its name. */
@@ -12,23 +17,7 @@ export function truncate(s: string, max: number): string {
   return s.length <= max ? s : s.slice(0, max) + "…";
 }
 
-/** Remove absolute arcade-studio project paths, leaving the readable error. */
-export function stripPaths(s: string): string {
-  return s
-    .replace(/\/[^\s]*arcade-studio\/projects\/[^\s]*/g, "<frame-path>")
-    .replace(/\/Users\/[^\s/]+/g, "<home>");
-}
-
-/** Sentry beforeSend: scrub auth headers + prompt-bearing extras. */
+/** Sentry beforeSend: scrub message/stack/breadcrumbs/headers/prompt + token-shaped strings. */
 export function sentryBeforeSend<T extends Record<string, any>>(event: T): T {
-  const headers = event?.request?.headers;
-  if (headers && typeof headers === "object") {
-    for (const key of Object.keys(headers)) {
-      if (/^authorization$/i.test(key)) headers[key] = "[redacted]";
-    }
-  }
-  if (event?.extra && typeof event.extra === "object" && "prompt" in event.extra) {
-    event.extra.prompt = "[redacted]";
-  }
-  return event;
+  return scrubSentryEvent(event);
 }

@@ -38,12 +38,47 @@ let enabled = false;
 let debug = false;
 const DEFAULT_HOST = "https://us.i.posthog.com";
 
+// Mirror of studio/src/lib/telemetry/scrub.ts (separate compile boundary — keep
+// in lockstep). Scrubs home paths + token-shaped strings out of message/stack/
+// breadcrumbs, plus auth headers and the prompt extra.
+function stripPaths(s: string): string {
+  return s
+    .replace(/\/[^\s]*arcade-studio\/projects\/[^\s]*/g, "<frame-path>")
+    .replace(/\/Users\/[^\s/]+/g, "<home>");
+}
+function scrubText(s: string): string {
+  return stripPaths(s)
+    .replace(/\bBearer\s+[\w.\-]+/gi, "Bearer <token>")
+    .replace(/\bgh[posru]_[A-Za-z0-9]{20,}\b/g, "<gh-token>")
+    .replace(/\bsk-[A-Za-z0-9]{16,}\b/g, "<token>")
+    .replace(/\bAKIA[0-9A-Z]{16}\b/g, "<aws-key>")
+    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "<jwt>");
+}
 function mainBeforeSend(event: any): any {
   try {
+    if (typeof event?.message === "string") event.message = scrubText(event.message);
+    const values = event?.exception?.values;
+    if (Array.isArray(values)) {
+      for (const v of values) {
+        if (typeof v?.value === "string") v.value = scrubText(v.value);
+        const frames = v?.stacktrace?.frames;
+        if (Array.isArray(frames)) {
+          for (const f of frames) {
+            if (typeof f?.filename === "string") f.filename = stripPaths(f.filename);
+            if (typeof f?.abs_path === "string") f.abs_path = stripPaths(f.abs_path);
+          }
+        }
+      }
+    }
     if (Array.isArray(event?.breadcrumbs)) {
       for (const b of event.breadcrumbs) {
         if (typeof b?.data?.url === "string") b.data.url = b.data.url.replace(/\/api\/projects\/[^/]+/g, "/api/projects/<slug>");
+        if (typeof b?.message === "string") b.message = scrubText(b.message);
       }
+    }
+    const headers = event?.request?.headers;
+    if (headers && typeof headers === "object") {
+      for (const k of Object.keys(headers)) if (/^authorization$/i.test(k)) headers[k] = "[redacted]";
     }
     if (event?.extra && typeof event.extra === "object" && "prompt" in event.extra) event.extra.prompt = "[redacted]";
   } catch {}
