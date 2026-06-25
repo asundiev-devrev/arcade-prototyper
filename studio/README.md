@@ -2,11 +2,11 @@
 
 Arcade Studio is an AI-assisted prototyping workspace for the Arcade Design System. Designers create a project, paste a Figma URL (or type a prompt), and a Claude-driven agent writes React frames into the project's `frames/` directory. Frames hot-reload inside a viewport grid, composed from the production arcade components and the opinionated composites in `prototype-kit/`.
 
-Studio is a sibling of `playground/` under the `arcade-gen` repo — not a pnpm workspace. It shares the root `node_modules` and reaches into the library via path aliases (`arcade`, `arcade-prototypes`).
+Studio lives in the `studio/` directory of the `arcade-prototyper` repo. It is **not** a pnpm workspace member — it shares the repo-root `node_modules` and reaches the production component library via the `arcade` path alias, which resolves to the published `@xorkavi/arcade-gen` dependency (not in-tree).
 
 ## Status
 
-Studio is currently a proof of concept — see [STATUS.md](./STATUS.md) for what works and [ROADMAP.md](./ROADMAP.md) for the prioritized enhancement list.
+Studio is a **beta** macOS app distributed to internal DevRev users as a signed `.dmg` — good enough for real prototyping work. See [STATUS.md](./STATUS.md) for what works and [ROADMAP.md](./ROADMAP.md) for the prioritized enhancement list.
 
 ## Quickstart
 
@@ -30,28 +30,31 @@ Studio auto-opens in the browser. Projects are stored outside the repo at `~/Lib
 ```
 studio/
 ├── src/              # React frontend (Vite, port 5556)
-├── server/           # Vite middleware + plugins (API, watchers, claude subprocess)
+├── server/           # Vite middleware + plugins + subsystems (see ARCHITECTURE.md)
 ├── prototype-kit/    # Opinionated composites + templates used by generated frames
-├── templates/        # CLAUDE.md.tpl — scaffolded into each new project
-├── __tests__/        # Vitest unit tests
-├── bin/              # (reserved — no CLI entry yet)
+├── worker/           # Cloudflare Worker that proxies share deploys
+├── packaging/        # .app/.dmg/.vsix packaging scripts + vendored CLIs
+├── templates/        # CLAUDE.md template — scaffolded into each new project
+├── __tests__/        # Vitest suite
 ├── index.html        # Entry (mounts src/main.tsx)
 ├── vite.config.ts    # Dev server + middleware + custom plugins
 └── vitest.config.ts  # Test config (jsdom)
 ```
+
+The Electron main process + bundle config live at the repo root (`electron/`,
+`electron-builder.yml`); `server/sidecar/bin.ts` is the CLI entry (`pnpm sidecar`).
 
 Runtime project storage lives outside the repo:
 
 ```
 ~/Library/Application Support/arcade-studio/projects/<slug>/
 ├── project.json
-├── CLAUDE.md             # Agent system prompt (rendered from templates/CLAUDE.md.tpl)
+├── CLAUDE.md             # Agent system prompt (rendered from the project template)
 ├── chat-history.json
 ├── theme-overrides.css
 ├── frames/<frame-slug>/index.tsx
-├── shared/
-├── thumbnails/
-└── _uploads/
+├── shared/               # e.g. DEVREV-API.md, copied in on demand
+└── _uploads/             # uploaded + Figma-exported images
 ```
 
 ## Further reading
@@ -62,12 +65,13 @@ Runtime project storage lives outside the repo:
 - **[prototype-kit/README.md](./prototype-kit/README.md)** — boundary rules between studio composites and the production library
 - **[templates/CLAUDE.md.tpl](./templates/CLAUDE.md.tpl)** — the system prompt the agent runs under inside each generated project
 
-## Relationship to other arcade-gen folders
+## Relationship to the rest of the repo
 
-| Folder        | Purpose                                                                  |
-|---------------|--------------------------------------------------------------------------|
-| `src/`        | Production arcade library (components, tokens, OpenUI bridge)            |
-| `playground/` | Prompt-driven demo that renders single components via OpenUI             |
-| `studio/`     | Multi-project prototyping workspace; agent generates whole frames        |
+The `arcade-prototyper` repo holds two independent products (see the repo-root `CLAUDE.md`):
 
-All three Vite apps share the root `node_modules` and the root `tokens.tokens.json`.
+| Path        | Product                                                                      |
+|-------------|------------------------------------------------------------------------------|
+| repo root   | **Arcade Prototyper skill** — `SKILL.md` + `DESIGN.md`, a Claude Code skill   |
+| `studio/`   | **Arcade Studio** — this app; multi-project workspace, agent generates frames |
+
+The production component library is the external `@xorkavi/arcade-gen` dependency, not a sibling folder in this repo.

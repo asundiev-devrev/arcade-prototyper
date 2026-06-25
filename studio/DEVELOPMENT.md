@@ -64,8 +64,8 @@ See [studio/packaging/README.md](./packaging/README.md) for the first-launch Gat
 ### What happens on startup
 
 1. Vite loads `studio/vite.config.ts`.
-2. `injectStudioSourcePlugin` appends `@source "<projectsRoot>/**/frames/**/*.{ts,tsx}"` to `arcade-gen/src/styles/globals.css` so Tailwind v4 scans generated frames for utility classes. (See the "Tailwind v4 content scanning" memory — auto-detect misses the studio subdir.)
-3. `apiPlugin` wires up all middleware (`chat`, `projects`, `figma`, `uploads`, `preflight`, `fonts`), attaches the build-error reporter, and runs `refreshStaleClaudeMd()` once: if `templates/CLAUDE.md.tpl` has changed since a project was scaffolded, the project's `CLAUDE.md` is rewritten and `sessionId` is cleared.
+2. `injectStudioSourcePlugin` appends absolute `@source` directives (the projects root + the user kit dir) to `studio/src/styles/tailwind.css` so Tailwind v4 scans generated frames for utility classes. (See the "Tailwind v4 content scanning" memory — auto-detect misses those out-of-tree roots.)
+3. `apiPlugin` wires up the API middleware (chat, projects, frames, figma, uploads, settings, devrev, cloudflare, components, assets, lift, export, metrics, version, turns, awsLogin, … — see the `apiPlugin` block in `vite.config.ts` for the full, ordered list), attaches the build-error reporter, and runs `refreshStaleClaudeMd()` once: if the project `CLAUDE.md` template has changed since a project was scaffolded, the project's `CLAUDE.md` is rewritten and `sessionId` is cleared.
 4. `projectWatchPlugin` starts a Chokidar watcher on `projectsRoot` (depth 6).
 5. `frameMountPlugin` registers the `/api/frames/:slug/:frame` route and the virtual module.
 6. Vite serves the React shell from `src/main.tsx`.
@@ -82,11 +82,10 @@ Projects are stored outside the repo so git never sees them:
 ├── theme-overrides.css
 ├── frames/<frame-slug>/index.tsx
 ├── shared/
-├── thumbnails/
 └── _uploads/
 ```
 
-Override with `ARCADE_STUDIO_ROOT=/some/path`. The slug regex is `/^[a-z0-9][a-z0-9-]{0,62}$/i` — validated on every path builder in `server/paths.ts`.
+Override with `ARCADE_STUDIO_ROOT=/some/path`. The slug regex is `/^[a-z0-9][a-z0-9-]{0,62}$/i` — validated on every path builder in `server/paths.ts`. (Frame thumbnails are now captured client-side for the Assets panel — there is no longer a `thumbnails/` directory on disk.)
 
 Helpful commands:
 
@@ -100,7 +99,11 @@ open "$HOME/Library/Application Support/arcade-studio/projects"
 | Variable                       | Default                                                  | Purpose                                        |
 |--------------------------------|----------------------------------------------------------|------------------------------------------------|
 | `ARCADE_STUDIO_ROOT`           | `~/Library/Application Support/arcade-studio`            | Root for all project storage                   |
+| `ARCADE_STUDIO_PORT`           | `5556`                                                   | Vite dev-server port (`strictPort`)            |
 | `ARCADE_STUDIO_CLAUDE_BIN`     | `<repo>/node_modules/.bin/claude`                        | Path to the Claude CLI                         |
+| `ARCADE_STUDIO_MODEL`          | `sonnet`                                                 | Generation model override (alias or pinned id) |
+| `ARCADE_STUDIO_FIGMA_CLI_DIR`  | `~/figma-cli`                                            | figma-cli checkout location                    |
+| `ARCADE_STUDIO_OPEN_BROWSER`   | `1`                                                      | `"0"` suppresses browser auto-open (Electron)  |
 | `ARCADE_STUDIO_SKIP_SSO_CHECK` | unset                                                    | `"1"` skips the SSO preflight                  |
 | `AWS_REGION`                   | `us-east-1`                                              | Passed to the Claude subprocess for Bedrock    |
 
@@ -117,7 +120,7 @@ open "$HOME/Library/Application Support/arcade-studio/projects"
 
 1. Create the `.tsx` under `prototype-kit/composites/`.
 2. Export it from `prototype-kit/index.ts`.
-3. Compose existing `arcade` primitives. Do **not** import from `arcade-gen/src/` in a way that creates a reverse dependency — `__tests__/prototype-kit-boundary.test.ts` will fail.
+3. Compose existing `arcade` primitives (from the published `@xorkavi/arcade-gen`). Do **not** create a reverse dependency from the library back into the prototype kit — `__tests__/prototype-kit-boundary.test.ts` will fail.
 4. Update `templates/CLAUDE.md.tpl` with a usage note so the agent knows about it.
 
 ### Update the agent's system prompt
@@ -135,7 +138,7 @@ When you change it, existing projects will have their `CLAUDE.md` silently refre
 
 ### Debug an agent that won't stop touching the wrong file
 
-The agent is started with `--dangerously-skip-permissions` and an allowlist of `Read,Edit,Write,Glob,Grep,Bash`. It also has `--add-dir <repo root>`. That means it can read the entire arcade-gen checkout but its writes should stay inside its own project. If you see it writing outside, that's a prompt bug in `templates/CLAUDE.md.tpl`, not a sandbox issue — the sandbox is deliberately off.
+The agent is started with `--dangerously-skip-permissions` and a tool allowlist (see `DEFAULT_ALLOWED_TOOLS` in `claudeCode.ts`). Its working dir is the project (`--add-dir <projectCwd>`, plus any extra `addDirs`), so its writes should stay inside its own project. If you see it writing outside, that's a prompt bug in `templates/CLAUDE.md.tpl`, not a sandbox issue — the sandbox is deliberately off.
 
 ## Testing
 
@@ -147,14 +150,14 @@ pnpm studio:test -t "description"     # filter by test name
 
 Config: `vitest.config.ts` — jsdom environment, setup at `__tests__/setup.ts`, path aliases mirror `vite.config.ts`.
 
-Coverage today (`__tests__/`):
+Coverage is broad (~1550 tests). Rather than enumerate it here (it drifts), browse
+`__tests__/` — its directory layout mirrors `server/`, `src/`, `lib/`, `lift/`, and
+`packaging/`. Notable suites:
 
-- **Server**: `claudeCode`, `types`, `projects`, `figmaCli`, `thumbnails`, `buildErrorReporter`, `paths`, `firstRun`, `awsPreflight`
-- **Middleware**: `dev`, `projects`, `figma`, `preflight`, `chat`, `uploads`
-- **Plugins**: `frameMountPlugin`
-- **Hooks**: `useChatStream`
-- **Lib**: `figmaUrl`, `streamJson`
-- **Boundary**: `prototype-kit-boundary.test.ts` — fails if `arcade-gen/src/` imports from `prototype-kit/`
+- **Server**: `claudeCode`, `projects`, `figmaCli`, `figmaIngest`, `buildErrorReporter`, `paths`, `kitEmit` (+ branch), and the middleware suites
+- **Boundary**: `prototype-kit-boundary.test.ts` — fails if the prototype kit creates a reverse dependency into the arcade library
+- **Packaging**: `arcade-gen-deps.test.ts` (guards arcade-gen's transitive deps resolve), `scaffold.test.ts` (asserts `electron-builder.yml` shape)
+- **Telemetry**: `lib/telemetry/redact.test.ts` (Sentry scrubbers), `chat-telemetry`, `runtime-error-telemetry`
 
 Integration tests for server endpoints hit the real filesystem inside a temp dir fixture (see `__tests__/fixtures/`). They do **not** mock disk — the project's memory records this as a deliberate choice ([`feedback_scalable_accuracy.md`](../.claude/projects/-Users-andrey-sundiev-arcade-prototyper/memory/feedback_scalable_accuracy.md)).
 
@@ -189,7 +192,7 @@ Open the iframe in a new tab (`/api/frames/:slug/:frame`). If it renders there, 
 
 ### "Port 5556 already in use"
 
-Studio hardcodes port 5556. Kill the old process: `lsof -ti:5556 | xargs kill`.
+Studio defaults to port 5556 (`strictPort`); override with `ARCADE_STUDIO_PORT`. Kill a stale process: `lsof -ti:5556 | xargs kill`.
 
 ## Related reading
 
