@@ -13,6 +13,31 @@ Status legend: ☐ todo · ◐ in progress · ☑ done · ⊘ won't fix
 
 ---
 
+## Status — 2026-06-25 (branch `chore/cleanup-audit-2026-06-25`, 6 commits)
+
+| Priority | State | Result |
+|----------|-------|--------|
+| **P0 — disk bloat** | ☑ done | Repo **26 GB → 1.9 GB**. `.gitignore` extended to stop recurrence. Tracked file count unchanged (899) — no tracked file touched. |
+| **P1 — pnpm-10 build traps** | ☑ done | `pnpm-workspace.yaml` added, dead `pnpm` field removed, `.npmrc` split (token out, registry mapping tracked). 0 pnpm warnings. keytar now builds → PAT uses Keychain. |
+| **P2 — security/privacy** | ◐ partial | No-tradeoff hardening done (Sentry scrubbers + 0600 PAT file). 3 telemetry product-calls + worker re-validation left as maintainer decisions. |
+| **P3 — doc drift** | ◐ partial | 3 high-blast-radius docs (ARCHITECTURE/README/DEVELOPMENT) fixed. Plan-doc archival + CHANGELOG split deferred (have tradeoffs). |
+| **P4 — code cleanups** | ◐ partial | Quick wins done (dead barrel, stale `.js`, flake fix). 2 large refactors (mock consolidation, god-file splits) deferred. |
+
+**Verification:** full suite **1549 passed**; the sole failure (`arcade-gen-deps` / highcharts)
+is a pre-existing transitive-dep gap, unrelated to these changes.
+
+**⚠️ Open — needs maintainer (not code-fixable here):**
+1. Put a GitHub token **with `read:packages` scope** in `~/.npmrc` (`GITHUB_TOKEN_PACKAGES`).
+   The tokens in this env (env `GITHUB_TOKEN`, `gh` CLI) both 401 against the package registry.
+   Blocks a clean fresh-clone install **and** item 2.
+2. **arcade-gen-deps test failure (live bug):** arcade-gen 1.0.0 now declares `highcharts` +
+   `highcharts-react-official`, not installed → a generated chart frame would white-screen.
+   Resolves once #1 lets the deps install.
+3. **Telemetry product-calls (P2):** raw-email distinct_id, prompt-text egress, on-by-default
+   + no opt-out UI — gate before any external (non-internal-beta) rollout.
+
+---
+
 ## 🔴 P0 — Reclaim disk (~8.4 GB junk, none tracked)
 
 Root cause: `.gitignore` never covered the scratch/capture/build-output paths, so they
