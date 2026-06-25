@@ -42,18 +42,43 @@ describe("EditableTokenChip", () => {
     expect(screen.queryByLabelText("Edit Style raw value")).toBeNull();
   });
 
-  it("onBlur exits raw mode", () => {
+  it("blurring out of the whole chip exits raw mode", () => {
     render(<EditableTokenChip ariaLabel="Text" tokenValue={null} tokenOptions={OPTS}
       rawValue="rgb(0,0,0)" onPickToken={vi.fn()} onRawChange={vi.fn()} />);
     // Enter raw mode
     fireEvent.click(screen.getByLabelText("Edit Text raw value"));
     const input = screen.getByLabelText("Text raw") as HTMLInputElement;
     expect(input).toBeDefined();
-    // Fire blur on the input to exit raw mode
-    fireEvent.blur(input);
-    // Assert raw mode exited: input is gone, # button is back
+    // Blur with focus leaving the chip entirely (relatedTarget outside) → exit
+    const outside = document.createElement("button");
+    document.body.appendChild(outside);
+    fireEvent.blur(input, { relatedTarget: outside });
     expect(screen.queryByLabelText("Text raw")).toBeNull();
     expect(screen.getByLabelText("Edit Text raw value")).toBeDefined();
+  });
+
+  it("REGRESSION: clicking the colour picker (focus moves to a sibling control) does NOT exit raw mode", () => {
+    render(<EditableTokenChip ariaLabel="Text" tokenValue={null} tokenOptions={OPTS}
+      rawValue="rgb(0,0,0)" onPickToken={vi.fn()} onRawChange={vi.fn()} swatch="rgb(0,0,0)" />);
+    fireEvent.click(screen.getByLabelText("Edit Text raw value"));
+    const textInput = screen.getByLabelText("Text raw") as HTMLInputElement;
+    const picker = screen.getByTestId("token-chip-swatch") as HTMLInputElement;
+    // Focus moves text input -> colour picker (a sibling inside the chip)
+    fireEvent.blur(textInput, { relatedTarget: picker });
+    // Still in raw mode: both the picker and the text field remain
+    expect(screen.getByTestId("token-chip-swatch")).toBeDefined();
+    expect(screen.getByLabelText("Text raw")).toBeDefined();
+  });
+
+  it("opening the OS colour dialog (relatedTarget null) does NOT exit raw mode", () => {
+    render(<EditableTokenChip ariaLabel="Text" tokenValue={null} tokenOptions={OPTS}
+      rawValue="rgb(0,0,0)" onPickToken={vi.fn()} onRawChange={vi.fn()} swatch="rgb(0,0,0)" />);
+    fireEvent.click(screen.getByLabelText("Edit Text raw value"));
+    const picker = screen.getByTestId("token-chip-swatch") as HTMLInputElement;
+    // Native picker opening blurs to the OS dialog → relatedTarget is null
+    fireEvent.blur(picker, { relatedTarget: null });
+    expect(screen.getByTestId("token-chip-swatch")).toBeDefined();
+    expect(screen.getByLabelText("Text raw")).toBeDefined();
   });
 
   it("back-to-tokens button exits raw mode", () => {

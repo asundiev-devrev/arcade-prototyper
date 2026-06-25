@@ -19,8 +19,18 @@ export function EditableTokenChip({
   const [rawMode, setRawMode] = useState(false);
 
   if (rawMode && rawEnabled) {
+    // Exit raw mode only when focus leaves the WHOLE chip. A plain onBlur on
+    // the text field fired when focus moved to a sibling (the colour picker),
+    // snapping back to token mode before the picker could open. Opening the OS
+    // colour dialog blurs with relatedTarget null — also stay in raw mode then.
+    const onChipBlur = (e: React.FocusEvent<HTMLDivElement>) => {
+      const next = e.relatedTarget as Node | null;
+      if (next && e.currentTarget.contains(next)) return; // moved within the chip
+      if (next === null) return; // OS colour dialog / window — keep editing
+      setRawMode(false);
+    };
     return (
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }} onBlur={onChipBlur}>
         {/* Native OS colour picker, seeded from the current colour. The picker
          *  is hex-only; the text field beside it still accepts rgb()/rgba()
          *  (incl. alpha) for exact values. */}
@@ -35,8 +45,7 @@ export function EditableTokenChip({
           }} />
         <input aria-label={`${ariaLabel} raw`} style={{ ...INPUT_COMPACT, flex: 1 }}
           autoFocus value={rawValue}
-          onChange={(e) => onRawChange(e.target.value)}
-          onBlur={() => setRawMode(false)} />
+          onChange={(e) => onRawChange(e.target.value)} />
         <button type="button" aria-label={`${ariaLabel} use tokens`} title="Use a token"
           onClick={() => setRawMode(false)}
           style={iconBtn}>↤</button>
