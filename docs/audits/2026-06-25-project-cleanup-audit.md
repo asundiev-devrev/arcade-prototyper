@@ -148,18 +148,26 @@ docs are now fixed:
 
 ---
 
-## 🟢 P4 — Code cleanups (small, low-risk, when convenient)
+## 🟢 P4 — Code cleanups (small, low-risk, when convenient) — ☑ quick wins DONE 2026-06-25
 
-- [ ] Delete dead telemetry barrel `studio/src/lib/telemetry/index.ts` + its
-  `__mocks__/index.ts` (nothing imports the barrel; consumers import submodules directly).
-- [ ] Delete stale untracked `electron/*.js` build artifacts (`viteRunner.js`,
-  `shared/awsBootstrap.js`, `shared/freePort.js`) — root copies leftover from old layout.
-- [ ] **Test flake:** `figmaIngest.test.ts:182` — fixed `setTimeout(20ms)` races under
-  full-suite load. Replace with a poll/await of the disk write.
+- [x] Deleted dead telemetry barrel `studio/src/lib/telemetry/index.ts` + its
+  `__mocks__/index.ts` (verified: nothing imports the barrel; no `vi.mock` targets it).
+- [x] Deleted stale untracked `electron/*.js` build artifacts (`viteRunner.js`,
+  `shared/awsBootstrap.js`, `shared/freePort.js`) — root copies older than their `.ts`
+  sources; runtime loads from `electron/dist/`.
+- [x] **Test flake fixed:** replaced the two `setTimeout(20ms)` waits in
+  `figmaIngest.test.ts` with a poll for the fire-and-forget `.ingest.json` write. Full
+  suite re-run: 1549 passed, no new failures.
+
+**Larger refactors — deferred (risk/effort tradeoff, not started):**
 - [ ] **Fragile mocks:** ~25 test files hand-mock `@xorkavi/arcade-gen` partially — a new
   shell import crashes unrelated tests. Consolidate into one auto-stubbing shared mock.
+  Medium effort (touches test infra across 25 files); worth doing before the next big
+  shell-component addition.
 - [ ] **God-files to split when next touched:** `kitEmit.ts` (1306 lines, 6 jobs),
   `chat.ts` (1108 lines, 3 inline generation strategies). `claudeCode.ts` (673) is fine.
+  Large, risky refactors of the most critical paths — do opportunistically when next
+  editing them, not as standalone churn.
 - [ ] Memory correction: `react-day-picker` is now *declared* in arcade-gen's package.json —
   the `arcade-gen-undeclared-deps` memory note is stale.
 - [ ] **NEW BUG (found during P2 — failing test):** `__tests__/packaging/arcade-gen-deps.test.ts`
