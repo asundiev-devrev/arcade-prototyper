@@ -10,6 +10,11 @@ Vite's file watcher, a Chokidar watcher, and its websocket HMR loop tie these to
 
 ## System diagram
 
+The diagram below shows the *core* path (chat → spawn → frame). It is illustrative,
+not exhaustive — the real server has ~21 middleware and several subsystems (Figma
+kit-emit, DevRev/Computer, Cloudflare share, LIFT). See the subsystem index below for
+the full surface; `apiPlugin` in `vite.config.ts` is the authoritative wiring.
+
 ```
 ┌───────────────────────── browser (localhost:5556) ─────────────────────────┐
 │  React frontend (src/)                                                     │
@@ -54,7 +59,7 @@ Vite's file watcher, a Chokidar watcher, and its websocket HMR loop tie these to
 1. Slugify the name, ensure unique.
 2. `mkdir` `{projectDir}/{frames,shared}`.
 3. Write `project.json` (theme, mode, empty frames).
-4. Render `templates/CLAUDE.md.tpl` with `{{PROJECT_NAME}}` and `{{THEME}}`, write `CLAUDE.md`.
+4. Render the project `CLAUDE.md` from the template, write it.
 5. Write empty `chat-history.json` and `theme-overrides.css`.
 
 Response: the new `Project` object; the frontend opens `ProjectDetail`.
@@ -74,12 +79,16 @@ Response: the new `Project` object; the frontend opens `ProjectDetail`.
        -p "<prompt>\n\nReference images:\n@<abs path>"
        --output-format stream-json --verbose
        --dangerously-skip-permissions
-       --allowed-tools Read,Edit,Write,Glob,Grep,Bash
-       --disallowed-tools mcp__figma-console
-       --add-dir <arcade-gen root>
+       --allowed-tools <DEFAULT_ALLOWED_TOOLS>
+       --disallowed-tools <DEFAULT_DISALLOWED_TOOLS>
+       --model <resolved model>
+       --add-dir <projectCwd> [--add-dir <extra dirs>]
        [--resume <sessionId>]
      ```
      Env: `CLAUDE_CODE_USE_BEDROCK=1`, `AWS_REGION=us-east-1`. Timeout 8 min.
+     Model resolves as: per-request `opts.model` → `ARCADE_STUDIO_MODEL` env →
+     `DEFAULT_GENERATION_MODEL` (`"sonnet"`). The exact tool allow/deny lists are
+     constants in `claudeCode.ts` — read them there rather than trusting a copy here.
 4. Claude streams JSON lines on stdout; `lib/streamJson.ts:parseStreamLineAll()` converts them into `StudioEvent`s (`session`, `narration`, `tool_call`, `tool_result`, `end`).
 5. Each event is forwarded as SSE: `event: <kind>\ndata: <json>\n\n`.
 6. The first event of a new turn carries the Claude `sessionId`; studio stores it on `project.json` so the next turn can `--resume`.
@@ -119,13 +128,17 @@ Two paths:
 
 | Layer                  | Path                              | May import from                                      |
 |------------------------|-----------------------------------|------------------------------------------------------|
-| Arcade library (prod)  | `arcade-gen/src/`                 | Its own subtree only. **Must not** import studio or prototype-kit. |
+| Arcade library (prod)  | `@xorkavi/arcade-gen` (published) | External dependency — the production component library, consumed via the `arcade` alias |
 | Prototype kit          | `studio/prototype-kit/`           | `arcade` primitives only                             |
 | Generated frames       | `~/.../projects/<slug>/frames/*`  | `arcade` + `arcade-prototypes`                       |
 | Studio UI              | `studio/src/`                     | `arcade` + studio-local modules                      |
 | Studio server          | `studio/server/`                  | Node stdlib + studio-local modules                   |
 
-The boundary rule (arcade-gen/src ⊥ prototype-kit) is enforced by `__tests__/prototype-kit-boundary.test.ts`. Imports use path aliases declared in three places that must agree:
+The arcade library is no longer in-tree — it ships as the `@xorkavi/arcade-gen`
+npm dependency (see the repo-root `.npmrc` for the private registry). The boundary
+rule (the prototype kit must not create a reverse dependency back into the library)
+is enforced by `__tests__/prototype-kit-boundary.test.ts`. Imports use path aliases
+declared in three places that must agree:
 
 - `studio/vite.config.ts` → `resolve.alias`
 - `studio/tsconfig.json` → `compilerOptions.paths`
@@ -143,87 +156,55 @@ Slugs are validated against `/^[a-z0-9][a-z0-9-]{0,62}$/i`.
 
 Frontend stream events (in `src/lib/streamJson.ts`): `session | narration | tool_call | tool_result | end`.
 
-## Server file map
+## Server subsystem index
 
-### `server/` (core)
+The server has outgrown a per-file table (it would rot on every feature). This is a
+**subsystem map** instead — to find the exact files, `ls studio/server/<dir>`; the
+authoritative wiring (which middleware mount in what order) is the `apiPlugin` block
+near the top of `studio/vite.config.ts`.
 
-| File                    | Responsibility                                                                                                  |
-|-------------------------|-----------------------------------------------------------------------------------------------------------------|
-| `projects.ts`           | Project CRUD, `reconcileFrames`, file-tree reader, `refreshStaleClaudeMd` (rewrites on template change)         |
-| `claudeCode.ts`         | `runClaudeTurn()` — spawn + stream-json parse + `onEvent` callback + abort/timeout                              |
-| `figmaCli.ts`           | `parseFigmaUrl`, `daemonStatus`, `getNode`, `nodeTree`, `exportNodePng` — all shell out to figma-cli            |
-| `awsPreflight.ts`       | `ssoIsValid()` — cached `aws sts get-caller-identity`; env escape hatch `ARCADE_STUDIO_SKIP_SSO_CHECK=1`        |
-| `firstRun.ts`           | `ensureDeps()` — checks `brew` (macOS), `node`, `pnpm`, `figmanage`                                             |
-| `buildErrorReporter.ts` | `attachBuildErrorReporter`, `parseBuildError`, `handleViteError` — rate-limited auto-fix dispatcher             |
-| `paths.ts`              | `studioRoot()`, `projectsRoot()`, `projectDir()`, `frameDir()`, `sharedDir()`, `chatHistoryPath()`              |
-| `types.ts`              | Zod schemas: `Project`, `Frame`, `ChatMessage`                                                                  |
+| Subsystem | Where | What it does |
+|-----------|-------|--------------|
+| **Core orchestration** | `server/*.ts` | The spine: `claudeCode.ts` (spawn + stream-json + retry/throttle/abort), `projects.ts` (CRUD, `reconcileFrames`, `refreshStaleClaudeMd`), `paths.ts` (slug-validated path builders — every FS path goes through here), `types.ts` (Zod schemas), `buildErrorReporter.ts` (auto-fix dispatch), `awsPreflight.ts` / `firstRun.ts` / `claudeBin.ts` (preflight + binary resolution), `turnRegistry.ts` (in-flight turn tracking), `metrics.ts` (per-turn telemetry) |
+| **HTTP/SSE layer** | `server/middleware/*.ts` | ~21 middleware, one concern each (chat SSE, projects, frames, figma, uploads, settings, devrev, cloudflare, components, assets, lift, export, metrics, version, turns, awsLogin, …). Mounted in order by `apiPlugin`. |
+| **Vite plugins** | `server/plugins/*.ts` | `frameMountPlugin` (serves `/api/frames/...` via a virtual module), `projectWatchPlugin` (Chokidar → reconcile + full-reload), `injectStudioSourcePlugin` (Tailwind `@source`), `kitManifestPlugin`, `liftEmitPlugin` |
+| **Figma kit-emit + export** | `server/figma/` | The big one — `kitEmit.ts` + siblings translate Figma nodes into kit-based TSX (componentId→set-key matching, token resolution, layout inference). See auto-memory `figma-kit-emit-engine`. |
+| **Figma bridge** | `server/figmaBridge/` | `wsServer.ts` — websocket bridge to the Figma plugin for the code→design export (fiber-walk). See `figma-export-fiber-walk-pipeline`. |
+| **DevRev / Computer** | `server/devrev/` | Computer-agent integration (`computerAgent.ts`, `computerContext.ts`, identity, scaffold). Fragile path — see `devrev_computer_agent_capabilities`. |
+| **Cloudflare share** | `server/cloudflare/` | `bundler.ts` (esbuild + Tailwind per frame) + `deploy.ts` (Worker client). The real CF token lives only in `worker/`. |
+| **Secrets** | `server/secrets/` | `keychain.ts` — DevRev PAT via keytar/macOS Keychain, 0600 plaintext fallback. |
+| **Sidecar** | `server/sidecar/` | `bin.ts` CLI entry (`pnpm sidecar`) for the rendezvous/packaging path. |
+| **Write hooks** | `server/hooks/*.mjs` | `validateArcadeImports.mjs` + `blockImageReshape.mjs` — Claude Code hooks run on the subprocess's writes. Launched via `process.execPath` (see `studio-hooks-node-not-found-dmg`). |
 
-### `server/middleware/`
+## Frontend subsystem index
 
-| File           | Routes                                                                                        |
-|----------------|-----------------------------------------------------------------------------------------------|
-| `chat.ts`      | `POST /api/chat` (SSE)                                                                        |
-| `projects.ts`  | `GET|POST|PATCH|DELETE /api/projects[/:slug[/history|tree|file|reveal|frames/:frameSlug]]`    |
-| `figma.ts`     | `GET /api/figma/{status, node/:id, tree/:id}`, `POST /api/figma/export`                       |
-| `uploads.ts`   | `POST /api/uploads/:slug` — image upload, 10 MB cap, writes to `_uploads/`                    |
-| `preflight.ts` | `GET /api/preflight` — dependency check                                                       |
-| `fonts.ts`     | `GET /api/fonts/:name` — proxies DevRev font CDN (strips Referer)                             |
+Entry: `src/main.tsx` mounts `<App />` inside `<DevRevThemeProvider>`; `App.tsx` routes
+between `routes/HomePage.tsx` (project list + templates) and `routes/ProjectDetail.tsx`
+(the chat + viewport workspace).
 
-### `server/plugins/`
-
-| Plugin                        | Role                                                                                           |
-|-------------------------------|------------------------------------------------------------------------------------------------|
-| `frameMountPlugin`            | Serves `/api/frames/:slug/:frame` as React HTML + `virtual:arcade-studio-frame.tsx` module     |
-| `projectWatchPlugin`          | Chokidar watcher → `reconcileFrames` + `ws.send({type: "full-reload"})`                        |
-| `injectStudioSourcePlugin`    | Appends `@source "<projectsRoot>/**/frames/**/*.{ts,tsx}"` to arcade's `globals.css`           |
-
-## Frontend file map
-
-### `src/` (entry + routes)
-
-- `main.tsx` — mounts `<App />` in `<DevRevThemeProvider mode="light">`; imports arcade globals + typography + token CSS.
-- `App.tsx` — trivial router: `{openSlug ? <ProjectDetail /> : <ProjectList />}`.
-- `routes/ProjectList.tsx` — grid of `<ProjectCard>`, search, `+ New project` modal.
-- `routes/ProjectDetail.tsx` — 3-column layout (ChatPane 400 px · Viewport · DevModePanel 320 px), mode toggle, back button.
-
-### `src/components/`
-
-| Dir         | Contents (purpose)                                                                                     |
-|-------------|--------------------------------------------------------------------------------------------------------|
-| `chat/`     | `ChatPane`, `MessageList`, `MessageBubble`, `AgentNarration`, `PromptInput`, `FigmaUrlModal`, `EmptyStatePrompts` |
-| `devmode/`  | `DevModePanel` — file tree + file viewer for the open project                                          |
-| `feedback/` | Error/info banners                                                                                     |
-| `projects/` | `ProjectCard`, `ProjectSearch`                                                                         |
-| `viewport/` | `Viewport`, `FrameCard`, `FrameCornerMenu`, `EmptyViewport`                                            |
-| `Header.tsx`| Top bar (project name, mode toggle, dev panel toggle, back)                                            |
-
-### `src/frame/`
-
-Loaded *inside* the iframe, not in the main shell:
-
-- `FrameErrorBoundary.tsx` — catches render errors in the generated frame.
-- `FrameFontProxy.tsx` — injects `@font-face` rules pointing at `/api/fonts/*` (works around the CDN's Referer whitelist).
-
-### `src/hooks/`
-
-- `useChatStream` — SSE client for `/api/chat`; exposes `{busy, error, errorKind, narrations, lastEvent, lastPrompt, send, cancel, retry}`.
-- `useProjects` — polling client for `/api/projects`.
-- `useFrames` — polling client for project frames.
-
-### `src/lib/`
-
-- `api.ts` — `createProject`, `renameProject`, `deleteProject` helpers.
-- `figmaUrl.ts` — `parseFigmaUrl(url) → {fileId, nodeId}`.
-- `streamJson.ts` — `parseStreamLineAll()` maps Claude CLI JSON lines to `StudioEvent`s; `prettyTool(name, input)` renders human-readable tool labels.
+| Area | Where | What it holds |
+|------|-------|---------------|
+| **Components** | `src/components/{chat,viewport,devmode,inspector,assets,home,projects,shell,feedback}/` | One dir per UI region. `shell/` = app chrome incl. `AppSettingsModal`; `inspector/` = the live element inspector; `assets/` = the Assets panel. |
+| **Hooks** | `src/hooks/` | `useChatStream` (SSE client), `useProjects`, `useFrames`, edit/stream contexts |
+| **Lib** | `src/lib/` | `api.ts`, `figmaUrl.ts`, `streamJson.ts` (CLI JSON → `StudioEvent`), `telemetry/*` (PostHog/Sentry + scrubbers) |
+| **Inside-iframe** | `src/frame/` | `FrameErrorBoundary`, `FrameFontProxy`, the element `inspector`/`picker` — loaded *inside* the frame iframe, not the shell |
+| **Figma export** | `src/export/` | Client side of the fiber-walk serializer (`fiberWalk.ts`, `slj.ts`, token index) |
+| **LIFT** | `src/lift/` | Prototype→production handoff: manifest build, render harness, drift audit, mappings |
 
 ## Environment variables
 
 | Variable                        | Default                                                  | Purpose                                        |
 |---------------------------------|----------------------------------------------------------|------------------------------------------------|
 | `ARCADE_STUDIO_ROOT`            | `~/Library/Application Support/arcade-studio`            | Root for all project storage                   |
+| `ARCADE_STUDIO_PORT`            | `5556`                                                   | Vite dev-server port (`strictPort`)            |
 | `ARCADE_STUDIO_CLAUDE_BIN`      | `<repo>/node_modules/.bin/claude`                        | Path to the Claude CLI binary                  |
+| `ARCADE_STUDIO_MODEL`           | `sonnet` (`DEFAULT_GENERATION_MODEL`)                    | Generation model override (alias or pinned id) |
 | `ARCADE_STUDIO_FIGMA_CLI_DIR`   | `~/figma-cli`                                            | figma-cli checkout location                    |
+| `ARCADE_STUDIO_OPEN_BROWSER`    | `1`                                                      | `"0"` suppresses auto-open (Electron path)     |
 | `ARCADE_STUDIO_SKIP_SSO_CHECK`  | unset                                                    | `"1"` skips `aws sts get-caller-identity`      |
 | `AWS_REGION`                    | `us-east-1`                                              | Passed to the Claude subprocess for Bedrock    |
+
+`ARCADE_TELEMETRY_DEBUG`, `ARCADE_STUDIO_CLASSIFIER_MODEL`, and `ARCADE_STUDIO_SYNTH_MODEL`
+also exist for telemetry-debug and Figma-classification tuning.
 
 See [DEVELOPMENT.md](./DEVELOPMENT.md) for the full setup checklist.

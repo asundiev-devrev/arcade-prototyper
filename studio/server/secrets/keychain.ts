@@ -59,7 +59,13 @@ export async function saveDevRevPat(pat: string): Promise<void> {
   } catch {
     // ignore
   }
-  await fs.writeFile(file, JSON.stringify({ ...existing, devrevPat: pat }, null, 2));
+  // 0600 — owner-only. This file holds a secret in the plaintext fallback path
+  // (keytar/Keychain unavailable); default 0644 would be world-readable on a
+  // multi-user macOS box.
+  await fs.writeFile(file, JSON.stringify({ ...existing, devrevPat: pat }, null, 2), { mode: 0o600 });
+  // writeFile's mode only applies on create; chmod guarantees 0600 even if the
+  // file pre-existed with looser perms.
+  await fs.chmod(file, 0o600).catch(() => {});
 }
 
 export async function getDevRevPat(): Promise<string | null> {
@@ -98,7 +104,7 @@ export async function deleteDevRevPat(): Promise<void> {
     if (Object.keys(parsed).length === 0) {
       await fs.unlink(plaintextPath());
     } else {
-      await fs.writeFile(plaintextPath(), JSON.stringify(parsed, null, 2));
+      await fs.writeFile(plaintextPath(), JSON.stringify(parsed, null, 2), { mode: 0o600 });
     }
   } catch {
     // ignore

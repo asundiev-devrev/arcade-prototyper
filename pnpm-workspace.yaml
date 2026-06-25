@@ -1,0 +1,12 @@
+# pnpm 10 reads build-script allow-listing from here, not the package.json "pnpm" field.
+# These packages run native/postinstall build steps that are otherwise skipped on a
+# fresh install (which silently produces a broken node_modules for packaging).
+#   - electron / esbuild: download platform binaries
+#   - @anthropic-ai/claude-code: postinstall
+#   - keytar: native module — without it the DevRev PAT falls back to plaintext on disk
+#     instead of the macOS Keychain
+onlyBuiltDependencies:
+  - "@anthropic-ai/claude-code"
+  - electron
+  - esbuild
+  - keytar

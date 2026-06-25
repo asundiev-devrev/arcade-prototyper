@@ -2,6 +2,21 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createFigmaIngest, readPrefetchedRawNode } from "../../server/figmaIngest";
 import type { IngestResult } from "../../server/figma/types";
 
+/**
+ * Wait for the fire-and-forget `.ingest.json` write to land in `diskDir`.
+ * Polls instead of a fixed sleep — under full-suite load a 20ms sleep was not
+ * always enough and the "survives a restart" test flaked.
+ */
+async function waitForIngestJson(diskDir: string, timeoutMs = 2000): Promise<void> {
+  const fs = await import("node:fs");
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (fs.readdirSync(diskDir).some((f) => f.endsWith(".ingest.json"))) return;
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  throw new Error(`.ingest.json never appeared in ${diskDir} within ${timeoutMs}ms`);
+}
+
 function simpleNode() {
   return {
     id: "1:2", type: "FRAME", name: "Card",
@@ -172,8 +187,8 @@ describe("figmaIngest (disk persistence)", () => {
     const deps1 = makeDeps({ exportPng: vi.fn().mockResolvedValue({ path: pngPath, widthPx: 1, heightPx: 1 }) });
     const ingest1 = createFigmaIngest(deps1, { composites: [], diskDir });
     await ingest1.ingest("file", "1:2", url);
-    // Let the fire-and-forget disk write settle.
-    await new Promise((r) => setTimeout(r, 20));
+    // Wait for the fire-and-forget disk write to actually land (poll, not sleep).
+    await waitForIngestJson(diskDir);
 
     // Fresh instance with an EMPTY in-memory cache but the same diskDir.
     const deps2 = makeDeps();
@@ -198,7 +213,7 @@ describe("figmaIngest (disk persistence)", () => {
     const deps1 = makeDeps({ exportPng: vi.fn().mockResolvedValue({ path: pngPath, widthPx: 1, heightPx: 1 }) });
     const ingest1 = createFigmaIngest(deps1, { composites: [], diskDir });
     await ingest1.ingest("file", "1:2", url);
-    await new Promise((r) => setTimeout(r, 20));
+    await waitForIngestJson(diskDir);
     fs.rmSync(pngPath, { force: true }); // PNG export deleted out from under us
 
     const deps2 = makeDeps();
