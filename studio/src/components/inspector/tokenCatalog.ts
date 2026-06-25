@@ -24,11 +24,21 @@ const COLOR_TOKEN_NAMES: string[] = [
   "--stroke-neutral-subtle", "--stroke-neutral-medium",
 ];
 
+// Friendly family names — match the ColorRow slot labels the user already sees
+// (Text / Fill / Border). Carried into the token label so same-named fg/bg/stroke
+// tokens (e.g. "neutral medium") don't collapse to one indistinguishable entry.
+const FAMILY_LABEL: Record<string, string> = {
+  fg: "Text", bg: "Fill", stroke: "Border", surface: "Surface",
+};
+
 function humanize(token: string): string {
-  // "--fg-neutral-prominent" -> "Neutral prominent" (drop the family prefix)
-  const body = token.replace(/^--(fg|bg|stroke|surface)-/, "");
+  // "--fg-neutral-prominent" -> "Text · Neutral prominent"
+  const m = /^--(fg|bg|stroke|surface)-(.+)$/.exec(token);
+  const family = m ? m[1] : "";
+  const body = m ? m[2] : token.replace(/^--/, "");
   const words = body.replace(/-/g, " ");
-  return words.charAt(0).toUpperCase() + words.slice(1);
+  const name = words.charAt(0).toUpperCase() + words.slice(1);
+  return family ? `${FAMILY_LABEL[family]} · ${name}` : name;
 }
 
 export function colorTokens(): ColorToken[] {

@@ -11,6 +11,17 @@ describe("colorTokens", () => {
     // labels are human-ish
     expect(toks.find((t) => t.token === "--fg-neutral-prominent")!.label.length).toBeGreaterThan(0);
   });
+
+  it("labels are unique — family prefix disambiguates same-name fg/bg tokens", () => {
+    const toks = colorTokens();
+    const labels = toks.map((t) => t.label);
+    expect(new Set(labels).size).toBe(labels.length);
+    // family carried into the label so fg vs bg 'neutral medium' differ
+    expect(toks.find((t) => t.token === "--fg-neutral-medium")!.label).toBe("Text · Neutral medium");
+    expect(toks.find((t) => t.token === "--bg-neutral-medium")!.label).toBe("Fill · Neutral medium");
+    expect(toks.find((t) => t.token === "--stroke-neutral-subtle")!.label).toBe("Border · Neutral subtle");
+    expect(toks.find((t) => t.token === "--surface-canvas")!.label).toBe("Surface · Canvas");
+  });
 });
 
 describe("typeTokens", () => {
