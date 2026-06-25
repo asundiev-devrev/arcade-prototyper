@@ -78,3 +78,23 @@ export function readTextChild(source: string, hit: JsxHit): ReadText {
   if (ts.isJsxExpression(only)) return { ok: false, reason: "dynamic-text" };
   return { ok: false, reason: "non-leaf-text" };
 }
+
+export type ReadAttr =
+  | { ok: true; valueStart: number; valueEnd: number }
+  | { ok: true; insertAt: number; insertAttr: true }
+  | { ok: false; reason: string };
+
+export function readAttr(source: string, hit: JsxHit, attrName: string): ReadAttr {
+  const sf = ts.createSourceFile("frame.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const opening = openingNodeAt(sf, hit);
+  if (!opening) return { ok: false, reason: "opening-not-found" };
+  const attr = opening.attributes.properties.find(
+    (p): p is ts.JsxAttribute => ts.isJsxAttribute(p) && p.name.getText() === attrName,
+  );
+  if (!attr) return { ok: true, insertAt: opening.tagName.getEnd(), insertAttr: true };
+  const init = attr.initializer;
+  if (init && ts.isStringLiteral(init)) {
+    return { ok: true, valueStart: init.getStart(sf) + 1, valueEnd: init.getEnd() - 1 };
+  }
+  return { ok: false, reason: "dynamic-attr" };
+}

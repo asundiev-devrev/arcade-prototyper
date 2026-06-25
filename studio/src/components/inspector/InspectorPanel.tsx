@@ -100,6 +100,7 @@ export function InspectorPanel({
   const catalog = catalogState.status === "ready" ? catalogState.catalog : null;
   const [isResizing, setIsResizing] = useState(false);
   const dragOrigin = useRef<{ startX: number; startWidth: number } | null>(null);
+  const [kitProps, setKitProps] = useState<{ name: string; values: string[] }[]>([]);
 
   // In-place text edits arrive from the iframe as text-changed messages.
   useEffect(() => {
@@ -113,6 +114,19 @@ export function InspectorPanel({
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
   }, [setField]);
+
+  // Fetch kit props for uppercase component names
+  useEffect(() => {
+    const focused = batch.find((e) => e.selection.editId === focusedEditId) ?? null;
+    const name = focused?.selection.componentName;
+    if (!name || !/^[A-Z]/.test(name)) { setKitProps([]); return; }
+    let cancelled = false;
+    fetch(`/api/kit-props/${encodeURIComponent(name)}`)
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) setKitProps(d.props ?? []); })
+      .catch(() => { if (!cancelled) setKitProps([]); });
+    return () => { cancelled = true; };
+  }, [focusedEditId, batch]);
 
   // Resize drag (mirrors the chat-pane handle in ProjectDetail).
   useEffect(() => {
@@ -136,14 +150,19 @@ export function InspectorPanel({
 
   if (!inspectorOpen) return null;
 
-  function change(key: keyof StyleSnapshot, rawValue: string) {
+  function change(key: keyof StyleSnapshot | "typeStyle" | "iconSwap" | `prop:${string}`, rawValue: string) {
     const id = focusedEditId;
     if (id == null) return;
     const elem = batch.find((e) => e.selection.editId === id);
     if (!elem) return;
-    const original = elem.selection.styles[key];
-    if (rawValue === original || rawValue === "") resetField(id, key);
-    else setField(id, key, rawValue);
+    // For prop: fields, no preview and no original check
+    if (typeof key === "string" && key.startsWith("prop:")) {
+      setField(id, key as any, rawValue);
+      return;
+    }
+    const original = elem.selection.styles[key as keyof StyleSnapshot];
+    if (rawValue === original || rawValue === "") resetField(id, key as keyof StyleSnapshot);
+    else setField(id, key as any, rawValue);
     frameWindow?.postMessage(
       { type: "arcade-studio:preview", editId: id, field: key, value: rawValue || original },
       "*",
@@ -294,33 +313,61 @@ export function InspectorPanel({
                   </div>
                 )}
 
-                <Section title="Layout">
-                  <LayoutSection styles={styles} pending={pending} change={change} />
-                </Section>
+                {kitProps.length > 0 && (
+                  <Section title={`${focused.selection.componentName} component`}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {kitProps.map((p) => (
+                        <Field key={p.name} label={p.name}>
+                          <select aria-label={p.name} style={INPUT_COMPACT}
+                            onChange={(e) => change(("prop:" + p.name) as any, e.target.value)}>
+                            <option value="">—</option>
+                            {p.values.map((v) => <option key={v} value={v}>{v}</option>)}
+                          </select>
+                        </Field>
+                      ))}
+                      <span style={{ fontSize: 11, color: "var(--fg-neutral-subtle)" }}>
+                        Inner styles are part of this component. Use "Ask AI to customize" to change them.
+                      </span>
+                      <Button variant="tertiary" onClick={() => {
+                        const frameRel = focused.selection.file.split("/frames/").pop() ?? focused.selection.file;
+                        const name = focused.selection.componentName;
+                        const line = focused.selection.line;
+                        onSend(`In frames/${frameRel}, customize the <${name}> at line ${line}.`);
+                      }}>
+                        Ask AI to customize
+                      </Button>
+                    </div>
+                  </Section>
+                )}
 
-                <Section title="Appearance">
-                  <AppearanceSection styles={styles} pending={pending} change={change} />
-                </Section>
+                <div style={kitProps.length > 0 ? { opacity: 0.5, pointerEvents: "none" } : {}}>
+                  <Section title="Layout">
+                    <LayoutSection styles={styles} pending={pending} change={change} />
+                  </Section>
 
-                {(() => {
-                  const cand = focused.selection.iconCandidate;
-                  if (!catalog || !cand || !iconNameSet(catalog).has(cand)) return null;
-                  // current shows the pending swap if any, else the detected icon
-                  const pendingIcon = pending.iconSwap;
-                  const currentName = pendingIcon ?? cand;
-                  return (
-                    <Section title="Icon">
-                      <IconSwapSection
-                        currentName={currentName}
-                        currentSvg={iconSvg(catalog, currentName)}
-                        icons={iconList(catalog)}
-                        onPickIcon={changeIcon}
-                      />
-                    </Section>
-                  );
-                })()}
+                  <Section title="Appearance">
+                    <AppearanceSection styles={styles} pending={pending} change={change} />
+                  </Section>
 
-                <Section title="Typography">
+                  {(() => {
+                    const cand = focused.selection.iconCandidate;
+                    if (!catalog || !cand || !iconNameSet(catalog).has(cand)) return null;
+                    // current shows the pending swap if any, else the detected icon
+                    const pendingIcon = pending.iconSwap;
+                    const currentName = pendingIcon ?? cand;
+                    return (
+                      <Section title="Icon">
+                        <IconSwapSection
+                          currentName={currentName}
+                          currentSvg={iconSvg(catalog, currentName)}
+                          icons={iconList(catalog)}
+                          onPickIcon={changeIcon}
+                        />
+                      </Section>
+                    );
+                  })()}
+
+                  <Section title="Typography">
                   <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                     {(() => {
                       const typeOptValues = new Set(typeTokens().map((t) => t.className));
@@ -371,13 +418,14 @@ export function InspectorPanel({
                   </div>
                 </Section>
 
-                <Section title="Color">
-                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                    <ColorRow slot="color" label="Text" styles={styles} pending={pending} changeToken={changeToken} change={change} />
-                    <ColorRow slot="backgroundColor" label="Fill" styles={styles} pending={pending} changeToken={changeToken} change={change} />
-                    <ColorRow slot="borderColor" label="Border" styles={styles} pending={pending} changeToken={changeToken} change={change} />
-                  </div>
-                </Section>
+                  <Section title="Color">
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      <ColorRow slot="color" label="Text" styles={styles} pending={pending} changeToken={changeToken} change={change} />
+                      <ColorRow slot="backgroundColor" label="Fill" styles={styles} pending={pending} changeToken={changeToken} change={change} />
+                      <ColorRow slot="borderColor" label="Border" styles={styles} pending={pending} changeToken={changeToken} change={change} />
+                    </div>
+                  </Section>
+                </div>
               </>
             )}
           </>
