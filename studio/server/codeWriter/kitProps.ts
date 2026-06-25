@@ -56,6 +56,5 @@ export function kitPropsFor(componentName: string): KitProp[] {
 }
 
 export function isKitComponent(componentName: string): boolean {
-  return /^[A-Z]/.test(componentName) && kitPropsFor(componentName).length >= 0
-    && readKitDts().includes(componentName);
+  return /^[A-Z]/.test(componentName) && kitPropsFor(componentName).length > 0;
 }

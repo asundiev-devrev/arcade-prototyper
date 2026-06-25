@@ -157,7 +157,8 @@ export function InspectorPanel({
     if (!elem) return;
     // For prop: fields, no preview and no original check
     if (typeof key === "string" && key.startsWith("prop:")) {
-      setField(id, key as any, rawValue);
+      if (rawValue === "") resetField(id, key as any);
+      else setField(id, key as any, rawValue);
       return;
     }
     const original = elem.selection.styles[key as keyof StyleSnapshot];
@@ -318,7 +319,9 @@ export function InspectorPanel({
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       {kitProps.map((p) => (
                         <Field key={p.name} label={p.name}>
+                          {/* Controlled on pending value only (committed-on-disk reflection is out of scope for picker snapshots) */}
                           <select aria-label={p.name} style={INPUT_COMPACT}
+                            value={(pending[`prop:${p.name}`] as string) ?? ""}
                             onChange={(e) => change(("prop:" + p.name) as any, e.target.value)}>
                             <option value="">—</option>
                             {p.values.map((v) => <option key={v} value={v}>{v}</option>)}
