@@ -221,7 +221,7 @@ describe("appliedTokens scan", () => {
     expect(el.classList.contains("text-body")).toBe(false);
   });
 
-  it("REGRESSION: preview-class clears competing inline style for color slots", () => {
+  it("preview-class for a color slot applies the token's var() inline so the preview is visible even when the Tailwind class was never compiled", () => {
     const el = document.createElement("p");
     el.textContent = "Hi";
     document.body.appendChild(el);
@@ -231,11 +231,29 @@ describe("appliedTokens scan", () => {
       data: { type: "arcade-studio:preview", editId, field: "backgroundColor", value: "#ff0000" },
     }));
     expect(el.style.backgroundColor).toBe("rgb(255, 0, 0)");
-    // Now apply a token class preview (should clear the inline style)
+    // Now apply a token class preview. The class string is built dynamically by
+    // the catalog and is usually NOT a literal in scanned source, so Tailwind
+    // never compiled a rule for it — adding the class alone is a no-op. The
+    // preview must instead set the inline style to the token's var() chain,
+    // which resolves against the frame's token CSS regardless.
     window.dispatchEvent(new MessageEvent("message", {
       data: { type: "arcade-studio:preview-class", editId, slot: "backgroundColor", className: "bg-(--bg-success-medium)" },
     }));
-    expect(el.style.backgroundColor).toBe("");
+    expect(el.style.backgroundColor).toBe("var(--bg-success-medium)");
     expect(el.classList.contains("bg-(--bg-success-medium)")).toBe(true);
+  });
+
+  it("preview-class restores the token var() for a color slot on reset", () => {
+    const el = document.createElement("p");
+    el.textContent = "Hi";
+    document.body.appendChild(el);
+    const { editId } = capture(el);
+    window.dispatchEvent(new MessageEvent("message", {
+      data: { type: "arcade-studio:preview-class", editId, slot: "color", className: "text-(--fg-success-prominent)" },
+    }));
+    expect(el.style.color).toBe("var(--fg-success-prominent)");
+    window.dispatchEvent(new MessageEvent("message", { data: { type: "arcade-studio:preview-reset", editId } }));
+    expect(el.style.color).toBe("");
+    expect(el.classList.contains("text-(--fg-success-prominent)")).toBe(false);
   });
 });

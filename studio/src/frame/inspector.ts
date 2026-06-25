@@ -153,14 +153,28 @@ function applyPreviewClass(editId: number, className: string, prevClassName?: st
   if (!set) { set = new Set(); previewClasses.set(editId, set); }
   set.add(className);
 
-  // Clear competing inline style for color slots so token class wins visually
+  // Color slots: the dynamically-built token class (e.g. `bg-(--bg-neutral-
+  // medium)`) is usually NOT a literal in any scanned source file, so Tailwind
+  // v4 never compiled a rule for it — adding the class alone shows nothing.
+  // Drive the preview with the token's var() chain inline instead; it resolves
+  // against the frame's token CSS regardless of whether the class compiled.
+  // (Commit is unaffected — it writes the class into source, which Tailwind
+  // then rescans and compiles.)
   if (slot === "color" || slot === "backgroundColor" || slot === "borderColor") {
-    entry.node.style[slot as "color" | "backgroundColor" | "borderColor"] = "";
-    if (slot === "borderColor") {
-      entry.node.style.borderStyle = "";
-      entry.node.style.borderWidth = "";
+    const token = tokenFromColorClass(className);
+    const styleSlot = slot as "color" | "backgroundColor" | "borderColor";
+    if (slot === "borderColor" && entry.node.style.borderStyle === "") {
+      entry.node.style.borderStyle = "solid";
+      if (entry.node.style.borderWidth === "") entry.node.style.borderWidth = "1px";
     }
+    entry.node.style[styleSlot] = token ? `var(${token})` : "";
   }
+}
+
+/** Extract the `--token` from a color utility class like `bg-(--bg-neutral-medium)`. */
+function tokenFromColorClass(className: string): string | null {
+  const m = /^(?:text|bg|border)-\((--[a-z0-9-]+)\)$/.exec(className.trim());
+  return m ? m[1] : null;
 }
 
 function applyPreviewIcon(editId: number, svg: string) {
