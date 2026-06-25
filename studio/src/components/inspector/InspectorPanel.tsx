@@ -5,6 +5,7 @@ import {
   TOKEN_PREFIX, isTokenPending, tokenClass,
 } from "../../hooks/editSessionContext";
 import { buildVisualEditPreamble } from "../../lib/visualEditPreamble";
+import { toElementEdits, postVisualEdit } from "../../lib/visualEditClient";
 import { fieldValue, toNumberInput, fromNumberInput, Field, NumberField, INPUT_COMPACT, GRID_2, SegmentedToggle } from "./inspectorControls";
 import { Section } from "./Section";
 import { LayoutSection } from "./LayoutSection";
@@ -85,10 +86,11 @@ function ColorRow({
 }
 
 export function InspectorPanel({
-  onSend, busy,
+  onSend, busy, slug,
 }: {
   onSend: (prompt: string, images?: string[]) => void;
   busy: boolean;
+  slug: string;
 }) {
   const {
     batch, focusedEditId, frameWindow, inspectorOpen, inspectorWidth,
@@ -171,9 +173,21 @@ export function InspectorPanel({
     frameWindow?.postMessage({ type: "arcade-studio:preview-reset", all: true }, "*");
     clear();
   }
-  function commit() {
+  async function commit() {
     if (batch.length === 0) { discard(); return; }
     const frameRel = batch[0].selection.file.split("/frames/").pop() ?? batch[0].selection.file;
+
+    // 1. Try the deterministic code-writer.
+    const payload = toElementEdits(batch);
+    const det = await postVisualEdit(slug, payload);
+    if (det.ok) {
+      // Vite will hot-reload the frame from disk; drop the inline preview.
+      frameWindow?.postMessage({ type: "arcade-studio:preview-reset", all: true }, "*");
+      clear();
+      return;
+    }
+
+    // 2. Fall back to the chat path (unchanged behaviour).
     const preamble = buildVisualEditPreamble(batch, frameRel);
     if (!preamble) { discard(); return; }
     onSend(preamble, []);
@@ -351,7 +365,7 @@ export function InspectorPanel({
 
       <div style={{ flex: "none", display: "flex", gap: 8, padding: 12, borderTop: "1px solid var(--stroke-neutral-subtle)" }}>
         <Button variant="tertiary" onClick={discard}>Discard</Button>
-        <Button variant="primary" onClick={commit} disabled={totalChanges === 0 || busy}>Commit</Button>
+        <Button variant="primary" onClick={() => { void commit(); }} disabled={totalChanges === 0 || busy}>Commit</Button>
       </div>
     </aside>
   );

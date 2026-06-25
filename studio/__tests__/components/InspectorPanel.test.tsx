@@ -40,7 +40,7 @@ function Harness({ onSend }: { onSend: any }) {
       <button onClick={() => { ctx.setInspectorOpen(true); ctx.addOrFocus(sel(1), "home", null); }}>open1</button>
       <button onClick={() => { ctx.setInspectorOpen(true); ctx.addOrFocus(sel(1), "home", stubWindow); }}>open1-with-window</button>
       <button onClick={() => ctx.addOrFocus(sel(2), "home", null)}>add2</button>
-      <InspectorPanel onSend={onSend} busy={false} />
+      <InspectorPanel onSend={onSend} busy={false} slug="test-slug" />
       <span data-testid="count">{ctx.batch.length}</span>
       <span data-testid="focused">{ctx.focusedEditId ?? ""}</span>
       <span data-testid="width">{ctx.inspectorWidth}</span>
@@ -92,7 +92,12 @@ describe("InspectorPanel (batch)", () => {
     expect(screen.getAllByText(/button/i).length).toBeGreaterThanOrEqual(2);
   });
 
-  it("Commit sends a preamble with the batch change then clears", () => {
+  it("Commit sends a preamble with the batch change then clears", async () => {
+    // Stub fetch to return {ok: false} so commit falls back to chat
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ ok: false, reason: "test" }),
+    })) as any);
     const onSend = vi.fn();
     render(<EditSessionProvider><Harness onSend={onSend} /></EditSessionProvider>);
     fireEvent.click(screen.getByText("open1"));
@@ -100,7 +105,8 @@ describe("InspectorPanel (batch)", () => {
     const widthInput = screen.getByLabelText("W") as HTMLInputElement;
     fireEvent.change(widthInput, { target: { value: "100" } });
     fireEvent.click(screen.getByText(/Commit/i));
-    expect(onSend).toHaveBeenCalledTimes(1);
+    // Wait for async commit to complete
+    await vi.waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
     const preamble = onSend.mock.calls[0][0];
     expect(preamble).toContain("width: 80px -> 100px");
     expect(screen.getByTestId("count").textContent).toBe("0");

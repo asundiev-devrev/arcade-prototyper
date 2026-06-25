@@ -427,7 +427,7 @@ function ProjectDetailShell({
           />
         </main>
         {devOpen && <DevModePanel slug={project.slug} />}
-        <InspectorPanel onSend={(p, imgs) => source.send(p, imgs)} busy={chatStream.state.phase === "running"} />
+        <InspectorPanel onSend={(p, imgs) => source.send(p, imgs)} busy={chatStream.state.phase === "running"} slug={project.slug} />
       </div>
     </div>
     </ChatStreamProvider>
