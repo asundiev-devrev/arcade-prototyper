@@ -1,7 +1,10 @@
 .omc/
 node_modules/
 .DS_Store
+# Ignore .npmrc everywhere (may carry _authToken lines) EXCEPT the root one,
+# which holds only the non-secret @xorkavi registry mapping that fresh clones need.
 .npmrc
+!/.npmrc
 dist/
 .vite/
 .worktrees/
@@ -18,3 +21,25 @@ electron/dist/
 # Observability secrets and generated config
 .env.production
 studio/packaging/telemetry.config.json
+
+# Scratch / capture output (cleanup audit 2026-06-25)
+.playwright-mcp/
+.superpowers/
+.claude/
+.career-framework-cache.json
+studio/packaging/vsix-stage/
+studio/packaging/rsync-test/
+tmp/
+composite-screenshots/
+
+# Loose root scratch — anchored so legit PNGs/assets under studio/ stay tracked
+/*.png
+*.log
+/arcade-plan*.json
+/live-slj.json
+/manifest-icons.json
+/vista-13460*
+/sync-career-framework.py
+/arcade-computer-brief.md
+/arcade-computer-runtime-brief.md
+/DESIGN_SYSTEM_REFERENCE.md
