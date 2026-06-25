@@ -17,10 +17,17 @@ describe("locateJsx", () => {
     const hit = locateJsx(SRC, 3, 6);
     expect(hit?.tagName).toBe("div");
     expect(hit?.selfClosing).toBe(false);
+    // Verify character offsets by slicing the source
+    expect(SRC.slice(hit!.openingStart, hit!.openingEnd)).toBe('<div className="p-4">');
+    expect(SRC.slice(hit!.elementStart, hit!.elementEnd)).toMatch(/^<div[\s\S]*<\/div>$/);
+    expect(SRC.slice(hit!.elementStart, hit!.elementEnd)).toContain('<span className="text-sm">Hi</span>');
   });
   it("finds the inner span on its own line", () => {
     const hit = locateJsx(SRC, 4, 8);
     expect(hit?.tagName).toBe("span");
+    // Verify character offsets
+    expect(SRC.slice(hit!.openingStart, hit!.openingEnd)).toBe('<span className="text-sm">');
+    expect(SRC.slice(hit!.elementStart, hit!.elementEnd)).toBe('<span className="text-sm">Hi</span>');
   });
   it("returns null when no JSX is on the line", () => {
     expect(locateJsx(SRC, 1, 1)).toBeNull();
@@ -30,5 +37,10 @@ describe("locateJsx", () => {
     const hit = locateJsx(src2, 1, 12);
     expect(hit?.tagName).toBe("img");
     expect(hit?.selfClosing).toBe(true);
+    // Verify character offsets for self-closing element
+    expect(src2.slice(hit!.openingStart, hit!.openingEnd)).toBe('<img src="a.png" />');
+    expect(src2.slice(hit!.elementStart, hit!.elementEnd)).toBe('<img src="a.png" />');
+    // For self-closing elements, elementEnd should equal openingEnd
+    expect(hit!.elementEnd).toBe(hit!.openingEnd);
   });
 });
