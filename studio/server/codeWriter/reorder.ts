@@ -18,15 +18,25 @@ export function moveSiblingInSource(
   const target0 = { line: line - 1, character: column - 1 };
 
   // Find the target JSX element (element or self-closing) at line:column.
+  // Matches nearest tag-name identifier on the target line, mirroring locateJsx.ts behavior.
   let target: ts.JsxChild | null = null;
   let parentChildren: ts.NodeArray<ts.JsxChild> | null = null;
+  let bestColDelta = Infinity;
   function visit(node: ts.Node) {
     if (ts.isJsxElement(node) || ts.isJsxFragment(node)) {
+      // Only direct element siblings are reorder targets; elements nested inside JSX expressions are NOT textual siblings.
       for (const child of node.children) {
         if (ts.isJsxElement(child) || ts.isJsxSelfClosingElement(child)) {
           const open = ts.isJsxElement(child) ? child.openingElement : child;
           const lc = sf.getLineAndCharacterOfPosition(open.tagName.getStart(sf));
-          if (lc.line === target0.line) { target = child; parentChildren = node.children; }
+          if (lc.line === target0.line) {
+            const colDelta = Math.abs(lc.character - target0.character);
+            if (colDelta < bestColDelta) {
+              bestColDelta = colDelta;
+              target = child;
+              parentChildren = node.children;
+            }
+          }
         }
       }
     }
