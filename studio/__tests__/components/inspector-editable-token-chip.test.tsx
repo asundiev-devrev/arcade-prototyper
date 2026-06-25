@@ -69,14 +69,32 @@ describe("EditableTokenChip", () => {
     expect(screen.getByLabelText("Edit Text raw value")).toBeDefined();
   });
 
-  it("raw-mode swatch renders with testid", () => {
+  it("raw-mode swatch is a native color picker seeded with the current colour as hex", () => {
     render(<EditableTokenChip ariaLabel="Text" tokenValue={null} tokenOptions={OPTS}
-      rawValue="rgb(1,2,3)" onPickToken={vi.fn()} onRawChange={vi.fn()} swatch="rgb(1,2,3)" />);
+      rawValue="rgb(1, 2, 3)" onPickToken={vi.fn()} onRawChange={vi.fn()} swatch="rgb(1, 2, 3)" />);
     // Enter raw mode
     fireEvent.click(screen.getByLabelText("Edit Text raw value"));
-    // Assert swatch is present in raw mode
-    const sw = screen.getByTestId("token-chip-swatch");
-    expect(sw).toBeDefined();
-    expect(sw.style.background).toBe("rgb(1, 2, 3)");
+    const picker = screen.getByTestId("token-chip-swatch") as HTMLInputElement;
+    expect(picker.tagName).toBe("INPUT");
+    expect(picker.type).toBe("color");
+    expect(picker.value).toBe("#010203"); // rgb(1,2,3) -> hex
+  });
+
+  it("raw-mode color picker emits the chosen hex via onRawChange", () => {
+    const onRaw = vi.fn();
+    render(<EditableTokenChip ariaLabel="Text" tokenValue={null} tokenOptions={OPTS}
+      rawValue="rgb(0, 0, 0)" onPickToken={vi.fn()} onRawChange={onRaw} swatch="rgb(0, 0, 0)" />);
+    fireEvent.click(screen.getByLabelText("Edit Text raw value"));
+    const picker = screen.getByTestId("token-chip-swatch") as HTMLInputElement;
+    fireEvent.input(picker, { target: { value: "#ff8800" } });
+    expect(onRaw).toHaveBeenCalledWith("#ff8800");
+  });
+
+  it("raw-mode color picker falls back to #000000 for an unparseable value", () => {
+    render(<EditableTokenChip ariaLabel="Text" tokenValue={null} tokenOptions={OPTS}
+      rawValue="transparent" onPickToken={vi.fn()} onRawChange={vi.fn()} swatch="transparent" />);
+    fireEvent.click(screen.getByLabelText("Edit Text raw value"));
+    const picker = screen.getByTestId("token-chip-swatch") as HTMLInputElement;
+    expect(picker.value).toBe("#000000");
   });
 });
