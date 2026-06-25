@@ -194,6 +194,19 @@ export function InspectorPanel({
     frameWindow?.postMessage({ type: "arcade-studio:preview-reset", all: true }, "*");
     clear();
   }
+  async function move(el: EditedElement, dir: "up" | "down") {
+    const frameSlug = el.selection.file.split("/frames/").pop()?.split("/")[0] ?? "";
+    await fetch(`/api/visual-edit/${slug}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ frameSlug, move: {
+        file: el.selection.file, line: el.selection.line, column: el.selection.column, dir,
+      } }),
+    });
+    // frame hot-reloads; the picked element's line moves, so drop the selection.
+    frameWindow?.postMessage({ type: "arcade-studio:preview-reset", all: true }, "*");
+    clear();
+  }
   function startResize(e: React.MouseEvent) {
     e.preventDefault();
     dragOrigin.current = { startX: e.clientX, startWidth: inspectorWidth };
@@ -251,13 +264,21 @@ export function InspectorPanel({
                     <span style={{ fontSize: 12, color: "var(--fg-neutral-prominent)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       &lt;{e.selection.tagName || e.selection.componentName}&gt;{n ? ` · ${n}` : ""}
                     </span>
-                    <button type="button" aria-label={`Remove element ${e.selection.editId}`}
-                      onClick={(ev) => {
-                        ev.stopPropagation();
-                        frameWindow?.postMessage({ type: "arcade-studio:preview-reset", editId: e.selection.editId }, "*");
-                        removeElement(e.selection.editId);
-                      }}
-                      style={{ background: "transparent", border: "none", color: "var(--fg-neutral-subtle)", cursor: "pointer", fontSize: 14, lineHeight: 1 }}>×</button>
+                    <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                      <button type="button" aria-label="Move element up" title="Move up"
+                        onClick={(ev) => { ev.stopPropagation(); void move(e, "up"); }}
+                        style={{ background: "transparent", border: "none", color: "var(--fg-neutral-subtle)", cursor: "pointer", fontSize: 13, lineHeight: 1 }}>↑</button>
+                      <button type="button" aria-label="Move element down" title="Move down"
+                        onClick={(ev) => { ev.stopPropagation(); void move(e, "down"); }}
+                        style={{ background: "transparent", border: "none", color: "var(--fg-neutral-subtle)", cursor: "pointer", fontSize: 13, lineHeight: 1 }}>↓</button>
+                      <button type="button" aria-label={`Remove element ${e.selection.editId}`}
+                        onClick={(ev) => {
+                          ev.stopPropagation();
+                          frameWindow?.postMessage({ type: "arcade-studio:preview-reset", editId: e.selection.editId }, "*");
+                          removeElement(e.selection.editId);
+                        }}
+                        style={{ background: "transparent", border: "none", color: "var(--fg-neutral-subtle)", cursor: "pointer", fontSize: 14, lineHeight: 1 }}>×</button>
+                    </div>
                   </div>
                 );
               })}

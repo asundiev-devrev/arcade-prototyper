@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { writeBatch, type VisualEditRequest } from "../codeWriter/index";
+import { moveSibling } from "../codeWriter/reorder";
 
 async function readJson(req: IncomingMessage): Promise<unknown> {
   let buf = "";
@@ -23,7 +24,21 @@ export function visualEditMiddleware() {
     const url = req.url ?? "";
     if (req.method !== "POST" || !url.startsWith("/api/visual-edit/")) return next?.();
 
-    const body = (await readJson(req)) as Partial<VisualEditRequest>;
+    const body = (await readJson(req)) as Partial<VisualEditRequest> & { move?: { file: string; line: number; column: number; dir: "up" | "down" } };
+
+    // Handle move operations first
+    const move = body.move;
+    if (typeof body.frameSlug === "string" && move) {
+      try {
+        const result = await moveSibling(body.frameSlug, move.file, move.line, move.column, move.dir);
+        return send(res, 200, result);
+      } catch (err) {
+        console.warn("[visualEdit] moveSibling threw:", err);
+        return send(res, 200, { ok: false, reason: "move-threw" });
+      }
+    }
+
+    // Handle batch edit operations
     if (typeof body.frameSlug !== "string" || !Array.isArray(body.edits) || body.edits.length === 0) {
       return send(res, 400, { ok: false, reason: "bad_request" });
     }
