@@ -5,7 +5,7 @@ import {
   TOKEN_PREFIX, isTokenPending, tokenClass,
 } from "../../hooks/editSessionContext";
 import { buildVisualEditPreamble } from "../../lib/visualEditPreamble";
-import { toElementEdits, postVisualEdit } from "../../lib/visualEditClient";
+import { toElementEdits, postVisualEdit, isInFrame, buildComponentEditPreamble } from "../../lib/visualEditClient";
 import { fieldValue, toNumberInput, fromNumberInput, Field, NumberField, INPUT_COMPACT, GRID_2, SegmentedToggle } from "./inspectorControls";
 import { Section } from "./Section";
 import { LayoutSection } from "./LayoutSection";
@@ -93,7 +93,7 @@ export function InspectorPanel({
   slug: string;
 }) {
   const {
-    batch, focusedEditId, frameWindow, inspectorOpen, inspectorWidth,
+    batch, focusedEditId, frameSlug, frameWindow, inspectorOpen, inspectorWidth,
     setField, resetField, removeElement, focus, clear, setInspectorWidth,
   } = useEditSession();
   const catalogState = useAssetsCatalog();
@@ -195,22 +195,41 @@ export function InspectorPanel({
   }
   async function commit() {
     if (batch.length === 0) { discard(); return; }
-    const frameRel = batch[0].selection.file.split("/frames/").pop() ?? batch[0].selection.file;
+    const targetFrame = frameSlug ?? "";
 
-    // 1. Try the deterministic code-writer.
-    const payload = toElementEdits(batch);
-    const det = await postVisualEdit(slug, payload);
-    if (det.ok) {
-      // Vite will hot-reload the frame from disk; drop the inline preview.
+    // Does every picked element live in THIS frame's own source? Elements that
+    // resolve to a shared kit composite (not the frame's index.tsx) can't be
+    // edited in place — editing kit source would change every prototype.
+    const allInFrame =
+      !!targetFrame && batch.every((e) => isInFrame(e.selection.file, targetFrame));
+
+    if (allInFrame) {
+      // 1. Try the deterministic code-writer (targets the SESSION frame, not
+      //    the picked file path).
+      const payload = toElementEdits(batch, targetFrame);
+      const det = await postVisualEdit(slug, payload);
+      if (det.ok) {
+        // Vite will hot-reload the frame from disk; drop the inline preview.
+        frameWindow?.postMessage({ type: "arcade-studio:preview-reset", all: true }, "*");
+        clear();
+        return;
+      }
+      // 2. Deterministic bailed (dynamic className/text, etc.) — scoped chat edit.
+      const preamble = buildVisualEditPreamble(batch, `${targetFrame}/index.tsx`);
+      if (!preamble) { discard(); return; }
+      onSend(preamble, []);
       frameWindow?.postMessage({ type: "arcade-studio:preview-reset", all: true }, "*");
       clear();
       return;
     }
 
-    // 2. Fall back to the chat path (unchanged behaviour).
-    const preamble = buildVisualEditPreamble(batch, frameRel);
-    if (!preamble) { discard(); return; }
-    onSend(preamble, []);
+    // 3. Element(s) come from a shared kit composite — ask the agent to
+    //    duplicate the markup locally into this frame and edit the copy, so the
+    //    shared component stays intact. (No deterministic path: kit source is
+    //    off-limits.)
+    const compPreamble = buildComponentEditPreamble(batch, targetFrame);
+    if (!compPreamble) { discard(); return; }
+    onSend(compPreamble, []);
     frameWindow?.postMessage({ type: "arcade-studio:preview-reset", all: true }, "*");
     clear();
   }
