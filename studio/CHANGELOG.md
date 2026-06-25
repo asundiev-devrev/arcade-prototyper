@@ -8,6 +8,15 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.41.2] — 2026-06-25
+
+### Fixed
+- **Colour tokens now actually recolour the element.** Picking a token in the Text / Fill / Border controls (e.g. "Neutral medium") had no visible effect when the element already carried its own colour — only typing a raw value worked. The preview now applies the token reliably.
+
+### Changed
+- **Colour token names are no longer ambiguous.** The dropdowns showed "Neutral medium" twice (a text colour and a fill colour with the same name). Each option now carries its family — "Text · Neutral medium", "Fill · Neutral medium", "Border · Neutral subtle" — so you can tell them apart.
+- **A real colour picker in raw mode.** Switch a colour control to a raw value and the swatch is now a proper colour picker — click it for the system colour wheel with live preview, or keep typing an exact rgb()/rgba() value in the field beside it.
+
 ## [0.41.1] — 2026-06-24
 
 ### Added
