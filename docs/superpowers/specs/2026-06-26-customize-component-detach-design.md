@@ -32,14 +32,28 @@ mechanism).
   chip **on the object** reading `💠 Component · Customize` (Customize is a click
   target in the chip). The exposed props remain editable in the inspector panel;
   internal styles show as locked.
-- **Customize scope:** the **nearest named component** wrapping the clicked
-  element (e.g. `<Agent>`, not the whole `<ComputerScene>`). Re-Customize deeper
-  if needed.
+- **Customize scope:** the **nearest named component present in the frame's own
+  `index.tsx`** — i.e. the component instance actually written in the frame
+  source that contains the clicked element. This is a hard constraint of the
+  architecture, not a preference: only a component that literally appears in the
+  frame source can be spliced/replaced there. Consequences:
+    - Generated frames that placed `<Button>`/`<Card>` directly in `index.tsx` →
+      Customize expands just that component (surgical).
+    - A frame whose source is a single top-level composite (e.g. the computer
+      reference frame's lone `<ComputerScene />`) → clicking the deeply-nested
+      `<Agent>` Customizes `<ComputerScene>`, because that is the only component
+      in the frame source. The clicked element (`<Agent>`'s bubble) then becomes
+      an ordinary, directly-editable element *inside* the expanded markup —
+      "edit in context." There is no surgical way to lift only `<Agent>` while
+      keeping its surroundings intact, because `<Agent>` is authored inside the
+      composite's own code, not the frame's.
 - **What Customize emits:** a **hybrid rendered snapshot** — serialize the live
-  rendered subtree of the nearest component into static JSX with real Tailwind
-  `className`s, leaving still-simple mapped kit primitives (Button, Icon) as
-  component references rather than exploding them. Reuses the existing fiber-walk
-  serializer.
+  rendered subtree of the targeted top-level-in-source component into static JSX
+  with real Tailwind `className`s, leaving still-simple mapped kit primitives
+  (Button, Icon) as component references rather than exploding them. Reuses the
+  existing fiber-walk serializer. The snapshot includes everything the component
+  rendered, so the expanded result looks pixel-identical and nothing appears
+  detached.
 - **Safety:** confirm dialog before; one-step **Undo** after. Designer-friendly
   copy (exact strings below).
 - **Out of scope (sub-project B):** on-canvas resize/move handles, arbitrary
@@ -90,11 +104,11 @@ machinery.
 ```
 Select component → [chip: 💠 Component · Customize] → click Customize → confirm
         │                                                                  │
-        │ (detection: !isInFrame + nearest componentName)                  ▼
+        │ (detection: !isInFrame; resolve the in-source component)         ▼
         │                                              1. SERIALIZE (client, in iframe)
-        │                                                 fiber-walk the nearest component's
-        │                                                 rendered subtree → SLJ
-        │                                                 (+ NEW: capture className)
+        │                                                 fiber-walk the TARGET component's
+        │                                                 (the in-source instance) rendered
+        │                                                 subtree → SLJ (+ NEW: capture className)
         │                                                                  │
         │                                                                  ▼
         │                                              2. PRINT (pure)  SLJ → JSX string
@@ -102,7 +116,8 @@ Select component → [chip: 💠 Component · Customize] → click Customize →
         │                                                                  │
         │                                                                  ▼
         │                                              3. SPLICE (server) replace the
-        │                                                 <Agent .../> element in
+        │                                                 in-source component element (e.g.
+        │                                                 <ComputerScene .../>) in
         │                                                 frames/<slug>/index.tsx with the
         │                                                 printed JSX (reuse locateJsx + splice
         │                                                 + reparse guard from Phase A)
@@ -127,10 +142,14 @@ Select component → [chip: 💠 Component · Customize] → click Customize →
    fragment that renders identically to the snapshot.
 
 3. **`POST /api/customize/:slug`** (`studio/server/middleware/customize.ts`) —
-   body `{ frameSlug, componentElementLocation, jsx }`: locate the JSX element
-   for the nearest component instance in `frames/<slug>/index.tsx` and replace it
-   with the printed `jsx`. Reuses `locateJsx`, `splice`, the re-parse guard, and
-   the all-or-nothing/path-safety model from Phase A's code-writer. Imports
+   body `{ frameSlug, targetComponentName, jsx }`: find the JSX element in
+   `frames/<slug>/index.tsx` whose tag is `targetComponentName` (the in-source
+   component instance, resolved client-side — see "resolving the target" below)
+   and replace it with the printed `jsx`. Reuses `locateJsx`, `splice`, the
+   re-parse guard, and the all-or-nothing/path-safety model from Phase A's
+   code-writer. If the frame source contains more than one instance of that
+   component tag, the request also carries the instance's source `line:column`
+   (from the picker) to disambiguate; the endpoint matches by position. Imports
    needed by the printed JSX (the kept kit primitives) are reconciled — see Error
    Handling. Returns `{ ok, reason? }`.
 
@@ -145,13 +164,35 @@ Select component → [chip: 💠 Component · Customize] → click Customize →
    seam Phase A flagged (`frameChangeContract.ts` snapshot infra) made concrete
    for one operation; no general undo stack.
 
-### Data flow for detection (which elements get the chip)
+### Data flow for detection + resolving the target
 
-The picker already returns `componentName` + source `file`. An element gets the
-`💠 Component` treatment when `!isInFrame(file, frameSlug)` — i.e. it resolves to
-shared component source, not the frame's own `index.tsx`. The "nearest named
-component" to Customize is `componentName` (the fiber's nearest named owner).
-In-frame elements keep the normal Phase-A inspector (no chip).
+The picker returns the clicked element's `componentName` (its nearest named
+fiber owner — e.g. `Agent`) and source `file`. An element gets the `💠 Component`
+treatment when `!isInFrame(file, frameSlug)` — it resolves to shared component
+source, not the frame's own `index.tsx`. In-frame elements keep the normal
+Phase-A inspector (no chip).
+
+**Resolving which component to Customize (the in-source target).** The clicked
+element's nearest owner (`Agent`) is usually NOT in the frame source — it's
+authored inside a composite. Customize must target the **outermost component on
+the fiber path between the frame root and the clicked element whose source file
+IS the frame's `index.tsx`** — i.e. the component instance the designer actually
+wrote (or the generator wrote) into the frame. Concretely, walking the fiber
+owner chain from the clicked element up toward the root, the target is the last
+named component whose JSX call-site file is `frames/<slug>/index.tsx`.
+
+- Generated frame with `<Card><Button/></Card>` in `index.tsx`, click the
+  Button's label → target = `Button` if `<Button>` is in `index.tsx`, else the
+  enclosing `Card` — whichever is the in-source instance nearest the click.
+- Computer frame with only `<ComputerScene/>` in `index.tsx`, click deep inside →
+  the only in-source component on the path is `ComputerScene` → target =
+  `ComputerScene`.
+
+This resolution runs client-side (the fiber owners carry `_debugStack`
+call-site files, already parsed by the picker for Phase A). The resolved
+`targetComponentName` + its `line:column` in `index.tsx` go to the customize
+endpoint. The fiber-walk serialization (stage 1) starts from the **target
+component's fiber**, not the clicked element's.
 
 ## Error handling
 
@@ -194,11 +235,18 @@ Follows Studio's "every fix gets a test" discipline.
 - **Detection** — `isInFrame` drives the chip: a component-internal selection →
   chip shown; an in-frame selection → no chip. (Extends the Phase-A
   `visualEditClient` tests.)
+- **Target resolution** — given a fiber owner chain (clicked element → … →
+  root) with call-site files, the resolver returns the outermost owner whose
+  file is the frame's `index.tsx`: a deep click in an all-composite frame →
+  `ComputerScene`; a click on an in-source `<Button>` → `Button`.
 - **Undo** — after a Customize, Undo restores the exact pre-Customize source.
-- **Full-fidelity manual gate (human, app restart):** Customize `<Agent>` inside
-  the computer frame → the frame renders pixel-identically, the region is now
-  editable with the Phase-A inspector, `prototype-kit/` is untouched, Undo
-  restores `<ComputerScene/>`. (Unit tests can't prove visual fidelity or
+- **Full-fidelity manual gate (human, app restart):** Customize a component
+  inside the computer frame (click the Agent bubble → resolves to
+  `<ComputerScene>`) → the frame renders pixel-identically, the clicked element
+  is now a directly-editable element inside the expanded markup,
+  `prototype-kit/` is untouched, Undo restores `<ComputerScene/>`. Also test a
+  generated frame where a `<Button>`/`<Card>` is in `index.tsx` directly →
+  Customize expands just that component. (Unit tests can't prove visual fidelity or
   hot-reload; this gate is required before shipping to testers.)
 
 ## Risks / honest limitations
