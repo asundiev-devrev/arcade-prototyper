@@ -89,6 +89,34 @@ describe("editSessionContext", () => {
     act(() => result.current.clear());
     expect(result.current.inspectorWidth).toBe(500);
   });
+
+  it("shiftSelectionsBelow shifts only selections strictly below the edited line", () => {
+    const { result } = renderHook(() => useEditSession(), { wrapper: wrap });
+    // sel(N) seeds line = N (see helper). Pick lines 5, 10, 15.
+    act(() => {
+      result.current.addOrFocus(sel(5, { line: 5 }), "home", null);
+      result.current.addOrFocus(sel(10, { line: 10 }), "home", null);
+      result.current.addOrFocus(sel(15, { line: 15 }), "home", null);
+    });
+    // A write at line 10 added 2 lines.
+    act(() => result.current.shiftSelectionsBelow(10, 2));
+    const byId = (id: number) => result.current.batch.find((e) => e.selection.editId === id)!;
+    expect(byId(5).selection.line).toBe(5);   // above — untouched
+    expect(byId(10).selection.line).toBe(10); // the edited line itself — untouched
+    expect(byId(15).selection.line).toBe(17); // below — shifted by +2
+  });
+
+  it("shiftSelectionsBelow with a negative delta moves below-selections up", () => {
+    const { result } = renderHook(() => useEditSession(), { wrapper: wrap });
+    act(() => {
+      result.current.addOrFocus(sel(8, { line: 8 }), "home", null);
+      result.current.addOrFocus(sel(20, { line: 20 }), "home", null);
+    });
+    act(() => result.current.shiftSelectionsBelow(8, -1));
+    const byId = (id: number) => result.current.batch.find((e) => e.selection.editId === id)!;
+    expect(byId(8).selection.line).toBe(8);   // edited line — untouched
+    expect(byId(20).selection.line).toBe(19); // below — shifted by -1
+  });
 });
 
 describe("token pending helpers", () => {

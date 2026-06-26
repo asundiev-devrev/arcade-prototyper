@@ -90,8 +90,26 @@ export function applyEditsToSource(
   return { ok: true, source: out };
 }
 
+/**
+ * Success shape for {@link writeBatch}. Carries the line-count delta the write
+ * introduced so the client can refresh the source coordinates of any held
+ * selection at/below the edit — otherwise a SECOND edit to a line-shifted
+ * element posts a stale line:column and `locateJsx` misses.
+ *
+ * `editLine` is the 1-based source line of the edited element (the MIN line
+ * among the batch's edits). `lineDelta` is (lines after) − (lines before),
+ * counting newlines; in-place edits report 0.
+ */
+export type WriteBatchResult =
+  | { ok: true; lineDelta: number; editLine: number }
+  | { ok: false; reason: string };
+
+function countLines(s: string): number {
+  return s.split("\n").length;
+}
+
 /** Apply a whole batch atomically: all-or-nothing. */
-export async function writeBatch(frameSlug: string, edits: ElementEdit[]): Promise<WriteResult> {
+export async function writeBatch(frameSlug: string, edits: ElementEdit[]): Promise<WriteBatchResult> {
   if (edits.length === 0) return { ok: false, reason: "empty-batch" };
   // All edits in a batch share one frame; derive the project slug from the path.
   const file = edits[0].file;
@@ -119,5 +137,9 @@ export async function writeBatch(frameSlug: string, edits: ElementEdit[]): Promi
   if (working === source) return { ok: false, reason: "no-change" };
 
   await fs.writeFile(filePath, working, "utf-8");
-  return { ok: true };
+  // Report the net line-count change + the edited element's line so the client
+  // can shift the held coordinates of selections at/below the edit.
+  const lineDelta = countLines(working) - countLines(source);
+  const editLine = Math.min(...edits.map((e) => e.line));
+  return { ok: true, lineDelta, editLine };
 }

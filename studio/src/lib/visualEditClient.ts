@@ -113,7 +113,7 @@ export function buildComponentEditPreamble(elements: EditedElement[], frameSlug:
 
 export async function postVisualEdit(
   slug: string, payload: VisualEditPayload,
-): Promise<{ ok: boolean; reason?: string }> {
+): Promise<{ ok: boolean; reason?: string; lineDelta?: number; editLine?: number }> {
   try {
     const res = await fetch(`/api/visual-edit/${slug}`, {
       method: "POST",

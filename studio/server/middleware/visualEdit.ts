@@ -19,7 +19,9 @@ function send(res: ServerResponse, status: number, body: unknown) {
 
 /**
  * POST /api/visual-edit/:slug — apply a batch of deterministic element edits
- * directly to the frame source. Returns { ok:true } on success or
+ * directly to the frame source. Returns { ok:true, lineDelta, editLine } on
+ * success (the writeBatch result is forwarded verbatim — lineDelta lets the
+ * client refresh held selection coordinates after a line-shifting write) or
  * { ok:false, reason } when the change can't be mapped (client then falls back
  * to the chat path). HTTP 200 either way; 400 only for malformed input.
  */

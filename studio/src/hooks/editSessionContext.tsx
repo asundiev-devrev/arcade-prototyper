@@ -52,6 +52,14 @@ interface Ctx {
   removeElement: (editId: number) => void;
   setField: (editId: number, key: keyof StyleSnapshot | "typeStyle" | "iconSwap", value: string) => void;
   resetField: (editId: number, key: keyof StyleSnapshot | "typeStyle" | "iconSwap") => void;
+  /**
+   * After a deterministic write that changed the frame's line count, shift the
+   * stored source `line` of every held selection BELOW the edited line by the
+   * net delta. Keeps subsequent edits targeting the right JSX node — a stale
+   * line:column would otherwise miss in `locateJsx`. Selections at/above the
+   * edited line are unaffected.
+   */
+  shiftSelectionsBelow: (editLine: number, delta: number) => void;
   clear: () => void;
   setInspectorOpen: (open: boolean) => void;
   setInspectorWidth: (px: number) => void;
@@ -103,6 +111,16 @@ export function EditSessionProvider({ children }: { children: ReactNode }) {
             return { ...e, pending };
           }),
         ),
+      shiftSelectionsBelow: (editLine, delta) => {
+        if (!delta) return;
+        setBatch((b) =>
+          b.map((e) =>
+            e.selection.line > editLine
+              ? { ...e, selection: { ...e.selection, line: e.selection.line + delta } }
+              : e,
+          ),
+        );
+      },
       clear: () => {
         setBatch([]);
         setFocusedEditId(null);

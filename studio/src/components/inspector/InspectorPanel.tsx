@@ -139,6 +139,7 @@ export function InspectorPanel({
   const {
     batch, focusedEditId, frameSlug, frameWindow, inspectorOpen, inspectorWidth,
     setField, resetField, removeElement, focus, clear, setInspectorWidth,
+    shiftSelectionsBelow,
   } = useEditSession();
   const { toast, dismiss } = useToast();
   const { addBlock } = useEditBlocks();
@@ -312,6 +313,12 @@ export function InspectorPanel({
     if (!targetFrame || !isInFrame(sel.file, targetFrame)) return;
     const det = await postVisualEdit(slug, buildSingleEdit(sel, field, value, targetFrame));
     if (det.ok) {
+      // If the write changed the file's line count, refresh the held source
+      // coordinates of any selection below it so a SECOND edit targets the
+      // right JSX node instead of a now-stale line:column.
+      if (det.lineDelta && typeof det.editLine === "number") {
+        shiftSelectionsBelow(det.editLine, det.lineDelta);
+      }
       addBlock({ label: humanLabel(field, value), kind: "instant", status: "applied", frameSlug: targetFrame });
       // Deterministic write succeeded → the edit is now applied on disk, so clear
       // the pending delta for this field. This drops it from totalChanges (which
