@@ -51,6 +51,15 @@ describe("expandFrame", () => {
     const sf = ts.createSourceFile("x.tsx", r.source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
     expect((sf as any).parseDiagnostics?.length ?? 0).toBe(0);
   });
+  it("leaves the composite (no white-screen) when there's no kit import to extend", () => {
+    // A SettingsPage usage with NO arcade-prototypes named import to add TitleBar/BreadcrumbBar to.
+    const src = `export default function F() {\n  return (\n    <SettingsPage title="X"><div/></SettingsPage>\n  );\n}\n`;
+    const r = expandFrame(src);
+    expect(r.changed).toBe(false);
+    expect(r.needsAi).toBeNull();
+    expect(r.source).toContain("<SettingsPage");        // left as the composite, not a broken flat body
+    expect(r.source).not.toContain("<TitleBar");         // did NOT emit unimported components
+  });
   it("adds TitleBar/BreadcrumbBar to the kit import when the expansion introduces them", () => {
     const r = expandFrame(SETTINGS);
     expect(r.changed).toBe(true);

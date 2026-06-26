@@ -14,8 +14,16 @@ function reparses(source: string): boolean {
  * The SettingsPage expansion ALWAYS emits these two components, but the original
  * frame likely only imported SettingsPage itself. Without adding them, the
  * expanded frame would white-screen at runtime (undefined component).
+ *
+ * Returns:
+ *  - the augmented source when missing names were added,
+ *  - the source unchanged when all required names are already imported (success — nothing to add),
+ *  - `null` when there is NO extendable arcade-prototypes named-import to add the
+ *    missing names to. A missing import is NOT a parse error, so the caller MUST
+ *    treat `null` as "can't expand safely" and leave the composite in place —
+ *    otherwise the flat body would reference unimported components and white-screen.
  */
-function ensureKitImports(source: string, requiredNames: string[]): string {
+function ensureKitImports(source: string, requiredNames: string[]): string | null {
   const sf = ts.createSourceFile("frame.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   let targetImport: ts.ImportDeclaration | null = null;
   let existingNames = new Set<string>();
@@ -38,13 +46,14 @@ function ensureKitImports(source: string, requiredNames: string[]): string {
   visit(sf);
 
   if (!targetImport) {
-    // No arcade-prototypes import to extend → fail safe, leave as composite
-    return source;
+    // No arcade-prototypes named-import to extend → signal the caller to degrade
+    // to the composite (do NOT emit a flat body with unimported components).
+    return null;
   }
 
   const missing = requiredNames.filter((n) => !existingNames.has(n));
   if (missing.length === 0) {
-    // Already imported
+    // Already imported — success, nothing to add.
     return source;
   }
 
@@ -80,7 +89,14 @@ export function expandFrame(source: string): ExpandResult {
   // Ensure they're imported before returning the flat source.
   if (inst.tag === "SettingsPage") {
     const namesIntroducedBySettingsPage = ["TitleBar", "BreadcrumbBar"];
-    out = ensureKitImports(out, namesIntroducedBySettingsPage);
+    const reconciled = ensureKitImports(out, namesIntroducedBySettingsPage);
+    if (reconciled === null) {
+      // No kit import to extend → would leave <TitleBar>/<BreadcrumbBar> unimported
+      // (a runtime white-screen, NOT a parse error). Degrade gracefully: leave the
+      // original composite in place rather than emitting a frame that crashes.
+      return { source, changed: false, needsAi: null };
+    }
+    out = reconciled;
   }
 
   if (!reparses(out)) return { source, changed: false, needsAi: null };
