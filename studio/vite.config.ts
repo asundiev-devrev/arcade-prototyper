@@ -32,7 +32,6 @@ import { cloudflareMiddleware } from "./server/middleware/cloudflare";
 import { runtimeErrorMiddleware } from "./server/middleware/runtimeError";
 import { visualEditMiddleware } from "./server/middleware/visualEdit";
 import { editUndoMiddleware } from "./server/middleware/editUndo";
-import { customizeMiddleware } from "./server/middleware/customize";
 import { kitPropsMiddleware } from "./server/middleware/kitProps";
 import { versionMiddleware, logVersionOnBoot } from "./server/middleware/version";
 import { telemetryIdentityMiddleware, setIdentitySnapshot } from "./server/middleware/telemetryIdentity";
@@ -66,7 +65,6 @@ function apiPlugin(): import("vite").Plugin {
       server.middlewares.use(chatMiddleware());
       server.middlewares.use(visualEditMiddleware());
       server.middlewares.use(editUndoMiddleware());
-      server.middlewares.use(customizeMiddleware());
       server.middlewares.use(kitPropsMiddleware());
       server.middlewares.use(figmaMiddleware());
       server.middlewares.use(uploadsMiddleware());
