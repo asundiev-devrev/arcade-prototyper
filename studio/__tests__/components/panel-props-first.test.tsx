@@ -127,7 +127,10 @@ describe("panel props-first", () => {
     )!;
     const body = JSON.parse(call[1]!.body as string);
     const edit = body.edits[0];
-    // Targets the RESOLVED SettingsPage line/col (7:25), NOT the clicked Grid (5:3).
+    // Targets the RESOLVED SettingsPage file/line/col, NOT the clicked Grid's kit path.
+    // CRITICAL: edit.file must be the frame's index.tsx (under /frames/<slug>/) so the
+    // server's slug derivation regex `/\/projects\/([^/]+)\/frames\//` succeeds.
+    expect(edit.file).toContain("/frames/home/");
     expect(edit.line).toBe(7);
     expect(edit.column).toBe(25);
     // Writes prop:columns = "3".

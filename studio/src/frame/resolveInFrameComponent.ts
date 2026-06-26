@@ -1,6 +1,6 @@
 // studio/src/frame/resolveInFrameComponent.ts
 export interface OwnerLink { componentName: string; file: string; line: number; column: number }
-export interface InFrameComponent { componentName: string; line: number; column: number }
+export interface InFrameComponent { componentName: string; file: string; line: number; column: number }
 
 /**
  * Given the fiber owner chain (innermost → outermost) of a clicked element,
@@ -12,7 +12,7 @@ export function resolveInFrameComponent(chain: OwnerLink[], frameSlug: string): 
   const needle = `/frames/${frameSlug}/`;
   for (const link of chain) {
     if (link.file.includes(needle)) {
-      return { componentName: link.componentName, line: link.line, column: link.column };
+      return { componentName: link.componentName, file: link.file, line: link.line, column: link.column };
     }
   }
   return null;

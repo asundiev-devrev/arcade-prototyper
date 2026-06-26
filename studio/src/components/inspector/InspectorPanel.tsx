@@ -353,13 +353,14 @@ export function InspectorPanel({
 
   const focused = focusedNow;
   // Props-first component mode: a settled prop change writes prop:<name> on the
-  // RESOLVED nearest-in-frame component instance (line/col from the resolver),
+  // RESOLVED nearest-in-frame component instance (file/line/col from the resolver),
   // NOT the clicked element. {ok:true} → instant/applied block; otherwise fall
   // back to a scoped chat ask. Everything else routes through "Ask AI".
   function changeProp(propName: string, value: string) {
     if (!inFrameComp || !focused) return;
     if (value === "") return; // "—" = no change
-    const sel = { ...focused.selection, line: inFrameComp.line, column: inFrameComp.column };
+    const sel = { ...focused.selection, file: inFrameComp.file, line: inFrameComp.line, column: inFrameComp.column };
+    setField(focused.selection.editId, `prop:${propName}` as any, value);
     void postVisualEdit(slug, buildSingleEdit(sel, `prop:${propName}`, value, frameSlug ?? ""))
       .then((det) => {
         if (det.ok) {

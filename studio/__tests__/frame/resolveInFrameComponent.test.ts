@@ -12,7 +12,7 @@ describe("resolveInFrameComponent", () => {
       { componentName: "Button", file: FRAME, line: 9, column: 7 },
       { componentName: "Card", file: FRAME, line: 8, column: 5 },
     ];
-    expect(resolveInFrameComponent(chain, "01-page")).toEqual({ componentName: "Button", line: 9, column: 7 });
+    expect(resolveInFrameComponent(chain, "01-page")).toEqual({ componentName: "Button", file: FRAME, line: 9, column: 7 });
   });
   it("returns the only in-frame component when the click is deep in a composite", () => {
     // <aside> deep inside SettingsPage: its owners up to SettingsPage are kit; SettingsPage is in-frame
@@ -20,7 +20,7 @@ describe("resolveInFrameComponent", () => {
       { componentName: "SettingsSidebar", file: KIT, line: 12, column: 3 },
       { componentName: "SettingsPage", file: FRAME, line: 7, column: 25 },
     ];
-    expect(resolveInFrameComponent(chain, "01-page")).toEqual({ componentName: "SettingsPage", line: 7, column: 25 });
+    expect(resolveInFrameComponent(chain, "01-page")).toEqual({ componentName: "SettingsPage", file: FRAME, line: 7, column: 25 });
   });
   it("returns null when no owner is in the frame source", () => {
     const chain: OwnerLink[] = [{ componentName: "X", file: KIT, line: 1, column: 1 }];
