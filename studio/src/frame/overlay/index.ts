@@ -86,9 +86,4 @@ export function showChipOnSelected(): void {
   if (selectedEl) showComponentChip(selectedEl);
 }
 
-/** Hide the component chip (called when the selection clears / isn't a component). */
-export function hideChip(): void {
-  hideComponentChip();
-}
-
 export { showComponentChip, hideComponentChip };

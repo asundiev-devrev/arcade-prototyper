@@ -161,6 +161,8 @@ export function InspectorPanel({
       const r = await postCustomize(slug, buildCustomizePayload(target, jsx, targetFrame));
       if (r.ok) {
         // 4. Frame hot-reloads from disk. Drop the inspector selection and offer Undo.
+        //    Belt-and-suspenders: explicitly tear down the chip before reload.
+        frameWindow?.postMessage({ type: "arcade-studio:hide-component-chip" }, "*");
         clear();
         toast({
           title: CUSTOMIZE_SUCCESS,

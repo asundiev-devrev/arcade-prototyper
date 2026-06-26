@@ -94,6 +94,7 @@ export function FrameCard({
     };
   }, [resizing, onFrameWidthChange, zoom]);
 
+  // Picking-gated effect: manages picker lifecycle in the iframe.
   useEffect(() => {
     if (!picking) return;
     iframeRef.current?.contentWindow?.postMessage(
@@ -127,11 +128,6 @@ export function FrameCard({
           );
         }
         // NOTE: do NOT setPicking(false) — bulk picking stays active.
-      } else if (t === "arcade-studio:customize-request") {
-        // The chip's Customize link posted this from inside the iframe. Forward
-        // it to the shell as a single internal signal so the InspectorPanel
-        // (which owns the dialog/toast/slug) can run the flow.
-        window.dispatchEvent(new CustomEvent("arcade-studio:customize-request"));
       } else if (t === "arcade-studio:frame-pick-cancelled") {
         const reason = (data as { reason?: string }).reason;
         if (reason && reason !== "escape" && reason !== "no-target") {
@@ -147,7 +143,14 @@ export function FrameCard({
       }
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setPicking(false);
+      if (e.key === "Escape") {
+        setPicking(false);
+        // Escape closes the picker, so hide the chip too.
+        iframeRef.current?.contentWindow?.postMessage(
+          { type: "arcade-studio:hide-component-chip" },
+          "*",
+        );
+      }
     }
     window.addEventListener("message", onMessage);
     window.addEventListener("keydown", onKey);
@@ -158,8 +161,30 @@ export function FrameCard({
         { type: "arcade-studio:frame-pick-stop" },
         "*",
       );
+      // When picking goes false, tear down the chip too.
+      iframeRef.current?.contentWindow?.postMessage(
+        { type: "arcade-studio:hide-component-chip" },
+        "*",
+      );
     };
-  }, [picking, frame.slug, addOrFocus, setInspectorOpen, clear, frameWindow, sessionFrameSlug]);
+  }, [picking, frame.slug, addOrFocus, setInspectorOpen, clear, frameWindow, sessionFrameSlug, toast]);
+
+  // Always-mounted customize-request forwarder: the chip's Customize link posts
+  // this from inside the iframe. Forward it to the shell as a single internal
+  // signal so InspectorPanel (which owns the dialog/toast/slug) can run the flow.
+  // Lives outside the picking effect so a visible chip stays functional even if
+  // picking was toggled off (Escape / crosshair click) while the chip is still up.
+  useEffect(() => {
+    function onCustomizeMessage(e: MessageEvent) {
+      const data = e.data;
+      if (!data || typeof data !== "object") return;
+      if ((data as { type?: unknown }).type === "arcade-studio:customize-request") {
+        window.dispatchEvent(new CustomEvent("arcade-studio:customize-request"));
+      }
+    }
+    window.addEventListener("message", onCustomizeMessage);
+    return () => window.removeEventListener("message", onCustomizeMessage);
+  }, []);
 
   function onIframeLoad() {
     if (phase !== "running") return;
