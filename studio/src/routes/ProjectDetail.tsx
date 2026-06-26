@@ -195,7 +195,11 @@ function ProjectDetailShell({
     async (id: string) => {
       const block = blocks.find((b) => b.id === id);
       if (!block) return;
-      await postEditUndo(routeKey, block.frameSlug);
+      const result = await postEditUndo(routeKey, block.frameSlug);
+      if (!result.ok) {
+        console.warn(`Undo failed for block ${id} (frame ${block.frameSlug})`);
+        return;
+      }
       takePendingBlockPreamble(id);
       setStatus(id, "undone");
     },

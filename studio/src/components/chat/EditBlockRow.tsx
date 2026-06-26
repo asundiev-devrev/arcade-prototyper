@@ -1,7 +1,8 @@
 import type { EditBlock } from "../../hooks/editBlocksContext";
 
-export function EditBlockRow({ block, onUndo, onApply, onDiscard }: {
+export function EditBlockRow({ block, undoable = false, onUndo, onApply, onDiscard }: {
   block: EditBlock;
+  undoable?: boolean;
   onUndo: (id: string) => void;
   onApply: (id: string) => void;
   onDiscard: (id: string) => void;
@@ -20,7 +21,7 @@ export function EditBlockRow({ block, onUndo, onApply, onDiscard }: {
         <span>{block.label}</span>
       </span>
       <span style={{ display: "flex", gap: 6, flex: "none" }}>
-        {block.kind === "instant" && block.status === "applied" && (
+        {block.kind === "instant" && block.status === "applied" && undoable && (
           <button type="button" onClick={() => onUndo(block.id)} style={btn}>Undo</button>
         )}
         {block.kind === "ai" && block.status === "pending" && (

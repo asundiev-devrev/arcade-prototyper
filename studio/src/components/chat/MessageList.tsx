@@ -12,6 +12,22 @@ import { ChimeInNote } from "./computer/ChimeInNote";
 import { EditBlockRow } from "./EditBlockRow";
 import type { EditBlock } from "../../hooks/editBlocksContext";
 
+/** Returns true if this block is the newest applied instant block for its frame
+ *  (LIFO-consistent undo eligibility). Only that block may show an actionable Undo. */
+function isNewestAppliedInstantForFrame(block: EditBlock, all: EditBlock[]): boolean {
+  if (block.kind !== "instant" || block.status !== "applied") return false;
+  // Walk backward from the end to find the last applied instant for this frame.
+  for (let i = all.length - 1; i >= 0; i--) {
+    const candidate = all[i];
+    if (candidate.frameSlug === block.frameSlug &&
+        candidate.kind === "instant" &&
+        candidate.status === "applied") {
+      return candidate.id === block.id;
+    }
+  }
+  return false;
+}
+
 function toolIcon(tool: string): string {
   if (tool === "Read") return "↘";
   if (tool === "Write") return "✎";
@@ -338,6 +354,7 @@ export function MessageList({
             <EditBlockRow
               key={block.id}
               block={block}
+              undoable={isNewestAppliedInstantForFrame(block, editBlocks)}
               onUndo={(id) => onUndoBlock?.(id)}
               onApply={(id) => onApplyBlock?.(id)}
               onDiscard={(id) => onDiscardBlock?.(id)}
