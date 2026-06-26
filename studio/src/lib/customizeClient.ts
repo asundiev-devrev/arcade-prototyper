@@ -43,3 +43,19 @@ export function serializeTargetToJsx(iframe: HTMLIFrameElement, target: Customiz
   if (!fiber) throw new Error("customize: target component fiber not found");
   return sljToJsx(h.walkFrom(fiber));
 }
+
+/** A short unique token used to re-find a just-customized element after reload. */
+export function newCustomizeToken(): string {
+  return "cz-" + Math.random().toString(36).slice(2, 8);
+}
+
+/** Insert data-arcade-customized="<token>" on the outermost JSX element of `jsx`.
+ *  Matches the first `<TagName` (optionally after leading whitespace) and inserts
+ *  the attr right after the tag name. Returns `jsx` unchanged if no root tag. */
+export function markJsxRoot(jsx: string, token: string): string {
+  // first `<` + tag name (letters/numbers/dot for Foo.Bar), capture up to end of tag name
+  const m = /^(\s*<)([A-Za-z][\w.]*)/.exec(jsx);
+  if (!m) return jsx;
+  const insertAt = m[1].length + m[2].length; // after `<TagName`
+  return jsx.slice(0, insertAt) + ` data-arcade-customized="${token}"` + jsx.slice(insertAt);
+}
