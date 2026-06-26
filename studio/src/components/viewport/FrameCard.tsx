@@ -161,10 +161,13 @@ export function FrameCard({
   // run a short bounded retry as a fallback in case the load fires before this
   // arms or the reload is debounced. The picker's pick-marked is idempotent.
   const armedTokenRef = useRef<string | null>(null);
+  const reselectIvRef = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
     function onArm(e: Event) {
       const detail = (e as CustomEvent).detail as { frameSlug: string; token: string };
       if (!detail || detail.frameSlug !== frame.slug) return;
+      // Clear any prior interval before starting a new one (rapid re-customize).
+      if (reselectIvRef.current) clearInterval(reselectIvRef.current);
       // Remember the token so the iframe onLoad can fire pick-marked once the
       // reloaded document is live.
       armedTokenRef.current = detail.token;
@@ -177,11 +180,18 @@ export function FrameCard({
       let tries = 0;
       const iv = setInterval(() => {
         post();
-        if (++tries >= 6) { clearInterval(iv); armedTokenRef.current = null; }
+        if (++tries >= 6) {
+          clearInterval(reselectIvRef.current!);
+          reselectIvRef.current = null;
+        }
       }, 250);
+      reselectIvRef.current = iv;
     }
     window.addEventListener("arcade-studio:armReselect", onArm);
-    return () => window.removeEventListener("arcade-studio:armReselect", onArm);
+    return () => {
+      window.removeEventListener("arcade-studio:armReselect", onArm);
+      if (reselectIvRef.current) clearInterval(reselectIvRef.current);
+    };
   }, [frame.slug]);
 
   function onIframeLoad() {
@@ -191,6 +201,12 @@ export function FrameCard({
       iframeRef.current?.contentWindow?.postMessage(
         { type: "arcade-studio:pick-marked", token: armedTokenRef.current }, "*",
       );
+      // Clear the token and interval once the onLoad belt successfully fires.
+      armedTokenRef.current = null;
+      if (reselectIvRef.current) {
+        clearInterval(reselectIvRef.current);
+        reselectIvRef.current = null;
+      }
     }
     if (phase !== "running") return;
     const wrapper = wipeWrapperRef.current;
