@@ -105,9 +105,11 @@ vi.mock("@xorkavi/arcade-gen", async () => {
       React.createElement("button", rest, children),
   };
   return {
+    Button: passthrough("button"),
     IconButton: passthrough("button"),
     Tooltip: ({ children }: any) => React.createElement("div", null, children),
     ToggleGroup,
+    useToast: () => ({ toast: () => {}, dismiss: () => {} }),
   };
 });
 

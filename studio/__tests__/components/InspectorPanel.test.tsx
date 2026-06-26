@@ -6,6 +6,7 @@ import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 vi.mock("@xorkavi/arcade-gen", () => ({
   Button: ({ children, onClick, disabled }: any) =>
     React.createElement("button", { onClick, disabled }, children),
+  useToast: () => ({ toast: () => {}, dismiss: () => {} }),
 }));
 
 import { InspectorPanel } from "../../src/components/inspector/InspectorPanel";

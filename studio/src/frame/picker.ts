@@ -241,6 +241,11 @@ function onParentMessage(e: MessageEvent) {
   const t = (data as { type?: unknown }).type;
   if (t === "arcade-studio:frame-pick-start") activate();
   else if (t === "arcade-studio:frame-pick-stop") deactivate();
+  // The shell decides whether the just-picked element is a shared component
+  // (its source isn't in this frame's index.tsx) and asks us to surface the
+  // Customize chip on the current selection — or to hide it on clear.
+  else if (t === "arcade-studio:show-component-chip") overlay.showChipOnSelected();
+  else if (t === "arcade-studio:hide-component-chip") overlay.hideComponentChip();
 }
 
 if (typeof window !== "undefined") {

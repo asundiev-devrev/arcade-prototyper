@@ -4,6 +4,7 @@ import type { Frame } from "../../../server/types";
 import { useEditSession } from "../../hooks/editSessionContext";
 import type { TurnPhase } from "../../hooks/chatStreamReducer";
 import { SaveComponentModal } from "../assets/SaveComponentModal";
+import { isInFrame } from "../../lib/visualEditClient";
 
 const FRAME_WIDTH_MIN = 320;
 const FRAME_WIDTH_MAX = 2560;
@@ -116,8 +117,21 @@ export function FrameCard({
           }
           addOrFocus(selection, frame.slug, win);
           setInspectorOpen(true);
+          // A picked element whose source isn't this frame's own index.tsx came
+          // from a shared prebuilt component. Surface the Customize chip on it;
+          // otherwise make sure any stale chip is gone.
+          const isComponent = !isInFrame(selection.file, frame.slug);
+          win?.postMessage(
+            { type: isComponent ? "arcade-studio:show-component-chip" : "arcade-studio:hide-component-chip" },
+            "*",
+          );
         }
         // NOTE: do NOT setPicking(false) — bulk picking stays active.
+      } else if (t === "arcade-studio:customize-request") {
+        // The chip's Customize link posted this from inside the iframe. Forward
+        // it to the shell as a single internal signal so the InspectorPanel
+        // (which owns the dialog/toast/slug) can run the flow.
+        window.dispatchEvent(new CustomEvent("arcade-studio:customize-request"));
       } else if (t === "arcade-studio:frame-pick-cancelled") {
         const reason = (data as { reason?: string }).reason;
         if (reason && reason !== "escape" && reason !== "no-target") {

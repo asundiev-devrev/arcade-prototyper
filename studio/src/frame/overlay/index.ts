@@ -71,12 +71,24 @@ export function clear(): void {
   hideSelect();
   hideAxisGuides();
   hideDistance();
+  hideComponentChip();
   selectedEl = null;
   hoveredEl = null;
 }
 
 export function isOverlayElement(el: HTMLElement): boolean {
   return isOverlayNode(el);
+}
+
+/** Show the "💠 Component · Customize" chip anchored to the current selection.
+ *  No-op when nothing is selected. */
+export function showChipOnSelected(): void {
+  if (selectedEl) showComponentChip(selectedEl);
+}
+
+/** Hide the component chip (called when the selection clears / isn't a component). */
+export function hideChip(): void {
+  hideComponentChip();
 }
 
 export { showComponentChip, hideComponentChip };

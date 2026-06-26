@@ -1,4 +1,6 @@
 import type { CustomizeTarget } from "../frame/resolveCustomizeTarget";
+import { buildWalkContext } from "./exportFrameToSlj";
+import { sljToJsx } from "../export/sljToJsx";
 
 export interface CustomizePayload {
   frameSlug: string; targetComponentName: string; line: number; column: number; jsx: string;
@@ -26,7 +28,18 @@ export async function postCustomizeUndo(slug: string, frameSlug: string): Promis
   } catch { return { ok: false }; }
 }
 
-// serializeTargetToSlj(iframe, target) — fiber-locate + walk
-// Added in Task 9 alongside the UI wiring, since it requires a live React tree
-// and is integration-tested via the manual gate (not unit-testable).
-// Reuses buildWalkContext() refactored from exportFrameToSlj.ts.
+/**
+ * Locate the target component's fiber in the live iframe and serialize its
+ * rendered subtree to a JSX string. Reuses buildWalkContext() (the shared
+ * reader/ctx/rootFiber construction refactored out of exportFrameToSlj.ts) so
+ * Customize and Figma-export walk the tree the exact same way.
+ *
+ * Throws if the target fiber can't be found. Integration-tested via the manual
+ * gate — a live React tree isn't unit-testable.
+ */
+export function serializeTargetToJsx(iframe: HTMLIFrameElement, target: CustomizeTarget): string {
+  const h = buildWalkContext(iframe);
+  const fiber = h.findComponentFiber(target.componentName, target.line, target.column);
+  if (!fiber) throw new Error("customize: target component fiber not found");
+  return sljToJsx(h.walkFrom(fiber));
+}

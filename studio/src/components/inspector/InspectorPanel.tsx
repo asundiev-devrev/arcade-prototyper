@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { Button } from "@xorkavi/arcade-gen";
+import { Button, useToast } from "@xorkavi/arcade-gen";
 import {
   useEditSession, type StyleSnapshot, type PendingEdits, type EditedElement,
   TOKEN_PREFIX, isTokenPending, tokenClass,
 } from "../../hooks/editSessionContext";
 import { buildVisualEditPreamble } from "../../lib/visualEditPreamble";
 import { toElementEdits, postVisualEdit, isInFrame, buildComponentEditPreamble } from "../../lib/visualEditClient";
+import { useDialogs } from "../feedback/Dialogs";
+import { resolveCustomizeTarget } from "../../frame/resolveCustomizeTarget";
+import { buildCustomizePayload, postCustomize, postCustomizeUndo, serializeTargetToJsx } from "../../lib/customizeClient";
 import { fieldValue, toNumberInput, fromNumberInput, Field, NumberField, INPUT_COMPACT, GRID_2, SegmentedToggle } from "./inspectorControls";
 import { Section } from "./Section";
 import { LayoutSection } from "./LayoutSection";
@@ -18,6 +21,15 @@ import { IconSwapSection } from "./IconSwapSection";
 
 const MIN_W = 280, MAX_W = 560;
 const RAW_LINE_INDENT = 22; // swatch 16 + gap 6
+
+// Approved Customize copy — keep verbatim.
+const CUSTOMIZE_LOCKED_NOTE = "💠 Parts of this are prebuilt. Customize to change anything inside.";
+const CUSTOMIZE_CONFIRM_TITLE = "Customize this component?";
+const CUSTOMIZE_CONFIRM_BODY =
+  "It becomes fully editable in this screen only. The original stays the same everywhere else.";
+const CUSTOMIZE_SUCCESS = "✓ Now fully editable.";
+const CUSTOMIZE_FALLBACK =
+  "Couldn't customize this automatically — describe the change in chat instead.";
 
 function countChanges(e: EditedElement): number {
   return Object.values(e.pending).filter((v) => v !== undefined).length;
@@ -96,6 +108,8 @@ export function InspectorPanel({
     batch, focusedEditId, frameSlug, frameWindow, inspectorOpen, inspectorWidth,
     setField, resetField, removeElement, focus, clear, setInspectorWidth,
   } = useEditSession();
+  const { toast } = useToast();
+  const { confirm } = useDialogs();
   const catalogState = useAssetsCatalog();
   const catalog = catalogState.status === "ready" ? catalogState.catalog : null;
   const [isResizing, setIsResizing] = useState(false);
@@ -114,6 +128,59 @@ export function InspectorPanel({
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
   }, [setField]);
+
+  // Customize flow: the component chip (inside the frame iframe) posts a
+  // customize-request, which FrameCard re-dispatches as a shell CustomEvent.
+  // We own the dialog/toast/network here. A ref keeps the listener mounted once
+  // while always reading the current selection/slug.
+  const customizeRef = useRef<() => void>(() => {});
+  customizeRef.current = async function runCustomize() {
+    const focused = batch.find((e) => e.selection.editId === focusedEditId) ?? null;
+    const sel = focused?.selection;
+    const targetFrame = frameSlug ?? "";
+    if (!sel || !targetFrame) { toast({ title: CUSTOMIZE_FALLBACK, intent: "alert" }); return; }
+
+    // 1. Resolve the outermost owner authored in THIS frame's index.tsx.
+    const target = resolveCustomizeTarget(sel.ownerChain, targetFrame);
+    if (!target) { toast({ title: CUSTOMIZE_FALLBACK, intent: "alert" }); return; }
+
+    // 2. Confirm (verbatim copy).
+    const ok = await confirm({
+      title: CUSTOMIZE_CONFIRM_TITLE,
+      description: CUSTOMIZE_CONFIRM_BODY,
+      confirmLabel: "Customize",
+      cancelLabel: "Cancel",
+    });
+    if (!ok) return;
+
+    // 3. Serialize the live rendered subtree → JSX, then POST the splice.
+    try {
+      const iframe = (frameWindow?.frameElement ?? null) as HTMLIFrameElement | null;
+      if (!iframe) { toast({ title: CUSTOMIZE_FALLBACK, intent: "alert" }); return; }
+      const jsx = serializeTargetToJsx(iframe, target);
+      const r = await postCustomize(slug, buildCustomizePayload(target, jsx, targetFrame));
+      if (r.ok) {
+        // 4. Frame hot-reloads from disk. Drop the inspector selection and offer Undo.
+        clear();
+        toast({
+          title: CUSTOMIZE_SUCCESS,
+          intent: "success",
+          action: { label: "Undo", onClick: () => { void postCustomizeUndo(slug, targetFrame); } },
+        });
+      } else {
+        // 5. Server declined — no file change happened. Fall back to chat.
+        toast({ title: CUSTOMIZE_FALLBACK, intent: "alert" });
+      }
+    } catch {
+      // serialize / network threw — leave the frame untouched, fall back to chat.
+      toast({ title: CUSTOMIZE_FALLBACK, intent: "alert" });
+    }
+  };
+  useEffect(() => {
+    const onCustomize = () => { void customizeRef.current(); };
+    window.addEventListener("arcade-studio:customize-request", onCustomize);
+    return () => window.removeEventListener("arcade-studio:customize-request", onCustomize);
+  }, []);
 
   // Fetch kit props for uppercase component names
   useEffect(() => {
@@ -364,6 +431,11 @@ export function InspectorPanel({
                       <span style={{ fontSize: 11, color: "var(--fg-neutral-subtle)" }}>
                         Inner styles are part of this component. Use "Ask AI to customize" to change them.
                       </span>
+                      {!isInFrame(focused.selection.file, frameSlug ?? "") && (
+                        <span style={{ fontSize: 11, color: "var(--fg-neutral-subtle)", lineHeight: 1.45 }}>
+                          {CUSTOMIZE_LOCKED_NOTE}
+                        </span>
+                      )}
                       <Button variant="tertiary" onClick={() => {
                         const frameRel = focused.selection.file.split("/frames/").pop() ?? focused.selection.file;
                         const name = focused.selection.componentName;
