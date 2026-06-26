@@ -17,6 +17,11 @@ const SIDE_PREFIX: Record<string, string> = {
   gap: "gap",
 };
 export const SPACE_FIELDS: ReadonlySet<string> = new Set(Object.keys(SIDE_PREFIX));
+const SIZE_PREFIX: Record<string, string> = {
+  width: "w", height: "h", minWidth: "min-w", maxWidth: "max-w",
+  minHeight: "min-h", maxHeight: "max-h",
+};
+const SIZE_FIELDS: ReadonlySet<string> = new Set(Object.keys(SIZE_PREFIX));
 
 function px(value: string): number | null {
   const m = /^(-?\d+(?:\.\d+)?)px$/.exec(value.trim());
@@ -33,16 +38,26 @@ export function pxToRadius(n: number): string | null {
 export function translateField(field: string, value: string): string | null {
   if (SPACE_FIELDS.has(field)) {
     const n = px(value);
-    if (n === null) return null;
+    if (n === null) return null;            // non-px junk → bail
     const step = pxToSpace(n);
-    return step === null ? null : `${SIDE_PREFIX[field]}-${step}`;
+    return step !== null ? `${SIDE_PREFIX[field]}-${step}` : `${SIDE_PREFIX[field]}-[${n}px]`;
+  }
+  if (SIZE_FIELDS.has(field)) {
+    const n = px(value);
+    if (n === null) return null;
+    return `${SIZE_PREFIX[field]}-[${n}px]`;  // sizing: always arbitrary (scale steps are rare/ambiguous)
+  }
+  if (field === "fontSize") {
+    const n = px(value);
+    if (n === null) return null;
+    return `text-[${n}px]`;
   }
   if (field === "borderRadius") {
     const n = px(value);
     if (n === null) return null;
     const r = pxToRadius(n);
-    if (r === null) return null;
-    return r === "" ? "rounded" : `rounded-${r}`;
+    if (r !== null) return r === "" ? "rounded" : `rounded-${r}`;
+    return `rounded-[${n}px]`;
   }
   if (field === "fontWeight") return WEIGHTS[value.trim()] ?? null;
   if (field === "textAlign") {
@@ -58,9 +73,9 @@ export function translateField(field: string, value: string): string | null {
     const f = Number(value);
     if (!Number.isFinite(f)) return null;
     const pct = Math.round(f * 100);
-    return pct % 5 === 0 && pct >= 0 && pct <= 100 ? `opacity-${pct}` : null;
+    if (pct < 0 || pct > 100) return null;
+    return pct % 5 === 0 ? `opacity-${pct}` : `opacity-[${f}]`;
   }
-  // fontSize, width, height, minWidth, maxWidth, minHeight, maxHeight, display,
-  // flexDirection → bail to AI in Phase A.
+  // display / flexDirection are enum classes handled by the caller's enum path.
   return null;
 }

@@ -25,9 +25,24 @@ function perSideFamily(targetClass: string): RegExp | null {
   return new RegExp(`^${m[1]}-`);
 }
 
+function sizingFamily(targetClass: string): RegExp | null {
+  const m = /^(min-w|max-w|min-h|max-h|w|h)-/.exec(targetClass);
+  if (!m) return null;
+  return new RegExp(`^${m[1]}-`);
+}
+
+// font-size arbitrary: text-[..] only (brackets), distinct from text-( / text-word
+function fontSizeFamily(targetClass: string): RegExp | null {
+  return /^text-\[/.test(targetClass) ? /^text-(\[|sm$|base$|lg$|xl$|[0-9])/ : null;
+}
+
 export function familyRegexFor(targetClass: string): RegExp | null {
   const perSide = perSideFamily(targetClass);
   if (perSide) return perSide;
+  const sizing = sizingFamily(targetClass);
+  if (sizing) return sizing;
+  const fontSize = fontSizeFamily(targetClass);
+  if (fontSize) return fontSize;
   for (const { when, family } of FAMILIES) {
     if (when.test(targetClass)) return family;
   }

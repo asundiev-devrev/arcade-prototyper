@@ -43,10 +43,10 @@ describe("translateField", () => {
     expect(translateField("fontStyle", "normal")).toBe("not-italic");
     expect(translateField("opacity", "0.5")).toBe("opacity-50");
   });
-  it("bails (null) for unsupported fields & off-scale values", () => {
-    expect(translateField("fontSize", "18px")).toBeNull();   // typography → AI
-    expect(translateField("width", "247px")).toBeNull();     // sizing → AI in v1
-    expect(translateField("paddingTop", "23px")).toBeNull(); // off-grid
-    expect(translateField("opacity", "0.37")).toBeNull();    // not /5 step
+  it("emits arbitrary values for off-scale numeric fields", () => {
+    expect(translateField("fontSize", "18px")).toBe("text-[18px]");  // now arbitrary
+    expect(translateField("width", "247px")).toBe("w-[247px]");      // now arbitrary
+    expect(translateField("paddingTop", "23px")).toBe("pt-[23px]");  // now arbitrary off-grid
+    expect(translateField("opacity", "0.37")).toBe("opacity-[0.37]"); // now arbitrary off /5 step
   });
 });

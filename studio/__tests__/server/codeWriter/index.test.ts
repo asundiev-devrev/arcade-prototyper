@@ -44,11 +44,11 @@ describe("applyEditsToSource", () => {
     expect(r.reason).toBe("spacing-shorthand-conflict");
   });
 
-  it("bails on an off-scale raw value", () => {
+  it("applies off-scale spacing as arbitrary value", () => {
     const src = srcWith(`<div className="flex">hi</div>`);
     const r = applyEditsToSource(src, edit({ fields: [{ field: "paddingTop", value: "23px" }] }));
-    expect(r.ok).toBe(false);
-    expect(r.reason).toBe("unmappable-field:paddingTop");
+    expect(r.ok).toBe(true);
+    expect(r.source).toContain("pt-[23px]");
   });
 
   it("bails on dynamic className", () => {
