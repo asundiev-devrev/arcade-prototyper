@@ -182,6 +182,18 @@ function onClick(e: MouseEvent) {
     postCancel("no-target");
     return;
   }
+  // Ignore clicks on our own overlay chrome (the Component chip and its
+  // "Customize" link). The picker stays active for bulk picking, so its
+  // document-level capture listener also fires on chip clicks — those are raw
+  // DOM nodes with no React fiber and must NOT be treated as a failed pick.
+  // The click target may be the chip itself OR a child (the <u>Customize</u>),
+  // so check ancestors via closest(), not just strict identity.
+  if (
+    overlay.isOverlayElement(target as HTMLElement) ||
+    (target as HTMLElement).closest?.("[data-arcade-component-chip]")
+  ) {
+    return;
+  }
   const fiber = getFiberFromNode(target);
   if (!fiber) {
     postCancel("no-fiber");
