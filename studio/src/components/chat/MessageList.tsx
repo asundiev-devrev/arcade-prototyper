@@ -13,9 +13,18 @@ import { EditBlockRow } from "./EditBlockRow";
 import type { EditBlock } from "../../hooks/editBlocksContext";
 
 /** Returns true if this block is the newest applied instant block for its frame
- *  (LIFO-consistent undo eligibility). Only that block may show an actionable Undo. */
-function isNewestAppliedInstantForFrame(block: EditBlock, all: EditBlock[]): boolean {
+ *  (LIFO-consistent undo eligibility). Only that block may show an actionable Undo.
+ *  EXPORTED so the test guards the shipped function, not a copy. */
+export function isNewestAppliedInstantForFrame(
+  block: EditBlock,
+  all: EditBlock[],
+  framesWithAiApply?: Set<string>,
+): boolean {
   if (block.kind !== "instant" || block.status !== "applied") return false;
+  // If an AI Apply has occurred for this frame, instant Undo is gated (the
+  // server's undo snapshot stack doesn't capture agent edits, so an instant
+  // Undo could silently revert the AI's work).
+  if (framesWithAiApply?.has(block.frameSlug)) return false;
   // Walk backward from the end to find the last applied instant for this frame.
   for (let i = all.length - 1; i >= 0; i--) {
     const candidate = all[i];
@@ -235,6 +244,7 @@ export function MessageList({
   onUndoBlock,
   onApplyBlock,
   onDiscardBlock,
+  framesWithAiApply,
 }: {
   history: ChatMessage[];
   pendingPrompt?: string;
@@ -251,6 +261,7 @@ export function MessageList({
   onUndoBlock?: (id: string) => void;
   onApplyBlock?: (id: string) => void;
   onDiscardBlock?: (id: string) => void;
+  framesWithAiApply?: Set<string>;
 }) {
   const hasActivity = !!currentItems && currentItems.length > 0;
   const liveTools = (currentItems ?? [])
@@ -354,7 +365,7 @@ export function MessageList({
             <EditBlockRow
               key={block.id}
               block={block}
-              undoable={isNewestAppliedInstantForFrame(block, editBlocks)}
+              undoable={isNewestAppliedInstantForFrame(block, editBlocks, framesWithAiApply)}
               onUndo={(id) => onUndoBlock?.(id)}
               onApply={(id) => onApplyBlock?.(id)}
               onDiscard={(id) => onDiscardBlock?.(id)}

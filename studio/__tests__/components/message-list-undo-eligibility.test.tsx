@@ -1,22 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
 import type { EditBlock } from "../../src/hooks/editBlocksContext";
-
-/** Helper extracted from MessageList for testing.
- *  Returns true if this block is the newest applied instant block for its frame. */
-function isNewestAppliedInstantForFrame(block: EditBlock, all: EditBlock[]): boolean {
-  if (block.kind !== "instant" || block.status !== "applied") return false;
-  // Walk backward from the end to find the last applied instant for this frame.
-  for (let i = all.length - 1; i >= 0; i--) {
-    const candidate = all[i];
-    if (candidate.frameSlug === block.frameSlug &&
-        candidate.kind === "instant" &&
-        candidate.status === "applied") {
-      return candidate.id === block.id;
-    }
-  }
-  return false;
-}
+import { isNewestAppliedInstantForFrame } from "../../src/components/chat/MessageList";
 
 describe("MessageList undo eligibility (LIFO-consistent)", () => {
   it("single applied instant block for a frame is undoable", () => {
@@ -84,5 +69,17 @@ describe("MessageList undo eligibility (LIFO-consistent)", () => {
     expect(isNewestAppliedInstantForFrame(blocks[1], blocks)).toBe(false); // ai
     expect(isNewestAppliedInstantForFrame(blocks[2], blocks)).toBe(true);  // newest home
     expect(isNewestAppliedInstantForFrame(blocks[3], blocks)).toBe(true);  // newest settings
+  });
+
+  it("AI-applied frame gates instant Undo for that frame", () => {
+    const blocks: EditBlock[] = [
+      { id: "b1", label: "x", kind: "instant", status: "applied", frameSlug: "home" },
+      { id: "b2", label: "y", kind: "instant", status: "applied", frameSlug: "settings" },
+    ];
+    const framesWithAiApply = new Set(["home"]);
+    // home's newest instant is NOT undoable because an AI Apply occurred for home.
+    expect(isNewestAppliedInstantForFrame(blocks[0], blocks, framesWithAiApply)).toBe(false);
+    // settings had no AI Apply → its newest instant is still undoable.
+    expect(isNewestAppliedInstantForFrame(blocks[1], blocks, framesWithAiApply)).toBe(true);
   });
 });

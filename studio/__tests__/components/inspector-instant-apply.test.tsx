@@ -140,4 +140,42 @@ describe("inspector instant-apply model", () => {
     expect(ai!.status).toBe("pending");
     expect(onSend).not.toHaveBeenCalled();
   });
+
+  it("successful instant edit clears pending → move buttons re-enable", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(() => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ ok: true }),
+    }));
+    vi.stubGlobal("fetch", fetchMock as any);
+
+    const { container } = renderHarness(vi.fn());
+    fireEvent.click(screen.getByText("open1"));
+
+    // Before the edit, move buttons are enabled (no pending changes).
+    let moveUp = screen.getByLabelText("Move element up") as HTMLButtonElement;
+    expect(moveUp.disabled).toBe(false);
+
+    // Make an edit → pending delta exists.
+    const widthInput = screen.getByLabelText("W") as HTMLInputElement;
+    fireEvent.change(widthInput, { target: { value: "100" } });
+
+    // After the edit settles (before the deterministic write completes), the
+    // pending entry exists and totalChanges > 0, so move buttons should be
+    // disabled. But the test renders synchronously and the `setField` that
+    // populates `pending` happens in the change handler — by the time we query
+    // the button, the state hasn't re-rendered yet. Instead, we verify the
+    // AFTER state: once the deterministic write completes, the pending entry
+    // is cleared and move buttons re-enable.
+
+    // Advance past the debounce → deterministic write succeeds and clears pending.
+    await vi.advanceTimersByTimeAsync(400);
+
+    // Move buttons should still be enabled (totalChanges drops to 0 after the
+    // successful write cleared the pending delta). This is the fix: before
+    // the patch, totalChanges would stay > 0 forever because applyFieldEdit
+    // never called resetField on success.
+    moveUp = screen.getByLabelText("Move element up") as HTMLButtonElement;
+    expect(moveUp.disabled).toBe(false);
+  });
 });

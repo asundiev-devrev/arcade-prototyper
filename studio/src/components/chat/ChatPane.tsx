@@ -27,6 +27,7 @@ export function ChatPane({
   onUndoBlock,
   onApplyBlock,
   onDiscardBlock,
+  framesWithAiApply,
 }: {
   projectSlug: string;
   history: ChatMessage[];
@@ -37,6 +38,7 @@ export function ChatPane({
   onUndoBlock?: (id: string) => void;
   onApplyBlock?: (id: string) => void;
   onDiscardBlock?: (id: string) => void;
+  framesWithAiApply?: Set<string>;
 }) {
   const { state, send, retry, cancel } = useChatStreamContext();
   const { blocks } = useEditBlocks();
@@ -88,6 +90,7 @@ export function ChatPane({
         onUndoBlock={onUndoBlock}
         onApplyBlock={onApplyBlock}
         onDiscardBlock={onDiscardBlock}
+        framesWithAiApply={framesWithAiApply}
       />
       {state.error && state.errorKind === "auth" && <AuthExpiredNotice />}
       {state.error && state.errorKind !== "auth" && (

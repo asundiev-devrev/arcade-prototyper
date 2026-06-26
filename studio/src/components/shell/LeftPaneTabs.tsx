@@ -20,6 +20,7 @@ interface Props {
   onUndoBlock: (id: string) => void;
   onApplyBlock: (id: string) => void;
   onDiscardBlock: (id: string) => void;
+  framesWithAiApply?: Set<string>;
 }
 
 export function LeftPaneTabs(props: Props) {
@@ -39,6 +40,7 @@ export function LeftPaneTabs(props: Props) {
           onUndoBlock={props.onUndoBlock}
           onApplyBlock={props.onApplyBlock}
           onDiscardBlock={props.onDiscardBlock}
+          framesWithAiApply={props.framesWithAiApply}
         />
       </div>
       <div style={{ flex: 1, minHeight: 0, display: tab === "assets" ? "block" : "none", overflow: "hidden" }}>

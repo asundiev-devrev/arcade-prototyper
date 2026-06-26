@@ -143,6 +143,11 @@ function ProjectDetailShell({
   // frames. Poll while mounted so a background drift check (which lands a
   // few seconds after a turn ends) surfaces without a manual refresh.
   const [chimeIns, setChimeIns] = useState<ChimeIn[]>([]);
+  // Track frames for which an AI Apply has occurred this session. Once an AI
+  // Apply runs for a given frame, instant Undo is gated for that frame (the
+  // server undo snapshot stack doesn't capture agent edits, so an instant Undo
+  // could silently revert the AI's work). Simple ref: no re-render needed.
+  const framesWithAiApplyRef = useRef<Set<string>>(new Set());
 
   const refreshChimeIns = useCallback(async () => {
     try {
@@ -208,14 +213,20 @@ function ProjectDetailShell({
 
   // Apply a pending AI block: send the stashed scoped preamble to the agent and
   // flip the block to working. (The reading also evicts the side-map entry.)
+  // Also record this frame in the AI-applied set so instant Undo becomes gated.
   const handleApplyBlock = useCallback(
     (id: string) => {
       const preamble = takePendingBlockPreamble(id);
       if (!preamble) return;
+      // Mark this frame as having had an AI Apply so instant Undo is gated.
+      const block = blocks.find((b) => b.id === id);
+      if (block && block.kind === "ai") {
+        framesWithAiApplyRef.current.add(block.frameSlug);
+      }
       source.send?.(preamble);
       setStatus(id, "working");
     },
-    [source, setStatus],
+    [source, setStatus, blocks],
   );
 
   // Discard a pending AI block: drop it from the stream and evict its preamble.
@@ -429,6 +440,7 @@ function ProjectDetailShell({
             onUndoBlock={handleUndoBlock}
             onApplyBlock={handleApplyBlock}
             onDiscardBlock={handleDiscardBlock}
+            framesWithAiApply={framesWithAiApplyRef.current}
           />
           {chatOpen && (
             <div

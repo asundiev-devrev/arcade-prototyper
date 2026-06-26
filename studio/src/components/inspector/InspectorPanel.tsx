@@ -313,6 +313,12 @@ export function InspectorPanel({
     const det = await postVisualEdit(slug, buildSingleEdit(sel, field, value, targetFrame));
     if (det.ok) {
       addBlock({ label: humanLabel(field, value), kind: "instant", status: "applied", frameSlug: targetFrame });
+      // Deterministic write succeeded → the edit is now applied on disk, so clear
+      // the pending delta for this field. This drops it from totalChanges (which
+      // gates the move ↑/↓ buttons), so once all edits settle the buttons
+      // re-enable. Only clear on success; a bail (pending AI block) must keep
+      // the pending entry since the change isn't applied yet.
+      resetField(sel.editId, field as any);
     } else {
       // Can't map deterministically → pending AI block. Stash a ready-to-send
       // preamble keyed by block id so Task 8's Apply can call onSend(...).
