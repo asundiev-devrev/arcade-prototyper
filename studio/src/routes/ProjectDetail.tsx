@@ -212,8 +212,9 @@ function ProjectDetailShell({
   );
 
   // Apply a pending AI block: send the stashed scoped preamble to the agent and
-  // flip the block to working. (The reading also evicts the side-map entry.)
-  // Also record this frame in the AI-applied set so instant Undo becomes gated.
+  // remove the block (it becomes a normal chat turn). (The reading also evicts
+  // the side-map entry.) Also record this frame in the AI-applied set so instant
+  // Undo becomes gated.
   const handleApplyBlock = useCallback(
     (id: string) => {
       const preamble = takePendingBlockPreamble(id);
@@ -224,9 +225,9 @@ function ProjectDetailShell({
         framesWithAiApplyRef.current.add(block.frameSlug);
       }
       source.send?.(preamble);
-      setStatus(id, "working");
+      removeBlock(id);
     },
-    [source, setStatus, blocks],
+    [source, removeBlock, blocks],
   );
 
   // Discard a pending AI block: drop it from the stream and evict its preamble.

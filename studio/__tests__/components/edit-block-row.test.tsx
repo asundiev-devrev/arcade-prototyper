@@ -21,7 +21,7 @@ describe("EditBlockRow", () => {
         undoable={false} onUndo={vi.fn()} onApply={vi.fn()} onDiscard={vi.fn()} />);
     expect(queryByText("Undo")).toBeNull();
   });
-  it("ai/pending shows Apply + Discard", () => {
+  it("ai/pending shows Apply + Discard; clicking Apply calls onApply with the block id", () => {
     const onApply = vi.fn(); const onDiscard = vi.fn();
     const { getByText } = render(
       <EditBlockRow block={{ id: "b3", label: "make responsive", kind: "ai", status: "pending", frameSlug: "f" }}
