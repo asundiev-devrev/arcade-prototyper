@@ -111,7 +111,17 @@ function resolveIconNode(node: HTMLElement): { el: Element; name: string } | nul
   return { el, name };
 }
 
-interface Entry { node: HTMLElement; original: StyleSnapshot; iconEl?: Element; iconOriginalHTML?: string; }
+interface Entry {
+  node: HTMLElement;
+  original: StyleSnapshot;
+  /** Each STYLE_FIELD's ORIGINAL inline-style value at capture time. Reset
+   *  restores these exact values (usually "" for class-styled elements, but the
+   *  author's real value for Figma-imported inline-styled elements) instead of
+   *  blanket-blanking — which would destroy source-authored inline styling. */
+  originalInline: Record<string, string>;
+  iconEl?: Element;
+  iconOriginalHTML?: string;
+}
 const edits = new Map<number, Entry>();
 const previewClasses = new Map<number, Set<string>>(); // editId -> classes we added
 let nextId = 1;
@@ -124,7 +134,11 @@ export function capture(node: HTMLElement): { editId: number; textEditable: bool
   const styles = readStyleSnapshot(node);
   const icon = resolveIconNode(node);
   if (!edits.has(editId)) {
-    edits.set(editId, { node, original: styles, iconEl: icon?.el, iconOriginalHTML: icon?.el.innerHTML });
+    const originalInline: Record<string, string> = {};
+    for (const field of [...STYLE_FIELDS, "borderStyle", "borderWidth"]) {
+      originalInline[field] = (node.style as unknown as Record<string, string>)[field] ?? "";
+    }
+    edits.set(editId, { node, original: styles, originalInline, iconEl: icon?.el, iconOriginalHTML: icon?.el.innerHTML });
   }
   return { editId, textEditable: isTextEditable(node), styles, iconCandidate: icon?.name };
 }
@@ -185,15 +199,15 @@ function applyPreviewIcon(editId: number, svg: string) {
   entry.iconEl.innerHTML = m ? m[1] : svg;
 }
 
-/** Reset one element's inline style overrides. NEVER touches textContent. */
+/** Reset one element's inline style overrides by restoring the ORIGINAL inline
+ *  values captured at pick time (NOT blanking — that would destroy source
+ *  inline styles on Figma-imported elements). NEVER touches textContent. */
 function resetOne(editId: number) {
   const entry = edits.get(editId);
   if (!entry) return;
-  for (const field of STYLE_FIELDS) {
-    (entry.node.style as unknown as Record<string, string>)[field] = "";
+  for (const field of [...STYLE_FIELDS, "borderStyle", "borderWidth"]) {
+    (entry.node.style as unknown as Record<string, string>)[field] = entry.originalInline[field] ?? "";
   }
-  entry.node.style.borderStyle = "";
-  entry.node.style.borderWidth = "";
   const cls = previewClasses.get(editId);
   if (cls) { for (const c of cls) entry.node.classList.remove(c); previewClasses.delete(editId); }
   if (entry.iconEl && entry.iconOriginalHTML != null) entry.iconEl.innerHTML = entry.iconOriginalHTML;
