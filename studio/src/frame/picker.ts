@@ -247,6 +247,17 @@ export function deactivate() {
   removeCursorStyle();
 }
 
+function pickMarked(token: string) {
+  const node = document.querySelector(`[data-arcade-customized="${token}"]`);
+  if (!node) return;
+  const fiber = getFiberFromNode(node as Element);
+  if (!fiber) return;
+  const sel = resolveSelection(fiber, node as HTMLElement);
+  if (!sel) return;
+  overlay.showSelection(node as HTMLElement);
+  postPicked(sel);
+}
+
 function onParentMessage(e: MessageEvent) {
   const data = e.data;
   if (!data || typeof data !== "object") return;
@@ -258,6 +269,10 @@ function onParentMessage(e: MessageEvent) {
   // Customize chip on the current selection — or to hide it on clear.
   else if (t === "arcade-studio:show-component-chip") overlay.showChipOnSelected();
   else if (t === "arcade-studio:hide-component-chip") overlay.hideComponentChip();
+  else if (t === "arcade-studio:pick-marked") {
+    const token = (data as { token?: unknown }).token;
+    if (typeof token === "string") pickMarked(token);
+  }
 }
 
 if (typeof window !== "undefined") {
