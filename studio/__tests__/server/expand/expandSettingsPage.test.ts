@@ -35,4 +35,11 @@ describe("expandSettingsPage", () => {
     expect(out).toContain(`>Hello<`);     // text, not the quoted string
     expect(out).not.toContain(`>"Hello"<`);
   });
+  it("renders empty node slots (no literal 'null') when sidebar/children absent", () => {
+    const out = expandSettingsPage({ title: `"X"` });
+    expect(out).not.toContain(`>null<`);
+    expect(out).not.toMatch(/<aside[^>]*>null<\/aside>/);
+    expect(out).toContain(`<aside`);   // chrome still present, just empty
+    expect(out).toContain(`<main`);
+  });
 });

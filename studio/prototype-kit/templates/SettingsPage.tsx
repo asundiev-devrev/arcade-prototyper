@@ -95,7 +95,7 @@ export function SettingsPage({
  * string literal), sidebar=`<NavSidebar …/>` (JSX expression source), etc.
  */
 export function expandSettingsPage(props: Record<string, string>): string {
-  const { title, subtitle, sidebar = "null", breadcrumb, actions, pageActions, titleAction, children = "null" } = props;
+  const { title, subtitle, sidebar, breadcrumb, actions, pageActions, titleAction, children } = props;
   // A string-literal prop ("X") becomes JSX text X; a JSX-expression prop stays {…}.
   const asText = (v: string | undefined): string => {
     if (v == null) return "";
