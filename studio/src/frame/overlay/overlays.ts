@@ -293,7 +293,7 @@ export function showComponentChip(el: HTMLElement): void {
     componentChip = document.createElement("div");
     componentChip.setAttribute("data-arcade-component-chip", "");
     componentChip.style.cssText =
-      "position:fixed;z-index:2147483646;display:inline-flex;align-items:center;gap:6px;" +
+      "position:fixed;z-index:2147483647;display:inline-flex;align-items:center;gap:6px;" +
       "font:600 11px system-ui,sans-serif;color:#7c3aed;background:#f3effe;border:1px solid #e3d9fb;" +
       "padding:3px 9px;border-radius:10px;pointer-events:auto;cursor:default;";
     const label = document.createElement("span");
@@ -301,7 +301,7 @@ export function showComponentChip(el: HTMLElement): void {
     const cust = document.createElement("u");
     cust.setAttribute("data-arcade-customize", "");
     cust.textContent = "Customize";
-    cust.style.cursor = "pointer";
+    cust.style.cssText = "cursor:pointer;pointer-events:auto;padding:2px 6px;margin:-2px -2px -2px 0;border-radius:6px;text-decoration:underline;";
     cust.addEventListener("click", (e) => {
       e.preventDefault(); e.stopPropagation();
       try { window.parent?.postMessage({ type: "arcade-studio:customize-request" }, "*"); } catch { /* noop */ }
@@ -309,9 +309,13 @@ export function showComponentChip(el: HTMLElement): void {
     componentChip.appendChild(label); componentChip.appendChild(cust);
     document.documentElement.appendChild(componentChip);
   }
-  // anchor top-left, sitting just above the selection box
-  componentChip.style.left = `${r.left}px`;
-  componentChip.style.top = `${Math.max(0, r.top - 24)}px`;
+  // Position: clamp to viewport top; place below the box if there's no room above.
+  const ABOVE = 24;
+  const top = r.top >= ABOVE ? r.top - ABOVE : r.bottom + 4;
+  componentChip.style.left = `${Math.max(0, r.left)}px`;
+  componentChip.style.top = `${Math.max(0, top)}px`;
+  componentChip.style.pointerEvents = "auto";
+  componentChip.style.zIndex = "2147483647";
 }
 
 export function hideComponentChip(): void {
