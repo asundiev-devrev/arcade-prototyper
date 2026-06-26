@@ -1,6 +1,10 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { writeBatch, type VisualEditRequest } from "../codeWriter/index";
 import { moveSibling } from "../codeWriter/reorder";
+import { frameDir } from "../paths";
+import { pushSnapshot } from "../editHistory";
 
 async function readJson(req: IncomingMessage): Promise<unknown> {
   let buf = "";
@@ -42,8 +46,15 @@ export function visualEditMiddleware() {
     if (typeof body.frameSlug !== "string" || !Array.isArray(body.edits) || body.edits.length === 0) {
       return send(res, 400, { ok: false, reason: "bad_request" });
     }
+
+    const slug = url.slice("/api/visual-edit/".length);
+
+    // Snapshot the pre-write source for one-step undo, then write.
     try {
+      const file = path.join(frameDir(slug, body.frameSlug), "index.tsx");
+      const before = await fs.readFile(file, "utf-8");
       const result = await writeBatch(body.frameSlug, body.edits);
+      if (result.ok) pushSnapshot(slug, body.frameSlug, before);
       send(res, 200, result);
     } catch (err) {
       send(res, 200, { ok: false, reason: "writer-threw" });
