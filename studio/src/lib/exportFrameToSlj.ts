@@ -71,6 +71,11 @@ export async function exportFrameToSlj(args: ExportArgs): Promise<SljDocument> {
 
   const reader: FiberReader = {
     hostTag: (f) => { const h = hostOf(f); return h ? h.tagName.toLowerCase() : null; },
+    hostClassName: (f) => {
+      const h = hostOf(f);
+      const c = h?.getAttribute?.("class");
+      return c && c.trim().length > 0 ? c : null;
+    },
     box: (f) => {
       const h = hostOf(f);
       if (!h) return { x: 0, y: 0, width: 0, height: 0 } as Box;

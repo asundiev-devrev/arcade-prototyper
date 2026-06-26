@@ -106,7 +106,16 @@ export function walkFiber(rootFiber: MinimalFiber, ctx: WalkCtx): SljNode {
     const childBoxes = kids.map((k) => ctx.reader.box(k));
     const s = ctx.reader.style(f);
     const layout: Layout | null = inferLayout(readStyleLike(s), childBoxes);
-    return { kind: "element", tag: tag ?? "div", box, layout, style: elementStyle(s, ctx.resolveColor), children: childNodes };
+    const cls = ctx.reader.hostClassName(f);
+    return {
+      kind: "element",
+      tag: tag ?? "div",
+      ...(cls ? { className: cls } : {}),
+      box,
+      layout,
+      style: elementStyle(s, ctx.resolveColor),
+      children: childNodes,
+    };
   }
   const root = walk(rootFiber);
   if (!root) throw new Error("fiberWalk: root produced no node");
