@@ -9,6 +9,7 @@ import { postVisualEdit, isInFrame, buildSingleEdit } from "../../lib/visualEdit
 import { useEditBlocks } from "../../hooks/editBlocksContext";
 import { useDialogs } from "../feedback/Dialogs";
 import { resolveCustomizeTarget } from "../../frame/resolveCustomizeTarget";
+import { resolveInFrameComponent } from "../../frame/resolveInFrameComponent";
 import { buildCustomizePayload, markJsxRoot, newCustomizeToken, postCustomize, postCustomizeUndo, serializeTargetToJsx } from "../../lib/customizeClient";
 import { fieldValue, toNumberInput, fromNumberInput, Field, NumberField, INPUT_COMPACT, GRID_2, SegmentedToggle } from "./inspectorControls";
 import { Section } from "./Section";
@@ -228,10 +229,16 @@ export function InspectorPanel({
     Object.values(applyTimers.current).forEach(clearTimeout);
   }, []);
 
-  // Fetch kit props for uppercase component names
+  // Fetch kit props for the RESOLVED nearest-in-frame component (not the clicked
+  // element). The props we edit live on that in-frame instance — the one the
+  // frame's own index.tsx placed — so its name drives the kit-props lookup.
+  const focusedNow = batch.find((e) => e.selection.editId === focusedEditId) ?? null;
+  const isComponentSel = !!focusedNow && !isInFrame(focusedNow.selection.file, frameSlug ?? "");
+  const inFrameComp = isComponentSel && focusedNow
+    ? resolveInFrameComponent(focusedNow.selection.ownerChain, frameSlug ?? "")
+    : null;
   useEffect(() => {
-    const focused = batch.find((e) => e.selection.editId === focusedEditId) ?? null;
-    const name = focused?.selection.componentName;
+    const name = inFrameComp?.componentName;
     if (!name || !/^[A-Z]/.test(name)) { setKitProps([]); return; }
     let cancelled = false;
     fetch(`/api/kit-props/${encodeURIComponent(name)}`)
@@ -239,7 +246,7 @@ export function InspectorPanel({
       .then((d) => { if (!cancelled) setKitProps(d.props ?? []); })
       .catch(() => { if (!cancelled) setKitProps([]); });
     return () => { cancelled = true; };
-  }, [focusedEditId, batch.find((e) => e.selection.editId === focusedEditId)?.selection.componentName]);
+  }, [inFrameComp?.componentName]);
 
   // Resize drag (mirrors the chat-pane handle in ProjectDetail).
   useEffect(() => {
@@ -344,12 +351,31 @@ export function InspectorPanel({
     if (svg) frameWindow?.postMessage({ type: "arcade-studio:preview-icon", editId: id, svg }, "*");
   }
 
-  const focused = batch.find((e) => e.selection.editId === focusedEditId) ?? null;
-  // Component mode: the picked element's source isn't this frame's own index.tsx
-  // (it came from a shared prebuilt component). Drives the grayed fields + the
-  // Customize button. Keyed on !isInFrame — NOT kitProps — so a PROPLESS
-  // composite (zero kit props but still a component) is treated as a component.
-  const isComponentSel = !!focused && !isInFrame(focused.selection.file, frameSlug ?? "");
+  const focused = focusedNow;
+  // Props-first component mode: a settled prop change writes prop:<name> on the
+  // RESOLVED nearest-in-frame component instance (line/col from the resolver),
+  // NOT the clicked element. {ok:true} → instant/applied block; otherwise fall
+  // back to a scoped chat ask. Everything else routes through "Ask AI".
+  function changeProp(propName: string, value: string) {
+    if (!inFrameComp || !focused) return;
+    if (value === "") return; // "—" = no change
+    const sel = { ...focused.selection, line: inFrameComp.line, column: inFrameComp.column };
+    void postVisualEdit(slug, buildSingleEdit(sel, `prop:${propName}`, value, frameSlug ?? ""))
+      .then((det) => {
+        if (det.ok) {
+          addBlock({
+            label: `${inFrameComp.componentName}.${propName} → ${value}`,
+            kind: "instant", status: "applied", frameSlug: frameSlug ?? "",
+          });
+        } else {
+          askAi(`set its ${propName} to ${value}`);
+        }
+      });
+  }
+  function askAi(change: string) {
+    if (!inFrameComp) return;
+    onSend(`In frames/${frameSlug}/index.tsx, on the <${inFrameComp.componentName}> at line ${inFrameComp.line}, ${change}.`);
+  }
   function discard() {
     frameWindow?.postMessage({ type: "arcade-studio:preview-reset", all: true }, "*");
     clear();
@@ -468,32 +494,35 @@ export function InspectorPanel({
                   </div>
                 )}
 
-                {isComponentSel && (
-                  <Section title="Prebuilt component">
+                {/* Props-first component mode: edit the resolved in-frame
+                    component's PROPS directly (instant, deterministic), and
+                    route everything else through "Ask AI to change this". No
+                    grayed style sections — they were never editable on a
+                    component. */}
+                {isComponentSel ? (
+                  <Section title={inFrameComp ? `Editing <${inFrameComp.componentName}>` : "Component"}>
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                      {/* Props render grayed/disabled pre-customize: the whole
-                          component is locked until Customize ejects it, so no
-                          edit can fire and silently revert on reload. */}
-                      {kitProps.map((p) => (
-                        <Field key={p.name} label={p.name}>
-                          <select aria-label={p.name}
-                            style={{ ...INPUT_COMPACT, opacity: 0.5, pointerEvents: "none" }}
-                            value={(pending[`prop:${p.name}`] as string) ?? ""}
-                            disabled readOnly>
-                            <option value="">—</option>
-                            {p.values.map((v) => <option key={v} value={v}>{v}</option>)}
-                          </select>
-                        </Field>
-                      ))}
-                      <span style={{ fontSize: 11, color: "var(--fg-neutral-subtle)", lineHeight: 1.45 }}>
-                        {CUSTOMIZE_LOCKED_NOTE}
-                      </span>
-                      <Button variant="primary" onClick={() => { void customizeRef.current(); }}>Customize</Button>
+                      {kitProps.length > 0 ? (
+                        kitProps.map((p) => (
+                          <Field key={p.name} label={p.name}>
+                            <select aria-label={p.name} style={INPUT_COMPACT}
+                              value={(pending[`prop:${p.name}`] as string) ?? ""}
+                              onChange={(e) => changeProp(p.name, e.target.value)}>
+                              <option value="">—</option>
+                              {p.values.map((v) => <option key={v} value={v}>{v}</option>)}
+                            </select>
+                          </Field>
+                        ))
+                      ) : (
+                        <span style={{ fontSize: 11, color: "var(--fg-neutral-subtle)", lineHeight: 1.45 }}>
+                          No editable properties — use Ask AI to change this.
+                        </span>
+                      )}
+                      <Button variant="primary" onClick={() => askAi("describe the change")}>Ask AI to change this</Button>
                     </div>
                   </Section>
-                )}
-
-                <div style={isComponentSel ? { opacity: 0.5, pointerEvents: "none" } : {}}>
+                ) : (
+                <div>
                   <Section title="Layout">
                     <LayoutSection styles={styles} pending={pending} change={change} />
                   </Section>
@@ -579,6 +608,7 @@ export function InspectorPanel({
                     </div>
                   </Section>
                 </div>
+                )}
               </>
             )}
           </>
