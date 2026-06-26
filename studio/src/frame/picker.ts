@@ -19,7 +19,7 @@
 import { capture } from "./inspector";
 import * as overlay from "./overlay";
 import { getFiberFromNode, componentNameFromType, type FiberLike } from "./fiber";
-import type { OwnerLink } from "./resolveCustomizeTarget";
+import type { OwnerLink } from "./resolveInFrameComponent";
 
 interface PickerSelection {
   editId: number;

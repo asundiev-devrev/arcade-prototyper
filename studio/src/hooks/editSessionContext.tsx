@@ -31,7 +31,7 @@ export interface ElementSelection {
   iconCandidate?: string;
   /** Named-component owner chain (innermost→outermost) with call-site files,
    *  for resolving the Customize target. */
-  ownerChain: import("../frame/resolveCustomizeTarget").OwnerLink[];
+  ownerChain: import("../frame/resolveInFrameComponent").OwnerLink[];
 }
 export interface EditedElement {
   selection: ElementSelection;
