@@ -4,7 +4,6 @@ import type { Frame } from "../../../server/types";
 import { useEditSession } from "../../hooks/editSessionContext";
 import type { TurnPhase } from "../../hooks/chatStreamReducer";
 import { SaveComponentModal } from "../assets/SaveComponentModal";
-import { isInFrame } from "../../lib/visualEditClient";
 
 const FRAME_WIDTH_MIN = 320;
 const FRAME_WIDTH_MAX = 2560;
@@ -118,14 +117,9 @@ export function FrameCard({
           }
           addOrFocus(selection, frame.slug, win);
           setInspectorOpen(true);
-          // A picked element whose source isn't this frame's own index.tsx came
-          // from a shared prebuilt component. Surface the Customize chip on it;
-          // otherwise make sure any stale chip is gone.
-          const isComponent = !isInFrame(selection.file, frame.slug);
-          win?.postMessage(
-            { type: isComponent ? "arcade-studio:show-component-chip" : "arcade-studio:hide-component-chip" },
-            "*",
-          );
+          // Component vs. in-frame is now decided in the inspector panel (it
+          // grays fields + shows Customize when the source isn't this frame's
+          // own index.tsx). No in-iframe chip to surface here anymore.
         }
         // NOTE: do NOT setPicking(false) — bulk picking stays active.
       } else if (t === "arcade-studio:frame-pick-cancelled") {
@@ -145,11 +139,6 @@ export function FrameCard({
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         setPicking(false);
-        // Escape closes the picker, so hide the chip too.
-        iframeRef.current?.contentWindow?.postMessage(
-          { type: "arcade-studio:hide-component-chip" },
-          "*",
-        );
       }
     }
     window.addEventListener("message", onMessage);
@@ -161,32 +150,48 @@ export function FrameCard({
         { type: "arcade-studio:frame-pick-stop" },
         "*",
       );
-      // When picking goes false, tear down the chip too.
-      iframeRef.current?.contentWindow?.postMessage(
-        { type: "arcade-studio:hide-component-chip" },
-        "*",
-      );
     };
   }, [picking, frame.slug, addOrFocus, setInspectorOpen, clear, frameWindow, sessionFrameSlug, toast]);
 
-  // Always-mounted customize-request forwarder: the chip's Customize link posts
-  // this from inside the iframe. Forward it to the shell as a single internal
-  // signal so InspectorPanel (which owns the dialog/toast/slug) can run the flow.
-  // Lives outside the picking effect so a visible chip stays functional even if
-  // picking was toggled off (Escape / crosshair click) while the chip is still up.
+  // Auto-reselect after Customize: when the inspector ejects a component it
+  // marks the new root with a token and dispatches `armReselect`. The frame
+  // hot-reloads from disk; once it reloads we tell the picker to re-select the
+  // marked node so the inspector immediately shows the now-editable element.
+  // We post `pick-marked` on the iframe's next onLoad (the reload), and ALSO
+  // run a short bounded retry as a fallback in case the load fires before this
+  // arms or the reload is debounced. The picker's pick-marked is idempotent.
+  const armedTokenRef = useRef<string | null>(null);
   useEffect(() => {
-    function onCustomizeMessage(e: MessageEvent) {
-      const data = e.data;
-      if (!data || typeof data !== "object") return;
-      if ((data as { type?: unknown }).type === "arcade-studio:customize-request") {
-        window.dispatchEvent(new CustomEvent("arcade-studio:customize-request"));
-      }
+    function onArm(e: Event) {
+      const detail = (e as CustomEvent).detail as { frameSlug: string; token: string };
+      if (!detail || detail.frameSlug !== frame.slug) return;
+      // Remember the token so the iframe onLoad can fire pick-marked once the
+      // reloaded document is live.
+      armedTokenRef.current = detail.token;
+      const post = () =>
+        iframeRef.current?.contentWindow?.postMessage(
+          { type: "arcade-studio:pick-marked", token: detail.token }, "*",
+        );
+      // Bounded retry (6× over 1.5s) covers the Vite reload timing without
+      // coupling to the exact reload event. Cheap + idempotent.
+      let tries = 0;
+      const iv = setInterval(() => {
+        post();
+        if (++tries >= 6) { clearInterval(iv); armedTokenRef.current = null; }
+      }, 250);
     }
-    window.addEventListener("message", onCustomizeMessage);
-    return () => window.removeEventListener("message", onCustomizeMessage);
-  }, []);
+    window.addEventListener("arcade-studio:armReselect", onArm);
+    return () => window.removeEventListener("arcade-studio:armReselect", onArm);
+  }, [frame.slug]);
 
   function onIframeLoad() {
+    // If a Customize just armed a re-select, the reload that triggered this load
+    // is the post-write reload — ask the picker to re-select the marked node.
+    if (armedTokenRef.current) {
+      iframeRef.current?.contentWindow?.postMessage(
+        { type: "arcade-studio:pick-marked", token: armedTokenRef.current }, "*",
+      );
+    }
     if (phase !== "running") return;
     const wrapper = wipeWrapperRef.current;
     if (!wrapper) return;

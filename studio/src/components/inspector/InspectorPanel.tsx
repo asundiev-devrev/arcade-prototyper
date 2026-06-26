@@ -9,7 +9,7 @@ import { postVisualEdit, isInFrame, buildSingleEdit } from "../../lib/visualEdit
 import { useEditBlocks } from "../../hooks/editBlocksContext";
 import { useDialogs } from "../feedback/Dialogs";
 import { resolveCustomizeTarget } from "../../frame/resolveCustomizeTarget";
-import { buildCustomizePayload, postCustomize, postCustomizeUndo, serializeTargetToJsx } from "../../lib/customizeClient";
+import { buildCustomizePayload, markJsxRoot, newCustomizeToken, postCustomize, postCustomizeUndo, serializeTargetToJsx } from "../../lib/customizeClient";
 import { fieldValue, toNumberInput, fromNumberInput, Field, NumberField, INPUT_COMPACT, GRID_2, SegmentedToggle } from "./inspectorControls";
 import { Section } from "./Section";
 import { LayoutSection } from "./LayoutSection";
@@ -199,13 +199,15 @@ export function InspectorPanel({
     try {
       const iframe = (frameWindow?.frameElement ?? null) as HTMLIFrameElement | null;
       if (!iframe) { toast({ title: CUSTOMIZE_FALLBACK, intent: "alert" }); return; }
-      const jsx = serializeTargetToJsx(iframe, target);
+      // Mark the ejected root so the picker can re-find it after the reload.
+      const token = newCustomizeToken();
+      const jsx = markJsxRoot(serializeTargetToJsx(iframe, target), token);
       const r = await postCustomize(slug, buildCustomizePayload(target, jsx, targetFrame));
       if (r.ok) {
         // 4. Frame hot-reloads from disk. Drop the inspector selection and offer Undo.
-        //    Belt-and-suspenders: explicitly tear down the chip before reload.
-        frameWindow?.postMessage({ type: "arcade-studio:hide-component-chip" }, "*");
         clear();
+        // Arm auto-reselect: FrameCard re-picks the marked node after the reload.
+        window.dispatchEvent(new CustomEvent("arcade-studio:armReselect", { detail: { frameSlug: targetFrame, token } }));
         // Dismiss the previous success toast (if any) before showing the new one.
         if (lastSuccessToastId.current) dismiss(lastSuccessToastId.current);
         lastSuccessToastId.current = toast({
@@ -351,6 +353,11 @@ export function InspectorPanel({
   }
 
   const focused = batch.find((e) => e.selection.editId === focusedEditId) ?? null;
+  // Component mode: the picked element's source isn't this frame's own index.tsx
+  // (it came from a shared prebuilt component). Drives the grayed fields + the
+  // Customize button. Keyed on !isInFrame — NOT kitProps — so a PROPLESS
+  // composite (zero kit props but still a component) is treated as a component.
+  const isComponentSel = !!focused && !isInFrame(focused.selection.file, frameSlug ?? "");
   function discard() {
     frameWindow?.postMessage({ type: "arcade-studio:preview-reset", all: true }, "*");
     clear();
@@ -469,41 +476,32 @@ export function InspectorPanel({
                   </div>
                 )}
 
-                {kitProps.length > 0 && (
-                  <Section title={`${focused.selection.componentName} component`}>
+                {isComponentSel && (
+                  <Section title="Prebuilt component">
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {/* Props render grayed/disabled pre-customize: the whole
+                          component is locked until Customize ejects it, so no
+                          edit can fire and silently revert on reload. */}
                       {kitProps.map((p) => (
                         <Field key={p.name} label={p.name}>
-                          {/* Controlled on pending value only (committed-on-disk reflection is out of scope for picker snapshots) */}
-                          <select aria-label={p.name} style={INPUT_COMPACT}
+                          <select aria-label={p.name}
+                            style={{ ...INPUT_COMPACT, opacity: 0.5, pointerEvents: "none" }}
                             value={(pending[`prop:${p.name}`] as string) ?? ""}
-                            onChange={(e) => change(("prop:" + p.name) as any, e.target.value)}>
+                            disabled readOnly>
                             <option value="">—</option>
                             {p.values.map((v) => <option key={v} value={v}>{v}</option>)}
                           </select>
                         </Field>
                       ))}
-                      <span style={{ fontSize: 11, color: "var(--fg-neutral-subtle)" }}>
-                        Inner styles are part of this component. Use "Ask AI to customize" to change them.
+                      <span style={{ fontSize: 11, color: "var(--fg-neutral-subtle)", lineHeight: 1.45 }}>
+                        {CUSTOMIZE_LOCKED_NOTE}
                       </span>
-                      {!isInFrame(focused.selection.file, frameSlug ?? "") && (
-                        <span style={{ fontSize: 11, color: "var(--fg-neutral-subtle)", lineHeight: 1.45 }}>
-                          {CUSTOMIZE_LOCKED_NOTE}
-                        </span>
-                      )}
-                      <Button variant="tertiary" onClick={() => {
-                        const frameRel = focused.selection.file.split("/frames/").pop() ?? focused.selection.file;
-                        const name = focused.selection.componentName;
-                        const line = focused.selection.line;
-                        onSend(`In frames/${frameRel}, customize the <${name}> at line ${line}.`);
-                      }}>
-                        Ask AI to customize
-                      </Button>
+                      <Button variant="primary" onClick={() => { void customizeRef.current(); }}>Customize</Button>
                     </div>
                   </Section>
                 )}
 
-                <div style={kitProps.length > 0 ? { opacity: 0.5, pointerEvents: "none" } : {}}>
+                <div style={isComponentSel ? { opacity: 0.5, pointerEvents: "none" } : {}}>
                   <Section title="Layout">
                     <LayoutSection styles={styles} pending={pending} change={change} />
                   </Section>
