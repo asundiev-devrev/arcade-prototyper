@@ -5,7 +5,8 @@ import {
   TOKEN_PREFIX, isTokenPending, tokenClass,
 } from "../../hooks/editSessionContext";
 import { buildVisualEditPreamble } from "../../lib/visualEditPreamble";
-import { toElementEdits, postVisualEdit, isInFrame, buildComponentEditPreamble } from "../../lib/visualEditClient";
+import { postVisualEdit, isInFrame, buildSingleEdit } from "../../lib/visualEditClient";
+import { useEditBlocks } from "../../hooks/editBlocksContext";
 import { useDialogs } from "../feedback/Dialogs";
 import { resolveCustomizeTarget } from "../../frame/resolveCustomizeTarget";
 import { buildCustomizePayload, postCustomize, postCustomizeUndo, serializeTargetToJsx } from "../../lib/customizeClient";
@@ -22,6 +23,15 @@ import { IconSwapSection } from "./IconSwapSection";
 const MIN_W = 280, MAX_W = 560;
 const RAW_LINE_INDENT = 22; // swatch 16 + gap 6
 
+/**
+ * Side map: pending AI block id → the scoped chat preamble that applies it.
+ * When a deterministic field write bails (dynamic className/text, etc.) we emit
+ * an `ai`/`pending` block instead of auto-sending. We stash the ready-to-send
+ * preamble here, keyed by the block id, so Task 8's "Apply" can call
+ * `onSend(pendingBlockPreambles.get(id))` without re-deriving the edit.
+ */
+export const pendingBlockPreambles = new Map<string, string>();
+
 // Approved Customize copy — keep verbatim.
 const CUSTOMIZE_LOCKED_NOTE = "💠 Parts of this are prebuilt. Customize to change anything inside.";
 const CUSTOMIZE_CONFIRM_TITLE = "Customize this component?";
@@ -33,6 +43,13 @@ const CUSTOMIZE_FALLBACK =
 
 function countChanges(e: EditedElement): number {
   return Object.values(e.pending).filter((v) => v !== undefined).length;
+}
+
+/** Short, human-readable label for an edit block (no file/line refs). */
+function humanLabel(field: string, value: string): string {
+  if (field === "text") return `text → "${value}"`;
+  const v = value.startsWith(TOKEN_PREFIX) ? value.slice(TOKEN_PREFIX.length) : value;
+  return `${field} → ${v}`;
 }
 
 const ALIGN_ICON = (d: string) => (
@@ -98,10 +115,12 @@ function ColorRow({
 }
 
 export function InspectorPanel({
-  onSend, busy, slug,
+  onSend, slug,
 }: {
   onSend: (prompt: string, images?: string[]) => void;
-  busy: boolean;
+  /** Retained for API compatibility with callers; no longer used now that
+   *  edits apply on settle (no Commit button to disable while busy). */
+  busy?: boolean;
   slug: string;
 }) {
   const {
@@ -109,6 +128,7 @@ export function InspectorPanel({
     setField, resetField, removeElement, focus, clear, setInspectorWidth,
   } = useEditSession();
   const { toast, dismiss } = useToast();
+  const { addBlock } = useEditBlocks();
   const { confirm } = useDialogs();
   const catalogState = useAssetsCatalog();
   const catalog = catalogState.status === "ready" ? catalogState.catalog : null;
@@ -116,6 +136,11 @@ export function InspectorPanel({
   const dragOrigin = useRef<{ startX: number; startWidth: number } | null>(null);
   const [kitProps, setKitProps] = useState<{ name: string; values: string[] }[]>([]);
   const lastSuccessToastId = useRef<string | null>(null);
+  // Debounce timers for the deterministic write-on-settle, keyed by editId:field.
+  const applyTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  // Ref to scheduleApply so the long-lived text-changed listener always calls
+  // the current closure (reading the latest batch/slug/frameSlug).
+  const scheduleApplyRef = useRef<(sel: EditedElement["selection"], field: string, value: string) => void>(() => {});
 
   // In-place text edits arrive from the iframe as text-changed messages.
   useEffect(() => {
@@ -124,11 +149,13 @@ export function InspectorPanel({
       if (!d || typeof d !== "object" || d.type !== "arcade-studio:text-changed") return;
       if (typeof d.editId === "number" && typeof d.text === "string") {
         setField(d.editId, "text", d.text);
+        const elem = batch.find((x) => x.selection.editId === d.editId);
+        if (elem) scheduleApplyRef.current(elem.selection, "text", d.text);
       }
     }
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
-  }, [setField]);
+  }, [setField, batch]);
 
   // Customize flow: the component chip (inside the frame iframe) posts a
   // customize-request, which FrameCard re-dispatches as a shell CustomEvent.
@@ -234,23 +261,54 @@ export function InspectorPanel({
       return;
     }
     const original = elem.selection.styles[key as keyof StyleSnapshot];
-    if (rawValue === original || rawValue === "") resetField(id, key as keyof StyleSnapshot);
-    else setField(id, key as any, rawValue);
+    if (rawValue === original || rawValue === "") { resetField(id, key as keyof StyleSnapshot); return; }
+    setField(id, key as any, rawValue);
     frameWindow?.postMessage(
       { type: "arcade-studio:preview", editId: id, field: key, value: rawValue || original },
       "*",
     );
+    // …then write the settled value deterministically (debounced) and emit a block.
+    scheduleApply(elem.selection, key as string, rawValue);
   }
 
   function changeToken(key: keyof StyleSnapshot | "typeStyle", className: string, prevClassName?: string) {
     const id = focusedEditId;
     if (id == null) return;
+    const elem = batch.find((e) => e.selection.editId === id);
+    if (!elem) return;
     setField(id, key, `${TOKEN_PREFIX}${className}`);
     frameWindow?.postMessage(
       { type: "arcade-studio:preview-class", editId: id, slot: key, className, prevClassName },
       "*",
     );
+    scheduleApply(elem.selection, key as string, `${TOKEN_PREFIX}${className}`);
   }
+
+  // Deterministic write-on-settle: each settled field edit writes to code and
+  // produces a block. {ok:true} → instant/applied block; {ok:false} → ai/pending
+  // block (NOT auto-sent — Task 8's Apply will send the stashed preamble).
+  async function applyFieldEdit(sel: EditedElement["selection"], field: string, value: string) {
+    const targetFrame = frameSlug ?? "";
+    // Off-frame (shared kit) elements are the Customize path, not field edits.
+    if (!targetFrame || !isInFrame(sel.file, targetFrame)) return;
+    const det = await postVisualEdit(slug, buildSingleEdit(sel, field, value, targetFrame));
+    if (det.ok) {
+      addBlock({ label: humanLabel(field, value), kind: "instant", status: "applied", frameSlug: targetFrame });
+    } else {
+      // Can't map deterministically → pending AI block. Stash a ready-to-send
+      // preamble keyed by block id so Task 8's Apply can call onSend(...).
+      const id = addBlock({ label: humanLabel(field, value), kind: "ai", status: "pending", frameSlug: targetFrame });
+      const elementWithPending: EditedElement = { selection: sel, pending: { [field]: value } as any };
+      const preamble = buildVisualEditPreamble([elementWithPending], `${targetFrame}/index.tsx`);
+      if (preamble) pendingBlockPreambles.set(id, preamble);
+    }
+  }
+  function scheduleApply(sel: EditedElement["selection"], field: string, value: string) {
+    const k = `${sel.editId}:${field}`;
+    clearTimeout(applyTimers.current[k]);
+    applyTimers.current[k] = setTimeout(() => { void applyFieldEdit(sel, field, value); }, 350);
+  }
+  scheduleApplyRef.current = scheduleApply;
 
   function changeIcon(name: string) {
     const id = focusedEditId;
@@ -262,46 +320,6 @@ export function InspectorPanel({
 
   const focused = batch.find((e) => e.selection.editId === focusedEditId) ?? null;
   function discard() {
-    frameWindow?.postMessage({ type: "arcade-studio:preview-reset", all: true }, "*");
-    clear();
-  }
-  async function commit() {
-    if (batch.length === 0) { discard(); return; }
-    const targetFrame = frameSlug ?? "";
-
-    // Does every picked element live in THIS frame's own source? Elements that
-    // resolve to a shared kit composite (not the frame's index.tsx) can't be
-    // edited in place — editing kit source would change every prototype.
-    const allInFrame =
-      !!targetFrame && batch.every((e) => isInFrame(e.selection.file, targetFrame));
-
-    if (allInFrame) {
-      // 1. Try the deterministic code-writer (targets the SESSION frame, not
-      //    the picked file path).
-      const payload = toElementEdits(batch, targetFrame);
-      const det = await postVisualEdit(slug, payload);
-      if (det.ok) {
-        // Vite will hot-reload the frame from disk; drop the inline preview.
-        frameWindow?.postMessage({ type: "arcade-studio:preview-reset", all: true }, "*");
-        clear();
-        return;
-      }
-      // 2. Deterministic bailed (dynamic className/text, etc.) — scoped chat edit.
-      const preamble = buildVisualEditPreamble(batch, `${targetFrame}/index.tsx`);
-      if (!preamble) { discard(); return; }
-      onSend(preamble, []);
-      frameWindow?.postMessage({ type: "arcade-studio:preview-reset", all: true }, "*");
-      clear();
-      return;
-    }
-
-    // 3. Element(s) come from a shared kit composite — ask the agent to
-    //    duplicate the markup locally into this frame and edit the copy, so the
-    //    shared component stays intact. (No deterministic path: kit source is
-    //    off-limits.)
-    const compPreamble = buildComponentEditPreamble(batch, targetFrame);
-    if (!compPreamble) { discard(); return; }
-    onSend(compPreamble, []);
     frameWindow?.postMessage({ type: "arcade-studio:preview-reset", all: true }, "*");
     clear();
   }
@@ -387,12 +405,12 @@ export function InspectorPanel({
                     </span>
                     <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
                       <button type="button" aria-label="Move element up"
-                        title={totalChanges > 0 ? "Commit or discard edits before moving" : "Move up"}
+                        title={totalChanges > 0 ? "Finish editing this element before moving it" : "Move up"}
                         disabled={totalChanges > 0}
                         onClick={(ev) => { ev.stopPropagation(); void move(e, "up"); }}
                         style={{ background: "transparent", border: "none", color: "var(--fg-neutral-subtle)", cursor: totalChanges > 0 ? "not-allowed" : "pointer", fontSize: 13, lineHeight: 1, opacity: totalChanges > 0 ? 0.4 : 1 }}>↑</button>
                       <button type="button" aria-label="Move element down"
-                        title={totalChanges > 0 ? "Commit or discard edits before moving" : "Move down"}
+                        title={totalChanges > 0 ? "Finish editing this element before moving it" : "Move down"}
                         disabled={totalChanges > 0}
                         onClick={(ev) => { ev.stopPropagation(); void move(e, "down"); }}
                         style={{ background: "transparent", border: "none", color: "var(--fg-neutral-subtle)", cursor: totalChanges > 0 ? "not-allowed" : "pointer", fontSize: 13, lineHeight: 1, opacity: totalChanges > 0 ? 0.4 : 1 }}>↓</button>
@@ -545,9 +563,10 @@ export function InspectorPanel({
         )}
       </div>
 
+      {/* Edits apply to code as they settle — there is no Commit. This control
+          just clears the selection and drops the live preview overlay. */}
       <div style={{ flex: "none", display: "flex", gap: 8, padding: 12, borderTop: "1px solid var(--stroke-neutral-subtle)" }}>
-        <Button variant="tertiary" onClick={discard}>Discard</Button>
-        <Button variant="primary" onClick={() => { void commit(); }} disabled={totalChanges === 0 || busy}>Commit</Button>
+        <Button variant="tertiary" onClick={discard}>Done</Button>
       </div>
     </aside>
   );

@@ -12,6 +12,7 @@ import { ChatToggle } from "../components/shell/ChatToggle";
 import { ProjectPicker } from "../components/shell/ProjectPicker";
 import { ChatStreamProvider } from "../hooks/chatStreamContext";
 import { EditSessionProvider, useEditSession } from "../hooks/editSessionContext";
+import { EditBlocksProvider } from "../hooks/editBlocksContext";
 import { useProjectFromHost } from "../hooks/useProjectFromHost";
 import type { Project, ChimeIn } from "../../server/types";
 import { takePendingPrompt, peekPendingPrompt } from "../lib/pendingPrompt";
@@ -76,12 +77,14 @@ export function ProjectDetail({ slug, onBack, onOpenProject }: ProjectDetailProp
 
   return (
     <EditSessionProvider>
-      <ProjectDetailShell
-        routeKey={slug}
-        source={source}
-        onBack={onBack}
-        onOpenProject={onOpenProject}
-      />
+      <EditBlocksProvider>
+        <ProjectDetailShell
+          routeKey={slug}
+          source={source}
+          onBack={onBack}
+          onOpenProject={onOpenProject}
+        />
+      </EditBlocksProvider>
     </EditSessionProvider>
   );
 }

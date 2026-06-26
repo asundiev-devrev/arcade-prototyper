@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 
@@ -14,6 +14,9 @@ import {
   EditSessionProvider, useEditSession,
   type ElementSelection, type StyleSnapshot,
 } from "../../src/hooks/editSessionContext";
+import {
+  EditBlocksProvider, useEditBlocks, type EditBlock,
+} from "../../src/hooks/editBlocksContext";
 
 const STYLES: StyleSnapshot = {
   text: "Save", fontSize: "14px", fontWeight: "400", fontStyle: "normal",
@@ -35,6 +38,14 @@ function sel(editId: number, iconCandidate?: string): ElementSelection {
 }
 const stubWindow = { postMessage: vi.fn() } as unknown as Window;
 
+// Probe so tests can read the emitted edit-blocks out of context.
+let capturedBlocks: EditBlock[] = [];
+function BlocksProbe() {
+  const { blocks } = useEditBlocks();
+  capturedBlocks = blocks;
+  return null;
+}
+
 function Harness({ onSend }: { onSend: any }) {
   const ctx = useEditSession();
   return (
@@ -43,25 +54,62 @@ function Harness({ onSend }: { onSend: any }) {
       <button onClick={() => { ctx.setInspectorOpen(true); ctx.addOrFocus(sel(1), "home", stubWindow); }}>open1-with-window</button>
       <button onClick={() => ctx.addOrFocus(sel(2), "home", null)}>add2</button>
       <InspectorPanel onSend={onSend} busy={false} slug="test-slug" />
+      <BlocksProbe />
       <span data-testid="count">{ctx.batch.length}</span>
       <span data-testid="focused">{ctx.focusedEditId ?? ""}</span>
       <span data-testid="width">{ctx.inspectorWidth}</span>
     </>
   );
 }
+
+// Render the whole inspector inside BOTH providers (the real app wires them in
+// ProjectDetail). InspectorPanel now requires EditBlocksProvider.
+function renderHarness(onSend: any) {
+  return render(
+    <EditSessionProvider>
+      <EditBlocksProvider>
+        <Harness onSend={onSend} />
+      </EditBlocksProvider>
+    </EditSessionProvider>,
+  );
+}
+
+beforeEach(() => {
+  // Default fetch stub so the debounced deterministic write (scheduleApply) never
+  // hits a missing global. Individual tests override this where they assert on it.
+  vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({
+    ok: true, json: () => Promise.resolve({ ok: true }),
+  })) as any);
+});
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
+  capturedBlocks = [];
 });
 
-describe("InspectorPanel (batch)", () => {
+describe("InspectorPanel (instant-apply)", () => {
   it("renders null when inspector closed", () => {
-    render(<EditSessionProvider><InspectorPanel onSend={vi.fn()} busy={false} /></EditSessionProvider>);
+    render(
+      <EditSessionProvider>
+        <EditBlocksProvider>
+          <InspectorPanel onSend={vi.fn()} busy={false} slug="test-slug" />
+        </EditBlocksProvider>
+      </EditSessionProvider>,
+    );
     expect(screen.queryByText(/Commit/i)).toBeNull();
   });
 
-  it("seeds focused controls and records a pending edit on the focused element", () => {
-    render(<EditSessionProvider><Harness onSend={vi.fn()} /></EditSessionProvider>);
+  it("renders NO Commit button when an element is focused", () => {
+    renderHarness(vi.fn());
+    fireEvent.click(screen.getByText("open1"));
+    // The whole point of the rewrite: there is no Commit affordance.
+    expect(screen.queryByText(/Commit/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /commit/i })).toBeNull();
+  });
+
+  it("seeds focused controls and stages a pending edit on the focused element", () => {
+    renderHarness(vi.fn());
     fireEvent.click(screen.getByText("open1"));
     expect(screen.getByText("Layout")).toBeTruthy(); // Layout section present
     expect(screen.getByLabelText("W")).toBeTruthy(); // Width field from Layout section
@@ -78,15 +126,14 @@ describe("InspectorPanel (batch)", () => {
     expect(textColor).toBeTruthy();
     const swatches = screen.getAllByTestId("token-chip-swatch");
     expect(swatches.length).toBeGreaterThanOrEqual(1);
-    // Change a width value to test pending edits
+    // Change a width value — it stages into the batch (and the live preview).
     const widthInput = screen.getByLabelText("W") as HTMLInputElement;
     fireEvent.change(widthInput, { target: { value: "100" } });
-    // batch element #1 now has the pending change; commit proves it (below)
     expect(screen.getByTestId("count").textContent).toBe("1");
   });
 
   it("shows a batch list with two elements after a second pick", () => {
-    render(<EditSessionProvider><Harness onSend={vi.fn()} /></EditSessionProvider>);
+    renderHarness(vi.fn());
     fireEvent.click(screen.getByText("open1"));
     fireEvent.click(screen.getByText("add2"));
     expect(screen.getByTestId("count").textContent).toBe("2");
@@ -94,35 +141,40 @@ describe("InspectorPanel (batch)", () => {
     expect(screen.getAllByText(/button/i).length).toBeGreaterThanOrEqual(2);
   });
 
-  it("Commit sends a preamble with the batch change then clears", async () => {
-    // Stub fetch to return {ok: false} so commit falls back to chat
-    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve({ ok: false, reason: "test" }),
-    })) as any);
+  it("a settled edit POSTs visual-edit and emits an applied instant block", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn((_url: string, _init?: unknown) => Promise.resolve({
+      ok: true, json: () => Promise.resolve({ ok: true }),
+    }));
+    vi.stubGlobal("fetch", fetchMock as any);
     const onSend = vi.fn();
-    render(<EditSessionProvider><Harness onSend={onSend} /></EditSessionProvider>);
+    renderHarness(onSend);
     fireEvent.click(screen.getByText("open1"));
-    // Change width (type style is now in Style token, not here)
     const widthInput = screen.getByLabelText("W") as HTMLInputElement;
     fireEvent.change(widthInput, { target: { value: "100" } });
-    fireEvent.blur(widthInput); // NEW commit trigger
-    fireEvent.click(screen.getByText(/Commit/i));
-    // Wait for async commit to complete
-    await vi.waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
-    const preamble = onSend.mock.calls[0][0];
-    expect(preamble).toContain("width: 80px -> 100px");
-    expect(screen.getByTestId("count").textContent).toBe("0");
+    fireEvent.blur(widthInput); // settled value → debounced deterministic write
+    // Advance past the ~350ms debounce and flush the async write.
+    await vi.advanceTimersByTimeAsync(400);
+    // Deterministic writer was called against /api/visual-edit/<slug>.
+    const posted = fetchMock.mock.calls.some(
+      (c) => typeof c[0] === "string" && c[0].startsWith("/api/visual-edit/"),
+    );
+    expect(posted).toBe(true);
+    // An applied instant block was emitted; deterministic success does NOT chat.
+    const instant = capturedBlocks.find((b) => b.kind === "instant");
+    expect(instant).toBeTruthy();
+    expect(instant!.status).toBe("applied");
+    expect(onSend).not.toHaveBeenCalled();
   });
 
   it("does NOT render a Text input (text is edited in place)", () => {
-    render(<EditSessionProvider><Harness onSend={vi.fn()} /></EditSessionProvider>);
+    renderHarness(vi.fn());
     fireEvent.click(screen.getByText("open1"));
     expect(screen.queryByLabelText(/text content/i)).toBeNull();
   });
 
   it("resize handle widens the panel when dragged left", () => {
-    render(<EditSessionProvider><Harness onSend={vi.fn()} /></EditSessionProvider>);
+    renderHarness(vi.fn());
     fireEvent.click(screen.getByText("open1"));
     const initialWidth = parseInt(screen.getByTestId("width").textContent || "360", 10);
     const handle = screen.getByRole("separator", { name: /resize inspector/i });
@@ -133,8 +185,8 @@ describe("InspectorPanel (batch)", () => {
   });
 
   it("removing an element sends preview-reset postMessage", () => {
-    vi.clearAllMocks();
-    render(<EditSessionProvider><Harness onSend={vi.fn()} /></EditSessionProvider>);
+    (stubWindow.postMessage as any).mockClear?.();
+    renderHarness(vi.fn());
     fireEvent.click(screen.getByText("open1-with-window"));
     const removeBtn = screen.getByLabelText(/remove element 1/i);
     fireEvent.click(removeBtn);
@@ -165,74 +217,68 @@ describe("InspectorPanel (batch)", () => {
       return (
         <>
           <button onClick={() => { ctx.setInspectorOpen(true); ctx.addOrFocus(sel(1, "Bell"), "home", null); }}>open-icon</button>
-          <InspectorPanel onSend={vi.fn()} busy={false} />
+          <InspectorPanel onSend={vi.fn()} busy={false} slug="test-slug" />
         </>
       );
     }
 
-    render(<EditSessionProvider><IconHarness /></EditSessionProvider>);
+    render(
+      <EditSessionProvider>
+        <EditBlocksProvider>
+          <IconHarness />
+        </EditBlocksProvider>
+      </EditSessionProvider>,
+    );
     fireEvent.click(screen.getByText("open-icon"));
     expect(await screen.findByText("Icon")).toBeTruthy(); // the Section title
     expect(screen.getByRole("button", { name: /replace/i })).toBeTruthy();
   });
 
-  it("disables move buttons when there are pending edits", () => {
-    render(<EditSessionProvider><Harness onSend={vi.fn()} /></EditSessionProvider>);
+  it("disables move buttons while the focused element has staged edits", () => {
+    renderHarness(vi.fn());
     fireEvent.click(screen.getByText("open1"));
     // Initially buttons are enabled
     const upBtn = screen.getByLabelText("Move element up") as HTMLButtonElement;
     const downBtn = screen.getByLabelText("Move element down") as HTMLButtonElement;
     expect(upBtn.disabled).toBe(false);
     expect(downBtn.disabled).toBe(false);
-    // Make a pending edit
+    // Stage an edit — its line:column would shift once the write lands, so moving
+    // is blocked until the element is settled/cleared.
     const widthInput = screen.getByLabelText("W") as HTMLInputElement;
     fireEvent.change(widthInput, { target: { value: "100" } });
-    fireEvent.blur(widthInput); // NEW commit trigger
+    fireEvent.blur(widthInput);
     // Now buttons should be disabled
     expect(upBtn.disabled).toBe(true);
     expect(downBtn.disabled).toBe(true);
-    expect(upBtn.title).toContain("Commit or discard edits before moving");
+    expect(upBtn.title).toMatch(/before moving/i);
   });
 
-  it("preserves batch on move failure (server bail)", async () => {
-    // Stub fetch to return {ok: false} (server bail)
-    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve({ ok: false, reason: "no-sibling" }),
-    })) as any);
-    render(<EditSessionProvider><Harness onSend={vi.fn()} /></EditSessionProvider>);
+  it("keeps the batch intact while move is blocked by staged edits", () => {
+    renderHarness(vi.fn());
     fireEvent.click(screen.getByText("open1"));
-    // Make a pending edit
     const widthInput = screen.getByLabelText("W") as HTMLInputElement;
     fireEvent.change(widthInput, { target: { value: "100" } });
-    fireEvent.blur(widthInput); // NEW commit trigger
-    const initialCount = screen.getByTestId("count").textContent;
-    expect(initialCount).toBe("1");
-    // Try to move (but buttons are disabled, so we can't actually click them)
-    // Instead, verify that if buttons were clicked, the batch would be preserved
-    // This test verifies the disabled state prevents the destructive action
+    fireEvent.blur(widthInput);
+    expect(screen.getByTestId("count").textContent).toBe("1");
+    // Move is disabled while there are staged edits — the destructive action
+    // (which would clear the selection) can't fire.
     const upBtn = screen.getByLabelText("Move element up") as HTMLButtonElement;
     expect(upBtn.disabled).toBe(true);
-    // Batch is still intact
     expect(screen.getByTestId("count").textContent).toBe("1");
   });
 
-  it("clears batch on successful move", async () => {
-    // Stub fetch to return {ok: true}
+  it("clears the selection on a successful move", async () => {
+    (stubWindow.postMessage as any).mockClear?.();
     vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve({ ok: true }),
+      ok: true, json: () => Promise.resolve({ ok: true }),
     })) as any);
-    render(<EditSessionProvider><Harness onSend={vi.fn()} /></EditSessionProvider>);
+    renderHarness(vi.fn());
     fireEvent.click(screen.getByText("open1-with-window"));
-    // No pending edits, buttons enabled
+    // No staged edits, buttons enabled
     const upBtn = screen.getByLabelText("Move element up") as HTMLButtonElement;
     expect(upBtn.disabled).toBe(false);
-    // Click move up
     fireEvent.click(upBtn);
-    // Wait for async move to complete
     await vi.waitFor(() => expect(screen.getByTestId("count").textContent).toBe("0"));
-    // postMessage was called with preview-reset
     expect(stubWindow.postMessage).toHaveBeenCalledWith(
       { type: "arcade-studio:preview-reset", all: true },
       "*",
