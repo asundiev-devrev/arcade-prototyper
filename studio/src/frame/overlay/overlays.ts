@@ -16,7 +16,6 @@ import { OVERLAY_COLORS, ALPHA } from "./overlayConfig";
 let hoverOverlay: HTMLDivElement | null = null;
 let selectOverlay: HTMLDivElement | null = null;
 let dimensionLabel: HTMLDivElement | null = null;
-let componentChip: HTMLElement | null = null;
 // Box-model band overlays — light red margin (outside the element box) and
 // light green padding (inside the border, between border and content).
 // One pair per outline (hover / select) so both can render at once when the
@@ -279,7 +278,6 @@ export function isOverlayElement(el: HTMLElement): boolean {
     el === hoverOverlay ||
     el === selectOverlay ||
     el === dimensionLabel ||
-    el === componentChip ||
     el === hoverMarginBand ||
     el === hoverPaddingBand ||
     el === selectMarginBand ||
@@ -287,38 +285,3 @@ export function isOverlayElement(el: HTMLElement): boolean {
   );
 }
 
-export function showComponentChip(el: HTMLElement): void {
-  const r = el.getBoundingClientRect();
-  if (!componentChip || !componentChip.parentNode) {
-    componentChip = document.createElement("div");
-    componentChip.setAttribute("data-arcade-component-chip", "");
-    componentChip.style.cssText =
-      "position:fixed;z-index:2147483647;display:inline-flex;align-items:center;gap:6px;" +
-      "font:600 11px system-ui,sans-serif;color:#7c3aed;background:#f3effe;border:1px solid #e3d9fb;" +
-      "padding:3px 9px;border-radius:10px;pointer-events:auto;cursor:default;";
-    const label = document.createElement("span");
-    label.textContent = "💠 Component · ";
-    const cust = document.createElement("u");
-    cust.setAttribute("data-arcade-customize", "");
-    cust.textContent = "Customize";
-    cust.style.cssText = "cursor:pointer;pointer-events:auto;padding:2px 6px;margin:-2px -2px -2px 0;border-radius:6px;text-decoration:underline;";
-    cust.addEventListener("click", (e) => {
-      e.preventDefault(); e.stopPropagation();
-      try { window.parent?.postMessage({ type: "arcade-studio:customize-request" }, "*"); } catch { /* noop */ }
-    });
-    componentChip.appendChild(label); componentChip.appendChild(cust);
-    document.documentElement.appendChild(componentChip);
-  }
-  // Position: clamp to viewport top; place below the box if there's no room above.
-  const ABOVE = 24;
-  const top = r.top >= ABOVE ? r.top - ABOVE : r.bottom + 4;
-  componentChip.style.left = `${Math.max(0, r.left)}px`;
-  componentChip.style.top = `${Math.max(0, top)}px`;
-  componentChip.style.pointerEvents = "auto";
-  componentChip.style.zIndex = "2147483647";
-}
-
-export function hideComponentChip(): void {
-  componentChip?.remove();
-  componentChip = null;
-}

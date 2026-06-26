@@ -171,10 +171,7 @@ export function InspectorPanel({
     return () => window.removeEventListener("message", onMsg);
   }, [setField, batch]);
 
-  // Customize flow: the component chip (inside the frame iframe) posts a
-  // customize-request, which FrameCard re-dispatches as a shell CustomEvent.
-  // We own the dialog/toast/network here. A ref keeps the listener mounted once
-  // while always reading the current selection/slug.
+  // Customize flow: panel button calls runCustomize via ref.
   const customizeRef = useRef<() => void>(() => {});
   customizeRef.current = async function runCustomize() {
     const focused = batch.find((e) => e.selection.editId === focusedEditId) ?? null;
@@ -224,11 +221,6 @@ export function InspectorPanel({
       toast({ title: CUSTOMIZE_FALLBACK, intent: "alert" });
     }
   };
-  useEffect(() => {
-    const onCustomize = () => { void customizeRef.current(); };
-    window.addEventListener("arcade-studio:customize-request", onCustomize);
-    return () => window.removeEventListener("arcade-studio:customize-request", onCustomize);
-  }, []);
 
   // Clear any in-flight debounce timer on unmount so a settled-but-not-yet-fired
   // deterministic write doesn't run after the inspector is gone (latent leak).

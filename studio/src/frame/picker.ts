@@ -182,16 +182,7 @@ function onClick(e: MouseEvent) {
     postCancel("no-target");
     return;
   }
-  // Ignore clicks on our own overlay chrome (the Component chip and its
-  // "Customize" link). The picker stays active for bulk picking, so its
-  // document-level capture listener also fires on chip clicks — those are raw
-  // DOM nodes with no React fiber and must NOT be treated as a failed pick.
-  // The click target may be the chip itself OR a child (the <u>Customize</u>),
-  // so check ancestors via closest(), not just strict identity.
-  if (
-    overlay.isOverlayElement(target as HTMLElement) ||
-    (target as HTMLElement).closest?.("[data-arcade-component-chip]")
-  ) {
+  if (overlay.isOverlayElement(target as HTMLElement)) {
     return;
   }
   const fiber = getFiberFromNode(target);
@@ -264,11 +255,6 @@ function onParentMessage(e: MessageEvent) {
   const t = (data as { type?: unknown }).type;
   if (t === "arcade-studio:frame-pick-start") activate();
   else if (t === "arcade-studio:frame-pick-stop") deactivate();
-  // The shell decides whether the just-picked element is a shared component
-  // (its source isn't in this frame's index.tsx) and asks us to surface the
-  // Customize chip on the current selection — or to hide it on clear.
-  else if (t === "arcade-studio:show-component-chip") overlay.showChipOnSelected();
-  else if (t === "arcade-studio:hide-component-chip") overlay.hideComponentChip();
   else if (t === "arcade-studio:pick-marked") {
     const token = (data as { token?: unknown }).token;
     if (typeof token === "string") pickMarked(token);

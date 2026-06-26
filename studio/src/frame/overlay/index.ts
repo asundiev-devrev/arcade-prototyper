@@ -11,7 +11,6 @@
 import {
   showHover as paintHover, hideHover, showSelect, hideSelect,
   updateSelectPosition, destroyOverlays, resetOverlayTeardown, isOverlayElement as isOverlayNode,
-  showComponentChip, hideComponentChip,
 } from "./overlays";
 import {
   showAxisGuides, hideAxisGuides, showDistance, hideDistance, teardownMeasureGuides, resetMeasureTeardown,
@@ -71,7 +70,6 @@ export function clear(): void {
   hideSelect();
   hideAxisGuides();
   hideDistance();
-  hideComponentChip();
   selectedEl = null;
   hoveredEl = null;
 }
@@ -79,11 +77,3 @@ export function clear(): void {
 export function isOverlayElement(el: HTMLElement): boolean {
   return isOverlayNode(el);
 }
-
-/** Show the "💠 Component · Customize" chip anchored to the current selection.
- *  No-op when nothing is selected. */
-export function showChipOnSelected(): void {
-  if (selectedEl) showComponentChip(selectedEl);
-}
-
-export { showComponentChip, hideComponentChip };
