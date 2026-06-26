@@ -7,10 +7,7 @@ import {
 import { buildVisualEditPreamble } from "../../lib/visualEditPreamble";
 import { postVisualEdit, isInFrame, buildSingleEdit } from "../../lib/visualEditClient";
 import { useEditBlocks } from "../../hooks/editBlocksContext";
-import { useDialogs } from "../feedback/Dialogs";
-import { resolveCustomizeTarget } from "../../frame/resolveCustomizeTarget";
 import { resolveInFrameComponent } from "../../frame/resolveInFrameComponent";
-import { buildCustomizePayload, markJsxRoot, newCustomizeToken, postCustomize, postCustomizeUndo, serializeTargetToJsx } from "../../lib/customizeClient";
 import { fieldValue, toNumberInput, fromNumberInput, Field, NumberField, INPUT_COMPACT, GRID_2, SegmentedToggle } from "./inspectorControls";
 import { Section } from "./Section";
 import { LayoutSection } from "./LayoutSection";
@@ -45,15 +42,6 @@ export function takePendingBlockPreamble(id: string): string | undefined {
   pendingBlockPreambles.delete(id);
   return preamble;
 }
-
-// Approved Customize copy — keep verbatim.
-const CUSTOMIZE_LOCKED_NOTE = "💠 Parts of this are prebuilt. Customize to change anything inside.";
-const CUSTOMIZE_CONFIRM_TITLE = "Customize this component?";
-const CUSTOMIZE_CONFIRM_BODY =
-  "It becomes fully editable in this screen only. The original stays the same everywhere else.";
-const CUSTOMIZE_SUCCESS = "✓ Now fully editable.";
-const CUSTOMIZE_FALLBACK =
-  "Couldn't customize this automatically — describe the change in chat instead.";
 
 function countChanges(e: EditedElement): number {
   return Object.values(e.pending).filter((v) => v !== undefined).length;
@@ -144,7 +132,6 @@ export function InspectorPanel({
   } = useEditSession();
   const { toast, dismiss } = useToast();
   const { addBlock } = useEditBlocks();
-  const { confirm } = useDialogs();
   const catalogState = useAssetsCatalog();
   const catalog = catalogState.status === "ready" ? catalogState.catalog : null;
   const [isResizing, setIsResizing] = useState(false);
@@ -171,57 +158,6 @@ export function InspectorPanel({
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
   }, [setField, batch]);
-
-  // Customize flow: panel button calls runCustomize via ref.
-  const customizeRef = useRef<() => void>(() => {});
-  customizeRef.current = async function runCustomize() {
-    const focused = batch.find((e) => e.selection.editId === focusedEditId) ?? null;
-    const sel = focused?.selection;
-    const targetFrame = frameSlug ?? "";
-    if (!sel || !targetFrame) { toast({ title: CUSTOMIZE_FALLBACK, intent: "alert" }); return; }
-
-    // 1. Resolve the outermost owner authored in THIS frame's index.tsx.
-    const target = resolveCustomizeTarget(sel.ownerChain, targetFrame);
-    if (!target) { toast({ title: CUSTOMIZE_FALLBACK, intent: "alert" }); return; }
-
-    // 2. Confirm (verbatim copy).
-    const ok = await confirm({
-      title: CUSTOMIZE_CONFIRM_TITLE,
-      description: CUSTOMIZE_CONFIRM_BODY,
-      confirmLabel: "Customize",
-      cancelLabel: "Cancel",
-    });
-    if (!ok) return;
-
-    // 3. Serialize the live rendered subtree → JSX, then POST the splice.
-    try {
-      const iframe = (frameWindow?.frameElement ?? null) as HTMLIFrameElement | null;
-      if (!iframe) { toast({ title: CUSTOMIZE_FALLBACK, intent: "alert" }); return; }
-      // Mark the ejected root so the picker can re-find it after the reload.
-      const token = newCustomizeToken();
-      const jsx = markJsxRoot(serializeTargetToJsx(iframe, target), token);
-      const r = await postCustomize(slug, buildCustomizePayload(target, jsx, targetFrame));
-      if (r.ok) {
-        // 4. Frame hot-reloads from disk. Drop the inspector selection and offer Undo.
-        clear();
-        // Arm auto-reselect: FrameCard re-picks the marked node after the reload.
-        window.dispatchEvent(new CustomEvent("arcade-studio:armReselect", { detail: { frameSlug: targetFrame, token } }));
-        // Dismiss the previous success toast (if any) before showing the new one.
-        if (lastSuccessToastId.current) dismiss(lastSuccessToastId.current);
-        lastSuccessToastId.current = toast({
-          title: CUSTOMIZE_SUCCESS,
-          intent: "success",
-          action: { label: "Undo", onClick: () => { void postCustomizeUndo(slug, targetFrame); } },
-        });
-      } else {
-        // 5. Server declined — no file change happened. Fall back to chat.
-        toast({ title: CUSTOMIZE_FALLBACK, intent: "alert" });
-      }
-    } catch {
-      // serialize / network threw — leave the frame untouched, fall back to chat.
-      toast({ title: CUSTOMIZE_FALLBACK, intent: "alert" });
-    }
-  };
 
   // Clear any in-flight debounce timer on unmount so a settled-but-not-yet-fired
   // deterministic write doesn't run after the inspector is gone (latent leak).

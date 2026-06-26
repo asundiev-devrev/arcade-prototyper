@@ -153,61 +153,7 @@ export function FrameCard({
     };
   }, [picking, frame.slug, addOrFocus, setInspectorOpen, clear, frameWindow, sessionFrameSlug, toast]);
 
-  // Auto-reselect after Customize: when the inspector ejects a component it
-  // marks the new root with a token and dispatches `armReselect`. The frame
-  // hot-reloads from disk; once it reloads we tell the picker to re-select the
-  // marked node so the inspector immediately shows the now-editable element.
-  // We post `pick-marked` on the iframe's next onLoad (the reload), and ALSO
-  // run a short bounded retry as a fallback in case the load fires before this
-  // arms or the reload is debounced. The picker's pick-marked is idempotent.
-  const armedTokenRef = useRef<string | null>(null);
-  const reselectIvRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  useEffect(() => {
-    function onArm(e: Event) {
-      const detail = (e as CustomEvent).detail as { frameSlug: string; token: string };
-      if (!detail || detail.frameSlug !== frame.slug) return;
-      // Clear any prior interval before starting a new one (rapid re-customize).
-      if (reselectIvRef.current) clearInterval(reselectIvRef.current);
-      // Remember the token so the iframe onLoad can fire pick-marked once the
-      // reloaded document is live.
-      armedTokenRef.current = detail.token;
-      const post = () =>
-        iframeRef.current?.contentWindow?.postMessage(
-          { type: "arcade-studio:pick-marked", token: detail.token }, "*",
-        );
-      // Bounded retry (6× over 1.5s) covers the Vite reload timing without
-      // coupling to the exact reload event. Cheap + idempotent.
-      let tries = 0;
-      const iv = setInterval(() => {
-        post();
-        if (++tries >= 6) {
-          clearInterval(reselectIvRef.current!);
-          reselectIvRef.current = null;
-        }
-      }, 250);
-      reselectIvRef.current = iv;
-    }
-    window.addEventListener("arcade-studio:armReselect", onArm);
-    return () => {
-      window.removeEventListener("arcade-studio:armReselect", onArm);
-      if (reselectIvRef.current) clearInterval(reselectIvRef.current);
-    };
-  }, [frame.slug]);
-
   function onIframeLoad() {
-    // If a Customize just armed a re-select, the reload that triggered this load
-    // is the post-write reload — ask the picker to re-select the marked node.
-    if (armedTokenRef.current) {
-      iframeRef.current?.contentWindow?.postMessage(
-        { type: "arcade-studio:pick-marked", token: armedTokenRef.current }, "*",
-      );
-      // Clear the token and interval once the onLoad belt successfully fires.
-      armedTokenRef.current = null;
-      if (reselectIvRef.current) {
-        clearInterval(reselectIvRef.current);
-        reselectIvRef.current = null;
-      }
-    }
     if (phase !== "running") return;
     const wrapper = wipeWrapperRef.current;
     if (!wrapper) return;
