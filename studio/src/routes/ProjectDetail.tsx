@@ -12,7 +12,9 @@ import { ChatToggle } from "../components/shell/ChatToggle";
 import { ProjectPicker } from "../components/shell/ProjectPicker";
 import { ChatStreamProvider } from "../hooks/chatStreamContext";
 import { EditSessionProvider, useEditSession } from "../hooks/editSessionContext";
-import { EditBlocksProvider } from "../hooks/editBlocksContext";
+import { EditBlocksProvider, useEditBlocks } from "../hooks/editBlocksContext";
+import { postEditUndo } from "../lib/visualEditClient";
+import { takePendingBlockPreamble } from "../components/inspector/InspectorPanel";
 import { useProjectFromHost } from "../hooks/useProjectFromHost";
 import type { Project, ChimeIn } from "../../server/types";
 import { takePendingPrompt, peekPendingPrompt } from "../lib/pendingPrompt";
@@ -101,6 +103,7 @@ function ProjectDetailShell({
   onOpenProject: (slug: string) => void;
 }) {
   const { inspectorOpen, inspectorWidth } = useEditSession();
+  const { blocks, setStatus, removeBlock } = useEditBlocks();
   // Optimistic local override for the theme toggle.
   const [localModeOverride, setLocalModeOverride] =
     useState<"light" | "dark" | null>(null);
@@ -184,6 +187,40 @@ function ProjectDetailShell({
       setChimeIns((list) => list.filter((x) => x.id !== c.id));
     },
     [routeKey],
+  );
+
+  // Undo an instant block: revert the deterministic write on disk (LIFO at the
+  // server), then mark the block undone. Also evict any stashed preamble.
+  const handleUndoBlock = useCallback(
+    async (id: string) => {
+      const block = blocks.find((b) => b.id === id);
+      if (!block) return;
+      await postEditUndo(routeKey, block.frameSlug);
+      takePendingBlockPreamble(id);
+      setStatus(id, "undone");
+    },
+    [routeKey, blocks, setStatus],
+  );
+
+  // Apply a pending AI block: send the stashed scoped preamble to the agent and
+  // flip the block to working. (The reading also evicts the side-map entry.)
+  const handleApplyBlock = useCallback(
+    (id: string) => {
+      const preamble = takePendingBlockPreamble(id);
+      if (!preamble) return;
+      source.send?.(preamble);
+      setStatus(id, "working");
+    },
+    [source, setStatus],
+  );
+
+  // Discard a pending AI block: drop it from the stream and evict its preamble.
+  const handleDiscardBlock = useCallback(
+    (id: string) => {
+      takePendingBlockPreamble(id);
+      removeBlock(id);
+    },
+    [removeBlock],
   );
 
   const [devOpen, setDevOpen] = useState(false);
@@ -385,6 +422,9 @@ function ProjectDetailShell({
             chimeIns={chimeIns}
             onApplyChimeIn={handleApplyChimeIn}
             onDismissChimeIn={handleDismissChimeIn}
+            onUndoBlock={handleUndoBlock}
+            onApplyBlock={handleApplyBlock}
+            onDiscardBlock={handleDiscardBlock}
           />
           {chatOpen && (
             <div

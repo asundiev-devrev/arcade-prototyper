@@ -9,6 +9,8 @@ import { DottedLoader } from "./computer/DottedLoader";
 import { NoFrameChangesBanner, splitNoChangesTrailer } from "./NoFrameChangesBanner";
 import { TurnStatusRow } from "./TurnStatusRow";
 import { ChimeInNote } from "./computer/ChimeInNote";
+import { EditBlockRow } from "./EditBlockRow";
+import type { EditBlock } from "../../hooks/editBlocksContext";
 
 function toolIcon(tool: string): string {
   if (tool === "Read") return "↘";
@@ -213,6 +215,10 @@ export function MessageList({
   chimeIns = [],
   onApplyChimeIn,
   onDismissChimeIn,
+  editBlocks = [],
+  onUndoBlock,
+  onApplyBlock,
+  onDiscardBlock,
 }: {
   history: ChatMessage[];
   pendingPrompt?: string;
@@ -225,6 +231,10 @@ export function MessageList({
   chimeIns?: ChimeIn[];
   onApplyChimeIn?: (c: ChimeIn) => void;
   onDismissChimeIn?: (c: ChimeIn) => void;
+  editBlocks?: EditBlock[];
+  onUndoBlock?: (id: string) => void;
+  onApplyBlock?: (id: string) => void;
+  onDiscardBlock?: (id: string) => void;
 }) {
   const hasActivity = !!currentItems && currentItems.length > 0;
   const liveTools = (currentItems ?? [])
@@ -319,6 +329,22 @@ export function MessageList({
         ))}
 
       {pendingPrompt && <BubbleRow role="user">{pendingPrompt}</BubbleRow>}
+
+      {/* Edit-block stream: instant edits land applied (with Undo); edits the
+       *  deterministic writer can't map land pending (with Apply / Discard). */}
+      {editBlocks.length > 0 && (
+        <div data-testid="edit-block-stream" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {editBlocks.map((block) => (
+            <EditBlockRow
+              key={block.id}
+              block={block}
+              onUndo={(id) => onUndoBlock?.(id)}
+              onApply={(id) => onApplyBlock?.(id)}
+              onDiscard={(id) => onDiscardBlock?.(id)}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Live turn rendering */}
       {isComputerLive ? (

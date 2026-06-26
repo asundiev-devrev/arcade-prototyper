@@ -2,6 +2,7 @@ import { type MutableRefObject } from "react";
 import { MessageList } from "./MessageList";
 import { PromptInput } from "./PromptInput";
 import { useChatStreamContext } from "../../hooks/chatStreamContext";
+import { useEditBlocks } from "../../hooks/editBlocksContext";
 import type { ChatMessage, ChimeIn } from "../../../server/types";
 import { extractFigmaUrl, decoratePromptWithFigma } from "../../lib/figmaUrl";
 import { peekPendingPrompt } from "../../lib/pendingPrompt";
@@ -23,6 +24,9 @@ export function ChatPane({
   chimeIns = [],
   onApplyChimeIn,
   onDismissChimeIn,
+  onUndoBlock,
+  onApplyBlock,
+  onDiscardBlock,
 }: {
   projectSlug: string;
   history: ChatMessage[];
@@ -30,8 +34,12 @@ export function ChatPane({
   chimeIns?: ChimeIn[];
   onApplyChimeIn?: (c: ChimeIn) => void;
   onDismissChimeIn?: (c: ChimeIn) => void;
+  onUndoBlock?: (id: string) => void;
+  onApplyBlock?: (id: string) => void;
+  onDiscardBlock?: (id: string) => void;
 }) {
   const { state, send, retry, cancel } = useChatStreamContext();
+  const { blocks } = useEditBlocks();
 
   const enhancedSend = (prompt: string, images: string[] = []) => {
     const url = extractFigmaUrl(prompt);
@@ -76,6 +84,10 @@ export function ChatPane({
         chimeIns={chimeIns}
         onApplyChimeIn={onApplyChimeIn}
         onDismissChimeIn={onDismissChimeIn}
+        editBlocks={blocks}
+        onUndoBlock={onUndoBlock}
+        onApplyBlock={onApplyBlock}
+        onDiscardBlock={onDiscardBlock}
       />
       {state.error && state.errorKind === "auth" && <AuthExpiredNotice />}
       {state.error && state.errorKind !== "auth" && (

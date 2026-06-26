@@ -32,6 +32,19 @@ const RAW_LINE_INDENT = 22; // swatch 16 + gap 6
  */
 export const pendingBlockPreambles = new Map<string, string>();
 
+/**
+ * Read AND evict the stashed preamble for a block. ProjectDetail's Apply
+ * handler calls this so it can `onSend(...)` the scoped chat instruction
+ * without re-deriving the edit — and the one-shot read keeps the side map
+ * from growing unbounded once a pending block is applied. Discard/Undo also
+ * call this to drop the entry for blocks that never get sent.
+ */
+export function takePendingBlockPreamble(id: string): string | undefined {
+  const preamble = pendingBlockPreambles.get(id);
+  pendingBlockPreambles.delete(id);
+  return preamble;
+}
+
 // Approved Customize copy — keep verbatim.
 const CUSTOMIZE_LOCKED_NOTE = "💠 Parts of this are prebuilt. Customize to change anything inside.";
 const CUSTOMIZE_CONFIRM_TITLE = "Customize this component?";
@@ -212,6 +225,12 @@ export function InspectorPanel({
     const onCustomize = () => { void customizeRef.current(); };
     window.addEventListener("arcade-studio:customize-request", onCustomize);
     return () => window.removeEventListener("arcade-studio:customize-request", onCustomize);
+  }, []);
+
+  // Clear any in-flight debounce timer on unmount so a settled-but-not-yet-fired
+  // deterministic write doesn't run after the inspector is gone (latent leak).
+  useEffect(() => () => {
+    Object.values(applyTimers.current).forEach(clearTimeout);
   }, []);
 
   // Fetch kit props for uppercase component names
