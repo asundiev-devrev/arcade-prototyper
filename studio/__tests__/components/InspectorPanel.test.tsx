@@ -28,6 +28,7 @@ function sel(editId: number, iconCandidate?: string): ElementSelection {
   return {
     editId, file: "/p/frames/home/index.tsx", line: editId, column: 1,
     componentName: "Button", tagName: "button", textEditable: true, styles: STYLES,
+    ownerChain: [],
     ...(iconCandidate ? { iconCandidate } : {}),
   };
 }

@@ -19,7 +19,8 @@ const STYLES: StyleSnapshot = {
 function sel(editId: number, over: Partial<ElementSelection> = {}): ElementSelection {
   return {
     editId, file: "/p/frames/home/index.tsx", line: editId, column: 1,
-    componentName: "Button", tagName: "button", textEditable: true, styles: STYLES, ...over,
+    componentName: "Button", tagName: "button", textEditable: true, styles: STYLES,
+    ownerChain: [], ...over,
   };
 }
 const wrap = ({ children }: { children: React.ReactNode }) => (
