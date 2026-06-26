@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type { StyleSnapshot, PendingEdits } from "../../hooks/editSessionContext";
 
@@ -46,11 +47,25 @@ export function NumberField({ id, label, displayLabel, valuePx, onChange, placeh
   id: string; label: string; displayLabel?: string; valuePx: string;
   onChange: (px: string) => void; placeholder?: string; trailing?: ReactNode;
 }) {
+  // Local draft so the user can clear/edit freely; commit to px on blur/Enter.
+  const [draft, setDraft] = useState<string>(toNumberInput(valuePx));
+  useEffect(() => { setDraft(toNumberInput(valuePx)); }, [valuePx]);
+
+  function commit() {
+    const t = draft.trim();
+    if (t === "") return;                       // empty → no edit
+    const n = Number(t);
+    if (!Number.isFinite(n)) { setDraft(toNumberInput(valuePx)); return; } // junk → revert
+    onChange(`${n}px`);
+  }
+
   const input = (
-    <input id={id} type="number" aria-label={label} style={INPUT_COMPACT}
-      value={toNumberInput(valuePx)}
+    <input id={id} type="text" inputMode="decimal" aria-label={label} style={INPUT_COMPACT}
+      value={draft}
       placeholder={placeholder}
-      onChange={(e) => onChange(fromNumberInput(e.target.value))} />
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commit(); (e.target as HTMLInputElement).blur(); } }} />
   );
   return (
     <Field label={displayLabel ?? label} htmlFor={id}>

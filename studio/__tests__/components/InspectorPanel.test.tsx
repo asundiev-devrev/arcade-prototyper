@@ -106,6 +106,7 @@ describe("InspectorPanel (batch)", () => {
     // Change width (type style is now in Style token, not here)
     const widthInput = screen.getByLabelText("W") as HTMLInputElement;
     fireEvent.change(widthInput, { target: { value: "100" } });
+    fireEvent.blur(widthInput); // NEW commit trigger
     fireEvent.click(screen.getByText(/Commit/i));
     // Wait for async commit to complete
     await vi.waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
@@ -186,6 +187,7 @@ describe("InspectorPanel (batch)", () => {
     // Make a pending edit
     const widthInput = screen.getByLabelText("W") as HTMLInputElement;
     fireEvent.change(widthInput, { target: { value: "100" } });
+    fireEvent.blur(widthInput); // NEW commit trigger
     // Now buttons should be disabled
     expect(upBtn.disabled).toBe(true);
     expect(downBtn.disabled).toBe(true);
@@ -203,6 +205,7 @@ describe("InspectorPanel (batch)", () => {
     // Make a pending edit
     const widthInput = screen.getByLabelText("W") as HTMLInputElement;
     fireEvent.change(widthInput, { target: { value: "100" } });
+    fireEvent.blur(widthInput); // NEW commit trigger
     const initialCount = screen.getByTestId("count").textContent;
     expect(initialCount).toBe("1");
     // Try to move (but buttons are disabled, so we can't actually click them)

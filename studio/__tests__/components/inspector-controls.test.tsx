@@ -20,6 +20,7 @@ describe("NumberField", () => {
     const input = screen.getByLabelText("W") as HTMLInputElement;
     expect(input.value).toBe("120");
     fireEvent.change(input, { target: { value: "200" } });
+    fireEvent.blur(input); // NEW commit trigger
     expect(onChange).toHaveBeenCalledWith("200px");
   });
 });

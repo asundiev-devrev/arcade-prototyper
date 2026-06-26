@@ -28,7 +28,9 @@ describe("AppearanceSection", () => {
   it("corner radius writes px", () => {
     const change = vi.fn();
     render(<AppearanceSection styles={STYLES} pending={{}} change={change} />);
-    fireEvent.change(screen.getByLabelText("Corner radius"), { target: { value: "8" } });
+    const input = screen.getByLabelText("Corner radius") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "8" } });
+    fireEvent.blur(input); // NEW commit trigger
     expect(change).toHaveBeenCalledWith("borderRadius", "8px");
   });
 });
