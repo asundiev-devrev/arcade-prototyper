@@ -8,6 +8,7 @@ vi.mock("node:fs/promises", () => ({ default: { readFile: (...a: unknown[]) => r
 vi.mock("../../../server/paths", () => ({ frameDir: (p: string, f: string) => `/root/projects/${p}/frames/${f}` }));
 
 import { customizeMiddleware } from "../../../server/middleware/customize";
+import { __setKitExportNamesForTest, __resetKitExportNamesForTest } from "../../../server/figma/kitBarrel";
 
 function mkReq(url: string, body: unknown): IncomingMessage {
   const req: any = (async function* () { yield Buffer.from(JSON.stringify(body)); })();
@@ -30,7 +31,12 @@ export default function F() {
 `;
 
 describe("customizeMiddleware", () => {
-  beforeEach(() => { readFile.mockReset(); writeFile.mockReset(); });
+  beforeEach(() => {
+    readFile.mockReset();
+    writeFile.mockReset();
+    // Mock a minimal set of known kit exports for validation tests
+    __setKitExportNamesForTest(["Button", "Input", "Modal", "Badge"]);
+  });
 
   it("splices the jsx, reconciles imports, writes, returns ok", async () => {
     readFile.mockResolvedValue(SRC);
@@ -80,5 +86,29 @@ describe("customizeMiddleware", () => {
     const next = vi.fn();
     await customizeMiddleware()(mkReq("/api/other", {}), mkRes(), next);
     expect(next).toHaveBeenCalled();
+  });
+
+  it("aborts (no write) when jsx references an unknown kit component", async () => {
+    readFile.mockResolvedValue(SRC);
+    const res = mkRes();
+    await customizeMiddleware()(mkReq("/api/customize/demo", {
+      frameSlug: "01-c", targetComponentName: "ComputerScene", line: 4, column: 6,
+      jsx: `<div><NotExported>content</NotExported></div>`,
+    }), res, () => {});
+    const body = JSON.parse(res.body);
+    expect(body.ok).toBe(false);
+    expect(body.reason).toMatch(/unknown-component:NotExported/);
+    expect(writeFile).not.toHaveBeenCalled();
+  });
+
+  it("allows lowercase host tags without validation", async () => {
+    readFile.mockResolvedValue(SRC);
+    const res = mkRes();
+    await customizeMiddleware()(mkReq("/api/customize/demo", {
+      frameSlug: "01-c", targetComponentName: "ComputerScene", line: 4, column: 6,
+      jsx: `<div><span>text</span></div>`,
+    }), res, () => {});
+    expect(JSON.parse(res.body)).toEqual({ ok: true });
+    expect(writeFile).toHaveBeenCalled();
   });
 });

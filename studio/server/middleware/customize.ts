@@ -5,6 +5,7 @@ import path from "node:path";
 import { frameDir } from "../paths";
 import { spliceComponentInSource } from "../customize/spliceComponent";
 import { reconcileArcadeImports } from "../customize/imports";
+import { kitExportNames } from "../figma/kitBarrel";
 
 async function readJson(req: IncomingMessage): Promise<any> {
   let buf = ""; for await (const c of req) buf += c;
@@ -65,7 +66,22 @@ export function customizeMiddleware() {
       const source = await fs.readFile(file, "utf-8");
       const spliced = spliceComponentInSource(source, targetComponentName, line, column, jsx);
       if (!spliced.ok) return send(res, 200, spliced);
-      const withImports = reconcileArcadeImports(spliced.source, kitNamesIn(jsx));
+
+      // Validate that all capitalized JSX tags in the jsx exist in the kit exports.
+      const referencedNames = kitNamesIn(jsx);
+      const validExports = kitExportNames();
+      if (validExports.size > 0) { // Only validate if we successfully loaded the kit exports
+        for (const name of referencedNames) {
+          if (!validExports.has(name)) {
+            return send(res, 200, { ok: false, reason: `unknown-component:${name}` });
+          }
+        }
+      } else {
+        // Kit exports couldn't be loaded — degrade gracefully (skip validation).
+        console.warn("[customize] Kit exports unavailable; skipping import validation.");
+      }
+
+      const withImports = reconcileArcadeImports(spliced.source, referencedNames);
       undoSnapshots.set(`${slug}::${frameSlug}`, source); // snapshot BEFORE write
       await fs.writeFile(file, withImports, "utf-8");
       return send(res, 200, { ok: true });

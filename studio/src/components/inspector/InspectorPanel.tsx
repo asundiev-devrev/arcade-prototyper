@@ -108,13 +108,14 @@ export function InspectorPanel({
     batch, focusedEditId, frameSlug, frameWindow, inspectorOpen, inspectorWidth,
     setField, resetField, removeElement, focus, clear, setInspectorWidth,
   } = useEditSession();
-  const { toast } = useToast();
+  const { toast, dismiss } = useToast();
   const { confirm } = useDialogs();
   const catalogState = useAssetsCatalog();
   const catalog = catalogState.status === "ready" ? catalogState.catalog : null;
   const [isResizing, setIsResizing] = useState(false);
   const dragOrigin = useRef<{ startX: number; startWidth: number } | null>(null);
   const [kitProps, setKitProps] = useState<{ name: string; values: string[] }[]>([]);
+  const lastSuccessToastId = useRef<string | null>(null);
 
   // In-place text edits arrive from the iframe as text-changed messages.
   useEffect(() => {
@@ -164,7 +165,9 @@ export function InspectorPanel({
         //    Belt-and-suspenders: explicitly tear down the chip before reload.
         frameWindow?.postMessage({ type: "arcade-studio:hide-component-chip" }, "*");
         clear();
-        toast({
+        // Dismiss the previous success toast (if any) before showing the new one.
+        if (lastSuccessToastId.current) dismiss(lastSuccessToastId.current);
+        lastSuccessToastId.current = toast({
           title: CUSTOMIZE_SUCCESS,
           intent: "success",
           action: { label: "Undo", onClick: () => { void postCustomizeUndo(slug, targetFrame); } },
