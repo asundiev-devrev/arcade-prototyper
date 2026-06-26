@@ -11,6 +11,7 @@
 import {
   showHover as paintHover, hideHover, showSelect, hideSelect,
   updateSelectPosition, destroyOverlays, resetOverlayTeardown, isOverlayElement as isOverlayNode,
+  showComponentChip, hideComponentChip,
 } from "./overlays";
 import {
   showAxisGuides, hideAxisGuides, showDistance, hideDistance, teardownMeasureGuides, resetMeasureTeardown,
@@ -77,3 +78,5 @@ export function clear(): void {
 export function isOverlayElement(el: HTMLElement): boolean {
   return isOverlayNode(el);
 }
+
+export { showComponentChip, hideComponentChip };
