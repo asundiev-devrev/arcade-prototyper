@@ -724,9 +724,9 @@ async function runClaudeBranch(ctx: {
       if (m) changedFrameSlugs.add(m[1]);
     }
     if (changedFrameSlugs.size > 0) {
-      void import("../expand/postGenHook").then(({ expandChangedFrames }) =>
-        expandChangedFrames(slug, Array.from(changedFrameSlugs))
-      );
+      void import("../expand/postGenHook")
+        .then(({ expandChangedFrames }) => expandChangedFrames(slug, Array.from(changedFrameSlugs)))
+        .catch((err) => console.warn("[expand] post-gen hook failed to load/run:", err instanceof Error ? err.message : err));
     }
   }
   // Telemetry: classify the turn (build/edit/none) + measure the frame it
