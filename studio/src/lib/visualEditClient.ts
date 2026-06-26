@@ -125,3 +125,27 @@ export async function postVisualEdit(
     return { ok: false, reason: "network" };
   }
 }
+
+export function buildSingleEdit(
+  sel: EditedElement["selection"], field: string, value: string, frameSlug: string,
+): VisualEditPayload {
+  const fields: FieldEdit[] = [];
+  let text: string | undefined;
+  let iconSwap: string | undefined;
+  if (field === "text") text = value;
+  else if (field === "iconSwap") iconSwap = value;
+  else fields.push({ field, value });
+  return {
+    frameSlug,
+    edits: [{ file: sel.file, line: sel.line, column: sel.column, text, fields, iconSwap }],
+  };
+}
+
+export async function postEditUndo(slug: string, frameSlug: string): Promise<{ ok: boolean; reason?: string }> {
+  try {
+    const res = await fetch(`/api/edit-undo/${slug}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ frameSlug }),
+    });
+    return await res.json();
+  } catch { return { ok: false, reason: "network" }; }
+}
