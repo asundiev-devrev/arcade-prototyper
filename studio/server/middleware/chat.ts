@@ -775,6 +775,8 @@ async function runClaudeBranch(ctx: {
       props: {
         project_slug_hash: hashSlug(slug),
         duration_ms: lastMetrics?.durationMs,
+        ttft_ms: lastMetrics?.ttftMs,
+        num_turns: lastMetrics?.numTurns,
         model: lastMetrics?.model,
         tokens_input: lastMetrics?.inputTokens,
         tokens_output: lastMetrics?.outputTokens,
@@ -788,6 +790,8 @@ async function runClaudeBranch(ctx: {
       props: {
         project_slug_hash: hashSlug(slug),
         duration_ms: lastMetrics?.durationMs,
+        ttft_ms: lastMetrics?.ttftMs,
+        num_turns: lastMetrics?.numTurns,
         error_kind: classifyGenerationError({ error: endResult.error, timedOut: didStall, exitCode: null }),
         model: lastMetrics?.model,
       },

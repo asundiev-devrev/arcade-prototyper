@@ -78,6 +78,7 @@ export function ChatPane({
         history={history}
         pendingPrompt={pendingPrompt}
         currentItems={state.items}
+        activeWrites={state.activeWrites}
         busy={phase === "running"}
         phase={phase}
         source={state.source}

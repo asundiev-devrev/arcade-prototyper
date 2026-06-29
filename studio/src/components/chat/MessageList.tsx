@@ -10,7 +10,9 @@ import { NoFrameChangesBanner, splitNoChangesTrailer } from "./NoFrameChangesBan
 import { TurnStatusRow } from "./TurnStatusRow";
 import { ChimeInNote } from "./computer/ChimeInNote";
 import { EditBlockRow } from "./EditBlockRow";
+import { LiveCodePreview } from "./LiveCodePreview";
 import type { EditBlock } from "../../hooks/editBlocksContext";
+import type { StreamState } from "../../hooks/chatStreamReducer";
 
 /** Returns true if this block is the newest applied instant block for its frame
  *  (LIFO-consistent undo eligibility). Only that block may show an actionable Undo.
@@ -232,6 +234,7 @@ export function MessageList({
   history,
   pendingPrompt,
   currentItems,
+  activeWrites = {},
   busy,
   phase = "idle",
   source = "claude",
@@ -249,6 +252,7 @@ export function MessageList({
   history: ChatMessage[];
   pendingPrompt?: string;
   currentItems?: ChatTurnItem[];
+  activeWrites?: StreamState["activeWrites"];
   busy?: boolean;
   phase?: TurnPhase;
   source?: "claude" | "computer";
@@ -394,6 +398,12 @@ export function MessageList({
                 <ActivityRow key={i} item={item} turnStartedAt={turnStartedAt} />
               ))}
             </div>
+          )}
+          {/* Live code stream: the agent's in-flight Write/Edit scrolls by as
+           *  it's written, so the wait reads as immediate progress (first token
+           *  ~5s) instead of a blank animation until the turn ends. */}
+          {phase === "running" && !suppressActivity && (
+            <LiveCodePreview activeWrites={activeWrites} />
           )}
           {/* Only show the live status row while the turn is running or has
            *  errored (error needs surfacing even without an assistant

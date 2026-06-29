@@ -62,7 +62,7 @@ export function buildVisualEditPreamble(elements: EditedElement[], frameRel: str
     "",
     "Express every change with idiomatic Tailwind utility classes and arcade-gen design tokens (e.g. text-(--fg-...), bg-(--bg-...), p-4, text-lg, font-semibold) — map raw px/colors to the nearest token or scale step. Do NOT write raw hex or inline style props.",
     "",
-    "A reply without a corresponding Edit or Write tool call is a failed turn. If your Edit reports zero or multiple matches, widen the surrounding context and retry, or fall back to Write with the full new file contents.",
+    "Use the Edit tool with a tight anchor and change only the lines that must change — do NOT rewrite or re-emit the whole file. A reply without a corresponding Edit or Write tool call is a failed turn. If your Edit reports zero or multiple matches, widen the surrounding context and retry; only fall back to Write with the full file contents when a unique anchor truly can't be found.",
     "",
   ].join("\n");
 }
