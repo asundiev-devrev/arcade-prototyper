@@ -32,6 +32,7 @@ export interface ElementSelection {
   /** Named-component owner chain (innermost→outermost) with call-site files,
    *  for resolving the Customize target. */
   ownerChain: import("../frame/resolveInFrameComponent").OwnerLink[];
+  bindPath?: string;
 }
 export interface EditedElement {
   selection: ElementSelection;
