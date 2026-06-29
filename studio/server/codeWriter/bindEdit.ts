@@ -19,7 +19,7 @@ function reparses(source: string): boolean {
 }
 
 /** Unwrap common wrapper expressions (as, satisfies, parenthesized) to reach the inner expression. */
-function unwrap(expr: ts.Expression): ts.Expression {
+export function unwrap(expr: ts.Expression): ts.Expression {
   let current = expr;
   while (
     ts.isAsExpression(current) ||
@@ -32,7 +32,7 @@ function unwrap(expr: ts.Expression): ts.Expression {
 }
 
 /** Find the `const <name> = [ … ]` array literal initializer anywhere in the file. */
-function findArrayLiteral(sf: ts.SourceFile, name: string): ts.ArrayLiteralExpression | null {
+export function findArrayLiteral(sf: ts.SourceFile, name: string): ts.ArrayLiteralExpression | null {
   let found: ts.ArrayLiteralExpression | null = null;
   function visit(node: ts.Node) {
     if (
