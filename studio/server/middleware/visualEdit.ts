@@ -55,7 +55,7 @@ export function visualEditMiddleware() {
     try {
       const file = path.join(frameDir(slug, body.frameSlug), "index.tsx");
       const before = await fs.readFile(file, "utf-8");
-      const result = await writeBatch(body.frameSlug, body.edits);
+      const result = await writeBatch(body.frameSlug, body.edits, slug);
       if (result.ok) pushSnapshot(slug, body.frameSlug, before);
       send(res, 200, result);
     } catch (err) {

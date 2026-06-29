@@ -121,17 +121,19 @@ function countLines(s: string): number {
 }
 
 /** Apply a whole batch atomically: all-or-nothing. */
-export async function writeBatch(frameSlug: string, edits: ElementEdit[]): Promise<WriteBatchResult> {
+export async function writeBatch(frameSlug: string, edits: ElementEdit[], projectSlug?: string): Promise<WriteBatchResult> {
   if (edits.length === 0) return { ok: false, reason: "empty-batch" };
-  // All edits in a batch share one frame; derive the project slug from the path.
-  const file = edits[0].file;
-  const m = /\/projects\/([^/]+)\/frames\//.exec(file);
-  if (!m) return { ok: false, reason: "unresolved-project" };
-  const projectSlug = m[1];
-  const filePath = path.join(frameDir(projectSlug, frameSlug), "index.tsx");
+  // All edits in a batch share one frame; derive the project slug from the path
+  // (bind edits have file:"" so they need an explicit projectSlug param).
+  const projectSlug_ = projectSlug ?? (() => {
+    const m = /\/projects\/([^/]+)\/frames\//.exec(edits[0].file);
+    return m ? m[1] : null;
+  })();
+  if (!projectSlug_) return { ok: false, reason: "unresolved-project" };
+  const filePath = path.join(frameDir(projectSlug_, frameSlug), "index.tsx");
 
   // Path-safety: ensure resolved path is inside the project's frames dir.
-  const base = frameDir(projectSlug, frameSlug);
+  const base = frameDir(projectSlug_, frameSlug);
   if (!path.resolve(filePath).startsWith(path.resolve(base))) {
     return { ok: false, reason: "path-escape" };
   }
