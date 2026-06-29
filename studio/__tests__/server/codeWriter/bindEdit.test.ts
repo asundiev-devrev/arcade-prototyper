@@ -68,4 +68,47 @@ describe("writeBindEdit", () => {
       expect((sf as any).parseDiagnostics?.length ?? 0).toBe(0);
     }
   });
+
+  it("unwraps as-const wrapper (the confirmed root-cause bug)", () => {
+    const asConstFrame = `import { ComputerScene } from "arcade-prototypes";
+const transcript = [
+  { id: 1, role: "user", text: "A" },
+] as const;
+export default function F() {
+  return <ComputerScene transcript={transcript} />;
+}
+`;
+    const r = writeBindEdit(asConstFrame, "transcript[id=1].text", "B");
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.source).toContain(`text: "B"`);
+  });
+
+  it("unwraps satisfies wrapper", () => {
+    const satisfiesFrame = `import { ComputerScene } from "arcade-prototypes";
+type Message = any;
+const transcript = [
+  { id: 1, role: "user", text: "A" },
+] satisfies Message[];
+export default function F() {
+  return <ComputerScene transcript={transcript} />;
+}
+`;
+    const r = writeBindEdit(satisfiesFrame, "transcript[id=1].text", "B");
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.source).toContain(`text: "B"`);
+  });
+
+  it("unwraps parenthesized wrapper", () => {
+    const parenFrame = `import { ComputerScene } from "arcade-prototypes";
+const transcript = ([
+  { id: 1, role: "user", text: "A" },
+]);
+export default function F() {
+  return <ComputerScene transcript={transcript} />;
+}
+`;
+    const r = writeBindEdit(parenFrame, "transcript[id=1].text", "B");
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.source).toContain(`text: "B"`);
+  });
 });

@@ -169,7 +169,10 @@ export function InspectorPanel({
   // element). The props we edit live on that in-frame instance — the one the
   // frame's own index.tsx placed — so its name drives the kit-props lookup.
   const focusedNow = batch.find((e) => e.selection.editId === focusedEditId) ?? null;
-  const isComponentSel = !!focusedNow && !isInFrame(focusedNow.selection.file, frameSlug ?? "");
+  // A bound selection (bindPath set) is a data-edit, NOT a component-props edit,
+  // even if the file is off-frame. Bound messages should show the double-click
+  // hint, not the Ask-AI button.
+  const isComponentSel = !!focusedNow && !focusedNow.selection.bindPath && !isInFrame(focusedNow.selection.file, frameSlug ?? "");
   const inFrameComp = isComponentSel && focusedNow
     ? resolveInFrameComponent(focusedNow.selection.ownerChain, frameSlug ?? "")
     : null;
@@ -261,7 +264,7 @@ export function InspectorPanel({
       } else {
         // Bind couldn't resolve (bare frame / id gone) → show error block, don't auto-prompt.
         addBlock({
-          label: "Couldn't edit this message inline — its data isn't in the frame",
+          label: "Edit didn't apply — try Ask AI for this one",
           kind: "instant",
           status: "error",
           frameSlug: targetFrame,

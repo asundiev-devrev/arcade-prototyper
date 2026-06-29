@@ -18,6 +18,19 @@ function reparses(source: string): boolean {
   return diags.length === 0;
 }
 
+/** Unwrap common wrapper expressions (as, satisfies, parenthesized) to reach the inner expression. */
+function unwrap(expr: ts.Expression): ts.Expression {
+  let current = expr;
+  while (
+    ts.isAsExpression(current) ||
+    ts.isSatisfiesExpression(current) ||
+    ts.isParenthesizedExpression(current)
+  ) {
+    current = current.expression;
+  }
+  return current;
+}
+
 /** Find the `const <name> = [ … ]` array literal initializer anywhere in the file. */
 function findArrayLiteral(sf: ts.SourceFile, name: string): ts.ArrayLiteralExpression | null {
   let found: ts.ArrayLiteralExpression | null = null;
@@ -26,9 +39,11 @@ function findArrayLiteral(sf: ts.SourceFile, name: string): ts.ArrayLiteralExpre
       ts.isVariableDeclaration(node) &&
       ts.isIdentifier(node.name) &&
       node.name.text === name &&
-      node.initializer &&
-      ts.isArrayLiteralExpression(node.initializer)
-    ) found = node.initializer;
+      node.initializer
+    ) {
+      const unwrapped = unwrap(node.initializer);
+      if (ts.isArrayLiteralExpression(unwrapped)) found = unwrapped;
+    }
     if (!found) ts.forEachChild(node, visit);
   }
   visit(sf);
