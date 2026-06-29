@@ -5,6 +5,9 @@ export interface FieldEdit { field: string; value: string }
 export interface ElementEdit {
   file: string; line: number; column: number;
   text?: string; fields: FieldEdit[]; iconSwap?: string;
+  /** When set, this edit targets a frame DATA binding (e.g. a ComputerScene
+   *  transcript message), not a JSX node. `text` carries the new string. */
+  bindPath?: string;
 }
 export interface VisualEditPayload { frameSlug: string; edits: ElementEdit[] }
 
@@ -139,6 +142,10 @@ export function buildSingleEdit(
     frameSlug,
     edits: [{ file: sel.file, line: sel.line, column: sel.column, text, fields, iconSwap }],
   };
+}
+
+export function buildBindEdit(bindPath: string, value: string, frameSlug: string): VisualEditPayload {
+  return { frameSlug, edits: [{ file: "", line: 0, column: 0, bindPath, text: value, fields: [] }] };
 }
 
 export async function postEditUndo(slug: string, frameSlug: string): Promise<{ ok: boolean; reason?: string }> {

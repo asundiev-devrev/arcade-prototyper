@@ -6,11 +6,15 @@ import { translateField } from "./pxScale";
 import { applyClass, hasSpacingShorthand } from "./classFamily";
 import { locateJsx } from "./locateJsx";
 import { readClassName, readTextChild, readAttr, splice } from "./patchSource";
+import { writeBindEdit } from "./bindEdit";
 
 export interface FieldEdit { field: string; value: string }
 export interface ElementEdit {
   file: string; line: number; column: number;
   text?: string; fields: FieldEdit[]; iconSwap?: string;
+  /** When set, this edit targets a frame DATA binding (e.g. a ComputerScene
+   *  transcript message), not a JSX node. `text` carries the new string. */
+  bindPath?: string;
 }
 export interface VisualEditRequest { frameSlug: string; edits: ElementEdit[] }
 export type WriteResult = { ok: true } | { ok: false; reason: string };
@@ -28,6 +32,14 @@ function reparses(source: string): boolean {
 export function applyEditsToSource(
   source: string, edit: ElementEdit,
 ): (WriteResult & { source?: string }) {
+  // Frame-DATA binding edit (e.g. a transcript message). Bypasses JSX location
+  // entirely — targets the named const array by message id.
+  if (edit.bindPath) {
+    if (typeof edit.text !== "string") return { ok: false, reason: "bind-no-text" };
+    const r = writeBindEdit(source, edit.bindPath, edit.text);
+    return r.ok ? { ok: true, source: r.source } : { ok: false, reason: r.reason };
+  }
+
   if (edit.iconSwap) return { ok: false, reason: "icon-swap" };
 
   let out = source;
