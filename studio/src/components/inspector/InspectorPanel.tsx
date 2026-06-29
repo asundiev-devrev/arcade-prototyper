@@ -5,7 +5,7 @@ import {
   TOKEN_PREFIX, isTokenPending, tokenClass,
 } from "../../hooks/editSessionContext";
 import { buildVisualEditPreamble } from "../../lib/visualEditPreamble";
-import { postVisualEdit, isInFrame, buildSingleEdit } from "../../lib/visualEditClient";
+import { postVisualEdit, isInFrame, buildSingleEdit, buildBindEdit } from "../../lib/visualEditClient";
 import { useEditBlocks } from "../../hooks/editBlocksContext";
 import { resolveInFrameComponent } from "../../frame/resolveInFrameComponent";
 import { fieldValue, toNumberInput, fromNumberInput, Field, NumberField, INPUT_COMPACT, GRID_2, SegmentedToggle } from "./inspectorControls";
@@ -241,11 +241,29 @@ export function InspectorPanel({
     scheduleApply(elem.selection, key as string, `${TOKEN_PREFIX}${className}`);
   }
 
+  function askAiForBind(sel: EditedElement["selection"], value: string) {
+    onSend(`In frames/${frameSlug}/index.tsx, change the message bound to ${sel.bindPath} to: "${value}".`);
+  }
+
   // Deterministic write-on-settle: each settled field edit writes to code and
   // produces a block. {ok:true} → instant/applied block; {ok:false} → ai/pending
   // block (NOT auto-sent — Task 8's Apply will send the stashed preamble).
   async function applyFieldEdit(sel: EditedElement["selection"], field: string, value: string) {
     const targetFrame = frameSlug ?? "";
+    // Bound data edit (e.g. a ComputerScene transcript message): route to the
+    // data writer by bindPath, bypassing the JSX-source gate entirely.
+    if (sel.bindPath && field === "text") {
+      if (!targetFrame) return;
+      const det = await postVisualEdit(slug, buildBindEdit(sel.bindPath, value, targetFrame));
+      if (det.ok) {
+        addBlock({ label: humanLabel("text", value), kind: "instant", status: "applied", frameSlug: targetFrame });
+        resetField(sel.editId, field as any);
+      } else {
+        // Bind couldn't resolve (bare frame / id gone) → scoped agent ask.
+        askAiForBind(sel, value);
+      }
+      return;
+    }
     // Off-frame (shared kit) elements are the Customize path, not field edits.
     if (!targetFrame || !isInFrame(sel.file, targetFrame)) return;
     const det = await postVisualEdit(slug, buildSingleEdit(sel, field, value, targetFrame));
