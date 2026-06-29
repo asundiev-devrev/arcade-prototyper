@@ -7,6 +7,7 @@ import { applyClass, hasSpacingShorthand } from "./classFamily";
 import { locateJsx } from "./locateJsx";
 import { readClassName, readTextChild, readAttr, splice } from "./patchSource";
 import { writeBindEdit } from "./bindEdit";
+import { writeBindStructure, type StructureOp } from "./bindStructure";
 
 export interface FieldEdit { field: string; value: string }
 export interface ElementEdit {
@@ -15,6 +16,9 @@ export interface ElementEdit {
   /** When set, this edit targets a frame DATA binding (e.g. a ComputerScene
    *  transcript message), not a JSX node. `text` carries the new string. */
   bindPath?: string;
+  /** When set, this edit performs a structure op on the frame's named data array. */
+  structureOp?: StructureOp;
+  arrayName?: string;
 }
 export interface VisualEditRequest { frameSlug: string; edits: ElementEdit[] }
 export type WriteResult = { ok: true } | { ok: false; reason: string };
@@ -32,6 +36,13 @@ function reparses(source: string): boolean {
 export function applyEditsToSource(
   source: string, edit: ElementEdit,
 ): (WriteResult & { source?: string }) {
+  // Structure operation on a frame DATA array (e.g. insert/delete/move/setRole).
+  if (edit.structureOp) {
+    if (!edit.arrayName) return { ok: false, reason: "structure-no-array" };
+    const r = writeBindStructure(source, edit.arrayName, edit.structureOp);
+    return r.ok ? { ok: true, source: r.source } : { ok: false, reason: r.reason };
+  }
+
   // Frame-DATA binding edit (e.g. a transcript message). Bypasses JSX location
   // entirely — targets the named const array by message id.
   if (edit.bindPath) {
