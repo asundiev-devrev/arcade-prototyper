@@ -130,7 +130,7 @@ export function writeBindStructure(
       const beforeStart = arr2.elements[j].getStart(sf2);
       const lineStart = del.source.lastIndexOf("\n", beforeStart) + 1;
       const ins = multi ? `${elText},\n${indent}` : `${elText}, `;
-      out = del.source.slice(0, multi ? lineStart : beforeStart) + (multi ? `${indent}${ins}`.replace(indent + indent, indent) : ins) + del.source.slice(multi ? lineStart : beforeStart);
+      out = del.source.slice(0, multi ? lineStart : beforeStart) + (multi ? `${indent}${ins}` : ins) + del.source.slice(multi ? lineStart : beforeStart);
       // Simpler robust fallback: if the above is fragile, just splice before beforeStart.
       if (!reparses(out)) {
         out = del.source.slice(0, beforeStart) + `${elText}, ` + del.source.slice(beforeStart);
@@ -152,7 +152,10 @@ export function writeBindStructure(
     if (op.role === "user") {
       const sf3 = parse(work);
       const arr3 = findArrayLiteral(sf3, arrayName)!;
-      const el3 = arr3.elements[idxOf(op.id)];
+      // Re-find the element on the RE-PARSED tree (do not reuse idxOf, which
+      // closes over the original `els`) — keeps the re-parse discipline honest.
+      const i3 = arr3.elements.findIndex((e) => elementId(e) === op.id);
+      const el3 = i3 === -1 ? undefined : arr3.elements[i3];
       if (el3 && ts.isObjectLiteralExpression(el3)) {
         const art = el3.properties.find(
           (p) => ts.isPropertyAssignment(p) && !!p.name && p.name.getText().replace(/['"]/g, "") === "artefact",
