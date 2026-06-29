@@ -1,7 +1,13 @@
 # Overlay Tweaks — Direct Visual Editing of Rendered Prototypes — Design
 
 **Date:** 2026-06-29
-**Status:** Approved design, pre-implementation
+**Status:** SUPERSEDED (do not implement) — an adversarial code-level review found
+the overlay's structural anchor silently re-applies to the wrong node on
+live-mutating composites, and Commit structurally cannot write composite-internal
+tweaks to code (kit source is shared/forbidden; baked content has no frame-source
+location). Root cause: scene composites bake CONTENT as internal constants. The
+real fix is at generation — make scene composites data-driven so content lives in
+the frame. Superseded by `2026-06-29-data-driven-composites-design.md`.
 **Product:** Arcade Studio (`studio/`)
 
 ## Problem
