@@ -17,6 +17,8 @@ import { EditableTokenChip } from "./EditableTokenChip";
 import { useAssetsCatalog } from "../assets/useAssetsCatalog";
 import { iconNameSet, iconSvg, iconList } from "./iconCatalog";
 import { IconSwapSection } from "./IconSwapSection";
+import type { KitProp2 } from "../../../server/codeWriter/compositeProps";
+import { renderPropField } from "./propField";
 
 const MIN_W = 280, MAX_W = 560;
 const RAW_LINE_INDENT = 22; // swatch 16 + gap 6
@@ -136,7 +138,8 @@ export function InspectorPanel({
   const catalog = catalogState.status === "ready" ? catalogState.catalog : null;
   const [isResizing, setIsResizing] = useState(false);
   const dragOrigin = useRef<{ startX: number; startWidth: number } | null>(null);
-  const [kitProps, setKitProps] = useState<{ name: string; values: string[] }[]>([]);
+  const [kitProps, setKitProps] = useState<KitProp2[]>([]);
+  const [instanceAttrs, setInstanceAttrs] = useState<Record<string, string>>({});
   const lastSuccessToastId = useRef<string | null>(null);
   // Debounce timers for the deterministic write-on-settle, keyed by editId:field.
   const applyTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -183,6 +186,17 @@ export function InspectorPanel({
       .catch(() => { if (!cancelled) setKitProps([]); });
     return () => { cancelled = true; };
   }, [inFrameComp?.componentName]);
+
+  useEffect(() => {
+    if (!inFrameComp || !frameSlug) { setInstanceAttrs({}); return; }
+    let cancelled = false;
+    const q = `frame=${encodeURIComponent(frameSlug)}&line=${inFrameComp.line}&col=${inFrameComp.column}`;
+    fetch(`/api/instance-props/${encodeURIComponent(slug)}?${q}`)
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) setInstanceAttrs(d.attrs ?? {}); })
+      .catch(() => { if (!cancelled) setInstanceAttrs({}); });
+    return () => { cancelled = true; };
+  }, [inFrameComp?.file, inFrameComp?.line, inFrameComp?.column, frameSlug, slug]);
 
   // Resize drag (mirrors the chat-pane handle in ProjectDetail).
   useEffect(() => {
@@ -306,6 +320,24 @@ export function InspectorPanel({
           });
         } else {
           askAi(`set its ${propName} to ${value}`);
+        }
+      });
+  }
+  function changePropByKind(prop: KitProp2, value: string) {
+    const prefix = prop.kind === "toggle" || prop.kind === "number" ? "propExpr" : "prop";
+    if (!inFrameComp || !focused) return;
+    if (value === "") return; // "—" = no change
+    const sel = { ...focused.selection, file: inFrameComp.file, line: inFrameComp.line, column: inFrameComp.column };
+    setField(focused.selection.editId, `${prefix}:${prop.name}` as any, value);
+    void postVisualEdit(slug, buildSingleEdit(sel, `${prefix}:${prop.name}`, value, frameSlug ?? ""))
+      .then((det) => {
+        if (det.ok) {
+          addBlock({
+            label: `${inFrameComp.componentName}.${prop.name} → ${value}`,
+            kind: "instant", status: "applied", frameSlug: frameSlug ?? "",
+          });
+        } else {
+          askAi(`set its ${prop.name} to ${value}`);
         }
       });
   }
@@ -440,21 +472,42 @@ export function InspectorPanel({
                   <Section title={inFrameComp ? `Editing <${inFrameComp.componentName}>` : "Component"}>
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       {kitProps.length > 0 ? (
-                        kitProps.map((p) => (
-                          <Field key={p.name} label={p.name}>
-                            <select aria-label={p.name} style={INPUT_COMPACT}
-                              value={(pending[`prop:${p.name}`] as string) ?? ""}
-                              onChange={(e) => changeProp(p.name, e.target.value)}>
-                              <option value="">—</option>
-                              {p.values.map((v) => <option key={v} value={v}>{v}</option>)}
-                            </select>
-                          </Field>
-                        ))
+                        kitProps.map((p) => {
+                          const pendingVal = pending[`prop:${p.name}`] as string | undefined;
+                          const pendingExpr = pending[`propExpr:${p.name}`] as string | undefined;
+                          const current = pendingVal ?? pendingExpr ?? instanceAttrs[p.name];
+                          const d = renderPropField(p, current);
+                          return (
+                            <Field key={p.name} label={p.name}>
+                              {d.widget === "select" ? (
+                                <select aria-label={p.name} style={INPUT_COMPACT} value={d.value}
+                                  onChange={(e) => changePropByKind(p, e.target.value)}>
+                                  <option value="">—</option>
+                                  {(d.values ?? []).map((v) => <option key={v} value={v}>{v}</option>)}
+                                </select>
+                              ) : d.widget === "toggle" ? (
+                                <SegmentedToggle ariaLabel={p.name}
+                                  options={[{ value: "false", label: "Off" }, { value: "true", label: "On" }]}
+                                  value={d.value === "true" ? "true" : "false"}
+                                  onChange={(v) => changePropByKind(p, v)} />
+                              ) : (
+                                <input aria-label={p.name} style={INPUT_COMPACT}
+                                  type={d.widget === "number" ? "number" : "text"}
+                                  defaultValue={d.value}
+                                  onBlur={(e) => changePropByKind(p, e.target.value)} />
+                              )}
+                            </Field>
+                          );
+                        })
                       ) : (
                         <span style={{ fontSize: 11, color: "var(--fg-neutral-subtle)", lineHeight: 1.45 }}>
                           No editable properties — use Ask AI to change this.
                         </span>
                       )}
+                      {/* Honesty boundary: the panel edits PROPS; baked-in text/structure is Ask-AI. */}
+                      <span style={{ fontSize: 11, color: "var(--fg-neutral-subtle)", lineHeight: 1.45 }}>
+                        Text content and structure are edited via Ask AI.
+                      </span>
                       <Button variant="primary" onClick={() => askAi("describe the change")}>Ask AI to change this</Button>
                     </div>
                   </Section>
