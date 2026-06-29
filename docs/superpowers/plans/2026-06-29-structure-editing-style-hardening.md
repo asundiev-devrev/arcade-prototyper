@@ -285,29 +285,27 @@ export function writeBindStructure(
     const entry = entryText(op.entry, newId);
     const multi = isMultiLine(sf, arr);
     const indent = elementIndent(source, arr, sf);
-    if (op.afterId == null) {
-      // append at end: insert before the array's closing "]"
+    // UNIFORM insert strategy (correct for all 3 real formats):
+    // pick the "anchor" element to insert AFTER — the afterId element, or the
+    // LAST element when afterId is null (append). Then insert immediately after
+    // that element's own end (its closing `}`), BEFORE any trailing comma. We
+    // always emit the new entry as: ", <entry>" (single-line) or ",\n<indent><entry>"
+    // (multi-line). Inserting right after the brace (not after the separator
+    // comma) guarantees exactly one separator on each side regardless of whether
+    // a trailing comma exists, so there is never a doubled or orphaned comma.
+    if (els.length === 0) {
+      // empty array: drop the entry between the brackets, no separators needed.
       const closeBracket = arr.getEnd() - 1; // position of "]"
-      // find the last element's end; insert ", entry" (single) or ",\n<indent>entry" (multi)
-      if (els.length === 0) {
-        out = source.slice(0, closeBracket) + entry + source.slice(closeBracket);
-      } else {
-        const lastEnd = els[els.length - 1].getEnd();
-        const hadTrailingComma = source.slice(lastEnd, closeBracket).includes(",");
-        const sep = hadTrailingComma ? "" : ",";
-        const ins = multi ? `${sep}\n${indent}${entry},` : `${sep} ${entry}`;
-        out = source.slice(0, lastEnd) + ins + source.slice(lastEnd);
-      }
+      out = source.slice(0, closeBracket) + entry + source.slice(closeBracket);
     } else {
-      const i = idxOf(op.afterId);
-      if (i === -1) return { ok: false, reason: "afterId-not-found" };
-      const afterEnd = els[i].getEnd();
-      const ins = multi ? `\n${indent}${entry},` : `, ${entry}`;
-      // afterEnd is just before the element's trailing comma (if any); insert after the comma.
-      // find the next comma after afterEnd within the array.
-      const commaIdx = source.indexOf(",", afterEnd);
-      const insertAt = (commaIdx !== -1 && commaIdx < arr.getEnd()) ? commaIdx + 1 : afterEnd;
-      out = source.slice(0, insertAt) + ins + source.slice(insertAt);
+      const anchorIdx = op.afterId == null ? els.length - 1 : idxOf(op.afterId);
+      if (anchorIdx === -1) return { ok: false, reason: "afterId-not-found" };
+      const anchorEnd = els[anchorIdx].getEnd(); // position just after the anchor element's `}`
+      // ", <entry>" places the new entry AFTER the anchor brace and BEFORE the
+      // anchor's existing trailing comma (if any). Net sequence becomes:
+      //   } , <entry> ,?    → "}, <entry>," (valid) or "}, <entry>" then "]" (valid)
+      const ins = multi ? `,\n${indent}${entry}` : `, ${entry}`;
+      out = source.slice(0, anchorEnd) + ins + source.slice(anchorEnd);
     }
   } else if (op.kind === "delete") {
     const i = idxOf(op.id);
@@ -613,11 +611,16 @@ Add the structure toolbar in the focused section. Find where the focused entry i
   );
 })()}
 ```
-And ensure the `isComponentSel` Ask-AI block does NOT render for a bound transcript selection — it already won't, because `isComponentSel` is false when `bindPath` is set (verify: `isComponentSel = !!focusedNow && !isInFrame(focusedNow.selection.file, …)` — a bound selection's `file` is `""`, so `isInFrame` is false → `isComponentSel` true → it WOULD show Ask-AI). FIX: gate `isComponentSel` to exclude bound selections:
+And ensure the `isComponentSel` Ask-AI block does NOT render for a bound
+transcript selection. **VERIFY (do not blindly add) — this guard ALREADY EXISTS:**
+`InspectorPanel.tsx:175` currently reads
 ```ts
 const isComponentSel = !!focusedNow && !focusedNow.selection.bindPath && !isInFrame(focusedNow.selection.file, frameSlug ?? "");
 ```
-(If a prior task already made this change for the bound text edit, confirm it's present; if not, add it.)
+The `!focusedNow.selection.bindPath` clause was added by an earlier task, so a
+bound selection already yields `isComponentSel === false` → no Ask-AI block.
+CONFIRM it's present and unchanged; do NOT add a duplicate clause and do NOT treat
+this as a bug to fix. (If, and only if, the clause is somehow absent, add it.)
 
 > Implementer note on move/add-above: v1 ships the buttons above (Add below, Delete, Move to end, Make user/assistant). "Add above" and per-step "move up/down" need the neighbor id; if deriving the rendered-neighbor id in the panel is clean (from the transcript order the picker knows), add them — otherwise v1's set is sufficient for the manual gate (add/delete/move-to-end/role all exercise writeBindStructure). Do NOT block on add-above.
 
