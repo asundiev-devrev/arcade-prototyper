@@ -66,21 +66,16 @@ function renderHarness(onSend: any) {
 }
 
 // Per-test override of the kit-props payload. Default: the "columns" prop set.
-// Updated to KitProp2 shape (Task 5): kind + optional values/default.
-let kitPropsPayload: { props: { name: string; kind: "text" | "toggle" | "number" | "select"; values?: string[]; default?: string }[] } = {
-  props: [{ name: "columns", kind: "select", values: ["2", "3", "4"] }],
+let kitPropsPayload: { props: { name: string; values: string[] }[] } = {
+  props: [{ name: "columns", values: ["2", "3", "4"] }],
 };
 
 beforeEach(() => {
-  // fetch serves /api/kit-props (returns kitPropsPayload), /api/instance-props
-  // (returns empty attrs), and /api/visual-edit (returns {ok:true}). Tests that
-  // assert on the POST inspect this same mock.
+  // fetch serves /api/kit-props (returns kitPropsPayload) and /api/visual-edit
+  // (returns {ok:true}). Tests that assert on the POST inspect this same mock.
   vi.stubGlobal("fetch", vi.fn((url: string) => {
     if (typeof url === "string" && url.startsWith("/api/kit-props/")) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(kitPropsPayload) });
-    }
-    if (typeof url === "string" && url.startsWith("/api/instance-props/")) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ attrs: {} }) });
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) });
   }) as any);
@@ -88,7 +83,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
-  kitPropsPayload = { props: [{ name: "columns", kind: "select", values: ["2", "3", "4"] }] };
+  kitPropsPayload = { props: [{ name: "columns", values: ["2", "3", "4"] }] };
 });
 
 describe("panel props-first", () => {
@@ -110,9 +105,6 @@ describe("panel props-first", () => {
     const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
       if (typeof url === "string" && url.startsWith("/api/kit-props/")) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(kitPropsPayload) });
-      }
-      if (typeof url === "string" && url.startsWith("/api/instance-props/")) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ attrs: {} }) });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) });
     });

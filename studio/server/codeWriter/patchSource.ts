@@ -98,28 +98,3 @@ export function readAttr(source: string, hit: JsxHit, attrName: string): ReadAtt
   }
   return { ok: false, reason: "dynamic-attr" };
 }
-
-export type ReadAttrInit =
-  | { ok: true; valueStart: number; valueEnd: number; insertAttr?: false }
-  | { ok: true; insertAt: number; insertAttr: true }
-  | { ok: false; reason: string };
-
-/** Like readAttr, but returns the FULL initializer span (string literal `"x"` OR
- *  the entire JsxExpression `{x}`) so a caller can overwrite it wholesale with a
- *  new expression. Does NOT bail on expression initializers. */
-export function readAttrInitializer(source: string, hit: JsxHit, attrName: string): ReadAttrInit {
-  const sf = ts.createSourceFile("frame.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  const opening = openingNodeAt(sf, hit);
-  if (!opening) return { ok: false, reason: "opening-not-found" };
-  const attr = opening.attributes.properties.find(
-    (p): p is ts.JsxAttribute => ts.isJsxAttribute(p) && p.name.getText() === attrName,
-  );
-  if (!attr) return { ok: true, insertAt: opening.tagName.getEnd(), insertAttr: true };
-  const init = attr.initializer;
-  if (!init) {
-    // bare boolean attr `foo` (no initializer) → overwrite from the attr name's end
-    return { ok: true, valueStart: attr.getEnd(), valueEnd: attr.getEnd() };
-  }
-  // String literal OR JsxExpression: overwrite the WHOLE initializer span.
-  return { ok: true, valueStart: attr.name.getEnd(), valueEnd: init.getEnd() };
-}
