@@ -1,242 +1,254 @@
-# Style & Structure Editing — One Data-Bind Machine — Design
+# Structure Editing + Frame-Authored Style Hardening — Design
 
 **Date:** 2026-06-29
-**Status:** Approved design, pre-implementation
+**Status:** Approved design (revised after adversarial code review), pre-implementation
 **Product:** Arcade Studio (`studio/`)
 **Builds on:** the shipped data-driven-composites work (`transcript` prop +
-`data-arcade-bind` + `writeBindEdit`). This spec EXTENDS that one machine; it does
-NOT introduce a new editing mechanism.
+`data-arcade-bind` + `writeBindEdit`). Extends that one machine; introduces no new
+editing mechanism and does NOT reach into sealed composites.
+
+## What changed from the first draft (and why)
+
+The first draft proposed "style any element" including a per-message style control.
+An adversarial code review **disproved the composite-style premise**:
+
+- `ChatBubble` (the kit's message bubble) exposes only `variant: "sender" |
+  "receiver"` + `tail` (verified: arcade-gen `index.d.mts`). `variant` is
+  **semantic role, not style**, and `receiver` on a user bubble is a *wrong*
+  visual. Assistant messages render via `ChatMessages.Agent`, which has **no
+  style axis at all**. So per-message style = a near-empty box.
+- Style value provably lives in **frame-authored elements** (raw markup the
+  frame wrote): a Figma-import frame carries 20–119 styleable raw tags; the
+  existing instant-style path **already writes** color/spacing/font/token changes
+  into the frame's own source. ComputerScene-style frames carry ~0 raw tags.
+
+**Conclusion (the honest scope):** for composite-heavy frames you can edit
+**content + structure**, NOT restyle individual messages (the kit doesn't expose
+it — that's Ask-AI). Rich style is real on **frame-authored** elements and
+**already works** — it needs a reliability + discoverability pass, not new
+mechanism. So this spec builds **(1) STRUCTURE editing** (the genuinely-missing,
+valuable capability) and **(2) a frame-authored style hardening pass**. The
+composite per-element style control is **dropped**.
 
 ## Problem
 
-After seven failed editing approaches, ONE worked: lift content into the frame as
-DATA, have the composite stamp each rendered node with `data-arcade-bind`, and
-write the frame's data array deterministically (`writeBindEdit`). That shipped for
-ONE field (a chat message's `text` + artefact title). Two gaps remain, and the
-designer is explicit that content-only is "not good enough":
+Two real gaps after the shipped text-editing:
 
-1. **Style** — recolor / spacing / font / variant on what you click. Twice
-   reverted (overlay, props-panel) because both tried to reach INTO a sealed
-   composite and override pixels on a guessed element. That is **the wall**.
-2. **Structure** — add / remove / reorder messages, change who-said-it. Never
-   built. Naturally fits the data machine (it's array entries).
+1. **Structure** — add / remove / reorder messages, change who-said-it. Never
+   built. Fits the data machine: it's operations on the frame's `transcript`
+   array entries.
+2. **Frame-authored style reliability** — the instant-style path writes className
+   changes into frame source for raw elements, but its reach/reliability across a
+   real Figma-import frame is unverified, and discoverability ("what can I click
+   to restyle?") is unclear.
 
-**The learning that governs this spec** (from 7 failures + the recorded
-"scalable accuracy" rule): *the wall is sealed composites; editing only works
-where the surface lives in the frame as data; never reach into a composite;
-solve at the level of a reusable PRINCIPLE, not per-design patches.*
+**The governing learning** (7 failures + the recorded "scalable accuracy" rule):
+*the wall is sealed composites; edit only where the surface lives in the frame as
+data or as frame-authored source; never reach into a composite; arbitrary
+composite-internal chrome is Ask-AI.* This spec stays entirely on that ground.
 
-## Key evidence (measured this session)
-
-A generated prototype is one of two worlds, and style differs sharply:
-
-- **Frame-authored / flat-markup frames** (e.g. a Figma import: 33 raw host tags,
-  4 kit components in a real sample): the elements are written DIRECTLY in the
-  frame. The existing **instant style path already writes className changes into
-  frame source** (color/spacing/font). Style here is RICH and already works — the
-  job is reliability + reach, not new mechanism.
-- **Composite-heavy frames** (ComputerScene: 0 raw tags, 1 component): everything
-  is sealed in the composite. Style here is limited to what the composite EXPOSES
-  as data (e.g. `ChatBubble` exposes only `variant: "sender" | "receiver"`).
-  Honest ceiling: thin-but-real, not a wall.
-
-## The model — ONE machine, three honest cases
+## The model
 
 ```
-EDITABLE SURFACE = (frame-authored elements) ∪ (data a composite exposes)
+EDITABLE SURFACE = (frame-authored source elements) ∪ (the frame's data arrays)
 
-A. FRAME-AUTHORED element (raw <div>/<h1>/<button> the frame wrote):
-   → existing instant-style path writes the className into frame source
-     (text + color/spacing/font). RICH style. Already works.
-   Job: make it reliable + discoverable on EVERY clickable frame-authored node.
+A. FRAME-AUTHORED element (raw <div>/<h1>/<button> with a static className):
+   → instant-style path writes the className into frame source (color token /
+     spacing / font / type style). RICH, already works. THIS SPEC: verify + harden
+     reach/reliability + discoverability. No rebuild.
 
-B. COMPOSITE DATA ITEM (a transcript message, later a session row):
-   → data-arcade-bind carries CONTENT fields (text — shipped) AND STYLE fields
-     (e.g. transcript[id=2].variant) AND the item is part of a list (structure).
-   → writeBindEdit writes the field into the frame's data array (proven).
-   → STRUCTURE = the SAME writeBindEdit machine operating on whole array ENTRIES
-     (insert / delete / move / change role) instead of one field.
-   Style ceiling = exactly the variants the composite/kit exposes (honest, on-brand).
+B. STRUCTURE of a composite data list (the transcript):
+   → operate on the frame's `const transcript = [...]` ARRAY ENTRIES by id:
+     insert / delete / move / setRole. New `writeBindStructure`, same TS-AST
+     discipline as the shipped `writeBindEdit`. THIS SPEC: build it.
 
-C. ARBITRARY INTERNAL CHROME a composite never exposed (a divider 3 levels deep):
-   → Ask-AI (the honest escape; the agent edits source). Rare in practice.
+C. Per-element STYLE of a composite-internal node (recolor a bubble):
+   → NOT built. The kit doesn't expose it. Ask-AI (honest escape). Out of scope.
 ```
 
-**Scalable principle (the anti-per-design rule):** *a composite DECLARES its
-editable surface — which fields are content, which are style, and which items are
-list-structured — as data the frame owns.* One convention
-(`data-arcade-bind` + a small per-composite "editable surface" declaration),
-extended from text to style+structure. Authored once on ComputerScene, the
-convention makes the next composite cheap — not a per-design patch.
-
-## Decisions locked during brainstorming
-
-- **Style first** (designer priority), then structure — but BOTH are designed
-  here as one model so they share the machine. (Build order in the plan can run
-  style-as-data before structure; see Build Sequence.)
-- **Style is reliable + on-brand, NOT pixel-arbitrary.** Frame-authored → rich
-  (className writes); composite items → the variants the kit exposes; arbitrary
-  internal chrome → Ask-AI. We do NOT build freeform per-element CSS override on
-  composite internals — that is the twice-reverted wall.
-- **Structure = array-entry operations** via the existing writeBindEdit machine
-  (extended from "set a field" to "insert/delete/move/role-change an entry"),
-  addressed by message `id` (reorder-safe, per the shipped bind format).
-- **No reaching into composites.** Every editable thing is either frame-authored
-  source or a field the composite exposed as data. Case C is explicitly Ask-AI,
-  not a new override layer.
+**Honesty up front:** a ComputerScene frame becomes **content- and
+structure-editable**, not style-editable. A Figma-import frame is
+**richly style-editable** (case A) + structure where it has data lists. We do not
+imply otherwise anywhere in the UI.
 
 ## Architecture
 
 ```
-studio/src/frame/  (in-frame, reused)
-  ├─ picker: bind-first resolve (shipped) — a clicked bound node carries bindPath
-  └─ instant-style path (shipped) — frame-authored nodes write className to source
-
 studio/server/codeWriter/
-  ├─ bindEdit.ts (shipped): writeBindEdit(source, "transcript[id=N].FIELD", value)
-  │     → EXTEND: FIELD can be a style field (e.g. "variant"), not just "text"
-  └─ bindStructure.ts (NEW): writeBindStructure(source, array, op) where op =
-        { kind:"insert", afterId, entry } | { kind:"delete", id }
-        | { kind:"move", id, beforeId } | { kind:"setRole", id, role }
-        TS-AST edits to the frame's data array (same as bindEdit, on entries).
+  ├─ index.ts (shipped): applyEditsToSource className write for frame-authored
+  │     nodes — reliability pass target (NOT rebuilt)
+  ├─ bindEdit.ts (shipped): writeBindEdit — used as the pattern/precedent
+  └─ bindStructure.ts (NEW): writeBindStructure(source, arrayName, op) — TS-AST
+        ops on the `const <arrayName> = [...]` literal, by id.
 
-studio/prototype-kit/composites/ComputerScene.tsx
-  ├─ stamp STYLE binds where a content item has a style axis
-  │     (a message bubble already maps to ChatBubble variant — expose it as
-  │      transcript[id=N].variant, default by role, stamped data-arcade-bind)
-  └─ (Message type gains an optional `variant` field; render reads it)
+studio/prototype-kit/composites/ComputerScene.tsx (shipped binds; +structure ids)
+  → each message already stamps data-arcade-bind for text; structure ops address
+    the same `transcript[id=N]` entries (no new stamping needed for structure —
+    the bind already identifies the entry + its id).
 
 studio/src/components/inspector/InspectorPanel.tsx
-  ├─ bound STYLE field → a control (the kit's variant options) → writeBindEdit
-  └─ bound list item → structure controls (add above/below, delete, move, role)
-       → writeBindStructure
+  ├─ bound list item → STRUCTURE controls (add above / add below / delete /
+  │     move up / move down / change role) → buildBindStructure → /api/visual-edit
+  │     → on success: clear the held selection (mirror the existing move() path)
+  └─ frame-authored element → existing instant-style fields (reliability pass)
+
+studio/src/lib/visualEditClient.ts
+  └─ buildBindStructure(arrayName, op, frameSlug) → VisualEditPayload (NEW)
+
+studio/server/middleware/visualEdit.ts + codeWriter dispatch
+  └─ a structure-op edit routes to writeBindStructure (NEW dispatch branch,
+     mirroring the shipped bindPath branch)
 ```
 
 ### New / changed units
 
-1. **`writeBindEdit` style fields** (extend `bindEdit.ts`) — already walks
-   `transcript[id=N].<field>` to a string-literal leaf. A style field
-   (`variant`) is the same write. If the field is ABSENT on the entry (e.g. a
-   message with no `variant` yet), the writer INSERTS the property into the
-   object literal (new capability: add-prop, not just replace-value),
-   reparse-guarded. Pure, by-id, JSON-escaped (all shipped properties).
+1. **`writeBindStructure`** (`studio/server/codeWriter/bindStructure.ts`, pure
+   TS-AST) — locate the `const <arrayName> = [...]` literal (reuse the shipped
+   `findArrayLiteral` which already unwraps `as const`/`satisfies`). Ops:
+   - `insert` `{ afterId, entry }` — splice a new object-literal entry after the
+     entry with `afterId` (or at end if `afterId` null). The new entry's `id` =
+     `max(all numeric id literals in the array) + 1` (scan every element's
+     numeric `id`; tolerate non-numeric/missing). Emit the entry matching the
+     array's existing FORMAT (multi-line, one prop per line, trailing comma) so
+     the written source is clean, not just parseable. Reparse-guard.
+   - `delete` `{ id }` — remove that entry (and a dangling comma). Other entries'
+     ids unchanged.
+   - `move` `{ id, beforeId }` — reorder the entry (precedent: the shipped
+     `reorder.ts` sibling-swap). ids unchanged.
+   - `setRole` `{ id, role }` — change the entry's `role`. **Union hygiene:** the
+     `Message` shape is a discriminated union (`user` has no `artefact`;
+     `assistant` may). Frames are esbuild-transpiled, NOT type-checked, so a
+     mismatched literal renders fine — but to keep the data honest, when flipping
+     to `user`, STRIP an `artefact` prop if present. (Stated explicitly so the
+     written object isn't union-invalid garbage.)
+   - All return `{ok, source}` / `{ok:false, reason}`; never throw; reparse-guard
+     every result.
 
-2. **`writeBindStructure`** (`bindEdit-structure.ts`, new, pure TS-AST) — operate
-   on the array as a whole: insert a new entry (with a fresh unique id) after a
-   given id; delete the entry with an id; move an entry before another id;
-   change an entry's `role`. Reparse-guarded; by-id throughout (never index).
-   Returns `{ok, source}` / `{ok:false, reason}`.
+2. **`buildBindStructure`** (`visualEditClient.ts`) — a `VisualEditPayload`
+   carrying a structure op (a new optional field on `ElementEdit`, e.g.
+   `structureOp?: {...}` + `arrayName`, mirroring the shipped `bindPath?`
+   optional-field approach — NOT a union rewrite). Both `ElementEdit` copies
+   (client + server) stay in sync.
 
-3. **ComputerScene style binds** — give `Message` an optional `variant`; the
-   transcript renderer reads it (falls back to role-derived default so existing
-   frames are unchanged) and stamps the bubble with
-   `data-arcade-bind="transcript[id=N].variant"` (in addition to the text bind).
-   Only the variants `ChatBubble` actually exposes are offered. Byte-identical
-   render when `variant` is absent.
+3. **codeWriter dispatch branch** — in `applyEditsToSource`, before the JSX
+   paths: if `edit.structureOp` is set → route to `writeBindStructure(source,
+   edit.arrayName, edit.structureOp)` → return its result directly (standalone,
+   like the shipped bindPath branch).
 
-4. **Panel: style + structure controls for a bound selection**
-   (`InspectorPanel.tsx`) — when the selection's `bindPath` ends in a known
-   STYLE field, render the kit's variant options (a select), writing via
-   `buildBindEdit` (shipped path). When the selection is a list item, render
-   structure actions (add above / add below / delete / move up / move down /
-   switch role) → a new `buildBindStructure` payload → `/api/visual-edit`
-   (a new dispatch branch, mirroring the bindPath branch).
+4. **Panel structure controls** (`InspectorPanel.tsx`) — when the focused
+   selection's `bindPath` identifies a transcript entry (matches
+   `^transcript\[id=\d+\]`), show a small structure toolbar: add-above,
+   add-below, delete, move-up, move-down, change-role. Each builds the
+   corresponding op (`afterId`/`beforeId` derived from the selection's id + the
+   neighbor) and POSTs via `buildBindStructure`. **On success: `preview-reset` +
+   `clear()` the selection** (the array mutated + the frame hot-reloads, so the
+   held editId/DOM selection is stale — mirror the existing `move()` success
+   path). On `{ok:false}` → calm error block (shipped fallback), no silent prompt.
 
-5. **Frame-authored style reliability pass** (audit, mostly verification) — the
-   instant-style path already writes className for frame-authored nodes. Verify
-   it is reachable + reliable on a Figma-import frame (where style is richest):
-   click any raw element → restyle (color token / spacing / font / type style)
-   → persists to source. Fix gaps found; do NOT rebuild it.
+5. **Frame-authored style reliability pass** (audit + targeted fixes, NOT a
+   rebuild) — on a real Figma-import frame, verify the instant-style path:
+   click a raw element → restyle (color token / spacing / font / type style) →
+   persists to source. Known bails (`dynamic-classname` on `className={cond?…}`,
+   `spacing-shorthand-conflict`) are correct — confirm they degrade to a calm
+   block, not a silent no-op. Scope the user-facing claim to "static-class
+   frame-authored elements." Fix any reachability/discoverability gaps found
+   (e.g. ensure such elements are pickable + the panel shows the style fields).
 
-## Data flow — three representative edits
+## Data flow — representative edits
 
-1. **Style a message (composite data item):** click bubble → bindPath
-   `transcript[id=2].variant` → panel shows ChatBubble's variant options → pick
-   → `writeBindEdit` sets/inserts `variant` on entry id 2 → reload → bubble
-   restyles. Deterministic, on-brand.
-2. **Add a message (structure):** click a message → "add below" → `buildBindStructure
-   {kind:"insert", afterId:2, entry:{id:<fresh>, role:"user", text:"New message"}}`
-   → `writeBindStructure` splices a new object into the array → reload → new
-   editable bubble appears.
-3. **Style a Figma-import heading (frame-authored):** click the `<h1>` → existing
-   instant-style path → change color token → className written to the frame's own
-   source. Rich style, already works.
+1. **Add a message:** click message id 2 → "add below" → `buildBindStructure
+   {arrayName:"transcript", op:{kind:"insert", afterId:2, entry:{role:"user",
+   text:"New message"}}}` → `writeBindStructure` computes id = max+1, splices a
+   formatted entry after id 2 → reparse-guard → write → reload → new editable
+   bubble; held selection cleared.
+2. **Reorder:** click message → "move up" → `{kind:"move", id, beforeId:<prev>}`
+   → entries reordered, ids intact → reload.
+3. **Change role:** click a user message → "make assistant" → `{kind:"setRole",
+   id, role:"assistant"}` → re-renders as an agent turn.
+4. **Style a Figma-import heading (case A):** click `<h1>` → existing instant
+   style → color token → className written to the frame's own source. Already
+   works.
 
 ## Error handling
 
-- Bound style field on an entry that lacks it → writer INSERTS the prop
-  (reparse-guarded); on any parse failure → `{ok:false}` → no write + a calm
-  "couldn't apply" block (the shipped fallback pattern), never a silent prompt.
-- Structure op referencing a missing id → `{ok:false, reason}` → calm block.
-- Insert id collision → the new id is computed as `max(existing ids)+1` so it's
-  always unique within the array.
-- Arbitrary internal chrome (case C) → no bind → the panel shows "Ask AI to
-  change this" (only here, not for bound items — per the shipped UX fix).
-- Frame-authored style write reparse fail → existing instant-style guard aborts.
+- Structure op with a missing `id` / `afterId` / `beforeId` → `{ok:false,
+  reason}` → calm "couldn't apply" block, no silent prompt.
+- Insert id = `max(numeric ids)+1`; tolerates runtime `Date.now()` ids already in
+  persisted frames + non-numeric/missing id literals (skips them in the max scan).
+- A splice that would not reparse → `{ok:false, reason:"reparse-failed"}`, file
+  untouched.
+- Stale selection after any structure op → cleared on success (no controls for a
+  vanished node).
+- Per-element style on a composite-internal node (case C) → no bind / not
+  frame-authored → panel shows "Ask AI to change this" (only here).
 
 ## Testing
 
-- **`writeBindEdit` style field** — set `variant` on an entry that has it;
-  INSERT `variant` on an entry that lacks it; both reparse-clean; absent-array /
-  missing-id → `{ok:false}`.
-- **`writeBindStructure`** — insert-after (fresh unique id, correct position);
-  delete (entry gone, others intact, ids unchanged); move (order changes, ids
-  intact); setRole (role flips, text intact); each reparse-clean; bad id →
-  `{ok:false}`; insert id = max+1 (no collision).
-- **ComputerScene style bind** — a message with `variant` renders that variant +
-  stamps `transcript[id=N].variant`; a message WITHOUT `variant` renders the
-  role-default + still stamps (so it can be added); bare/legacy frames render
-  byte-identical.
-- **Panel** — a bound style selection shows the variant options + writes; a bound
-  list item shows structure actions + writes; a frame-authored element shows the
-  existing instant-style fields (unchanged); case-C (no bind) shows Ask-AI.
-- **Frame-authored reliability** — on a Figma-import frame, a raw element's
-  color/spacing/font/type edit persists to source (regression-verify the shipped
-  path).
-- **Manual gate (HUMAN):** (a) STYLE — on a generated Computer chat, click a
-  message → change its variant → persists; on a Figma-import frame, recolor a
-  heading → persists. (b) STRUCTURE — add a message below a message → new
-  editable bubble; delete one → gone; reorder two → order changes; change a
-  user message to assistant → re-renders as agent. All deterministic, scene stays
-  interactive. Case-C internal chrome → Ask-AI (no false "editable" promise).
+- **`writeBindStructure` (the core unit, pure):**
+  - insert-after: new entry present at the right position, id = max+1, others
+    intact, reparse-clean; insert at end when afterId null.
+  - insert preserves FORMAT: against a multi-line trailing-comma array (the real
+    seed shape) AND a single-line/no-trailing-comma array, the result reparses
+    AND the new entry matches the surrounding style (assert the written entry
+    is multi-line when the array is).
+  - delete: entry gone, no dangling comma, others + their ids intact.
+  - move: order changes, ids intact.
+  - setRole: role flips; flipping to `user` STRIPS an `artefact` if present.
+  - id scan: an array with a `Date.now()`-sized id → new id = that max+1.
+  - bad id / absent array → `{ok:false}`; nothing throws.
+- **Dispatch:** a `structureOp` edit routes to `writeBindStructure` (not the JSX
+  path); a normal edit is unaffected; both `ElementEdit` copies have the field.
+- **Panel:** a transcript-entry selection shows structure controls + writes +
+  clears selection on success; a frame-authored element shows the instant-style
+  fields (unchanged); a case-C node shows Ask-AI.
+- **Frame-authored style reliability:** on a Figma-import frame, a raw element's
+  color/spacing/font/type edit persists to source; a `className={cond?…}` element
+  degrades to a calm block (not silent).
+- **Manual gate (HUMAN):**
+  - STRUCTURE on a generated Computer chat: add a message below another → new
+    editable bubble; delete one → gone; move two → reorder; change a user message
+    to assistant → re-renders as agent. All deterministic; scene stays
+    interactive; the array in the frame source reflects each change.
+  - STYLE on a Figma-import frame: recolor a heading / change spacing on a raw
+    element → persists. A composite-internal bubble → panel offers Ask-AI, NOT a
+    fake style control.
 
 ## Risks / honest limitations
 
-- **Composite-item style is only as rich as the kit exposes.** A ChatBubble
-  offers `sender/receiver` — that's the honest ceiling for a message; we do NOT
-  invent arbitrary recolor on it. Where designers need more, that's either a
-  frame-authored element (rich) or Ask-AI. Stated plainly to avoid the
-  expectation gap that sank prior attempts.
-- **The richest style lives on frame-authored elements**, which is most of a
-  Figma-import frame but little of a composite-heavy one. So "style anything" is
-  honestly "style frame-authored richly + composite items within their variants +
-  Ask-AI for the rest." That IS the on-brand model the designer approved.
-- **Structure is full** on the transcript (and any composite list we later mark
-  structured); other composites get it when their lists are declared editable —
-  the scalable convention, not a per-design patch.
-- **Build order is style-first per priority**, but both share one machine, so
-  neither blocks the other.
-- **Verified by tests + reasoning** until the manual gate; given the history, the
-  gate is mandatory before "done."
+- **Composite-heavy frames are not per-element style-editable.** Stated plainly,
+  in the UI (Ask-AI), not just here. The kit doesn't expose it; widening kit
+  composites to expose real style props is a separate design-system effort
+  (explicitly out of scope, noted as the future unlock).
+- **Frame-authored style is reliable only on static-class elements.** Dynamic
+  `className={…}` degrades to Ask-AI/calm-block. Scope the claim accordingly.
+- **Structure insert/format fidelity** is reparse-guarded AND format-matched, but
+  exotic array formattings could still produce valid-but-slightly-off layout;
+  reparse-guard prevents breakage, and the frame remains editable. Acceptable.
+- **The bind/stamp convention is still per-composite hand-work.** This spec does
+  NOT build a generic "composite declares its editable surface" primitive — that
+  remains a pattern to copy. Honest: structure on a NEW composite still needs the
+  array identified + entries id'd. ComputerScene already has it.
+- **Verified by tests + reasoning** until the manual gate; mandatory given the
+  history.
 
-## Build sequence (each independently testable, all on proven ground)
+## Build sequence
 
-1. **Style-as-data field** (priority): `writeBindEdit` add-prop + ComputerScene
-   `variant` bind + panel variant control. Smallest extension of the shipped
-   text machine; delivers the style win on a composite item.
-2. **Frame-authored style reliability pass**: audit + harden the existing
-   instant-style path on a Figma-import frame (where style is richest). Mostly
-   verification + gap fixes, no new mechanism.
-3. **Structure**: `writeBindStructure` + ComputerScene list-item structure binds
-   + panel structure controls (add/delete/move/role).
-4. **Full suite + manual gate.**
+1. **`writeBindStructure`** (pure, TS-AST) — the core, fully unit-tested
+   (insert/delete/move/setRole + format fidelity + id scan).
+2. **Dispatch + `buildBindStructure`** — thread the op through the visual-edit
+   batch (optional-field, both ElementEdit copies).
+3. **Panel structure controls** — toolbar on a transcript-entry selection +
+   selection-clear on success.
+4. **Frame-authored style reliability pass** — audit + targeted fixes on a
+   Figma-import frame; scope the claim to static-class elements.
+5. **Full suite + manual gate.**
 
 ## Out of scope
 
-- Freeform per-element CSS override on composite internals (the reverted wall).
-- Lifting OTHER ComputerScene content (sessions, people, header) to editable data
-  — valuable, but a separate content-coverage effort; this spec is style +
-  structure on the message surface + frame-authored style.
-- Generalizing the declared-editable-surface convention to other composites
-  (future; this proves it on ComputerScene first).
+- Per-element style override on composite internals (case C → Ask-AI; the
+  twice-reverted wall).
+- Widening kit composites to expose real style props (separate DS effort).
+- A generic declared-editable-surface primitive (future; pattern-copy for now).
+- Lifting other ComputerScene content (sessions/people/header) to data (separate
+  content-coverage effort).
 - The Cloudflare share 500 (infra, tracked separately).
