@@ -152,7 +152,6 @@ export function InspectorPanel({
       if (typeof d.editId === "number" && typeof d.text === "string") {
         setField(d.editId, "text", d.text);
         const elem = batch.find((x) => x.selection.editId === d.editId);
-        console.log("[DD-DEBUG] panel.text-changed: editId", d.editId, "found in batch?", !!elem, "bindPath=", elem?.selection.bindPath, "→", elem ? "scheduleApply" : "DROPPED (editId not in batch)");
         if (elem) scheduleApplyRef.current(elem.selection, "text", d.text);
       }
     }
@@ -254,10 +253,8 @@ export function InspectorPanel({
     // Bound data edit (e.g. a ComputerScene transcript message): route to the
     // data writer by bindPath, bypassing the JSX-source gate entirely.
     if (sel.bindPath && field === "text") {
-      if (!targetFrame) { console.log("[DD-DEBUG] applyFieldEdit bind branch: BAIL no targetFrame"); return; }
-      console.log("[DD-DEBUG] applyFieldEdit bind branch: POSTing bindEdit", sel.bindPath, "to slug", slug, "frame", targetFrame);
+      if (!targetFrame) return;
       const det = await postVisualEdit(slug, buildBindEdit(sel.bindPath, value, targetFrame));
-      console.log("[DD-DEBUG] applyFieldEdit bind branch: write result ok=", det.ok, "reason=", (det as any).reason, det.ok ? "→ APPLIED" : "→ error block (array-not-found)");
       if (det.ok) {
         addBlock({ label: humanLabel("text", value), kind: "instant", status: "applied", frameSlug: targetFrame });
         resetField(sel.editId, field as any);

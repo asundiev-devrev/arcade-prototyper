@@ -36,7 +36,9 @@ describe("visualEditMiddleware", () => {
       { frameSlug: "01-x", edits: [{ file: "/p/projects/demo/frames/01-x/index.tsx", line: 3, column: 6, fields: [] }] }),
       res, () => {});
     expect(readFile).toHaveBeenCalled();
-    expect(writeBatch).toHaveBeenCalledWith("01-x", expect.any(Array));
+    // writeBatch now also receives the project slug (from the URL) so bind edits
+    // — whose edits carry no resolvable file path — still resolve their project.
+    expect(writeBatch).toHaveBeenCalledWith("01-x", expect.any(Array), "demo");
     expect(JSON.parse(res.body)).toEqual({ ok: true });
   });
 
