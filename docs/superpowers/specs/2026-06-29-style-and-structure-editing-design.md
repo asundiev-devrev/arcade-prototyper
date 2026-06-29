@@ -102,25 +102,39 @@ studio/server/middleware/visualEdit.ts + codeWriter dispatch
 
 ### New / changed units
 
+0. **Prerequisite — export the shipped AST helpers.** `findArrayLiteral` AND
+   `unwrap` are CURRENTLY module-private in `bindEdit.ts` (verified). `export`
+   them so `bindStructure.ts` reuses them (do NOT duplicate). `unwrap` is what
+   strips `as const`/`satisfies` so the array is found regardless of wrapper.
+
 1. **`writeBindStructure`** (`studio/server/codeWriter/bindStructure.ts`, pure
-   TS-AST) — locate the `const <arrayName> = [...]` literal (reuse the shipped
-   `findArrayLiteral` which already unwraps `as const`/`satisfies`). Ops:
+   TS-AST) — locate the `const <arrayName> = [...]` literal via the now-exported
+   `findArrayLiteral`. Ops:
    - `insert` `{ afterId, entry }` — splice a new object-literal entry after the
      entry with `afterId` (or at end if `afterId` null). The new entry's `id` =
      `max(all numeric id literals in the array) + 1` (scan every element's
-     numeric `id`; tolerate non-numeric/missing). Emit the entry matching the
-     array's existing FORMAT (multi-line, one prop per line, trailing comma) so
-     the written source is clean, not just parseable. Reparse-guard.
-   - `delete` `{ id }` — remove that entry (and a dangling comma). Other entries'
-     ids unchanged.
+     numeric `id`; tolerate non-numeric/missing). **FORMAT FIDELITY — there are
+     THREE real array shapes in the wild (verified): the seed
+     `template-seeds/computer/index.tsx` is SINGLE-LINE objects + `as const`, no
+     trailing comma on the last element; a lifted/generated frame
+     (`01-launch-planning`) is MULTI-LINE, one prop per line, trailing comma on
+     EVERY element incl. the last; the dispatch-test fixture is single-line, one
+     element, trailing comma.** The emitter must DETECT single-vs-multi-line per
+     array (inspect the existing elements' source spans for newlines) and match
+     it, and handle a trailing comma after the last element (don't assume its
+     absence). Reparse-guard is necessary but NOT sufficient — a valid-but-ugly
+     splice ships malformed-looking code; match the format.
+   - `delete` `{ id }` — remove that entry + its trailing comma (handle
+     last-element / dangling-comma cases). Other entries' ids unchanged.
    - `move` `{ id, beforeId }` — reorder the entry (precedent: the shipped
      `reorder.ts` sibling-swap). ids unchanged.
-   - `setRole` `{ id, role }` — change the entry's `role`. **Union hygiene:** the
-     `Message` shape is a discriminated union (`user` has no `artefact`;
-     `assistant` may). Frames are esbuild-transpiled, NOT type-checked, so a
-     mismatched literal renders fine — but to keep the data honest, when flipping
-     to `user`, STRIP an `artefact` prop if present. (Stated explicitly so the
-     written object isn't union-invalid garbage.)
+   - `setRole` `{ id, role }` — change the entry's `role`. **Keep minimal.** When
+     flipping to `user`, ALSO strip an `artefact` prop if present — this is
+     COSMETIC data-hygiene only (the render branches on `role` and a `user`
+     object ignores a stray `artefact`; frames aren't typechecked, so nothing
+     breaks without the strip). Do it as ONE cheap in-object property delete; do
+     NOT grow a separate test matrix around it. If it can't be done cleanly in
+     one step, ship setRole WITHOUT the strip and note the inert stray prop.
    - All return `{ok, source}` / `{ok:false, reason}`; never throw; reparse-guard
      every result.
 
@@ -133,26 +147,57 @@ studio/server/middleware/visualEdit.ts + codeWriter dispatch
 3. **codeWriter dispatch branch** — in `applyEditsToSource`, before the JSX
    paths: if `edit.structureOp` is set → route to `writeBindStructure(source,
    edit.arrayName, edit.structureOp)` → return its result directly (standalone,
-   like the shipped bindPath branch).
+   like the shipped bindPath branch). **CRITICAL — slug path:** structure ops go
+   through the normal `body.edits` → `/api/visual-edit/:slug` → `writeBatch(frameSlug,
+   edits, slug)` route, where `writeBatch` takes the project slug from the
+   MIDDLEWARE (shipped: `visualEdit.ts` passes `slug` as the 3rd arg, the same
+   fix that made `file:""` bind edits resolve). They must NOT use the separate
+   `body.move` side-channel, which derives the slug from `selection.file` —
+   empty/kit-path for a bound message → misroute (this is the known `file:""` bug
+   we already fixed once; do not reopen it). `buildBindStructure` sets `file:""`
+   like `buildBindEdit` — safe ONLY on this `writeBatch(slug)` path.
 
-4. **Panel structure controls** (`InspectorPanel.tsx`) — when the focused
-   selection's `bindPath` identifies a transcript entry (matches
-   `^transcript\[id=\d+\]`), show a small structure toolbar: add-above,
-   add-below, delete, move-up, move-down, change-role. Each builds the
-   corresponding op (`afterId`/`beforeId` derived from the selection's id + the
-   neighbor) and POSTs via `buildBindStructure`. **On success: `preview-reset` +
-   `clear()` the selection** (the array mutated + the frame hot-reloads, so the
-   held editId/DOM selection is stale — mirror the existing `move()` success
-   path). On `{ok:false}` → calm error block (shipped fallback), no silent prompt.
+4. **Panel structure controls + dual-affordance UX** (`InspectorPanel.tsx`) —
+   when the focused selection's `bindPath` matches `^transcript\[id=\d+\]`, the
+   panel presents BOTH (no collision):
+   - the existing "Double-click the element in the frame to edit its text" hint
+     (text edit, unchanged), AND
+   - a structure toolbar: add-above, add-below, delete, move-up, move-down,
+     change-role.
+   The Ask-AI block and the style sections are NOT shown for this selection
+   (a bound transcript entry forces `isComponentSel=false` because `bindPath` is
+   set — state this is why). **SUPPRESS the existing per-element JSX move ↑/↓
+   buttons** (`InspectorPanel.tsx` ~`:427-436`) for a bound transcript selection:
+   those call the `body.move` JSX-sibling reorder, which would try to reorder the
+   composite's INTERNAL `<ChatBubble>`/`<Agent>` JSX — reaching into the
+   composite (the wall). The structure toolbar's move-up/down REPLACES them for
+   bound selections (it reorders the DATA array by id, the right layer).
+   - frameSlug for the structure op comes from the panel's edit-session
+     `frameSlug` CONTEXT (as the bind-text path does), NOT from `selection.file`.
+   - Each toolbar action builds the op (`afterId`/`beforeId` from the selection's
+     id + the rendered neighbor's id) and POSTs via `buildBindStructure`.
+   - **On success: `preview-reset` + `clear()` the selection** — borrow ONLY this
+     selection-clearing behavior from `move()` (NOT its slug derivation); the
+     array mutated + the frame hot-reloads, so the held editId/DOM selection is
+     stale. The picker stays armed (shipped behavior), so the user can click the
+     new bubble. On `{ok:false}` → calm error block (shipped fallback), no silent
+     prompt.
 
-5. **Frame-authored style reliability pass** (audit + targeted fixes, NOT a
-   rebuild) — on a real Figma-import frame, verify the instant-style path:
-   click a raw element → restyle (color token / spacing / font / type style) →
-   persists to source. Known bails (`dynamic-classname` on `className={cond?…}`,
+5. **Frame-authored style reliability pass** (audit + targeted fixes — NOT a
+   rebuild, but NOT pure verification either; budget real fix work). On a real
+   Figma-import frame, verify the instant-style path: click a raw element →
+   restyle (color token / spacing / font / type style) → persists to source.
+   Known bails (`dynamic-classname` on `className={cond?…}`,
    `spacing-shorthand-conflict`) are correct — confirm they degrade to a calm
    block, not a silent no-op. Scope the user-facing claim to "static-class
-   frame-authored elements." Fix any reachability/discoverability gaps found
-   (e.g. ensure such elements are pickable + the panel shows the style fields).
+   frame-authored elements." **Load-bearing discovery (may need fixes, not just
+   a check):** a frame-authored element only shows style fields when
+   `isComponentSel` is false, i.e. `isInFrame(selection.file, frameSlug)` is true.
+   Whether a raw tag in a Figma-import frame resolves to the frame's OWN file
+   (editable) vs an imported sub-component (not) is unknown until tested — if raw
+   tags wrongly resolve as components, that's a real fix, not an audit. This task
+   carries that uncertainty; if the fix turns out large, split it to its own
+   spec rather than smuggling scope.
 
 ## Data flow — representative edits
 
@@ -198,9 +243,16 @@ studio/server/middleware/visualEdit.ts + codeWriter dispatch
   - bad id / absent array → `{ok:false}`; nothing throws.
 - **Dispatch:** a `structureOp` edit routes to `writeBindStructure` (not the JSX
   path); a normal edit is unaffected; both `ElementEdit` copies have the field.
-- **Panel:** a transcript-entry selection shows structure controls + writes +
-  clears selection on success; a frame-authored element shows the instant-style
-  fields (unchanged); a case-C node shows Ask-AI.
+- **Panel:** a transcript-entry selection shows structure controls + the
+  double-click text hint, NO Ask-AI block, NO style sections, and the existing
+  per-element JSX move ↑/↓ buttons are SUPPRESSED (so they can't reorder
+  composite-internal JSX); writes route via buildBindStructure and clear the
+  selection on success. A frame-authored element shows the instant-style fields
+  (unchanged). A case-C node shows Ask-AI.
+- **Slug path:** a structure-op edit posted to `/api/visual-edit/:slug` resolves
+  the project from the middleware slug (NOT from `edits[0].file`, which is `""`) —
+  i.e. it does not return `unresolved-project`. (Guards against reopening the
+  known `file:""` bug.)
 - **Frame-authored style reliability:** on a Figma-import frame, a raw element's
   color/spacing/font/type edit persists to source; a `className={cond?…}` element
   degrades to a calm block (not silent).
@@ -233,14 +285,21 @@ studio/server/middleware/visualEdit.ts + codeWriter dispatch
 
 ## Build sequence
 
+0. **Export `findArrayLiteral` + `unwrap`** from `bindEdit.ts` (prerequisite for
+   reuse in bindStructure.ts).
 1. **`writeBindStructure`** (pure, TS-AST) — the core, fully unit-tested
-   (insert/delete/move/setRole + format fidelity + id scan).
+   (insert/delete/move/setRole + format fidelity across the three real shapes +
+   id scan incl. a Date.now()-sized id).
 2. **Dispatch + `buildBindStructure`** — thread the op through the visual-edit
-   batch (optional-field, both ElementEdit copies).
-3. **Panel structure controls** — toolbar on a transcript-entry selection +
-   selection-clear on success.
+   batch (optional `structureOp`+`arrayName` field, both ElementEdit copies);
+   structure ops use the `writeBatch(slug)` path, slug from the middleware (NOT
+   the body.move side-channel). Test the slug resolves (no `unresolved-project`).
+3. **Panel structure controls** — toolbar + double-click text hint on a
+   transcript-entry selection; SUPPRESS the JSX move ↑/↓ buttons + Ask-AI + style
+   sections for it; frameSlug from context; selection-clear on success.
 4. **Frame-authored style reliability pass** — audit + targeted fixes on a
-   Figma-import frame; scope the claim to static-class elements.
+   Figma-import frame; scope the claim to static-class elements; budget real fix
+   work for the `isInFrame` discovery (may split to its own spec if large).
 5. **Full suite + manual gate.**
 
 ## Out of scope
