@@ -5,7 +5,7 @@ import { frameDir } from "../paths";
 import { translateField } from "./pxScale";
 import { applyClass, hasSpacingShorthand } from "./classFamily";
 import { locateJsx } from "./locateJsx";
-import { readClassName, readTextChild, readAttr, splice } from "./patchSource";
+import { readClassName, readTextChild, readAttr, readAttrInitializer, splice } from "./patchSource";
 
 export interface FieldEdit { field: string; value: string }
 export interface ElementEdit {
@@ -45,6 +45,20 @@ export function applyEditsToSource(
         out = splice(out, a.insertAt, a.insertAt, ` ${propName}="${f.value}"`);
       } else {
         out = splice(out, a.valueStart, a.valueEnd, f.value);
+      }
+      continue;
+    }
+
+    if (f.field.startsWith("propExpr:")) {
+      const propName = f.field.slice("propExpr:".length);
+      const hit = locateJsx(out, edit.line, edit.column);
+      if (!hit) return { ok: false, reason: "element-not-found" };
+      const a = readAttrInitializer(out, hit, propName);
+      if (!a.ok) return { ok: false, reason: a.reason };
+      if ("insertAttr" in a && a.insertAttr) {
+        out = splice(out, a.insertAt, a.insertAt, ` ${propName}={${f.value}}`);
+      } else {
+        out = splice(out, a.valueStart, a.valueEnd, `={${f.value}}`);
       }
       continue;
     }
