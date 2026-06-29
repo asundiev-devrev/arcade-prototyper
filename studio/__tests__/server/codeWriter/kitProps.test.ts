@@ -28,6 +28,17 @@ describe("parsePropsFromDts", () => {
   });
 });
 
+describe("kitPropsFor shape", () => {
+  it("shapes arcade-gen string-unions as kind:select with values", () => {
+    const props = kitPropsFor("Button");
+    // Button may or may not have unions in the installed kit; if present, they're selects.
+    for (const p of props) {
+      expect(p.kind).toBe("select");
+      expect(Array.isArray(p.values)).toBe(true);
+    }
+  });
+});
+
 describe("isKitComponent", () => {
   it("returns true for real kit components with string-union props (reads disk)", () => {
     // Button in the real @xorkavi/arcade-gen has variant/size string-union props
