@@ -120,17 +120,34 @@ export function writeBindStructure(
     const multi = isMultiLine(sf2, arr2);
     const indent = elementIndent(del.source, arr2, sf2);
     if (op.beforeId == null) {
+      // Append to the end. REUSE the insert op's anchor strategy: splice the
+      // moved element AFTER the last element's `}` with a LEADING separator
+      // (never after-the-brace-before-the-trailing-comma, which double-commas
+      // on trailing-comma-on-every-element frames). One separator each side
+      // regardless of whether a trailing comma exists.
       const closeBracket = arr2.getEnd() - 1;
-      const lastEnd = arr2.elements.length ? arr2.elements[arr2.elements.length - 1].getEnd() : closeBracket;
-      const ins = multi ? `\n${indent}${elText},` : (arr2.elements.length ? `, ${elText}` : elText);
-      out = del.source.slice(0, lastEnd) + ins + del.source.slice(lastEnd);
+      if (arr2.elements.length === 0) {
+        out = del.source.slice(0, closeBracket) + elText + del.source.slice(closeBracket);
+      } else {
+        const lastEnd = arr2.elements[arr2.elements.length - 1].getEnd();
+        const ins = multi ? `,\n${indent}${elText}` : `, ${elText}`;
+        out = del.source.slice(0, lastEnd) + ins + del.source.slice(lastEnd);
+      }
+      // Reparse fallback (defensive, mirrors the beforeId!=null branch).
+      if (!reparses(out)) {
+        out = del.source.slice(0, closeBracket) + `, ${elText}` + del.source.slice(closeBracket);
+      }
     } else {
       const j = arr2.elements.findIndex((e) => elementId(e) === op.beforeId);
       if (j === -1) return { ok: false, reason: "beforeId-not-found" };
       const beforeStart = arr2.elements[j].getStart(sf2);
       const lineStart = del.source.lastIndexOf("\n", beforeStart) + 1;
-      const ins = multi ? `${elText},\n${indent}` : `${elText}, `;
-      out = del.source.slice(0, multi ? lineStart : beforeStart) + (multi ? `${indent}${ins}` : ins) + del.source.slice(multi ? lineStart : beforeStart);
+      // Multi-line: splice the moved element as its own line at lineStart, then
+      // a newline so the displaced element's existing line (which already carries
+      // its own indent from lineStart onward) follows. No extra ${indent} prepend
+      // here — that was double-indenting the displaced element.
+      const ins = multi ? `${indent}${elText},\n` : `${elText}, `;
+      out = del.source.slice(0, multi ? lineStart : beforeStart) + ins + del.source.slice(multi ? lineStart : beforeStart);
       // Simpler robust fallback: if the above is fragile, just splice before beforeStart.
       if (!reparses(out)) {
         out = del.source.slice(0, beforeStart) + `${elText}, ` + del.source.slice(beforeStart);

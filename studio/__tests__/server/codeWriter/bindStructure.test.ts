@@ -70,6 +70,15 @@ describe("writeBindStructure — delete / move / setRole", () => {
     expect(r.ok).toBe(true);
     if (r.ok) { expect(reparses(r.source)).toBe(true); expect(r.source.indexOf(`"Second"`)).toBeLessThan(r.source.indexOf(`"First"`)); }
   });
+  it("moves an entry to the END (beforeId:null) on a multi-line array, reparse-clean", () => {
+    const r = writeBindStructure(MULTI, "transcript", { kind: "move", id: 1, beforeId: null });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(reparses(r.source)).toBe(true);
+      // id 1 ("First") now after id 2 ("Second")
+      expect(r.source.indexOf(`"Second"`)).toBeLessThan(r.source.indexOf(`"First"`));
+    }
+  });
   it("setRole flips role and strips artefact when going to user (cosmetic hygiene)", () => {
     const r = writeBindStructure(MULTI, "transcript", { kind: "setRole", id: 2, role: "user" });
     expect(r.ok).toBe(true);
