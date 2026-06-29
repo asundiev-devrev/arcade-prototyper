@@ -167,8 +167,29 @@ import { ComputerScene } from "arcade-prototypes";
 // Mutate this frame, copy it as a starting point for new ones, or delete it.
 // To swap to the empty-state wordmark: <ComputerScene state="empty" />
 // To add the right-hand artefacts panel: <ComputerScene withCanvasPanel />
+
+const transcript = [
+  {
+    id: 1,
+    role: "user",
+    text: "Help me prep a marketing keynote for the Q3 launch — I want a tight outline I can riff off in front of the team tomorrow.",
+  },
+  {
+    id: 2,
+    role: "assistant",
+    text: "Here's a starting outline — I can expand any section. Want me to draft slide copy, build a structure, or pull together visual references?",
+    artefact: { tag: "DOC", title: "Q3 launch brief" },
+  },
+  { id: 3, role: "user", text: "Build the structure first." },
+  {
+    id: 4,
+    role: "assistant",
+    text: "A 5-act structure works for this audience: open with the customer problem, frame the wedge, walk through the product surface, hand off to a live demo, close on commercial signal. Want me to flesh out any act?",
+  },
+];
+
 export default function ComputerReference() {
-  return <ComputerScene />;
+  return <ComputerScene transcript={transcript} />;
 }
 `;
 

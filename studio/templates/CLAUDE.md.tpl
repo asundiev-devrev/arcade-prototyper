@@ -290,7 +290,23 @@ export default function Frame() { return <ComputerScene />; }
 - "a chat screen with sessions and chats" (without further specifics)
 - Anything that names Computer / Agent Studio without spelling out a *specific* sidebar / header / panel shape that differs from the canonical scene.
 
-**Reference frame on disk.** Every project is seeded with `frames/00-computer-reference/index.tsx` containing exactly `<ComputerScene />`. When asked for a Computer screen, the cheapest path is:
+**Populate the transcript as frame data.** When the prototype is a Computer/Agent chat the designer will want to EDIT, author the conversation as a frame-level `const` and pass it, so messages live in the frame (editable in place) rather than baked in the kit:
+
+```tsx
+const transcript = [
+  { id: 1, role: "user", text: "…the user's first message…" },
+  { id: 2, role: "assistant", text: "…the agent's reply…",
+    artefact: { tag: "DOC", title: "…optional attachment title…" } },
+  { id: 3, role: "user", text: "…" },
+];
+export default function Frame() {
+  return <ComputerScene transcript={transcript} />;
+}
+```
+
+Message shape: `{ id: number; role: "user" | "assistant"; text: string; artefact?: { tag: string; title: string } }`. Give each message a unique stable `id`. Bare `<ComputerScene />` is only for a throwaway scaffold the designer won't edit.
+
+**Reference frame on disk.** Every project is seeded with `frames/00-computer-reference/index.tsx` containing a populated transcript. When asked for a Computer screen, the cheapest path is:
 
 1. `Read frames/00-computer-reference/index.tsx`.
 2. Copy it as your new frame and override props for the requested deviation (e.g. `<ComputerScene state="empty" headerTitle="Untitled" />`).
