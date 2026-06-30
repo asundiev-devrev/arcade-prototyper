@@ -82,4 +82,69 @@ describe("cloudflareMiddleware", () => {
     const body = res.end.mock.calls[0][0] as string;
     expect(body).toContain("no_share_key");
   });
+
+  it("deploys each frame as its own production (main) Pages project", async () => {
+    // Regression for the share-URL bug: deploying to a per-frame *branch*
+    // produced a two-label host (<frame>.<project>.pages.dev) the universal
+    // *.pages.dev cert can't cover (TLS handshake fails forever), while the
+    // apex stayed empty ("Nothing is here yet") because nothing ever hit the
+    // production branch. The fix: one project PER FRAME, branch "main", so
+    // the URL is the apex single-label host that certs instantly.
+    //
+    // We stub the Worker client so no real network call happens, and assert
+    // the contract the Worker depends on: project name = slug-frameSlug,
+    // branch = "main".
+    const deploySpy = vi.fn(async () => ({
+      url: "https://my-proj-hero.pages.dev",
+      deployId: "d1",
+    }));
+    vi.doMock("../../../server/cloudflare/deploy", async () => {
+      const actual = await vi.importActual<any>("../../../server/cloudflare/deploy");
+      return { ...actual, deployViaWorker: deploySpy };
+    });
+    vi.doMock("../../../server/cloudflare/bundler", () => ({
+      buildFrameBundle: vi.fn(async () => ({
+        html: "<html></html>",
+        js: "",
+        css: "",
+      })),
+    }));
+
+    // settings.json with a share key so the middleware proceeds to deploy.
+    fs.writeFileSync(
+      path.join(studioTmp, "settings.json"),
+      JSON.stringify({ cloudflare: { shareKey: "deadbeef" } }),
+    );
+    // project.json with the frame we're sharing.
+    const projDir = path.join(studioTmp, "projects", "my-proj");
+    fs.mkdirSync(projDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(projDir, "project.json"),
+      JSON.stringify({
+        slug: "my-proj",
+        theme: "arcade",
+        mode: "light",
+        frames: [{ slug: "hero", name: "Hero", size: 1440 }],
+      }),
+    );
+
+    const { cloudflareMiddleware } = await import("../../../server/middleware/cloudflare");
+    const middleware = cloudflareMiddleware();
+    const req = {
+      url: "/api/projects/my-proj/share",
+      method: "POST",
+      [Symbol.asyncIterator]: async function* () {
+        yield JSON.stringify({ frameSlug: "hero" });
+      },
+    } as any;
+    const res = { writeHead: vi.fn(), end: vi.fn() } as any;
+
+    await middleware(req, res);
+
+    expect(deploySpy).toHaveBeenCalledTimes(1);
+    const arg = deploySpy.mock.calls[0][0] as any;
+    expect(arg.pagesProjectName).toBe("my-proj-hero");
+    expect(arg.branch).toBe("main");
+    expect(res.writeHead).toHaveBeenCalledWith(200, { "Content-Type": "application/json" });
+  });
 });

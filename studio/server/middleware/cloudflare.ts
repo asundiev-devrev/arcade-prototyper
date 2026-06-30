@@ -4,7 +4,6 @@ import path from "node:path";
 import { buildFrameBundle } from "../cloudflare/bundler";
 import {
   deployViaWorker,
-  normalizeBranchName,
   normalizeProjectName,
 } from "../cloudflare/deploy";
 import { projectJsonPath } from "../paths";
@@ -90,13 +89,22 @@ export function cloudflareMiddleware() {
           mode: projectJson.mode,
         });
 
-        // One Pages project per studio project; each frame becomes a branch
-        // deploy inside it. Preview URL shape: <frameSlug>.<slug>.pages.dev.
-        // Normalize defensively — studio slugs are already kebab-case, but
-        // the helpers enforce Cloudflare's leading-digit ban and length
-        // limits.
-        const pagesProjectName = normalizeProjectName(slug);
-        const branch = normalizeBranchName(frameSlug);
+        // One Pages project PER FRAME, deployed to the production branch so
+        // the canonical URL is the apex <project>.pages.dev — a single-label
+        // host that Cloudflare's universal *.pages.dev cert covers instantly.
+        //
+        // The old scheme (one project per studio project, each frame a
+        // *branch* deploy) produced a two-label host
+        // (<frame>.<project>.pages.dev). The universal cert doesn't cover
+        // that depth, so the URL's TLS handshake failed indefinitely; and the
+        // apex stayed on Cloudflare's "Nothing is here yet" placeholder
+        // because nothing was ever deployed to the production branch.
+        //
+        // Combining slug + frameSlug keeps each frame's project — and thus
+        // its URL — stable across re-shares. normalizeProjectName enforces
+        // Cloudflare's leading-digit ban and 58-char cap.
+        const pagesProjectName = normalizeProjectName(`${slug}-${frameSlug}`);
+        const branch = "main";
 
         const files = [
           { file: "index.html", data: bundle.html },

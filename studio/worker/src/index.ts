@@ -269,14 +269,31 @@ export default {
     }
 
     const result = payload.result;
-    // Prefer the stable branch alias so re-shares of the same frame hit the
-    // same URL. The per-deploy URL (`<hash>.<project>.pages.dev`) is our
-    // fallback for deploys that somehow come back without aliases.
-    const aliasUrl: string | undefined = Array.isArray(result?.aliases)
-      ? result.aliases[0]
-      : undefined;
-    const rawUrl = aliasUrl ?? String(result?.url ?? "");
-    const deployUrl = rawUrl.startsWith("http") ? rawUrl : `https://${rawUrl}`;
+    // Resolve the URL we hand back to Studio.
+    //
+    // For a PRODUCTION deploy (branch === the project's production_branch,
+    // "main"), the canonical URL is the apex `<project>.pages.dev`. That's a
+    // single-label host covered by Cloudflare's universal *.pages.dev cert,
+    // so TLS works the instant the deploy lands — no per-project cert wait.
+    // We construct it deterministically from the project name rather than
+    // trusting `result.aliases`, whose contents/ordering for production
+    // deploys are inconsistent and previously made us fall back to the
+    // per-deploy `<hash>.<project>.pages.dev` URL — a TWO-label host the
+    // universal cert does NOT cover, so its handshake failed forever.
+    //
+    // For a non-production branch deploy we keep the old alias-then-url
+    // heuristic (still two-label, still cert-gated — callers should prefer
+    // production).
+    let deployUrl: string;
+    if (body.branch === "main") {
+      deployUrl = `https://${body.pagesProjectName}.pages.dev`;
+    } else {
+      const aliasUrl: string | undefined = Array.isArray(result?.aliases)
+        ? result.aliases[0]
+        : undefined;
+      const rawUrl = aliasUrl ?? String(result?.url ?? "");
+      deployUrl = rawUrl.startsWith("http") ? rawUrl : `https://${rawUrl}`;
+    }
 
     return cors(json(200, { url: deployUrl, deployId: String(result?.id ?? "") }));
   },
