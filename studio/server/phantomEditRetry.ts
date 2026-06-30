@@ -43,6 +43,7 @@ export function shouldRetryPhantomEdit(input: {
 export const PHANTOM_EDIT_RETRY_PROMPT =
   "Your last reply described a change to the frame, but no file was actually modified — " +
   "the edit did not land. Re-read the target frame file now, then apply the change with the " +
-  "Edit tool (or Write with the full file contents if Edit can't find a unique anchor). " +
+  "Edit tool using a tight anchor — change only the lines that must change, do not rewrite the " +
+  "whole file (fall back to Write with the full file contents only if Edit can't find a unique anchor). " +
   "Make the real change before replying; do not describe it again without editing. " +
   "Keep the same response shape: a one-sentence summary plus a ### Deviations section.";

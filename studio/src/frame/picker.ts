@@ -19,6 +19,7 @@
 import { capture } from "./inspector";
 import * as overlay from "./overlay";
 import { getFiberFromNode, componentNameFromType, type FiberLike } from "./fiber";
+import type { OwnerLink } from "./resolveInFrameComponent";
 
 interface PickerSelection {
   editId: number;
@@ -30,6 +31,7 @@ interface PickerSelection {
   textEditable: boolean;
   styles: import("./inspector").StyleSnapshot;
   iconCandidate?: string;
+  ownerChain: OwnerLink[];
 }
 
 const CURSOR_STYLE_ID = "__arcade-studio-picker-cursor";
@@ -88,6 +90,29 @@ function parseFirstUserFrame(stack: string): { file: string; line: number; colum
 }
 
 /**
+ * Walk the fiber `.return` chain from a node and, for every fiber that both has
+ * a name and whose `_debugStack` parses to a user source file, emit an
+ * OwnerLink. Order is innermost→outermost. Pure over the fiber shape (testable).
+ */
+export function buildOwnerChain(start: FiberLike | null): OwnerLink[] {
+  const out: OwnerLink[] = [];
+  let node: FiberLike | null = start;
+  while (node) {
+    const name =
+      (typeof node.type === "function" || (node.type && typeof node.type === "object"))
+        ? componentNameFromType(node.type)
+        : null;
+    const stack = node._debugStack?.stack;
+    if (name && stack) {
+      const parsed = parseFirstUserFrame(stack);
+      if (parsed) out.push({ componentName: name, file: parsed.file, line: parsed.line, column: parsed.column });
+    }
+    node = node.return ?? null;
+  }
+  return out;
+}
+
+/**
  * Walk the fiber chain starting at the DOM node's fiber, finding the nearest
  * ancestor whose `_debugStack` parses cleanly to a user source file.
  */
@@ -109,6 +134,7 @@ function resolveSelection(fiber: FiberLike, domNode: HTMLElement): PickerSelecti
           ...parsed, componentName, tagName,
           editId: cap.editId, textEditable: cap.textEditable, styles: cap.styles,
           iconCandidate: cap.iconCandidate,
+          ownerChain: buildOwnerChain(fiber),
         };
       }
     }
@@ -154,6 +180,9 @@ function onClick(e: MouseEvent) {
   const target = e.target as Element | null;
   if (!target) {
     postCancel("no-target");
+    return;
+  }
+  if (overlay.isOverlayElement(target as HTMLElement)) {
     return;
   }
   const fiber = getFiberFromNode(target);

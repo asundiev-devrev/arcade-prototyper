@@ -8,6 +8,17 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.41.3] — 2026-06-29
+
+### Added
+- **Watch the code as it's written.** While a prototype is generating, the chat pane now streams the actual code live — the file scrolls by as the agent writes it, tagged with the file name and a running line count — instead of a blank "Thinking…" animation. The wait now reads as visible progress.
+
+### Changed
+- **Edits are faster and lighter-touch.** The generator now makes the smallest change that satisfies your request — editing only the lines that need to change rather than rewriting the whole file. Small tweaks land quicker and cost less waiting.
+
+### Fixed
+- **The live code preview now actually shows code.** A parsing bug left the streamed-code view blank in every case; it now renders the code as it streams.
+
 ## [0.41.2] — 2026-06-25
 
 ### Fixed

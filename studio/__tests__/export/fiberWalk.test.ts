@@ -20,6 +20,7 @@ function chain(node: any, children: MinimalFiber[]): MinimalFiber {
 }
 const reader: FiberReader = {
   hostTag: (f) => (typeof (f as any).type === "string" ? (f as any).type : null),
+  hostClassName: () => null,
   box: () => box,
   style: () => ({ getPropertyValue: (p) => (p === "display" ? "flex" : p === "flex-direction" ? "column" : p === "background-color" ? "rgba(0, 0, 0, 0)" : "0px") }),
   text: (f) => (f as any).__text ?? null,

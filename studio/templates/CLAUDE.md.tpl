@@ -546,8 +546,8 @@ Read this preamble literally:
 
 ### Picking the right tool
 
-- **`Edit`** is the default for targeted modifications. Find a unique, contiguous chunk of the existing JSX that contains the element you want to change, and replace it. Include enough surrounding code (a parent tag, a unique class name, a unique string) that the `old_string` matches exactly once.
-- **`Write`** rewrites the whole file. Use it when the change is sweeping (more than ~30% of the file changes), when you can't find a unique anchor for `Edit`, or when the file is short enough that a clean rewrite is easier to reason about than a surgical edit.
+- **`Edit` is the default for targeted modifications — strongly prefer it.** Find a unique, contiguous chunk of the existing JSX that contains the element you want to change, and replace ONLY the lines that must change. Include enough surrounding code (a parent tag, a unique class name, a unique string) that the `old_string` matches exactly once. A one-line intent should produce a one-line diff, not a full-file rewrite.
+- **`Write` rewrites the whole file and re-streams every line — it is the slow path.** A full-file rewrite of a 200-line frame costs the user a much longer wait than a surgical `Edit`, so reserve `Write` for cases where it's genuinely unavoidable: the change is sweeping (more than ~30% of the file changes), or `Edit` truly can't find a unique anchor after you've widened the surrounding context. Do NOT reach for `Write` just because the file is short or a clean rewrite feels tidier — that trades the user's time for your convenience.
 - Never invent a third path. There is no "explain the change in the chat and let the user apply it" — the user expects code to move.
 
 ### Preserve existing inline styles on edits

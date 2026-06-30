@@ -284,3 +284,4 @@ export function isOverlayElement(el: HTMLElement): boolean {
     el === selectPaddingBand
   );
 }
+

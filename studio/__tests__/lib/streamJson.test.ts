@@ -257,4 +257,36 @@ describe("createStreamParser: per-turn isolation", () => {
     const aPartial = aEvents.find((e) => e.kind === "tool_input_partial");
     expect(aPartial).toMatchObject({ partialContent: "hello world" });
   });
+
+  it("extracts filePath + partialContent when the CLI emits standard JSON spacing", () => {
+    // Bedrock streams real JSON with a space after the colon (`"content": "`).
+    // The old exact `"content":"` opener missed it and left every live code
+    // preview blank — verify the space-tolerant extraction handles both.
+    const p = createStreamParser();
+    p.parseLine(blockStart(0, "tool-w", "Write"));
+    const events = p.parseLine(
+      blockDelta(0, '{"file_path": "/p/frames/pricing/index.tsx", "content": "export function Pricing'),
+    );
+    const partial = events.find((e) => e.kind === "tool_input_partial");
+    expect(partial).toMatchObject({
+      kind: "tool_input_partial",
+      action: "writing",
+      filePath: "/p/frames/pricing/index.tsx",
+      partialContent: "export function Pricing",
+    });
+  });
+
+  it("extracts new_string for an Edit with standard JSON spacing", () => {
+    const p = createStreamParser();
+    p.parseLine(blockStart(0, "tool-e", "Edit"));
+    const events = p.parseLine(
+      blockDelta(0, '{"file_path": "/p/frames/home/index.tsx", "old_string": "Hi", "new_string": "Hello there'),
+    );
+    const partial = events.find((e) => e.kind === "tool_input_partial");
+    expect(partial).toMatchObject({
+      action: "editing",
+      filePath: "/p/frames/home/index.tsx",
+      partialContent: "Hello there",
+    });
+  });
 });

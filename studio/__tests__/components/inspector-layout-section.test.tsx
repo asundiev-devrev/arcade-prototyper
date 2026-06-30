@@ -33,7 +33,9 @@ describe("LayoutSection", () => {
   it("editing W writes width in px", () => {
     const change = vi.fn();
     render(<LayoutSection styles={STYLES} pending={{}} change={change} />);
-    fireEvent.change(screen.getByLabelText("W"), { target: { value: "300" } });
+    const input = screen.getByLabelText("W") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "300" } });
+    fireEvent.blur(input); // NEW commit trigger
     expect(change).toHaveBeenCalledWith("width", "300px");
   });
   it("aspect-lock: editing W also writes H at the same ratio", () => {
@@ -41,7 +43,9 @@ describe("LayoutSection", () => {
     render(<LayoutSection styles={STYLES} pending={{}} change={change} />);
     // ratio H/W = 100/200 = 0.5
     fireEvent.click(screen.getByLabelText(/lock aspect/i));
-    fireEvent.change(screen.getByLabelText("W"), { target: { value: "400" } });
+    const input = screen.getByLabelText("W") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "400" } });
+    fireEvent.blur(input); // NEW commit trigger
     expect(change).toHaveBeenCalledWith("width", "400px");
     expect(change).toHaveBeenCalledWith("height", "200px");
   });

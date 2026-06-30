@@ -9,6 +9,35 @@ import { DottedLoader } from "./computer/DottedLoader";
 import { NoFrameChangesBanner, splitNoChangesTrailer } from "./NoFrameChangesBanner";
 import { TurnStatusRow } from "./TurnStatusRow";
 import { ChimeInNote } from "./computer/ChimeInNote";
+import { EditBlockRow } from "./EditBlockRow";
+import { LiveCodePreview } from "./LiveCodePreview";
+import type { EditBlock } from "../../hooks/editBlocksContext";
+import type { StreamState } from "../../hooks/chatStreamReducer";
+
+/** Returns true if this block is the newest applied instant block for its frame
+ *  (LIFO-consistent undo eligibility). Only that block may show an actionable Undo.
+ *  EXPORTED so the test guards the shipped function, not a copy. */
+export function isNewestAppliedInstantForFrame(
+  block: EditBlock,
+  all: EditBlock[],
+  framesWithAiApply?: Set<string>,
+): boolean {
+  if (block.kind !== "instant" || block.status !== "applied") return false;
+  // If an AI Apply has occurred for this frame, instant Undo is gated (the
+  // server's undo snapshot stack doesn't capture agent edits, so an instant
+  // Undo could silently revert the AI's work).
+  if (framesWithAiApply?.has(block.frameSlug)) return false;
+  // Walk backward from the end to find the last applied instant for this frame.
+  for (let i = all.length - 1; i >= 0; i--) {
+    const candidate = all[i];
+    if (candidate.frameSlug === block.frameSlug &&
+        candidate.kind === "instant" &&
+        candidate.status === "applied") {
+      return candidate.id === block.id;
+    }
+  }
+  return false;
+}
 
 function toolIcon(tool: string): string {
   if (tool === "Read") return "↘";
@@ -205,6 +234,7 @@ export function MessageList({
   history,
   pendingPrompt,
   currentItems,
+  activeWrites = {},
   busy,
   phase = "idle",
   source = "claude",
@@ -213,10 +243,16 @@ export function MessageList({
   chimeIns = [],
   onApplyChimeIn,
   onDismissChimeIn,
+  editBlocks = [],
+  onUndoBlock,
+  onApplyBlock,
+  onDiscardBlock,
+  framesWithAiApply,
 }: {
   history: ChatMessage[];
   pendingPrompt?: string;
   currentItems?: ChatTurnItem[];
+  activeWrites?: StreamState["activeWrites"];
   busy?: boolean;
   phase?: TurnPhase;
   source?: "claude" | "computer";
@@ -225,6 +261,11 @@ export function MessageList({
   chimeIns?: ChimeIn[];
   onApplyChimeIn?: (c: ChimeIn) => void;
   onDismissChimeIn?: (c: ChimeIn) => void;
+  editBlocks?: EditBlock[];
+  onUndoBlock?: (id: string) => void;
+  onApplyBlock?: (id: string) => void;
+  onDiscardBlock?: (id: string) => void;
+  framesWithAiApply?: Set<string>;
 }) {
   const hasActivity = !!currentItems && currentItems.length > 0;
   const liveTools = (currentItems ?? [])
@@ -320,6 +361,23 @@ export function MessageList({
 
       {pendingPrompt && <BubbleRow role="user">{pendingPrompt}</BubbleRow>}
 
+      {/* Edit-block stream: instant edits land applied (with Undo); edits the
+       *  deterministic writer can't map land pending (with Apply / Discard). */}
+      {editBlocks.length > 0 && (
+        <div data-testid="edit-block-stream" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {editBlocks.map((block) => (
+            <EditBlockRow
+              key={block.id}
+              block={block}
+              undoable={isNewestAppliedInstantForFrame(block, editBlocks, framesWithAiApply)}
+              onUndo={(id) => onUndoBlock?.(id)}
+              onApply={(id) => onApplyBlock?.(id)}
+              onDiscard={(id) => onDiscardBlock?.(id)}
+            />
+          ))}
+        </div>
+      )}
+
       {/* Live turn rendering */}
       {isComputerLive ? (
         <>
@@ -340,6 +398,12 @@ export function MessageList({
                 <ActivityRow key={i} item={item} turnStartedAt={turnStartedAt} />
               ))}
             </div>
+          )}
+          {/* Live code stream: the agent's in-flight Write/Edit scrolls by as
+           *  it's written, so the wait reads as immediate progress (first token
+           *  ~5s) instead of a blank animation until the turn ends. */}
+          {phase === "running" && !suppressActivity && (
+            <LiveCodePreview activeWrites={activeWrites} />
           )}
           {/* Only show the live status row while the turn is running or has
            *  errored (error needs surfacing even without an assistant

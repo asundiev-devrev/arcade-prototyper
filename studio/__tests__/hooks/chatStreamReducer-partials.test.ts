@@ -32,6 +32,7 @@ describe("chatStreamReducer — activeWrites", () => {
     expect(s.activeWrites["toolu_X"]).toEqual({
       slug: "hero",
       filePath: "/projects/p/frames/hero/index.tsx",
+      action: "writing",
       partialContent: "import React",
       startedAt: expect.any(Number),
     });

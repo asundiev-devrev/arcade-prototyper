@@ -93,6 +93,7 @@ export function FrameCard({
     };
   }, [resizing, onFrameWidthChange, zoom]);
 
+  // Picking-gated effect: manages picker lifecycle in the iframe.
   useEffect(() => {
     if (!picking) return;
     iframeRef.current?.contentWindow?.postMessage(
@@ -116,6 +117,9 @@ export function FrameCard({
           }
           addOrFocus(selection, frame.slug, win);
           setInspectorOpen(true);
+          // Component vs. in-frame is now decided in the inspector panel (it
+          // grays fields + shows Customize when the source isn't this frame's
+          // own index.tsx). No in-iframe chip to surface here anymore.
         }
         // NOTE: do NOT setPicking(false) — bulk picking stays active.
       } else if (t === "arcade-studio:frame-pick-cancelled") {
@@ -133,7 +137,9 @@ export function FrameCard({
       }
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setPicking(false);
+      if (e.key === "Escape") {
+        setPicking(false);
+      }
     }
     window.addEventListener("message", onMessage);
     window.addEventListener("keydown", onKey);
@@ -145,7 +151,7 @@ export function FrameCard({
         "*",
       );
     };
-  }, [picking, frame.slug, addOrFocus, setInspectorOpen, clear, frameWindow, sessionFrameSlug]);
+  }, [picking, frame.slug, addOrFocus, setInspectorOpen, clear, frameWindow, sessionFrameSlug, toast]);
 
   function onIframeLoad() {
     if (phase !== "running") return;

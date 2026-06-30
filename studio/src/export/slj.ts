@@ -52,6 +52,9 @@ export interface ComponentNode {
 export interface ElementNode {
   kind: "element";
   tag: string; // "div" | "text" | "img" | ...
+  /** The host element's literal class attribute, for JSX emission (Customize).
+   *  Absent on text nodes and the Figma-export path (which ignores it). */
+  className?: string;
   box: Box;
   layout: Layout | null;
   style: ElementStyle;

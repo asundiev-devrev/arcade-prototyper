@@ -252,10 +252,13 @@ function extractStringField(
   fieldName: string,
   allowOpen = false,
 ): string | undefined {
-  const opener = `"${fieldName}":"`;
-  const start = buffer.indexOf(opener);
-  if (start === -1) return undefined;
-  const valueStart = start + opener.length;
+  // The CLI streams standard JSON, which permits whitespace after the colon
+  // (`"content": "…"`). An exact `"field":"` opener misses that and silently
+  // returns "" — which left the live code preview blank for every Write/Edit.
+  // Match the key + colon + optional whitespace + opening quote instead.
+  const keyMatch = new RegExp(`"${fieldName}"\\s*:\\s*"`).exec(buffer);
+  if (!keyMatch) return undefined;
+  const valueStart = keyMatch.index + keyMatch[0].length;
   let i = valueStart;
   let result = "";
   while (i < buffer.length) {

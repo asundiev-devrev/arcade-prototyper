@@ -54,6 +54,17 @@ vi.mock("../../../src/hooks/chatStreamContext", () => ({
 }));
 
 import { ChatPane } from "../../../src/components/chat/ChatPane";
+import { EditBlocksProvider } from "../../../src/hooks/editBlocksContext";
+
+// ChatPane reads the edit-block stream from EditBlocksProvider (always present
+// in the real shell via ProjectDetail). Wrap so the hook resolves.
+function renderPane(slug: string) {
+  return render(
+    <EditBlocksProvider>
+      <ChatPane projectSlug={slug} history={[]} />
+    </EditBlocksProvider>,
+  );
+}
 
 afterEach(() => {
   cleanup();
@@ -69,7 +80,7 @@ describe("ChatPane hero handoff", () => {
       figmaUrl: null,
     });
 
-    render(<ChatPane projectSlug="p-new" history={[]} />);
+    renderPane("p-new");
 
     expect(screen.getByText("Build me a settings page")).toBeTruthy();
     expect(screen.getByText(/Working…/i)).toBeTruthy();
@@ -77,7 +88,7 @@ describe("ChatPane hero handoff", () => {
   });
 
   it("does not paint the optimistic Working… row when no pending prompt exists", () => {
-    render(<ChatPane projectSlug="p-empty" history={[]} />);
+    renderPane("p-empty");
 
     expect(screen.queryByText(/Working…/i)).toBeNull();
     expect(screen.queryByText(/Try starting with/i)).toBeNull();
@@ -90,7 +101,7 @@ describe("ChatPane hero handoff", () => {
       figmaUrl: null,
     });
 
-    render(<ChatPane projectSlug="p-busy" history={[]} />);
+    renderPane("p-busy");
 
     expect(screen.getByTestId("prompt-input").getAttribute("data-busy")).toBe("1");
   });

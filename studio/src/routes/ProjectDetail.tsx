@@ -12,6 +12,9 @@ import { ChatToggle } from "../components/shell/ChatToggle";
 import { ProjectPicker } from "../components/shell/ProjectPicker";
 import { ChatStreamProvider } from "../hooks/chatStreamContext";
 import { EditSessionProvider, useEditSession } from "../hooks/editSessionContext";
+import { EditBlocksProvider, useEditBlocks } from "../hooks/editBlocksContext";
+import { postEditUndo } from "../lib/visualEditClient";
+import { takePendingBlockPreamble } from "../components/inspector/InspectorPanel";
 import { useProjectFromHost } from "../hooks/useProjectFromHost";
 import type { Project, ChimeIn } from "../../server/types";
 import { takePendingPrompt, peekPendingPrompt } from "../lib/pendingPrompt";
@@ -76,12 +79,14 @@ export function ProjectDetail({ slug, onBack, onOpenProject }: ProjectDetailProp
 
   return (
     <EditSessionProvider>
-      <ProjectDetailShell
-        routeKey={slug}
-        source={source}
-        onBack={onBack}
-        onOpenProject={onOpenProject}
-      />
+      <EditBlocksProvider>
+        <ProjectDetailShell
+          routeKey={slug}
+          source={source}
+          onBack={onBack}
+          onOpenProject={onOpenProject}
+        />
+      </EditBlocksProvider>
     </EditSessionProvider>
   );
 }
@@ -98,6 +103,7 @@ function ProjectDetailShell({
   onOpenProject: (slug: string) => void;
 }) {
   const { inspectorOpen, inspectorWidth } = useEditSession();
+  const { blocks, setStatus, removeBlock } = useEditBlocks();
   // Optimistic local override for the theme toggle.
   const [localModeOverride, setLocalModeOverride] =
     useState<"light" | "dark" | null>(null);
@@ -137,6 +143,11 @@ function ProjectDetailShell({
   // frames. Poll while mounted so a background drift check (which lands a
   // few seconds after a turn ends) surfaces without a manual refresh.
   const [chimeIns, setChimeIns] = useState<ChimeIn[]>([]);
+  // Track frames for which an AI Apply has occurred this session. Once an AI
+  // Apply runs for a given frame, instant Undo is gated for that frame (the
+  // server undo snapshot stack doesn't capture agent edits, so an instant Undo
+  // could silently revert the AI's work). Simple ref: no re-render needed.
+  const framesWithAiApplyRef = useRef<Set<string>>(new Set());
 
   const refreshChimeIns = useCallback(async () => {
     try {
@@ -181,6 +192,51 @@ function ProjectDetailShell({
       setChimeIns((list) => list.filter((x) => x.id !== c.id));
     },
     [routeKey],
+  );
+
+  // Undo an instant block: revert the deterministic write on disk (LIFO at the
+  // server), then mark the block undone. Also evict any stashed preamble.
+  const handleUndoBlock = useCallback(
+    async (id: string) => {
+      const block = blocks.find((b) => b.id === id);
+      if (!block) return;
+      const result = await postEditUndo(routeKey, block.frameSlug);
+      if (!result.ok) {
+        console.warn(`Undo failed for block ${id} (frame ${block.frameSlug})`);
+        return;
+      }
+      takePendingBlockPreamble(id);
+      setStatus(id, "undone");
+    },
+    [routeKey, blocks, setStatus],
+  );
+
+  // Apply a pending AI block: send the stashed scoped preamble to the agent and
+  // remove the block (it becomes a normal chat turn). (The reading also evicts
+  // the side-map entry.) Also record this frame in the AI-applied set so instant
+  // Undo becomes gated.
+  const handleApplyBlock = useCallback(
+    (id: string) => {
+      const preamble = takePendingBlockPreamble(id);
+      if (!preamble) return;
+      // Mark this frame as having had an AI Apply so instant Undo is gated.
+      const block = blocks.find((b) => b.id === id);
+      if (block && block.kind === "ai") {
+        framesWithAiApplyRef.current.add(block.frameSlug);
+      }
+      source.send?.(preamble);
+      removeBlock(id);
+    },
+    [source, removeBlock, blocks],
+  );
+
+  // Discard a pending AI block: drop it from the stream and evict its preamble.
+  const handleDiscardBlock = useCallback(
+    (id: string) => {
+      takePendingBlockPreamble(id);
+      removeBlock(id);
+    },
+    [removeBlock],
   );
 
   const [devOpen, setDevOpen] = useState(false);
@@ -382,6 +438,10 @@ function ProjectDetailShell({
             chimeIns={chimeIns}
             onApplyChimeIn={handleApplyChimeIn}
             onDismissChimeIn={handleDismissChimeIn}
+            onUndoBlock={handleUndoBlock}
+            onApplyBlock={handleApplyBlock}
+            onDiscardBlock={handleDiscardBlock}
+            framesWithAiApply={framesWithAiApplyRef.current}
           />
           {chatOpen && (
             <div
@@ -427,7 +487,7 @@ function ProjectDetailShell({
           />
         </main>
         {devOpen && <DevModePanel slug={project.slug} />}
-        <InspectorPanel onSend={(p, imgs) => source.send(p, imgs)} busy={chatStream.state.phase === "running"} />
+        <InspectorPanel onSend={(p, imgs) => source.send(p, imgs)} busy={chatStream.state.phase === "running"} slug={project.slug} />
       </div>
     </div>
     </ChatStreamProvider>

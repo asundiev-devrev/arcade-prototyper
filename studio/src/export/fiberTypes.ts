@@ -24,6 +24,8 @@ export function fiberName(f: MinimalFiber): string | null {
 export interface FiberReader {
   /** Host tag for a host fiber (e.g. "div","svg","button"), or null if none. */
   hostTag(f: MinimalFiber): string | null;
+  /** The host element's `class` attribute (space-separated), or null if none / no host. */
+  hostClassName(f: MinimalFiber): string | null;
   /** Frame-relative box of the fiber's host node. */
   box(f: MinimalFiber): Box;
   /** A computed-style getter for the fiber's host node (kebab CSS props). */

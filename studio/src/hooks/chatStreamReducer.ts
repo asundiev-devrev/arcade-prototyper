@@ -68,6 +68,7 @@ export interface StreamState {
   activeWrites: Record<string, {
     slug: string;
     filePath: string;
+    action: "writing" | "editing";
     partialContent: string;
     startedAt: number;
   }>;
@@ -269,6 +270,7 @@ export function applyStudioEvent(
         [ev.toolUseId]: {
           slug,
           filePath: ev.filePath,
+          action: ev.action,
           partialContent: ev.partialContent,
           startedAt: existing?.startedAt ?? Date.now(),
         },

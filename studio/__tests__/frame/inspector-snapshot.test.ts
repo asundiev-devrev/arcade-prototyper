@@ -77,6 +77,30 @@ describe("capture + preview", () => {
     expect(card.style.backgroundColor).toBe("");
   });
 
+  it("REGRESSION: resetting an element with SOURCE inline styles restores them, not blanks them", () => {
+    // A Figma-imported element styles itself with an inline `style` prop. The
+    // inspector previews + resets must NOT wipe the author's own inline styles.
+    const el = document.createElement("div");
+    el.style.fontSize = "22px";
+    el.style.color = "rgb(76, 71, 72)";
+    el.style.display = "flex";
+    el.textContent = "Good morning, Polina!";
+    document.body.appendChild(el);
+    const { editId } = capture(el);
+    // preview a font-size change, then reset (the per-row × path)
+    window.dispatchEvent(new MessageEvent("message", {
+      data: { type: "arcade-studio:preview", editId, field: "fontSize", value: "40px" },
+    }));
+    expect(el.style.fontSize).toBe("40px"); // preview applied
+    window.dispatchEvent(new MessageEvent("message", {
+      data: { type: "arcade-studio:preview-reset", editId },
+    }));
+    // reset MUST restore the ORIGINAL inline styles, not blank them
+    expect(el.style.fontSize).toBe("22px");
+    expect(el.style.color).toBe("rgb(76, 71, 72)");
+    expect(el.style.display).toBe("flex");
+  });
+
   it("style preview targets the right element by editId", () => {
     const a = document.createElement("button"); a.textContent = "A"; document.body.appendChild(a);
     const b = document.createElement("button"); b.textContent = "B"; document.body.appendChild(b);
