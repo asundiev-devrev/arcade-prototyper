@@ -1,339 +1,310 @@
-# Figma Export via Agent — Design Spec
+# Figma Export (Hybrid Deterministic + LLM) — Design Spec
 
 **Date:** 2026-06-30
 **Status:** Approved (design), pending implementation plan
 **Area:** `studio/` — Share modal "Export to Figma"
 
-> **Revision note.** An earlier draft of this spec was built on a false premise
-> (that the *local* Figma Dev Mode MCP at `:3845` could write to Figma). An
-> adversarial review + live probing disproved it: the local MCP is read-only
-> and gated on an active design tab. This version is rebuilt around the
-> **remote** Figma MCP (`mcp.figma.com`) with a one-time interactive login,
-> a path proven feasible by a live spike (see "Auth spike — proven").
+> **Revision history (why this spec churned).**
+> - Draft 1 assumed the *local* Figma Dev Mode MCP (`:3845`) could write. It
+>   can't — read-only, active-tab gated. Disproven by live probe.
+> - Draft 2 switched to the remote MCP + an all-agentic rebuild, and claimed a
+>   spike "proved" headless auth. A second adversarial review showed the spike
+>   only proved token *reuse*, not first-run *login*, and that a working
+>   deterministic fidelity engine already exists on HEAD (I had it marked for
+>   deletion). Both corrected here.
+> - This version: hybrid engine (deterministic for mapped components, LLM for
+>   unmapped components + flow), with the auth path now proven end-to-end (see
+>   "Auth — proven end-to-end").
 
 ## Problem
 
-Studio's Share modal has an "Export to Figma" button. Clicking it errors with
-"Open the Arcade export plugin in Figma, then try again" — because the export
-ships a generated script over a WebSocket bridge to a **Figma Desktop Bridge
-plugin that was never built**. The data pipeline is complete and tested up to
-that boundary, but the transport is dead, so the feature has never worked for
-any user.
+Studio's Share modal has an "Export to Figma" button. It errors with "Open the
+Arcade export plugin in Figma" — it ships a generated script over a WebSocket
+bridge to a **Figma plugin that was never built**. The data pipeline is complete
+and tested up to that boundary; only the transport is dead. The feature has
+never worked for any user.
 
-The feature is valuable: a live prototype is a great *build* artifact but a poor
-*review* artifact (it only exists in motion). Rebuilding it as a still,
-annotated flow in Figma makes it reviewable async — PMs, designers, engineers
-can comment on individual states, see the whole flow, and jump to buried
-screens. (Reference: southleft.substack.com/p/code-prototypes-are-fast-feedback
-and the open-source skill github.com/alima-max/prototype-to-figma-skill.)
+A live prototype is a great *build* artifact but a poor *review* artifact (it
+only exists in motion). Rebuilding it as a still, annotated flow in Figma makes
+it reviewable async — reviewers can comment on a single state, see the whole
+flow, jump to a buried screen.
 
 ## Goal
 
-Replace the broken plugin-based export with an **agent-driven export** that uses
-the **remote** Figma MCP (no custom plugin) to rebuild selected frames as an
-**annotated flow** in the designer's Figma, built from real Arcade
-design-system components.
+Replace the dead plugin transport with an export that rebuilds selected frames
+in Figma as an **annotated flow**, using the **remote Figma MCP** (no custom
+plugin), driven by Studio's bundled `claude` subprocess.
 
-Product decisions, locked during brainstorming:
-- **One-click inside Studio** (not a copy-paste prompt for the user's own editor).
-- **Annotated-flow output** (the full article treatment), not a single faithful
-  frame.
-- **Auth baked into first-run export.** No separate "Connect Figma" button. The
-  first time the user clicks Export to Figma, if not yet authed, the Figma login
-  runs inline, then the export continues. Every later click goes straight to
-  export.
+Locked product decisions:
+- **One-click inside Studio** (auth handled in-app on first export; no leaving
+  the app).
+- **Annotated-flow output** (multi-frame, arrows, interaction annotations,
+  overview frame, DS-gap report).
+- **No plain rectangles, ever.** Anything in the prototype that isn't a mapped
+  component must be intelligently *built* by the LLM (real layout + tokens +
+  text), never dropped in as an empty box. This is a hard requirement — see
+  "The three-bucket model".
 
-## Approach (chosen: A — agentic skill)
+## The three-bucket model (core of the hybrid)
 
-Studio already spawns a `claude` CLI subprocess for frame generation. For
-export, spawn a **second, differently-configured** subprocess: the remote Figma
-MCP wired in, a vendored "prototype-to-figma" skill loaded, handed the selected
-frames + our curated Arcade→Figma component map. The agent reads frames, infers
-the flow, and rebuilds it in Figma with annotations and arrows, then verifies.
+Every node in a prototype frame falls into exactly one bucket. The engine treats
+each differently — this is the heart of the design.
 
-Rejected alternatives:
-- **B (deterministic transport swap):** feed our existing
-  `fiberWalk → SLJ → executePlan` plan to the Figma MCP instead of the dead
-  plugin. Rejected as the *primary* approach because that pipeline only does
-  single-frame rebuilds; the annotated-flow output (multi-frame, arrows,
-  interaction inference) is exactly what it can't do, so an agent is needed
-  anyway. NOTE: a validated hybrid swap pipeline (51 instances / 0 failures) was
-  built and then deleted in commit `05afed4` when its plugin transport died. It
-  is recoverable via `git revert` and is the natural basis for a future
-  fidelity pass (see "Phase 2").
-- **C (hybrid):** agent owns flow scaffolding, deterministic swap owns per-frame
-  fidelity. Best quality, most integration work. Held as **phase-2** if the
-  agent's per-frame fidelity proves insufficient at DevRev's bar.
+| Bucket | Example | Handler | Output |
+|---|---|---|---|
+| **1. Mapped component** | Button, Card, Chip, Select — in our curated map | **Deterministic** | Exact Figma component instance by published key, correct variant, label, icon, token-bound fills. Perfect fidelity, zero non-determinism. |
+| **2. Unmapped component** | a real component we have no key for (large kit, ~20 mapped → long tail is big) | **LLM** | A faithful build from the node's source + resolved SLJ (auto-layout, design-token fills, real text, structure), **flagged as a DS gap**. NEVER a gray rectangle. |
+| **3. Container / text** | layout divs, text runs | **Deterministic** | Auto-layout frame / text node with bound tokens. (Legitimate frames — not the bad "rectangle stand-in".) |
+
+**Why this split is correct:**
+- Bucket 1 includes the components with nasty rename-traps (Chip/Tag,
+  Toggle/Switch) and silent token-drift where "close" is wrong — only an exact
+  key is safe. Deterministic guarantees it.
+- Bucket 2 is frequent, not rare (coverage is ~20 components vs a large kit), so
+  the LLM is doing real, constant building — and the user's hard requirement is
+  that these are built faithfully, not boxed. This is unavoidable
+  non-determinism, deliberately **confined** to the gaps.
+- Every bucket-2 build is, by definition, a **candidate component for the Arcade
+  kit** — the "design-system parity as a byproduct" signal, made concrete in the
+  DS-gap report.
+
+### Today's gap (verified)
+`executePlan.ts:94` currently returns `{ kind: "frame" }` (an empty box) for any
+unmapped component — exactly the "plain rectangle" outcome the user forbids. The
+hybrid replaces that branch: unmapped components are handed to the LLM to build,
+not boxed.
 
 ## Architecture
 
 ```
 Share modal → "Export to Figma" (multi-frame select)
-   └─ auth gate: is the export Figma MCP authed?
-        • NO  → run interactive OAuth inline (browser opens, user approves once)
-        • YES → continue
-   └─ Studio spawns export subprocess (SEPARATE from generator):
-        • --mcp-config → { "<FIXED_SERVER_NAME>": { type:"http", url:"https://mcp.figma.com/mcp" } }
-        • --strict-mcp-config (scopes to OUR config; ignores ambient servers)
-        • --append-system-prompt → vendored prototype-to-figma skill
-        • allowed-tools → mcp__<FIXED_SERVER_NAME>__{use_figma, search_design_system,
-                            get_design_context, get_metadata, get_variable_defs,
-                            create_new_file, whoami}
-        • --disallowedTools → AskUserQuestion (backstop against interactive stalls)
-        • input → selected frames' TSX + SLJ + curated Arcade component map
-   └─ agent: map components → build one frame per state →
-              annotate interactions → draw flow arrows → overview/legend →
-              verify (no overlaps, all rows present)
-   └─ stream agent narration → modal progress line
+   └─ auth gate (see "Auth"):
+        • not authed → PTY-driven Figma login (browser opens, approve once)
+        • authed     → continue
+        • seat check via whoami → Full seat? else → figma_no_seat state
+   └─ Studio builds the deterministic plan from each frame's SLJ:
+        • bucket 1 (mapped)    → PlanInstance (exact key + variant + text + icon)
+        • bucket 3 (container) → PlanFrame / PlanText (auto-layout + token fills)
+        • bucket 2 (unmapped)  → marked as a GAP node (NOT a frame) for the LLM
+   └─ Studio spawns export subprocess (SEPARATE config from generator):
+        • remote Figma MCP wired via --mcp-config (fixed server name)
+        • vendored prototype-to-figma skill via --append-system-prompt
+        • Figma MCP write tools allowed; AskUserQuestion disallowed
+        • input: the plan (with gap nodes) + selected frames' TSX/SLJ + curated map
+   └─ agent:
+        • emits the deterministic instances/frames for buckets 1 & 3 (via use_figma)
+        • BUILDS each bucket-2 gap node faithfully (layout/tokens/text), flags it
+        • assembles the flow: order frames, draw arrows, annotate interactions
+        • builds overview/legend + DS-gap list
+        • verifies (no overlaps, every node present)
+   └─ stream agent narration → modal progress
    └─ done → Figma file URL + DS-gaps summary
 ```
 
-`<FIXED_SERVER_NAME>` is a single constant (e.g. `arcade-figma-export`) used
-**identically** at login time and at export time. This is load-bearing — see
-"Transport + auth".
+**Division of labor:** deterministic owns what we can guarantee (mapped
+components, containers, text); the LLM owns what requires judgment (building
+unmapped components, and all flow scaffolding). Non-determinism never touches a
+mapped component.
 
-### Deleted (dead transport)
-- `studio/server/figmaBridge/wsServer.ts` — custom WebSocket bridge.
-- `studio/src/export/figma/buildExecuteScript.ts` — ES5 plugin-sandbox script
-  builder.
-- `studio/server/middleware/figmaExport.ts` — the `to-figma` route that drove
-  them, **plus** its wiring in `vite.config.ts` (the only non-test caller).
-- Associated tests: `__tests__/server/figmaBridge/wsServer.test.ts`,
-  `__tests__/export/figma/buildExecuteScript.test.ts`.
-- The current `ShareModal.tsx` `handleExportToFigma` posts to the dead route;
-  rewire it to the new flow as part of this work (don't leave it pointing at a
-  deleted endpoint).
+### Deleted (dead transport only)
+- `studio/server/figmaBridge/wsServer.ts` — WebSocket bridge.
+- `studio/server/middleware/figmaExport.ts` + its `vite.config.ts` wiring
+  (`:28,:74`) — the `to-figma` route.
+- Associated test: `__tests__/server/figmaBridge/wsServer.test.ts`.
+- Rewire `ShareModal.tsx` `handleExportToFigma` off the dead route.
 
-(Verified: these three modules are imported only by each other + `vite.config.ts`
-+ their own tests. Deleting them breaks no unrelated feature. The validated
-fiber-walk/swap import pipeline under `src/export/` is NOT touched — it's kept.)
+> **Correction from review:** an earlier draft also listed
+> `buildExecuteScript.ts` for deletion. It is NOT deleted — it's the live
+> deterministic engine. `buildExecuteScript.ts` (ES5 runtime that built nodes in
+> the old plugin sandbox) is REPLACED by emitting the same plan through the
+> Figma MCP's `use_figma`; `executePlan.ts` (SLJ → plan) is KEPT and extended
+> with the bucket-2 gap path. (The deleted `swapPlan/swapOps/...` in commit
+> `05afed4` were a *different, older* strategy — not these files.)
 
 ### Kept and repurposed
-- `componentEntries.ts`, `iconEntries.ts`, `tokenMap.ts` — curated Arcade→Figma
-  component/icon/token mappings. Rendered into a table injected into the skill
-  prompt so the agent swaps by **exact key** instead of fuzzy
-  `search_design_system` (which becomes the fallback for unmapped elements).
-  **Caveat (from review):** these keys were captured from "Arcade UI Kit v0.3"
-  on 2026-06-06; some entries are already `status:"ambiguous"` / `figma:null`,
-  and published component keys rot when the kit republishes. See "Component-map
-  freshness" — the plan MUST include a re-resolution + validation step, and the
-  agent MUST gracefully fall back to `search_design_system` on a dead key.
-- `fiberWalk.ts` / `slj.ts` / `inferLayout.ts` / `tokenIndex.ts` — the
-  fiber-walk serializer. Its SLJ output (computed styles, layout, token-resolved
-  colors) is passed to the agent as a **structured hint** so it reads resolved
-  values instead of guessing CSS.
+- `executePlan.ts` — SLJ → plan. **Extended:** the unmapped-component branch
+  (line 94) stops returning an empty frame and instead emits a typed `gap` node
+  the LLM must build.
+- `componentEntries.ts` / `iconEntries.ts` / `tokenMap.ts` — curated map,
+  rendered into the skill prompt for exact bucket-1 swaps. **Caveat:** keys are
+  from "Arcade UI Kit v0.3" (2026-06-06); some already `ambiguous`/`null`. Plan
+  MUST re-resolve keys against the live kit; a dead key degrades to a **bucket-2
+  LLM build** (never a rectangle), and is recorded as a DS gap.
+- `fiberWalk.ts` / `slj.ts` / `inferLayout.ts` / `tokenIndex.ts` — produce the
+  SLJ (resolved styles/layout/colors) that feeds both the deterministic plan and
+  the LLM's bucket-2 builds.
 
-### Why a separate subprocess (not the generator)
-The generator is intentionally locked down: `--strict-mcp-config` with no MCP
-config, `mcp__figma-console` explicitly disallowed, tools limited to
-`Read,Edit,Write,Glob,Grep,Bash`, cwd = project dir (to write frames). Export is
-a different job (Figma MCP, read-only on frames). Two separate spawn configs on
-the same machinery keeps the generator's guardrails intact.
+### Why a separate subprocess config (refactor called out)
+The generator's spawn (`claudeCode.ts`) hardcodes `--strict-mcp-config` (no
+config), `--allowed-tools "Read,Edit,Write,Glob,Grep,Bash"`,
+`--disallowed-tools "mcp__figma-console,AskUserQuestion"`, and unconditionally
+injects the kit manifest via `--append-system-prompt`. None are parameterizable
+today, and tests pin them. **Prerequisite task:** extend `RunTurnOptions` with
+`{ mcpConfig, allowedTools, disallowedTools, appendSystemPrompt, skipManifest,
+noResume, stallMs, maxAttempts }` so export gets its own config WITHOUT loosening
+the generator (its locked test assertions must still pass). This is real work,
+scoped as the first implementation task — not "reuse existing machinery".
 
-## Transport + auth (the corrected core)
+## Auth — proven end-to-end
 
-**Use the REMOTE Figma MCP at `https://mcp.figma.com/mcp`.** It is the only
-transport that can WRITE to Figma without a custom plugin. (The local Dev Mode
-MCP at `:3845` is read-only and won't even list tools unless a design tab is
-active — disproven as a write path.)
+**Remote Figma MCP at `https://mcp.figma.com/mcp`** — the only no-plugin write
+transport.
 
-### Why this is feasible — the auth spike (PROVEN)
-The open question was whether Studio's *headless* subprocess could use the remote
-MCP, which requires an interactive OAuth the subprocess can't run. Live spike on
-the dev machine settled it:
+### Live spike results (this machine, dev CLI)
+1. **First-run login needs a TTY.** A headless spawn (stdin=/dev/null) fails:
+   "stdin isn't a terminal." Studio's normal spawn can't log in directly.
+2. **A PTY clears it.** Running `claude mcp login <name>` under a pseudo-terminal
+   (Studio would use a `node-pty` helper) opens the browser, runs a localhost
+   callback, and completes: "Authenticated." `--no-browser` is a fallback that
+   prints a paste-able URL.
+3. **The loop sticks.** After ONE PTY login under a fixed server name, TWO
+   separate fresh headless processes (`claude -p --strict-mcp-config
+   --mcp-config`, stdin=/dev/null — Studio's exact export spawn) both reused the
+   credential with no re-auth, returning the authed email.
+4. **Seat is detectable pre-write.** `whoami` returned email + "DevRev org, Full
+   seat" headlessly — so `figma_no_seat` can be a real pre-flight state, not a
+   mid-build failure.
 
-1. Registered a remote MCP server under a fixed name (`figma-export`).
-2. Logged in once interactively (`/mcp` → Authenticate → browser approve). Token
-   stored in `~/.claude/.credentials.json` under `mcpOAuth`.
-3. Ran headless exactly as Studio spawns:
-   `claude -p --strict-mcp-config --mcp-config <figma-export.json>` — all 25
-   Figma tools (incl. `use_figma`, `create_new_file`) surfaced, and a real
-   `whoami` call returned the authed email. **No browser, no re-auth.**
+### Invariants (load-bearing)
+- **Fixed server name** (e.g. `arcade-figma-export`) used identically at login
+  and at export. The OAuth token is keyed to the server registration; a mismatch
+  forces a fresh (impossible-when-headless) login.
+- Studio's spawn inherits the user's real `$HOME` (verified: it only strips
+  `CLAUDE_CODE_*`/`CLAUDECODE_*` env keys), so the export subprocess reads the
+  same credential store the PTY login wrote to.
 
-Two facts the spike established:
-- **The stored OAuth token IS reused by the headless subprocess** — auth once,
-  export many times.
-- **The token is keyed to the SERVER NAME.** A config naming the server
-  differently than the login used does NOT reuse the token (it fails to a fresh
-  OAuth, which can't run headless). Therefore Studio MUST use one fixed server
-  name at both login and export. This is the single most important
-  implementation invariant.
+### First-run flow
+- Export click → check authed (cheap probe under the fixed name).
+- Not authed → PTY login (browser, approve once). Then seat check. Then export.
+- Authed → seat check → export. Token auto-refreshes.
 
-### How Studio handles env (verified)
-Studio's spawn inherits the user's real `$HOME` (it only strips
-`CLAUDE_CODE_*`/`CLAUDECODE_*` env keys; never touches HOME / CLAUDE_CONFIG_DIR /
-XDG). So the subprocess reads `~/.claude/.credentials.json` exactly as the user's
-own CLI would — no credential plumbing needed. We only pass `--mcp-config` to
-register the server (kept `--strict-mcp-config`, matching existing isolation).
+### Auth realities (not hidden)
+- **Full seat required to write** (Figma rule). Dev/viewer seats are read-only →
+  `figma_no_seat` state, detected up front via `whoami`.
+- **The packaged-`.app` confirmation remains a manual gate:** does the vendored
+  `claude` binary (v2.1.142, vs the dev v2.1.196 used in the spike) do PTY login
+  + headless reuse under hardened-runtime/notarization, and does a PTY work from
+  inside Electron. This is now a *verification of a proven mechanism*, not an
+  open question — but it MUST be checked on a real DMG before shipping.
 
-### First-run auth flow
-- Studio checks whether the export server is authed (e.g. a probe run, or
-  presence of the token under the fixed server name).
-- Not authed → trigger the interactive OAuth (`claude mcp` login flow under the
-  fixed server name) — opens a browser, user approves with their DevRev Figma
-  account, once. This mirrors how connecting Figma in Settings already feels.
-- Authed → proceed straight to export. Token auto-refreshes; re-auth only if it
-  fully expires.
+## v1 scope — thin, prove the chain
 
-### Auth/permission realities (not hidden)
-- **Figma Full seat required to write.** Per Figma, writing to files with agents
-  needs a Full seat; Dev-seat users get read-only. A Dev-seat user can't export.
-  The modal must surface this as a distinct state, not a generic failure.
-- **Edit permission on the target file** (or creating a new file) is required.
+**v1 = deterministic frames + LLM-built gaps, SINGLE frame, no flow scaffolding.**
 
-## The skill (fork of alima-max/prototype-to-figma)
+Rationale: three layers are each only proven on the dev machine (packaged-app MCP
+reach, bucket-2 LLM fidelity, the skill driving multi-step work). Ship the
+smallest thing that exercises the whole chain end-to-end on a real DMG:
+- buckets 1 + 3 deterministic, bucket 2 LLM-built (the no-rectangle requirement
+  is in v1 — it's not optional), one frame, no arrows/flow.
+- If a single faithful frame (mapped components exact, unmapped built, no boxes)
+  lands in a real DMG, the auth + transport + fidelity chain is proven.
 
-A markdown skill (`SKILL.md` + `figma-patterns.md`) vendored in the repo (e.g.
-`studio/figma-export-skill/`), shipped in the `.app`, loaded via
-`--append-system-prompt`. Self-contained in Studio, versioned with the app — NOT
-installed into the user's `~/.claude`.
+**v2 = the full annotated flow:** multi-frame select, ordering, arrows,
+interaction annotations, overview/legend. Layered on top of v1's proven
+per-frame builder. The agent's flow reasoning is added where it's low-risk
+(arrangement), never to rebuild a frame's pixels.
 
-> **Reliability caveat (from review):** Studio's own code notes that
-> `--append-system-prompt` text is obeyed *more loosely* than CLAUDE.md. The
-> skill is mostly behavior. Mitigation: keep the skill's rules tight and
-> imperative; the plan should test that a representative export actually follows
-> the flow/annotation steps, and consider a project-level CLAUDE.md in the export
-> cwd for the hardest rules if append-prompt adherence proves weak.
-
-### Changes from upstream
-1. **Inject the curated map; demote guessing.** Generate an Arcade component
-   table from `componentEntries.ts` / `iconEntries.ts` / `tokenMap.ts` and paste
-   it into the prompt (component → set key + variants; token → variable key).
-   Agent swaps by exact key. `search_design_system` is the fallback for unmapped
-   elements or dead keys.
-2. **Read frame source + SLJ, not a live browser.** Frames are on disk as React
-   TSX (`frames/<slug>/index.tsx`); the SLJ from our fiber-walk is passed as a
-   structured hint with resolved styles/layout/colors.
-3. **Arcade specifics.** Point `search_design_system` at the Arcade UI Kit
-   library; teach token naming (`--fg-*`, `--bg-*`) and the two themes
-   (Arcade / DevRev App); set `figma-patterns.md` primitive fallbacks to Arcade
-   defaults.
-4. **No interactivity.** HARD-DELETE upstream's "Phase 1b" flow-selection
-   question (it waits for a reply a headless subprocess can't give). Frames are
-   passed up front from the modal; the agent infers ordering/branches. Backstop:
-   `AskUserQuestion` in the export subprocess's `--disallowedTools`.
-
-### Kept from upstream
-Flow/annotation/arrow/overview logic; the verify-before-done pass (re-examine
-output, confirm nothing overlaps, all mapping rows present); "annotate flows not
-tap targets"; "never createComponent"; "never omit an element". The skill header
-records the upstream commit forked from, for drift tracing.
+This sequences the user's chosen annotated-flow output safely — it's still the
+destination, just not the first landing.
 
 ## Modal UX + states
 
-The export path uses **multi-frame checkbox** selection (default: all frames in
-project order). The deploy/share path keeps its single-frame radio. Same modal,
-mode depends on the button.
+Export uses **multi-frame checkbox** select (v2; v1 single). Deploy/share keeps
+its single radio. NOTE (from review): `ShareModal` is currently built on a single
+`selectedFrame: string | null` consumed by deploy + copy + export. Multi-select
+is a real state-model change (add `selectedFrames: string[]`, conditional
+checkbox vs radio), scoped in the plan — not a trivial swap.
 
 | State | UI |
 |---|---|
-| Idle | Frame checkboxes + "Export to Figma" |
-| First-run auth | "Connecting Figma…" while the browser OAuth completes, then auto-continues into export. |
-| Not authenticated / wrong account | "Log into Figma with your DevRev account to export." + the auth trigger. |
-| No Full seat | "Exporting to Figma needs a Figma Full seat. Read-only seats can't create files." (distinct, actionable — not a generic error). |
-| Running | Live progress line — agent narration streamed via the generator's stream-json plumbing ("Mapping components… Building Sign-in… Annotating… Verifying…"). Cancelable. |
-| Done | "Built N frames in Figma" + **Open in Figma** (deep link) + DS-gaps summary ("2 elements had no DS match — built as primitives"). |
-| Partial | "Built 3 of 5 frames. 2 failed: …" + Open in Figma anyway. |
-| Error | Plain message + action (see categories). |
+| Idle | Frame select + "Export to Figma" |
+| First-run auth | "Connecting Figma…" during PTY login, auto-continues |
+| Not authed / wrong account | "Log into Figma with your DevRev account." |
+| No Full seat | "Exporting to Figma needs a Figma Full seat. Read-only seats can't create files." (distinct, pre-flight) |
+| Running | Live narration (see below). Cancelable. |
+| Done | "Built N frames in Figma" + Open in Figma + DS-gaps summary |
+| Partial | "Built 3 of 5 frames. 2 failed: …" + Open in Figma anyway |
+| Error | Plain message + action |
 
-**Streamed narration** because export runs tens of seconds to minutes (an agent
-making many MCP calls); a featureless spinner reads as broken. Reuses existing
-progress plumbing.
-
-**DS-gaps summary is a feature:** unmapped elements are candidate components for
-the Arcade kit — "design-system parity as a byproduct." Surfacing it turns export
-into a kit-improvement signal. (Honest note: only ~20 components are mapped today
-vs. a large kit, so the long tail will rely on `search_design_system`; the gap
-report doubles as a coverage signal.)
-
-**v1 cuts (YAGNI):** no interactive flow-picker, no per-frame options, no Code
-Connect mapping. Code Connect is a strong phase-2 add.
+### Progress narration (scoped, not free)
+The generator's stream-json parser only pretty-prints `Read/Write/Edit/Glob/
+Grep/Bash`; MCP tool calls fall to a generic "Using <tool>" line. To show
+"Building Sign-in… Annotating…", the plan must either add `prettyTool` cases for
+the Figma MCP tools or have the skill emit assistant-text milestones. Scoped, not
+assumed-free.
 
 ## Error handling
 
 | Kind | Cause | Designer sees |
 |---|---|---|
-| `figma_not_authed` | no stored token for the export server | first-run auth trigger / "Log into Figma" |
+| `figma_not_authed` | no token under fixed name | first-run auth trigger |
 | `figma_wrong_account` | authed, not DevRev org | "Log into Figma with your DevRev account." |
-| `figma_no_seat` | authed but Dev/viewer seat | "Needs a Figma Full seat to create files." |
-| `agent_failed` | subprocess crash / Bedrock throttle | "Export failed — retry." (reuse generator throttle detection) |
-| `agent_timeout` | past cap | "Export took too long and was stopped. Try fewer frames." |
-| `partial` | some frames built, some not | "Built 3 of 5 frames. 2 failed: …" + Open in Figma anyway |
+| `figma_no_seat` | Dev/viewer seat | "Needs a Figma Full seat." (pre-flight via whoami) |
+| `agent_failed` | crash / Bedrock throttle | "Export failed — retry." |
+| `agent_timeout` | past cap | "Took too long. Try fewer frames." |
+| `partial` | some frames built | "Built 3 of 5…" + Open anyway |
 | `cancelled` | user cancel | silent → idle |
 
-`partial` is first-class: don't discard good frames because others failed.
-
-### Timeout / retry — export-specific (from review)
-The generator wraps spawns in a 15-min hard timeout, a 120s stall watchdog, and a
-2-attempt `--resume` auto-retry. That recovery model is WRONG for export: a long,
-stateful, side-effecting Figma build can exceed 120s of stdout silence between
-large MCP results (watchdog kills it mid-build), and `--resume` re-running a
-half-built file is not idempotent (duplicate frames/arrows). The export spawn
-MUST use its own config: a longer/disabled stall watchdog and **no auto-resume
-retry** (or an idempotency guard). The plan picks concrete numbers.
+### Timeout / retry — export-specific
+The generator's 120s stall watchdog + 2-attempt `--resume` retry are WRONG for a
+long, stateful, side-effecting build (silence between large MCP results →
+mid-build kill; `--resume` re-run → duplicate frames). Export uses its own config
+(longer/disabled stall, **no auto-resume**). This rides on the `RunTurnOptions`
+refactor above. A test asserts auto-resume is off for export.
 
 ## Telemetry (PostHog)
 
-Extend the existing `events.ts` typed catalog (replaces the old `figma_export_run`
-single event):
+Replaces the old single `figma_export_run` (whose only real-world outcome was
+`no_bridge` — i.e. zero successful uses ever):
 - `figma_export_started` — `frame_count`
-- `figma_export_succeeded` — `frame_count`, `duration_ms`, `ds_instances`,
-  `ds_primitives`, `annotations`
-- `figma_export_failed` — `duration_ms`, `error_kind` (the table above)
+- `figma_export_succeeded` — `frame_count`, `duration_ms`, `ds_instances`
+  (bucket 1), `llm_built` (bucket 2), `annotations`
+- `figma_export_failed` — `duration_ms`, `error_kind`
+- Optional `figma_seat_observed` — `seat_type` (cheap way to learn the addressable
+  audience early; see "Open questions").
 
-Gives visibility the old button never had: auth-failure rate, seat-block rate,
-export latency, DS-gap rate (feeds kit priorities). Same typed-event discipline
-as the rest of the catalog.
+## Component-map freshness
 
-## Component-map freshness (from review)
-
-The curated keys are a perishable asset. The plan MUST:
-- Re-resolve all `componentEntries.ts` / `iconEntries.ts` keys against the
-  currently-published Arcade kit before relying on them (some are already known
-  dead/ambiguous).
-- Make the agent fall back to `search_design_system` on any key that fails to
-  instantiate, and record it as a DS gap (so a stale key degrades to "primitive
-  + flagged," never a hard failure).
-- Note that re-curation is a recurring cost per kit release; consider a
-  validation script as a follow-up so drift is caught, not discovered.
+The curated keys are perishable. Plan MUST: re-resolve all keys against the live
+kit before relying on them; on any key that fails to instantiate, degrade to a
+**bucket-2 LLM build** (never a rectangle) and record a DS gap; consider a
+validation script as a follow-up.
 
 ## Testing
 
-Unit-testable (CLAUDE.md: every piece gets a test):
-- **Auth gate** — mock "no token" → first-run auth state, not a spawn; mock
-  "token present" → proceeds.
-- **Export command builder** — asserts `--mcp-config` names the FIXED server,
-  the matching `mcp__<name>__*` allowed-tools, the skill loaded, `AskUserQuestion`
-  disallowed; and asserts the config is **distinct** from the generator's
-  locked-down args (regression guard against un-isolating the generator).
-- **Server-name invariant** — a test that login-name and export-config-name come
-  from the same constant (guards the one fact the spike proved load-bearing).
-- **Curated-map rendering** — `componentEntries.ts` → correct skill table; a dead
-  key path renders the fallback instruction.
-- **Result parsing** — agent stream → `{built, failed, dsGaps}` → correct state
-  (done/partial/error) + telemetry.
-- **Modal states** — checkbox multi-select, auth/seat states, partial render
-  (arcade-gen mocked).
-- **No-resume guard** — export spawn config asserts auto-resume retry is off.
+Unit-testable:
+- **`RunTurnOptions` refactor** — export config has Figma MCP + write tools +
+  skill + no-resume; generator config UNCHANGED (existing locked assertions pass).
+- **Bucket routing** — `executePlan` maps mapped→instance, container→frame/text,
+  **unmapped→gap node (NOT empty frame)**. Direct regression for the
+  no-rectangle requirement.
+- **Auth gate** — no token → first-run state, not a spawn; token present →
+  proceed; fixed-server-name constant shared by login + export config.
+- **Curated-map rendering** — entries → skill table; dead key → bucket-2 fallback
+  instruction.
+- **Result parsing** — agent stream → `{built, llmBuilt, failed, dsGaps}` →
+  correct state + telemetry.
+- **Modal states** — select model, auth/seat states, partial render.
 
-Manual gates (real run required, called out in the plan):
-- The packaged `.app` subprocess reaches `mcp.figma.com` and reuses the stored
-  token (the spike proved this on the dev machine + dev CLI; confirm on a real
-  notarized DMG, where hardened-runtime/network entitlements could differ).
-- A real export produces a sane annotated flow at DevRev's fidelity bar.
+Manual gates (real DMG):
+- Vendored binary does PTY login + headless reuse under notarization; PTY works
+  inside Electron.
+- A single exported frame: mapped components exact, unmapped components built
+  faithfully (NO rectangles), at DevRev's fidelity bar.
 
-## Phase 2 (out of scope for v1)
+## Phase 2 / later
+- Full annotated flow (multi-frame, arrows, annotations, overview).
 - Code Connect mapping.
-- Deterministic fidelity pass: revive the deleted hybrid swap pipeline
-  (commit `05afed4`, 51/0 validated) so the agent owns only flow scaffolding
-  while exact per-frame fidelity is deterministic. Gated on whether v1's
-  agent-built fidelity is good enough.
 - Component-map auto-validation script.
+- Promote frequently-recurring bucket-2 builds into the curated map.
 
 ## Open questions for the plan
-- The exact fixed server name constant + where it's defined (shared by auth
-  trigger and export spawn).
-- Frame-count / timeout caps — concrete numbers.
-- Where the curated-map → skill-table renderer lives (build-time vs. spawn-time).
-- Whether `server/middleware/export.ts` (SLJ storage) survives or the new path
-  reads SLJ in-process.
+- Fixed server-name constant + where defined (shared by login + export).
+- v1 frame cap / v2 batching strategy (context budget: N×(TSX+SLJ) is heavy;
+  SLJ snapshots are large — commit to a cap + degradation path, don't leave
+  fully open).
+- Where the curated-map → skill-table renderer lives.
+- Whether `server/middleware/export.ts` (SLJ storage) survives or SLJ is read
+  in-process.
+- How to learn beta-tester Full-seat distribution early (Slack ask or
+  `figma_seat_observed` probe) — gates how much v2 to build.
