@@ -5,7 +5,7 @@ import {
   TOKEN_PREFIX, isTokenPending, tokenClass,
 } from "../../hooks/editSessionContext";
 import { buildVisualEditPreamble } from "../../lib/visualEditPreamble";
-import { postVisualEdit, isInFrame, buildSingleEdit, buildBindEdit, buildBindStructure } from "../../lib/visualEditClient";
+import { postVisualEdit, isInFrame, buildSingleEdit } from "../../lib/visualEditClient";
 import { useEditBlocks } from "../../hooks/editBlocksContext";
 import { resolveInFrameComponent } from "../../frame/resolveInFrameComponent";
 import { fieldValue, toNumberInput, fromNumberInput, Field, NumberField, INPUT_COMPACT, GRID_2, SegmentedToggle } from "./inspectorControls";
@@ -41,14 +41,6 @@ export function takePendingBlockPreamble(id: string): string | undefined {
   const preamble = pendingBlockPreambles.get(id);
   pendingBlockPreambles.delete(id);
   return preamble;
-}
-
-/** A transcript-entry bind (e.g. "transcript[id=3].text") → its message id, else null.
- *  v1: only the `transcript` array is structure-editable. */
-export function isTranscriptEntry(bindPath: string | undefined): { id: number } | null {
-  if (!bindPath) return null;
-  const m = /^transcript\[id=(\d+)\]\./.exec(bindPath);
-  return m ? { id: Number(m[1]) } : null;
 }
 
 function countChanges(e: EditedElement): number {
@@ -177,10 +169,7 @@ export function InspectorPanel({
   // element). The props we edit live on that in-frame instance — the one the
   // frame's own index.tsx placed — so its name drives the kit-props lookup.
   const focusedNow = batch.find((e) => e.selection.editId === focusedEditId) ?? null;
-  // A bound selection (bindPath set) is a data-edit, NOT a component-props edit,
-  // even if the file is off-frame. Bound messages should show the double-click
-  // hint, not the Ask-AI button.
-  const isComponentSel = !!focusedNow && !focusedNow.selection.bindPath && !isInFrame(focusedNow.selection.file, frameSlug ?? "");
+  const isComponentSel = !!focusedNow && !isInFrame(focusedNow.selection.file, frameSlug ?? "");
   const inFrameComp = isComponentSel && focusedNow
     ? resolveInFrameComponent(focusedNow.selection.ownerChain, frameSlug ?? "")
     : null;
@@ -252,34 +241,11 @@ export function InspectorPanel({
     scheduleApply(elem.selection, key as string, `${TOKEN_PREFIX}${className}`);
   }
 
-  function askAiForBind(sel: EditedElement["selection"], value: string) {
-    onSend(`In frames/${frameSlug}/index.tsx, change the message bound to ${sel.bindPath} to: "${value}".`);
-  }
-
   // Deterministic write-on-settle: each settled field edit writes to code and
   // produces a block. {ok:true} → instant/applied block; {ok:false} → ai/pending
   // block (NOT auto-sent — Task 8's Apply will send the stashed preamble).
   async function applyFieldEdit(sel: EditedElement["selection"], field: string, value: string) {
     const targetFrame = frameSlug ?? "";
-    // Bound data edit (e.g. a ComputerScene transcript message): route to the
-    // data writer by bindPath, bypassing the JSX-source gate entirely.
-    if (sel.bindPath && field === "text") {
-      if (!targetFrame) return;
-      const det = await postVisualEdit(slug, buildBindEdit(sel.bindPath, value, targetFrame));
-      if (det.ok) {
-        addBlock({ label: humanLabel("text", value), kind: "instant", status: "applied", frameSlug: targetFrame });
-        resetField(sel.editId, field as any);
-      } else {
-        // Bind couldn't resolve (bare frame / id gone) → show error block, don't auto-prompt.
-        addBlock({
-          label: "Edit didn't apply — try Ask AI for this one",
-          kind: "instant",
-          status: "error",
-          frameSlug: targetFrame,
-        });
-      }
-      return;
-    }
     // Off-frame (shared kit) elements are the Customize path, not field edits.
     if (!targetFrame || !isInFrame(sel.file, targetFrame)) return;
     const det = await postVisualEdit(slug, buildSingleEdit(sel, field, value, targetFrame));
@@ -312,20 +278,6 @@ export function InspectorPanel({
     applyTimers.current[k] = setTimeout(() => { void applyFieldEdit(sel, field, value); }, 350);
   }
   scheduleApplyRef.current = scheduleApply;
-
-  async function structure(op: import("../../lib/visualEditClient").VisualEditPayload["edits"][number]["structureOp"]) {
-    const targetFrame = frameSlug ?? "";
-    if (!targetFrame || !op) return;
-    const det = await postVisualEdit(slug, buildBindStructure("transcript", op, targetFrame));
-    if (det.ok) {
-      // array mutated + frame hot-reloads → held selection is stale: clear it
-      // (borrow ONLY the selection-clear behavior from move(); NOT its slug derivation).
-      frameWindow?.postMessage({ type: "arcade-studio:preview-reset", all: true }, "*");
-      clear();
-    } else {
-      addBlock({ label: "Couldn't change the conversation structure", kind: "instant", status: "error", frameSlug: targetFrame });
-    }
-  }
 
   function changeIcon(name: string) {
     const id = focusedEditId;
@@ -446,20 +398,16 @@ export function InspectorPanel({
                       &lt;{e.selection.tagName || e.selection.componentName}&gt;{n ? ` · ${n}` : ""}
                     </span>
                     <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                      {!isTranscriptEntry(e.selection.bindPath) && (
-                        <>
-                          <button type="button" aria-label="Move element up"
-                            title={totalChanges > 0 ? "Finish editing this element before moving it" : "Move up"}
-                            disabled={totalChanges > 0}
-                            onClick={(ev) => { ev.stopPropagation(); void move(e, "up"); }}
-                            style={{ background: "transparent", border: "none", color: "var(--fg-neutral-subtle)", cursor: totalChanges > 0 ? "not-allowed" : "pointer", fontSize: 13, lineHeight: 1, opacity: totalChanges > 0 ? 0.4 : 1 }}>↑</button>
-                          <button type="button" aria-label="Move element down"
-                            title={totalChanges > 0 ? "Finish editing this element before moving it" : "Move down"}
-                            disabled={totalChanges > 0}
-                            onClick={(ev) => { ev.stopPropagation(); void move(e, "down"); }}
-                            style={{ background: "transparent", border: "none", color: "var(--fg-neutral-subtle)", cursor: totalChanges > 0 ? "not-allowed" : "pointer", fontSize: 13, lineHeight: 1, opacity: totalChanges > 0 ? 0.4 : 1 }}>↓</button>
-                        </>
-                      )}
+                      <button type="button" aria-label="Move element up"
+                        title={totalChanges > 0 ? "Finish editing this element before moving it" : "Move up"}
+                        disabled={totalChanges > 0}
+                        onClick={(ev) => { ev.stopPropagation(); void move(e, "up"); }}
+                        style={{ background: "transparent", border: "none", color: "var(--fg-neutral-subtle)", cursor: totalChanges > 0 ? "not-allowed" : "pointer", fontSize: 13, lineHeight: 1, opacity: totalChanges > 0 ? 0.4 : 1 }}>↑</button>
+                      <button type="button" aria-label="Move element down"
+                        title={totalChanges > 0 ? "Finish editing this element before moving it" : "Move down"}
+                        disabled={totalChanges > 0}
+                        onClick={(ev) => { ev.stopPropagation(); void move(e, "down"); }}
+                        style={{ background: "transparent", border: "none", color: "var(--fg-neutral-subtle)", cursor: totalChanges > 0 ? "not-allowed" : "pointer", fontSize: 13, lineHeight: 1, opacity: totalChanges > 0 ? 0.4 : 1 }}>↓</button>
                       <button type="button" aria-label={`Remove element ${e.selection.editId}`}
                         onClick={(ev) => {
                           ev.stopPropagation();
@@ -482,26 +430,6 @@ export function InspectorPanel({
                     </span>
                   </div>
                 )}
-
-                {(() => {
-                  const te = focused ? isTranscriptEntry(focused.selection.bindPath) : null;
-                  if (!te) return null;
-                  return (
-                    <div style={{ ...SECTION }}>
-                      <span style={LABEL}>Conversation</span>
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                        <Button onClick={() => structure({ kind: "insert", afterId: te.id, entry: { role: "user", text: "New message" } })}>Add below</Button>
-                        <Button onClick={() => structure({ kind: "delete", id: te.id })}>Delete</Button>
-                        <Button onClick={() => structure({ kind: "move", id: te.id, beforeId: null })}>Move to end</Button>
-                        <Button onClick={() => structure({ kind: "setRole", id: te.id, role: "user" })}>Make user</Button>
-                        <Button onClick={() => structure({ kind: "setRole", id: te.id, role: "assistant" })}>Make assistant</Button>
-                      </div>
-                      <span style={{ fontSize: 11, color: "var(--fg-neutral-subtle)" }}>
-                        Double-click the message in the frame to edit its text.
-                      </span>
-                    </div>
-                  );
-                })()}
 
                 {/* Props-first component mode: edit the resolved in-frame
                     component's PROPS directly (instant, deterministic), and

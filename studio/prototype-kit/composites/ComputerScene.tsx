@@ -185,9 +185,6 @@ export type ComputerSceneProps = {
   activeSessionId?: string;
   /** Override the default sessions roster. */
   sessions?: Session[];
-  /** The chat transcript (messages). Defaults to the baked SEED_TRANSCRIPT.
-   *  Lift this into the frame to make messages editable. */
-  transcript?: Message[];
   /** Placeholder for the bottom command bar. */
   chatInputPlaceholder?: string;
   /**
@@ -208,7 +205,6 @@ export function ComputerScene({
   userAvatarSrc,
   activeSessionId: activeSessionIdProp = "strategic",
   sessions = DEFAULT_SESSIONS,
-  transcript = SEED_TRANSCRIPT,
   chatInputPlaceholder = "Ask me anything",
   onOpenSettings,
 }: ComputerSceneProps = {}) {
@@ -216,7 +212,7 @@ export function ComputerScene({
   const activeSession =
     sessions.find((s) => s.id === activeId) ?? sessions[0] ?? DEFAULT_SESSIONS[3];
 
-  const initialTranscript: Message[] = state === "empty" ? [] : transcript;
+  const initialTranscript: Message[] = state === "empty" ? [] : SEED_TRANSCRIPT;
   const [messages, setMessages] = React.useState<Message[]>(initialTranscript);
   const [draft, setDraft] = React.useState("");
   const [pending, setPending] = React.useState(false);
@@ -254,11 +250,7 @@ export function ComputerScene({
   };
 
   const resolvedHeaderTitle = headerTitle ?? activeSession.topic;
-  // Streaming shows only while the transcript is still the initial seed (the
-  // user hasn't typed). Compare LENGTH against the captured initial, not array
-  // identity — a passed `transcript` prop is a different reference than the
-  // module seed, so `=== SEED_TRANSCRIPT` would always be false for populated frames.
-  const showStreaming = state === "streaming" && messages.length === initialTranscript.length;
+  const showStreaming = state === "streaming" && messages === SEED_TRANSCRIPT;
 
   const accountMenu = (
     <>
@@ -459,12 +451,7 @@ export function ComputerScene({
       {messages.length === 0 ? (
         <ChatEmptyState />
       ) : (
-        <Transcript
-          messages={messages}
-          streaming={showStreaming || pending}
-          onOpenArtefact={() => setPanelOpen(true)}
-          boundIds={new Set(initialTranscript.map((m) => m.id))}
-        />
+        <Transcript messages={messages} streaming={showStreaming || pending} onOpenArtefact={() => setPanelOpen(true)} />
       )}
     </ComputerPage>
   );
@@ -472,30 +459,22 @@ export function ComputerScene({
 
 /* ─── Transcript renderer ───────────────────────────────────────────────── */
 
-function Transcript({ messages, streaming, onOpenArtefact, boundIds }: {
-  messages: Message[]; streaming: boolean; onOpenArtefact: () => void; boundIds: Set<number>;
-}) {
-  const bind = (id: number, field: string) =>
-    boundIds.has(id) ? { "data-arcade-bind": `transcript[id=${id}].${field}` } : {};
+function Transcript({ messages, streaming, onOpenArtefact }: { messages: Message[]; streaming: boolean; onOpenArtefact: () => void }) {
   return (
     <ChatMessages>
       {messages.map((m) =>
         m.role === "user" ? (
           <ChatBubble key={m.id} variant="sender">
-            <span {...bind(m.id, "text")}>{m.text}</span>
+            {m.text}
           </ChatBubble>
         ) : (
           <ChatMessages.Agent
             key={m.id}
             thoughts={<ChatMessages.Thoughts label="Thought for 4s" />}
           >
-            <span {...bind(m.id, "text")}>{m.text}</span>
+            {m.text}
             {m.artefact ? (
-              <ArtefactCard
-                tag={m.artefact.tag}
-                title={<span {...bind(m.id, "artefact.title")}>{m.artefact.title}</span>}
-                onOpen={onOpenArtefact}
-              />
+              <ArtefactCard tag={m.artefact.tag} title={m.artefact.title} onOpen={onOpenArtefact} />
             ) : null}
             <ChatMessages.Actions />
           </ChatMessages.Agent>

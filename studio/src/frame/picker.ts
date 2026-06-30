@@ -20,7 +20,6 @@ import { capture } from "./inspector";
 import * as overlay from "./overlay";
 import { getFiberFromNode, componentNameFromType, type FiberLike } from "./fiber";
 import type { OwnerLink } from "./resolveInFrameComponent";
-import { readBindPath } from "./bindRead";
 
 interface PickerSelection {
   editId: number;
@@ -33,7 +32,6 @@ interface PickerSelection {
   styles: import("./inspector").StyleSnapshot;
   iconCandidate?: string;
   ownerChain: OwnerLink[];
-  bindPath?: string;
 }
 
 const CURSOR_STYLE_ID = "__arcade-studio-picker-cursor";
@@ -145,29 +143,6 @@ function resolveSelection(fiber: FiberLike, domNode: HTMLElement): PickerSelecti
   return null;
 }
 
-/**
- * Build a minimal selection for a bound node that has no resolvable frame source
- * (e.g. a composite-internal node). Uses `capture()` to stamp an editId and
- * snapshot styles, but sets file/line/column to zero since there's no JSX location.
- */
-function makeBareSelection(domNode: HTMLElement): PickerSelection {
-  const cap = capture(domNode);
-  const tagName = domNode.tagName.toLowerCase();
-  const componentName = tagName.charAt(0).toUpperCase() + tagName.slice(1);
-  return {
-    editId: cap.editId,
-    file: "",
-    line: 0,
-    column: 0,
-    componentName,
-    tagName,
-    textEditable: cap.textEditable,
-    styles: cap.styles,
-    iconCandidate: cap.iconCandidate,
-    ownerChain: [],
-  };
-}
-
 let active = false;
 let hoverTarget: Element | null = null;
 
@@ -208,20 +183,6 @@ function onClick(e: MouseEvent) {
     return;
   }
   if (overlay.isOverlayElement(target as HTMLElement)) {
-    return;
-  }
-  // Bind-first: if the clicked node is under a [data-arcade-bind], route to
-  // data-editing instead of the source walk (which would bail for composite-
-  // internal nodes).
-  const bindPath = readBindPath(target);
-  if (bindPath) {
-    const fiber = getFiberFromNode(target);
-    const sel = fiber ? resolveSelection(fiber, target as HTMLElement) : null;
-    overlay.showSelection(target as HTMLElement);
-    postPicked({
-      ...(sel ?? makeBareSelection(target as HTMLElement)),
-      bindPath,
-    });
     return;
   }
   const fiber = getFiberFromNode(target);

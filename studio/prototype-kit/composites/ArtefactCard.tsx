@@ -27,7 +27,7 @@ export type ArtefactCardProps = {
   /** Filetype label shown in the red tag pill, e.g. "DOC". */
   tag: string;
   /** Document title. */
-  title: React.ReactNode;
+  title: string;
   /** "Open in canvas" CTA handler. When omitted, the CTA is not rendered. */
   onOpen?: () => void;
 };

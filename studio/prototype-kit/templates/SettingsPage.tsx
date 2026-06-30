@@ -82,13 +82,3 @@ export function SettingsPage({
     </AppShell>
   );
 }
-
-/**
- * Authored flat expansion of SettingsPage. Re-exported from a sibling,
- * IMPORT-FREE module (`./SettingsPage.expand`) so the server-side auto-expand
- * registry can consume it WITHOUT dragging this file's React composite imports
- * (→ the @xorkavi/arcade-gen barrel → gridstack) into vite.config.ts's static
- * graph. Co-located by name here so the byte-faithfulness tests + callers still
- * reach it via the template module. See SettingsPage.expand.ts for why.
- */
-export { expandSettingsPage } from "./SettingsPage.expand";

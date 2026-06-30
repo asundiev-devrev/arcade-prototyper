@@ -711,24 +711,6 @@ async function runClaudeBranch(ctx: {
       afterDiff = diffSnapshots(beforeSnapshot, afterSnapshot);
     } catch { /* snapshot is best-effort — leave afterDiff null */ }
   }
-  // Auto-expand: flatten any full-page composite in each changed frame so the
-  // frame is directly editable. Derived from afterDiff (both added and changed
-  // frames). Fire-and-forget: must not block the turn response; the frame
-  // write triggers the normal Vite reload. Best-effort, never throws.
-  // Dynamic import to avoid loading the expand module tree at chat.ts module-load
-  // time (the registry imports prototype-kit composites, which breaks chat tests).
-  if (endResult.ok && afterDiff) {
-    const changedFrameSlugs = new Set<string>();
-    for (const p of [...afterDiff.added, ...afterDiff.changed]) {
-      const m = /^frames\/([^/]+)\/index\.tsx$/.exec(p);
-      if (m) changedFrameSlugs.add(m[1]);
-    }
-    if (changedFrameSlugs.size > 0) {
-      void import("../expand/postGenHook")
-        .then(({ expandChangedFrames }) => expandChangedFrames(slug, Array.from(changedFrameSlugs)))
-        .catch((err) => console.warn("[expand] post-gen hook failed to load/run:", err instanceof Error ? err.message : err));
-    }
-  }
   // Telemetry: classify the turn (build/edit/none) + measure the frame it
   // touched. Computed from the file snapshot regardless of narration so even a
   // silent build is counted.

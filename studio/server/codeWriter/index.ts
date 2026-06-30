@@ -6,19 +6,11 @@ import { translateField } from "./pxScale";
 import { applyClass, hasSpacingShorthand } from "./classFamily";
 import { locateJsx } from "./locateJsx";
 import { readClassName, readTextChild, readAttr, splice } from "./patchSource";
-import { writeBindEdit } from "./bindEdit";
-import { writeBindStructure, type StructureOp } from "./bindStructure";
 
 export interface FieldEdit { field: string; value: string }
 export interface ElementEdit {
   file: string; line: number; column: number;
   text?: string; fields: FieldEdit[]; iconSwap?: string;
-  /** When set, this edit targets a frame DATA binding (e.g. a ComputerScene
-   *  transcript message), not a JSX node. `text` carries the new string. */
-  bindPath?: string;
-  /** When set, this edit performs a structure op on the frame's named data array. */
-  structureOp?: StructureOp;
-  arrayName?: string;
 }
 export interface VisualEditRequest { frameSlug: string; edits: ElementEdit[] }
 export type WriteResult = { ok: true } | { ok: false; reason: string };
@@ -36,21 +28,6 @@ function reparses(source: string): boolean {
 export function applyEditsToSource(
   source: string, edit: ElementEdit,
 ): (WriteResult & { source?: string }) {
-  // Structure operation on a frame DATA array (e.g. insert/delete/move/setRole).
-  if (edit.structureOp) {
-    if (!edit.arrayName) return { ok: false, reason: "structure-no-array" };
-    const r = writeBindStructure(source, edit.arrayName, edit.structureOp);
-    return r.ok ? { ok: true, source: r.source } : { ok: false, reason: r.reason };
-  }
-
-  // Frame-DATA binding edit (e.g. a transcript message). Bypasses JSX location
-  // entirely — targets the named const array by message id.
-  if (edit.bindPath) {
-    if (typeof edit.text !== "string") return { ok: false, reason: "bind-no-text" };
-    const r = writeBindEdit(source, edit.bindPath, edit.text);
-    return r.ok ? { ok: true, source: r.source } : { ok: false, reason: r.reason };
-  }
-
   if (edit.iconSwap) return { ok: false, reason: "icon-swap" };
 
   let out = source;
@@ -132,19 +109,17 @@ function countLines(s: string): number {
 }
 
 /** Apply a whole batch atomically: all-or-nothing. */
-export async function writeBatch(frameSlug: string, edits: ElementEdit[], projectSlug?: string): Promise<WriteBatchResult> {
+export async function writeBatch(frameSlug: string, edits: ElementEdit[]): Promise<WriteBatchResult> {
   if (edits.length === 0) return { ok: false, reason: "empty-batch" };
-  // All edits in a batch share one frame; derive the project slug from the path
-  // (bind edits have file:"" so they need an explicit projectSlug param).
-  const projectSlug_ = projectSlug ?? (() => {
-    const m = /\/projects\/([^/]+)\/frames\//.exec(edits[0].file);
-    return m ? m[1] : null;
-  })();
-  if (!projectSlug_) return { ok: false, reason: "unresolved-project" };
-  const filePath = path.join(frameDir(projectSlug_, frameSlug), "index.tsx");
+  // All edits in a batch share one frame; derive the project slug from the path.
+  const file = edits[0].file;
+  const m = /\/projects\/([^/]+)\/frames\//.exec(file);
+  if (!m) return { ok: false, reason: "unresolved-project" };
+  const projectSlug = m[1];
+  const filePath = path.join(frameDir(projectSlug, frameSlug), "index.tsx");
 
   // Path-safety: ensure resolved path is inside the project's frames dir.
-  const base = frameDir(projectSlug_, frameSlug);
+  const base = frameDir(projectSlug, frameSlug);
   if (!path.resolve(filePath).startsWith(path.resolve(base))) {
     return { ok: false, reason: "path-escape" };
   }

@@ -1,17 +1,10 @@
 import type { EditedElement } from "../hooks/editSessionContext";
 import { isTokenPending, tokenClass } from "../hooks/editSessionContext";
-import type { StructureOp } from "../../server/codeWriter/bindStructure";
 
 export interface FieldEdit { field: string; value: string }
 export interface ElementEdit {
   file: string; line: number; column: number;
   text?: string; fields: FieldEdit[]; iconSwap?: string;
-  /** When set, this edit targets a frame DATA binding (e.g. a ComputerScene
-   *  transcript message), not a JSX node. `text` carries the new string. */
-  bindPath?: string;
-  /** When set, this edit performs a structure op on the frame's named data array. */
-  structureOp?: StructureOp;
-  arrayName?: string;
 }
 export interface VisualEditPayload { frameSlug: string; edits: ElementEdit[] }
 
@@ -146,14 +139,6 @@ export function buildSingleEdit(
     frameSlug,
     edits: [{ file: sel.file, line: sel.line, column: sel.column, text, fields, iconSwap }],
   };
-}
-
-export function buildBindEdit(bindPath: string, value: string, frameSlug: string): VisualEditPayload {
-  return { frameSlug, edits: [{ file: "", line: 0, column: 0, bindPath, text: value, fields: [] }] };
-}
-
-export function buildBindStructure(arrayName: string, op: StructureOp, frameSlug: string): VisualEditPayload {
-  return { frameSlug, edits: [{ file: "", line: 0, column: 0, fields: [], arrayName, structureOp: op }] };
 }
 
 export async function postEditUndo(slug: string, frameSlug: string): Promise<{ ok: boolean; reason?: string }> {
