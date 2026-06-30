@@ -201,8 +201,26 @@ Secrets live only in Cloudflare (`wrangler secret put POSTHOG_PERSONAL_KEY` /
 
 ## Resolved (were open questions / rejected approaches)
 
-- **PII exposure** → live data via authed Worker; nothing committed, URL gated.
-- **Key safety** → `phx_` is a Worker secret; browser sends only an access key.
 - **Real URL vs localhost** → Cloudflare Pages, openable anywhere.
 - **Trend methodology** → date-bucketed queries, not rolling-window snapshots.
 - **Repo visibility** → no longer forced private (repo holds no secret, no data).
+- **`phx_` key safety** → resolved: it's a Worker secret, never in the browser.
+
+## Security: mitigated, with residual risk (NOT fully "resolved")
+
+An adversarial review on the plan corrected an over-claim here. The dashboard
+serves real PII (tester emails as `distinct_id`, per-user event history, error
+messages). The controls are proportional for an internal tool, but be honest
+about what remains:
+
+- **The access key is a single shared secret.** Anyone who obtains it (shared,
+  phished, shoulder-surfed) can read all tester PII from any machine. Mitigations:
+  generate a high-entropy key (not a passphrase), and lock the Worker's CORS to
+  the Pages origin (`ALLOWED_ORIGIN`) so a random web page can't call it from a
+  browser. No per-person revocation or audit — **Cloudflare Access (SSO) is the
+  named upgrade path** if that's ever needed.
+- **`prompt_text` must never reach the browser.** It's real PII (≤2000 chars).
+  No query selects it, and a denylist test enforces that no query ever will,
+  even though the field stays in the event catalog for drift-completeness.
+- **HogQL injection** via the `user` param is closed by escaping backslash + quote
+  (or parameterized values); queries are read-only and project-scoped regardless.

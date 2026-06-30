@@ -96,6 +96,7 @@ git init
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250109.0",
+    "jsdom": "^25.0.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0",
     "wrangler": "^3.99.0"
@@ -158,7 +159,9 @@ dist/
 `.dev.vars.example`:
 ```
 POSTHOG_PERSONAL_KEY=phx_replace_me
-ACCESS_KEYS=pick-a-long-random-passphrase
+# ACCESS_KEYS guards real PII (tester emails + event history). Use a generated
+# high-entropy token, NOT a memorable passphrase: openssl rand -hex 24
+ACCESS_KEYS=replace_with_openssl_rand_hex_24
 ```
 
 - [ ] **Step 7: Write `worker/event-catalog.json`** — the checked-in list of every event + property the queries are allowed to reference (drift guard for Task 3's test)
@@ -348,6 +351,22 @@ describe("buildQuery", () => {
       }
     }
   });
+
+  // PII denylist: NO query may pull raw prompt_text to the browser, even though
+  // it exists in the catalog for drift-completeness. A future "show the prompt"
+  // tweak would otherwise silently ship 2000-char prompt bodies past a shared key.
+  it("never selects prompt_text", () => {
+    for (const name of QUERY_NAMES) {
+      const q = buildQuery(name, { range: 30, excludeMe: false, user: "x@y.com" });
+      expect(q, `${name} must not reference prompt_text`).not.toContain("prompt_text");
+    }
+  });
+
+  // Backslash-injection guard for the only attacker-controllable interpolation.
+  it("escapes backslashes AND quotes in the user param", () => {
+    const q = buildQuery("user_detail", { range: 30, excludeMe: false, user: "a\\'b" });
+    expect(q).toContain("a\\\\''b"); // backslash doubled, then quote doubled
+  });
 });
 ```
 
@@ -365,9 +384,11 @@ export type QueryParams = { range: 7 | 30 | 90; excludeMe: boolean; user?: strin
 
 const VALID_RANGES = new Set([7, 30, 90]);
 
-/** Escape a string for safe inclusion inside a single-quoted HogQL literal. */
+/** Escape a string for safe inclusion inside a single-quoted HogQL literal.
+ *  ClickHouse/HogQL treats BOTH backslash and single-quote as escape chars, so
+ *  escape backslash FIRST (else doubling quotes can be undone by a trailing \). */
 function lit(s: string): string {
-  return s.replace(/'/g, "''");
+  return s.replace(/\\/g, "\\\\").replace(/'/g, "''");
 }
 
 /** The `AND distinct_id != '…'` fragment (or empty). */
@@ -383,8 +404,8 @@ const QUERIES: Record<string, Builder> = {
       count(DISTINCT distinct_id) AS active_users,
       countIf(event='frame_generated') AS generations,
       countIf(event='generation_failed') AS failures,
-      round(quantile(0.5)(toFloat(properties.duration_ms))) AS dur_p50,
-      round(quantile(0.5)(toFloat(properties.ttft_ms))) AS ttft_p50
+      round(quantile(0.5)(toFloatOrNull(properties.duration_ms))) AS dur_p50,
+      round(quantile(0.5)(toFloatOrNull(properties.ttft_ms))) AS ttft_p50
     FROM events
     WHERE timestamp > now() - INTERVAL ${p.range} DAY ${notMe(p)}`,
 
@@ -418,32 +439,32 @@ const QUERIES: Record<string, Builder> = {
 
   latency_by_turn: (p) => `
     SELECT properties.turn_type AS tt, count() AS n,
-      round(quantile(0.5)(toFloat(properties.duration_ms))) AS dur_p50,
-      round(quantile(0.9)(toFloat(properties.duration_ms))) AS dur_p90,
-      round(max(toFloat(properties.duration_ms))) AS dur_max,
-      round(quantile(0.5)(toFloat(properties.ttft_ms))) AS ttft_p50,
-      round(quantile(0.9)(toFloat(properties.ttft_ms))) AS ttft_p90
+      round(quantile(0.5)(toFloatOrNull(properties.duration_ms))) AS dur_p50,
+      round(quantile(0.9)(toFloatOrNull(properties.duration_ms))) AS dur_p90,
+      round(max(toFloatOrNull(properties.duration_ms))) AS dur_max,
+      round(quantile(0.5)(toFloatOrNull(properties.ttft_ms))) AS ttft_p50,
+      round(quantile(0.9)(toFloatOrNull(properties.ttft_ms))) AS ttft_p90
     FROM events
     WHERE event='frame_generated' AND timestamp > now() - INTERVAL ${p.range} DAY ${notMe(p)}
     GROUP BY tt ORDER BY n DESC`,
 
   latency_by_version: (p) => `
     SELECT properties.version AS v, properties.model AS model, count() AS n,
-      round(quantile(0.5)(toFloat(properties.duration_ms))) AS dur_p50,
-      round(quantile(0.5)(toFloat(properties.ttft_ms))) AS ttft_p50,
-      round(quantile(0.5)(toFloat(properties.num_turns))) AS turns_p50
+      round(quantile(0.5)(toFloatOrNull(properties.duration_ms))) AS dur_p50,
+      round(quantile(0.5)(toFloatOrNull(properties.ttft_ms))) AS ttft_p50,
+      round(quantile(0.5)(toFloatOrNull(properties.num_turns))) AS turns_p50
     FROM events
     WHERE event='frame_generated' AND timestamp > now() - INTERVAL ${p.range} DAY ${notMe(p)}
     GROUP BY v, model ORDER BY n DESC`,
 
   num_turns: (p) => `
-    SELECT toInt(properties.num_turns) AS turns, count() AS c
+    SELECT toIntOrNull(properties.num_turns) AS turns, count() AS c
     FROM events
     WHERE event='frame_generated' AND timestamp > now() - INTERVAL ${p.range} DAY ${notMe(p)}
     GROUP BY turns ORDER BY turns`,
 
   duration_vs_tokens: (p) => `
-    SELECT toFloat(properties.duration_ms) AS dur, toFloat(properties.tokens_output) AS out,
+    SELECT toFloatOrNull(properties.duration_ms) AS dur, toFloatOrNull(properties.tokens_output) AS out,
       properties.turn_type AS tt
     FROM events
     WHERE event='frame_generated' AND properties.duration_ms IS NOT NULL
@@ -451,8 +472,8 @@ const QUERIES: Record<string, Builder> = {
 
   ttft_trend: (p) => `
     SELECT toDate(timestamp) AS d,
-      round(quantile(0.5)(toFloat(properties.ttft_ms))) AS ttft_p50,
-      round(quantile(0.5)(toFloat(properties.duration_ms))) AS dur_p50,
+      round(quantile(0.5)(toFloatOrNull(properties.ttft_ms))) AS ttft_p50,
+      round(quantile(0.5)(toFloatOrNull(properties.duration_ms))) AS dur_p50,
       count() AS n
     FROM events
     WHERE event='frame_generated' AND timestamp > now() - INTERVAL ${p.range} DAY ${notMe(p)}
@@ -460,7 +481,7 @@ const QUERIES: Record<string, Builder> = {
 
   funnel: (p) => `
     SELECT
-      count(DISTINCT distinct_id) AS launched,
+      count(DISTINCT if(event='app_launched', distinct_id, NULL)) AS launched,
       count(DISTINCT if(event='prompt_submitted', distinct_id, NULL)) AS prompted,
       count(DISTINCT if(event='frame_generated', distinct_id, NULL)) AS generated,
       count(DISTINCT if(event='share_opened', distinct_id, NULL)) AS shared
@@ -495,7 +516,7 @@ export function buildQuery(name: string, params: QueryParams): string {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pnpm test test/queries.test.ts`
-Expected: PASS (8 tests, including the drift guard).
+Expected: PASS (10 tests — incl. drift guard, prompt_text denylist, backslash-escape).
 
 - [ ] **Step 5: Commit**
 
@@ -763,25 +784,32 @@ import { shape } from "./shape";
 
 export interface Env extends PostHogEnv {
   ACCESS_KEYS: string;
+  ALLOWED_ORIGIN?: string; // the Pages origin; falls back to "*" only if unset
 }
 
-function cors(res: Response): Response {
-  res.headers.set("access-control-allow-origin", "*");
+function cors(res: Response, env: Env): Response {
+  // Lock CORS to the dashboard's own Pages origin — we control both ends, so
+  // there's no reason for "*". This is defence-in-depth behind the access key:
+  // it stops an arbitrary third-party page from calling the Worker from a
+  // browser. ALLOWED_ORIGIN is set as a wrangler [var] at deploy time.
+  res.headers.set("access-control-allow-origin", env.ALLOWED_ORIGIN || "*");
+  res.headers.set("vary", "origin");
   res.headers.set("access-control-allow-headers", "authorization, content-type");
   res.headers.set("access-control-allow-methods", "GET, OPTIONS");
+  res.headers.set("access-control-max-age", "86400");
   return res;
 }
 
 export async function handle(req: Request, env: Env, fetchImpl: typeof fetch = fetch): Promise<Response> {
-  if (req.method === "OPTIONS") return cors(new Response(null, { status: 204 }));
+  if (req.method === "OPTIONS") return cors(new Response(null, { status: 204 }), env);
 
   const url = new URL(req.url);
   if (url.pathname !== "/api/q") {
-    return cors(json(404, { error: { code: "not_found", message: "GET /api/q only" } }));
+    return cors(json(404, { error: { code: "not_found", message: "GET /api/q only" } }), env);
   }
 
   const auth = checkBearer(req, env);
-  if (auth) return cors(auth);
+  if (auth) return cors(auth, env);
 
   const name = url.searchParams.get("name") ?? "";
   const range = Number(url.searchParams.get("range") ?? "30") as QueryParams["range"];
@@ -792,14 +820,14 @@ export async function handle(req: Request, env: Env, fetchImpl: typeof fetch = f
   try {
     sql = buildQuery(name, { range, excludeMe, user });
   } catch (e) {
-    return cors(json(400, { error: { code: "bad_query", message: String((e as Error).message) } }));
+    return cors(json(400, { error: { code: "bad_query", message: String((e as Error).message) } }), env);
   }
 
   try {
     const raw = await runHogql(env, sql, fetchImpl);
-    return cors(json(200, { data: shape(name, raw) }));
+    return cors(json(200, { data: shape(name, raw) }), env);
   } catch (e) {
-    return cors(json(502, { error: { code: "posthog_error", message: String((e as Error).message) } }));
+    return cors(json(502, { error: { code: "posthog_error", message: String((e as Error).message) } }), env);
   }
 }
 
@@ -900,7 +928,15 @@ Run the `observatory-dashboard-style` skill (installed) to load the Observatory 
 </html>
 ```
 
-- [ ] **Step 3: Write `public/styles.css`** — apply the Observatory tokens from Step 1 (Chip font stack, phi-based spacing scale, KPI grid, card surfaces, muted/error colors, table styling, tab bar). Include `#access-gate` centered card styling and `[hidden]{display:none}`. (Full token values come from the skill; this file is pure CSS, no logic.)
+- [ ] **Step 3: Write `public/styles.css`** — apply the Observatory tokens from Step 1 (Chip font stack, phi-based spacing scale, KPI grid, card surfaces, muted/error colors, table styling, tab bar). Include `#access-gate` centered card styling and `[hidden]{display:none}`. (Token *values* come from the skill; this file is otherwise pure CSS.)
+
+  **Load-bearing (not decorative):** the cards and the chart canvas MUST have an explicit width or the charts render blank (`charts.js setup()` reads the parent's `clientWidth`). Include at minimum:
+
+```css
+.card { width: 100%; box-sizing: border-box; padding: 16px; }
+.chart { display: block; width: 100%; height: 220px; }
+#tab-content { max-width: 1100px; margin: 0 auto; }
+```
 
 - [ ] **Step 4: Manual check**
 
@@ -982,8 +1018,17 @@ git commit -m "feat(dashboard): shell + access gate + observatory styles"
 ```javascript
 (function () {
   function setup(canvas) {
+    // Width comes from the PARENT (a freshly-inserted canvas has clientWidth 0
+    // until it has a CSS box), with a fallback — mirrors the reference's
+    // setupCanvas. We also SET canvas.style.{width,height} so the element has a
+    // display box independent of the dpr-scaled backing store. Charts must be
+    // (re)drawn while their tab is visible (see selectTab) or width is 0.
     var dpr = window.devicePixelRatio || 1;
-    var w = canvas.clientWidth, h = canvas.clientHeight || 220;
+    var parent = canvas.parentElement;
+    var w = (parent && parent.clientWidth) || canvas.clientWidth || 800;
+    var h = 220;
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
     canvas.width = w * dpr; canvas.height = h * dpr;
     var ctx = canvas.getContext("2d"); ctx.scale(dpr, dpr);
     return { ctx: ctx, w: w, h: h };
@@ -1068,17 +1113,25 @@ git commit -m "feat(dashboard): shell + access gate + observatory styles"
   function renderTabs() {
     var nav = document.getElementById("tabs"); nav.innerHTML = "";
     TABS.forEach(function (t) {
-      nav.appendChild(window.el("button", { class: "tab", onclick: function () { selectTab(t.id); } }, t.label));
+      nav.appendChild(window.el("button", { class: "tab", "data-id": t.id, onclick: function () { selectTab(t.id); } }, t.label));
     });
   }
   function selectTab(id) {
+    // Single source of truth for the active tab: state.activeTab. selectTab both
+    // records it AND owns the .active class — the boot path calls selectTab
+    // programmatically (no click), so class-toggling must NOT live in a click
+    // listener or the first paint has no active tab and refresh() misfires.
+    state.activeTab = id;
+    Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (b) {
+      b.classList.toggle("active", b.getAttribute("data-id") === id);
+    });
     var host = document.getElementById("tab-content"); host.innerHTML = "";
     var tab = TABS.filter(function (t) { return t.id === id; })[0];
     var loading = window.el("div", { class: "muted" }, "Loading…"); host.appendChild(loading);
     Promise.resolve(tab.render(host)).then(function () { if (loading.parentNode) loading.remove(); })
       .catch(function (e) { host.innerHTML = ""; host.appendChild(window.errorCard(e.message)); });
   }
-  function refresh() { var active = document.querySelector(".tab.active"); selectTab((active && active.dataset.id) || TABS[0].id); }
+  function refresh() { selectTab(state.activeTab || TABS[0].id); }
 
   // ---- Overview tab ----
   registerTab("overview", "Overview", function (host) {
@@ -1088,7 +1141,10 @@ git commit -m "feat(dashboard): shell + access gate + observatory styles"
         host.appendChild(window.kpiRow([
           { label: "Active users", value: window.fmtNum(k.active_users) },
           { label: "Generations", value: window.fmtNum(k.generations) },
-          { label: "Success rate", value: window.fmtPct(k.generations - k.failures, k.generations) },
+          // generated and failed are DISJOINT event types (emitted in an
+          // if/else per turn), so success rate = generated / (generated+failed),
+          // NOT generated-failed (which can go negative).
+          { label: "Success rate", value: window.fmtPct(k.generations, k.generations + k.failures) },
           { label: "Median duration", value: window.fmtMs(k.dur_p50) },
           { label: "Median ttft", value: window.fmtMs(k.ttft_p50) },
         ]));
@@ -1125,30 +1181,60 @@ git commit -m "feat(dashboard): shell + access gate + observatory styles"
     document.getElementById("filter-note").textContent = e.target.checked ? "excluding andrey.sundiev@devrev.ai" : "";
     refresh();
   });
-
-  // mark active tab
-  document.getElementById("tabs").addEventListener("click", function (e) {
-    if (e.target.classList.contains("tab")) {
-      Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (t) { t.classList.remove("active"); });
-      e.target.classList.add("active");
-    }
-  });
+  // (active-tab class is owned by selectTab — no separate click listener.)
 
   if (localStorage.getItem(KEY)) api("overview_kpis").then(showApp).catch(function () {}); else showGate();
 })();
 ```
 
-- [ ] **Step 4: Wire tab `data-id`** — in `renderTabs()`, set `data-id` so `refresh()` finds the active tab. Update the `el(...,"button"...)` call to include `{ class: "tab", "data-id": t.id, onclick: ... }`.
+- [ ] **Step 4: Write the dashboard smoke test** (the spec requires one; jsdom env). `render.js` exposes its helpers as `window.*` via an IIFE — load it into jsdom by evaluating the file, then assert the pure render helpers produce the expected DOM from a fixture.
 
-- [ ] **Step 5: Manual smoke test**
+```typescript
+// test/render.smoke.test.ts
+// @vitest-environment jsdom
+import { describe, it, expect, beforeAll } from "vitest";
+import { readFileSync } from "node:fs";
 
-With `pnpm dev` running and `window.OBSERVATORY_API` set to `http://localhost:8787` (via `localStorage.setItem("observatory_api","http://localhost:8787")` in the console), open `public/index.html`. Enter the access key. Expected: Overview renders KPIs, the activity line chart, the engagement table, the errors table. Toggling range/exclude re-fetches.
+beforeAll(() => {
+  // Execute render.js in the jsdom global so window.el/kpiRow/table/fmt* exist.
+  // eslint-disable-next-line no-eval
+  (0, eval)(readFileSync(new URL("../public/render.js", import.meta.url), "utf-8"));
+});
 
-- [ ] **Step 6: Commit**
+describe("render helpers", () => {
+  it("fmtPct shows the raw fraction (small-n honesty)", () => {
+    expect((window as any).fmtPct(4, 6)).toBe("66.7% (4/6)");
+    expect((window as any).fmtPct(1, 0)).toBe("—");
+  });
+  it("kpiRow renders one .kpi per item with value + label", () => {
+    const node = (window as any).kpiRow([{ label: "Active users", value: 6 }]);
+    expect(node.querySelectorAll(".kpi").length).toBe(1);
+    expect(node.querySelector(".kpi-value")!.textContent).toBe("6");
+    expect(node.querySelector(".kpi-label")!.textContent).toBe("Active users");
+  });
+  it("table renders a header row + one row per data row", () => {
+    const node = (window as any).table(["User", "Prompts"], [["nuska@x", 25]]);
+    expect(node.querySelectorAll("thead th").length).toBe(2);
+    expect(node.querySelectorAll("tbody tr").length).toBe(1);
+    expect(node.querySelector("tbody td")!.textContent).toBe("nuska@x");
+  });
+});
+```
+
+- [ ] **Step 5: Run the smoke test**
+
+Run: `pnpm test test/render.smoke.test.ts`
+Expected: PASS (3 tests). (If `fmtPct(4,6)` rounds to `66.7`, the assertion matches; adjust the expected string to the helper's actual rounding if needed.)
+
+- [ ] **Step 6: Manual smoke test**
+
+With `pnpm dev` running and `window.OBSERVATORY_API` set to `http://localhost:8787` (via `localStorage.setItem("observatory_api","http://localhost:8787")` in the console), open `public/index.html`. Enter the access key. Expected: Overview renders KPIs, the activity line chart (NOT blank — verify the canvas has non-zero width), the engagement table, the errors table. Toggling range/exclude re-fetches and stays on the current tab.
+
+- [ ] **Step 7: Commit**
 
 ```bash
-git add public/render.js public/charts.js public/app.js
-git commit -m "feat(dashboard): core helpers, charts, tab runtime + Overview tab"
+git add public/render.js public/charts.js public/app.js test/render.smoke.test.ts
+git commit -m "feat(dashboard): core helpers, charts, tab runtime + Overview tab + smoke test"
 ```
 
 ---
@@ -1383,11 +1469,22 @@ Expected: `{ "data": { "active_users": … } }`. Verify a missing/wrong key retu
 ```bash
 pnpm exec wrangler pages deploy public --project-name studio-observatory
 ```
-Then in the deployed site set the Worker base once: open the site, console → `localStorage.setItem("observatory_api","https://studio-observatory.<subdomain>.workers.dev")`. (Or hardcode `window.OBSERVATORY_API` in `index.html` to the Worker URL and redeploy.)
+Note the printed Pages URL (e.g. `https://studio-observatory.pages.dev`). Then in the deployed site set the Worker base once: open the site, console → `localStorage.setItem("observatory_api","https://studio-observatory.<subdomain>.workers.dev")`. (Or hardcode `window.OBSERVATORY_API` in `index.html` to the Worker URL and redeploy.)
 
-- [ ] **Step 5: End-to-end check** — open the Pages URL, enter the access key, confirm all four tabs load live data. Confirm the key is NOT in any served file (`view-source` + check `app.js`).
+- [ ] **Step 5: Lock CORS to the Pages origin** — now that the Pages URL is known, set it as the Worker's allowed origin and redeploy so the Worker only accepts cross-origin calls from the dashboard (defence-in-depth behind the access key).
 
-- [ ] **Step 6: Write the README runbook** — fill `README.md` with: architecture diagram, the two secrets + how to rotate them, deploy commands, the access-key flow, and the note that `andrey.sundiev@devrev.ai` is excluded only when the toggle is on. Commit.
+```bash
+# add to wrangler.toml [vars]:  ALLOWED_ORIGIN = "https://studio-observatory.pages.dev"
+pnpm run deploy
+# verify: a request with a foreign Origin header gets no allow-origin for it
+curl -si "https://studio-observatory.<subdomain>.workers.dev/api/q?name=overview_kpis&range=30" \
+  -H "Authorization: Bearer <access-key>" -H "Origin: https://evil.example" | grep -i access-control-allow-origin
+# Expected: the header echoes the Pages origin, NOT https://evil.example
+```
+
+- [ ] **Step 6: End-to-end check** — open the Pages URL, enter the access key, confirm all four tabs load live data (charts NOT blank). Confirm the key is NOT in any served file (`view-source` + check `app.js`).
+
+- [ ] **Step 7: Write the README runbook** — fill `README.md` with: architecture diagram, the two secrets + `ALLOWED_ORIGIN` var + how to rotate them, deploy commands, the access-key flow, the residual-risk note (shared key guards real PII — see security note below), and that `andrey.sundiev@devrev.ai` is excluded only when the toggle is on. Commit.
 
 ```bash
 git add README.md
@@ -1409,9 +1506,19 @@ git commit -m "docs: deploy runbook + architecture"
 - Observatory visual style → Tasks 7, 8 (style skill) ✓
 - Drift guard vs event catalog → Tasks 1, 3 ✓
 - Error handling (per-section, 401, 502, no-data card) → Tasks 6, 8 ✓
-- Testing (queries/shape/auth/posthog/index) → Tasks 2–6, 12 ✓
+- Testing (queries/shape/auth/posthog/index + **dashboard smoke test**) → Tasks 2–6, 8, 12 ✓
+- Security: CORS locked to Pages origin (Tasks 6, 13), prompt_text denylist test + backslash-escape test (Task 3), high-entropy key (Tasks 1, 13) ✓
 
-**Placeholder scan:** No "TBD"/"add error handling"/"similar to" — every code step has full code. `styles.css` (Task 7 Step 3) intentionally defers token *values* to the `observatory-dashboard-style` skill output (it's pure CSS, no logic) — this is a skill invocation, not a placeholder.
+**Adversarial-review fixes applied (verified against live data + emitter source):**
+- C1 canvas blank → `setup()` reads parent width + sets `canvas.style.*`; `.chart` has committed CSS width (Tasks 7, 8).
+- C3 funnel denominator → `launched` counts `app_launched` only (Task 3).
+- C5 missing dashboard test → jsdom `render.smoke.test.ts` (Task 8).
+- C6 racy active-tab → tracked in `state.activeTab`, class owned by `selectTab` (Task 8).
+- m4 success rate → `generated / (generated+failed)` (Task 8).
+- M1/M3 → CORS origin lock + backslash escaping + denylist test.
+- C2 (`toFloat` 502 claim) was **disproven live** (returns null, no error) but `toFloatOrNull`/`toIntOrNull` adopted as free hardening; m2/m3 disproven live (version present; alias OK) — left as-is.
+
+**Placeholder scan:** No "TBD"/"add error handling"/"similar to" — every code step has full code. `styles.css` (Task 7 Step 3) defers token *values* to the `observatory-dashboard-style` skill, but the load-bearing chart-sizing CSS is now spelled out (not deferred) — not a placeholder.
 
 **Type consistency:** `buildQuery`/`QueryParams`/`EXCLUDE_ME_ID` (Task 3) used consistently in Task 6. `runHogql` signature (Task 5) matches its call in Task 6. `shape` returns object-for-single-row (`overview_kpis`, `funnel`) consumed as objects in Tasks 8/11; array-returning queries consumed as arrays elsewhere. `api(name, extra)`, `el`, `kpiRow`, `table`, `fmtPct/fmtMs/fmtDate`, `charts.{lineChart,barChart,scatter}` (Task 8) used with matching signatures in Tasks 9–11. Column names in shapes match the `SELECT … AS <alias>` aliases in Task 3.
 
