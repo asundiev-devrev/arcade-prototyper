@@ -1,88 +1,90 @@
 # Studio Observatory — bespoke PostHog dashboard (design)
 
 **Date:** 2026-06-29
-**Status:** approved (revised after adversarial review), ready for implementation plan
-**Location:** a **new standalone PRIVATE repo** (e.g. `asundiev-devrev/studio-observatory`).
-NOT a subdir of `arcade-prototyper` — that repo is **public**, and this tool
-handles beta testers' emails + prompt text, which must never land in a public repo.
+**Status:** approved (revised twice — adversarial review, then a Worker-proxy
+pivot), ready for implementation plan
+**Hosting:** Cloudflare Pages (static site) + a Cloudflare Worker proxy that
+holds the PostHog key and gates access. Real shareable URL, live data, no key or
+PII ever in the browser or git.
 
 ## Problem
 
 Studio's beta telemetry lives in PostHog EU (project 197530). PostHog's own UI
 is disliked and not tailored to the questions we actually ask about the beta.
 We want a bespoke, internal dashboard — beta health, latency, per-user
-drill-down, funnel — in the DevRev Observatory visual style.
+drill-down, funnel — in the DevRev Observatory visual style, at a real URL we
+can open from any device.
 
-Reference build (architecture + visual style to copy): `~/ds-observatory-standalone`
-— a CLI that collects data into JSON and renders a no-build HTML+CSS+Canvas
-dashboard. We mirror its shape, swapping Figma→PostHog.
+Reference build (visual style + no-build dashboard shape to copy):
+`~/ds-observatory-standalone`. Proxy/auth pattern to copy: the existing Studio
+share Worker at `studio/worker/` (holds a secret API token, auth-checks each
+request against per-user keys, proxies to an upstream API — exactly our shape).
 
-## How this spec changed (adversarial review findings)
+## Design history (so we don't regress)
 
-An adversarial review + direct verification corrected three broken premises in
-the first draft. Recorded here so we don't regress to them:
+This design was revised twice. Both pivots are load-bearing:
 
-1. **PII leak (verified).** `asundiev-devrev/arcade-prototyper` is a **public**
-   repo. Committing `distinct_id` (real `@devrev.ai` emails) + `prompt_text`
-   there would publish colleagues' identities and prompts to the open internet,
-   permanently in git history. → Tool moves to a **private repo**.
-2. **GitHub Pages on a private repo is NOT private** on personal/Pro/Team plans
-   (needs Enterprise Cloud access control). So "deploy to Pages" cannot be the
-   default for data that includes user identity. → **View locally** via a tiny
-   static server (the reference's `serve`); Pages is a *future, gated* option,
-   only if private-Pages access control is confirmed AND data is de-identified.
-3. **Rolling-window snapshots can't make real trends.** Snapshotting "median
-   over last 7d" hourly yields a smeared moving average, not a before/after
-   step, and a static host can't even list `data/snapshots/*.json` (the
-   reference's directory listing only works because `serve` is a live server).
-   → Trends come from **date-bucketed queries** (`GROUP BY toDate(timestamp)`)
-   in a single HogQL call. No snapshot-history mechanism needed.
-
-## Key decisions
-
-- **Repo:** new **private** repo. Standalone (overrides the earlier subdir plan,
-  which assumed a safe-to-commit location — it isn't).
-- **Viewing:** **local static server** (`serve`, ~80 lines, from the reference).
-  Run `collect` → writes JSON → `serve` → open `localhost`. No build step.
-- **Pages:** out of scope for v1. Revisit only if (a) private-Pages access
-  control is available on the account AND (b) committed data is de-identified.
-- **Data model:** `collect` runs HogQL, writes `data/*.json`; dashboard reads it.
-  Live-on-load was rejected (can't safely hold the `phx_` key in a browser);
-  snapshot-history was rejected (see finding 3). `collect` is run **on demand**
-  (a script you invoke) and/or by a **daily** scheduled job later — not hourly.
-- **Trends:** date-bucketed (`GROUP BY toDate`) — point-in-time daily series, so
-  a shipped fix shows a true step. One query per trended metric.
-- **Key handling:** `phx_…` personal key in a gitignored `.env` for local runs;
-  if a scheduled job is added later, the key is a GitHub Actions **repo secret**,
-  never served, never in the browser.
-- **Filter:** `exclude me` (`andrey.sundiev@devrev.ai`) is a **toggle, default
-  OFF** — excluding the heaviest event generator by default makes every chart
-  look empty (I'm the main tester). The active filter + excluded-event count are
-  shown prominently so "filtered" never reads as "broken."
-- **Small-n honesty:** every percentage shows its raw fraction (`67% (4/6)`) and
-  every chart shows its `n`, so single-digit-sample noise can't masquerade as a
-  trend. With ~6 external users, the per-user **engagement table** is the
-  highest-value artifact — readable row by row.
-- Use the `observatory-dashboard-style` skill for the visual layer.
-- All four tabs are in scope (Overview, Latency, Users, Funnel).
+1. **First draft:** static Pages + hourly snapshots committed to the
+   `arcade-prototyper` repo. An adversarial review + verification killed it:
+   the repo is **public** (would leak tester emails + prompt_text), Pages on a
+   private repo isn't actually private on this account, and rolling-window
+   snapshots can't produce real trends.
+2. **Second draft:** localhost-only view. Rejected by product owner — wants a
+   real URL openable from anywhere, not tied to one machine.
+3. **This draft:** a **Cloudflare Worker proxy** resolves the original
+   constraints cleanly — the Worker holds the `phx_` key as a secret and
+   auth-gates requests, so the browser never sees the key, **data is fetched
+   live (never committed)**, and the URL is access-controlled. This also
+   restores live-on-load (the originally-preferred data model) and means the
+   dashboard repo can be public again (it holds no key and no data).
 
 ## Architecture
 
 ```
-src/collect.mjs   reads phx_ key from .env (local) → HogQL queries → public/data/*.json
-        │
-        ▼
-src/serve.mjs     tiny static Node server (from the reference)
-        │
-        ▼
-browser           no-build HTML + CSS + Canvas; fetch ./data/*.json (relative paths)
-                  no key, no build, no live PostHog call
+browser  (Cloudflare Pages — static HTML + CSS + Canvas, real URL)
+   │  fetch /api/q?name=latency&range=30d&excludeMe=0
+   │  Authorization: Bearer <access-key>        ← entered once, stored locally
+   ▼
+Cloudflare Worker  (the proxy)
+   │  • checks <access-key> against ACCESS_KEYS secret  → 401 if absent/wrong
+   │  • maps query name → HogQL (server-side; browser can't run arbitrary SQL)
+   │  • calls PostHog with POSTHOG_PERSONAL_KEY secret
+   ▼
+PostHog EU  (project 197530, HogQL)
+   ▼  rows → shaped JSON → back to browser
 ```
 
-Two decoupled halves — exactly the reference's `collect` + `serve`. The
-dashboard never talks to PostHog; it reads committed/generated JSON. All client
-fetches use **relative** paths (`./data/...`) so the same files work locally and
-(later) under a Pages subpath.
+Mirrors `studio/worker/` almost exactly: a secret upstream key + an
+`ACCESS_KEYS` allow-list, proxying to an upstream API. Two Cloudflare secrets:
+`POSTHOG_PERSONAL_KEY` (the `phx_…`) and `ACCESS_KEYS` (the dashboard
+password(s)). Neither ever reaches the browser or git.
+
+**Why the browser calls query *names*, not SQL:** keeps HogQL server-side (one
+place to maintain + can't be tampered with) and means a leaked access key can
+only run our fixed, read-only queries — not arbitrary account-wide reads.
+
+### Data flow & freshness
+
+- **Live-on-load.** Each dashboard open / refresh hits the Worker → PostHog →
+  fresh numbers. Nothing is stored or committed. PII (emails, prompt_text) lives
+  only transiently in the authed browser session, never on disk or in git.
+- **Trends: date-bucketed**, not snapshots. A trended metric is one HogQL query
+  with `GROUP BY toDate(timestamp)` returning a real daily series — so a shipped
+  fix shows a true before/after step. (The earlier rolling-window-snapshot
+  approach is abandoned; it produced smeared moving averages and couldn't be
+  listed by a static host.)
+- Optional later: the Worker can cache responses (Cache API / KV) for a few
+  minutes to spare PostHog quota. Not required for v1.
+
+### Auth
+
+- **Shared access key** (chosen). First visit: enter the key once; stored in
+  `localStorage` and sent as `Authorization: Bearer …` on every `/api` call.
+- Worker validates against the `ACCESS_KEYS` secret (supports rotating /
+  multiple keys, like the share Worker's `ALLOWED_KEYS`). Missing/wrong → 401,
+  and the dashboard shows an "enter access key" prompt.
+- Not full SSO — adequate for an internal tool. Cloudflare Access (SSO) is a
+  later upgrade path if per-person revocation/audit is ever needed.
 
 ### PostHog query mechanics (from session memory `posthog-query-recipe`)
 
@@ -95,9 +97,9 @@ fetches use **relative** paths (`./data/...`) so the same files work locally and
 ## Events & properties consumed
 
 (from `arcade-prototyper`'s `studio/src/lib/telemetry/events.ts` — the emitter's
-source of truth. NOT co-located here, so a property rename there won't fail this
-build — it returns nulls. Mitigation: a test asserting every property referenced
-in `queries.mjs` is documented in a checked-in copy of the event catalog.)
+source of truth, in a different repo. A property rename there won't fail this
+build — it returns nulls. Mitigation: a checked-in `event-catalog.json` + a test
+asserting every `properties.X` referenced by the Worker's queries appears in it.)
 
 - `app_launched` (version, os, os_version, is_first_launch)
 - `app_shutdown` (session_duration_ms)
@@ -114,17 +116,19 @@ in `queries.mjs` is documented in a checked-in copy of the event catalog.)
 ## Tabs & metrics
 
 Global controls (all tabs): date-range toggle **7d / 30d / 90d**; **exclude me**
-toggle (default OFF). Every percentage carries its raw fraction; every chart shows `n`.
+toggle (default OFF — excluding the heaviest tester by default empties charts).
+Every percentage carries its raw fraction; every chart shows its `n`. Active
+filter + excluded-event count shown so "filtered" never reads as "broken."
 Landing tab = Overview.
 
 ### ① Overview — "how's the beta doing"
-- KPI row: Active users, Generations, Success rate % (with fraction), Median duration, Median ttft.
+- KPI row: Active users, Generations, Success rate % (+fraction), Median duration, Median ttft.
 - Activity-by-day chart: distinct users + prompts + generations per day (date-bucketed).
 - **Engagement table (highest-value):** per-user prompts / generated / failed / crashes / shares / last-seen — sortable.
 - Top-errors strip: `generation_failed` by kind + `frame_runtime_error` by kind, **broken down by version**.
 
 ### ② Latency — performance deep-dive
-- ttft + duration percentiles (p50/p90/max) by turn_type — **with n shown per cell**; cells with n<5 visibly de-emphasized.
+- ttft + duration percentiles (p50/p90/max) by turn_type — **n shown per cell**; n<5 visibly de-emphasized.
 - Same, sliced by version and model.
 - num_turns distribution (edit-loop signal).
 - duration-vs-output-tokens scatter (generation-bound view).
@@ -132,8 +136,7 @@ Landing tab = Overview.
 - **Date-bucketed trend lines** (e.g. median ttft/day) — true before/after for shipped fixes.
 
 ### ③ Users — per-tester drill-down
-- Pick a user → funnel, prompts (prompt_text shown **only when present**; not
-  load-bearing), failures, versions used, crash messages, last-seen.
+- Pick a user → funnel, prompts (prompt_text shown only when present; not load-bearing), failures, versions used, crash messages, last-seen.
 
 ### ④ Funnel — adoption / activation
 - Launch → prompt → generate → share conversion (fractions shown, not just %).
@@ -143,64 +146,63 @@ Landing tab = Overview.
 ## File layout
 
 ```
-studio-observatory/                 # new PRIVATE repo
-  package.json                      # tsx + dotenv; scripts: collect, serve, test
-  .env.example                      # POSTHOG_PERSONAL_KEY / POSTHOG_PROJECT_ID / POSTHOG_HOST
-  .gitignore                        # .env, node_modules, public/data/*.json
-  README.md                         # setup, key handling, run instructions, the PII/Pages note
-  src/
-    collect.mjs                     # orchestrates queries → public/data/*.json
-    queries.mjs                     # named HogQL builders: buildQuery(name, {range, excludeMe})
-    shape.mjs                       # raw PostHog rows → dashboard JSON shape
-    serve.mjs                       # tiny static server (from reference)
-    event-catalog.json              # checked-in copy of event/prop names for the drift test
-  public/
+studio-observatory/                 # standalone repo (visibility optional — holds no key, no data)
+  package.json                      # tsx + dotenv + wrangler (dev); scripts: dev, deploy, test
+  .gitignore                        # node_modules, .dev.vars
+  README.md                         # setup, the two Worker secrets, deploy, auth flow
+  worker/
+    src/index.ts                    # the proxy: auth check + name→HogQL + PostHog fetch + shaping
+    queries.ts                      # named HogQL builders: buildQuery(name, {range, excludeMe})
+    shape.ts                        # raw PostHog rows → dashboard JSON shape
+    event-catalog.json              # checked-in event/prop names for the drift test
+    wrangler.toml                   # routes, name; secrets set via `wrangler secret put`
+  public/                           # ← Cloudflare Pages root (static, no data baked in)
     index.html
-    app.js                          # tabs, fetch ./data/*.json (RELATIVE), Canvas charts
+    app.js                          # tabs, access-key prompt, fetch /api/q (RELATIVE), Canvas charts
     styles.css                      # observatory visual style (Chip fonts, phi spacing)
-    data/                           # generated by collect; gitignored (regenerate, don't commit)
-      latest.json                   # all tabs' current numbers + date-bucketed series
   test/
-    queries.test.mjs                # range substitution, excludeMe clause, drift vs event-catalog
-    shape.test.mjs                  # raw response → dashboard JSON, against captured fixtures
+    queries.test.ts                 # range substitution, excludeMe clause, GROUP BY shape, drift vs catalog
+    shape.test.ts                   # raw response → dashboard JSON, against captured fixtures
 ```
 
-Note: `public/data/` is **gitignored** — it holds user identity + prompts and is
-regenerated by `collect`. Nothing with PII is committed. (If a Pages path is
-pursued later, that step must commit a de-identified variant, not this raw data.)
+Secrets live only in Cloudflare (`wrangler secret put POSTHOG_PERSONAL_KEY` /
+`ACCESS_KEYS`); for local Worker dev they go in `.dev.vars` (gitignored). No
+`data/` directory — data is live, never written to disk or committed.
 
 ## Error handling
 
-- **Collect:** each named query wrapped independently — a failure writes `null`
-  for its section and logs which failed; the run completes with partial data.
-- **Missing key:** `collect` exits non-zero with a clear message (never silently
-  emit empty data that reads as "no activity").
+- **Worker per-query:** each named query wrapped — a failure returns
+  `{ section: null, error }` for that section, not a 500 for the whole load.
+  Partial data beats a dead dashboard. Logs which query failed.
+- **Auth:** missing/invalid access key → 401; dashboard shows the access-key prompt.
+- **PostHog upstream error / rate-limit:** surfaced to the browser as a section
+  error card; the rest of the tab still renders.
 - **Dashboard:** missing/null section → "no data" card, never a blank screen.
-  Empty date-bucket series → chart shows the available points (or a "no data" note).
 
 ## Testing
 
-- `queries.mjs` — pure builders. Unit-test: range substitution (7/30/90d), the
-  excludeMe clause on/off, date-bucket `GROUP BY` shape. Plus a **drift test**:
+- `queries.ts` — pure builders. Unit-test: range substitution (7/30/90d),
+  excludeMe clause on/off, date-bucket `GROUP BY` shape, and a **drift test**:
   every `properties.X` referenced is present in `event-catalog.json`.
-- `shape.mjs` — raw PostHog response → dashboard JSON, against a captured sample
-  response per query (one fixture each).
+- `shape.ts` — raw PostHog response → dashboard JSON, against a captured sample
+  per query (one fixture each).
+- Worker auth — unit-test: no key → 401, wrong key → 401, valid key → passes to query layer (PostHog fetch mocked).
 - Dashboard JS — one smoke test that `app.js` renders the KPI row + engagement
-  table from a fixture `latest.json`; otherwise manual visual check.
+  table from a fixture response; otherwise manual visual check.
 - NOT hitting live PostHog in CI (needs key, flaky). Mock the fetch, test the transform.
 
 ## Out of scope (YAGNI)
 
-- **GitHub Pages deployment** (v1 is local-view only; gated on private-Pages
-  access control + de-identification — see findings).
-- Committing any PII / prompt_text / raw error messages to git.
-- Live/real-time streaming (on-demand + optional daily collect is enough).
+- Cloudflare Access / SSO (shared access key is enough for v1; SSO is the upgrade path).
+- Response caching in the Worker (add later if PostHog quota bites).
+- Committing any data or key to git.
 - Alerting / Slack pings. View-only.
 - Writing back to PostHog.
 
-## Resolved (were open questions in draft 1)
+## Resolved (were open questions / rejected approaches)
 
-- **prompt_text on a public URL** → resolved: private repo, data gitignored,
-  never committed. prompt_text shown in the local UI only when present.
-- **Trend methodology** → resolved: date-bucketed queries, not rolling-window snapshots.
-- **Cadence** → resolved: on-demand now; daily scheduled job later if wanted (not hourly).
+- **PII exposure** → live data via authed Worker; nothing committed, URL gated.
+- **Key safety** → `phx_` is a Worker secret; browser sends only an access key.
+- **Real URL vs localhost** → Cloudflare Pages, openable anywhere.
+- **Trend methodology** → date-bucketed queries, not rolling-window snapshots.
+- **Repo visibility** → no longer forced private (repo holds no secret, no data).
