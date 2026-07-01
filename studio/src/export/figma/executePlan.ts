@@ -16,6 +16,7 @@ export interface PlanFrame {
   layout: Layout | null;
   fillVariableKey?: string;
   fillColor?: string;
+  cornerRadius?: number;
   children: PlanNode[];
 }
 export interface PlanInstance {
@@ -35,6 +36,10 @@ export interface PlanText {
   characters: string;
   fillVariableKey?: string;
   fillColor?: string;
+  fontSize?: number;
+  fontWeight?: number;
+  fontFamily?: string;
+  lineHeight?: number;
 }
 export type PlanNode = PlanFrame | PlanInstance | PlanText;
 
@@ -95,9 +100,25 @@ export function sljToExecutePlan(slj: SljDocument, maps: ExecutePlanMaps): Execu
     }
     const el = node as ElementNode;
     if (el.tag === "text" && el.style.characters !== undefined) {
-      return { kind: "text", box: el.box, characters: el.style.characters, ...fillFields(maps, el.style.color) };
+      return {
+        kind: "text",
+        box: el.box,
+        characters: el.style.characters,
+        ...fillFields(maps, el.style.color),
+        ...(el.style.fontSize !== undefined ? { fontSize: el.style.fontSize } : {}),
+        ...(el.style.fontWeight !== undefined ? { fontWeight: el.style.fontWeight } : {}),
+        ...(el.style.fontFamily !== undefined ? { fontFamily: el.style.fontFamily } : {}),
+        ...(el.style.lineHeight !== undefined ? { lineHeight: el.style.lineHeight } : {}),
+      };
     }
-    return { kind: "frame", box: el.box, layout: el.layout, ...fillFields(maps, el.style.fill), children: el.children.map(walk) };
+    return {
+      kind: "frame",
+      box: el.box,
+      layout: el.layout,
+      ...fillFields(maps, el.style.fill),
+      ...(el.style.cornerRadius !== undefined ? { cornerRadius: el.style.cornerRadius } : {}),
+      children: el.children.map(walk),
+    };
   }
   return { frame: slj.frame, root: walk(slj.root) };
 }
