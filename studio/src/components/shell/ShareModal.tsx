@@ -105,7 +105,6 @@ export function ShareModal({
       const data = await res.json();
       if (res.ok && data.ok) {
         setFigmaPhase("done");
-        track({ name: "figma_export_run", props: { outcome: "ok", instance_count: data.summary?.made?.instances, failure_count: data.summary?.made?.fail } });
         setTimeout(() => setFigmaPhase("idle"), 2500);
       } else {
         const code = data.error?.code;
@@ -114,12 +113,10 @@ export function ShareModal({
           : (data.error?.message ?? "Export failed.") + " Check Figma is on the Arcade UI Kit library.";
         setFigmaError(msg);
         setFigmaPhase("error");
-        track({ name: "figma_export_run", props: { outcome: code === "no_bridge" ? "no_bridge" : "error" } });
       }
     } catch (err: any) {
       setFigmaError(err?.message ?? "Export failed.");
       setFigmaPhase("error");
-      track({ name: "figma_export_run", props: { outcome: "error" } });
     }
   }
 

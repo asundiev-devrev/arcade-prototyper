@@ -156,7 +156,7 @@ describe("ShareModal SSL probe", () => {
 });
 
 describe("ShareModal — Export to Figma (one-click)", () => {
-  it("serializes the frame, posts to /to-figma, shows success, and fires figma_export_run", async () => {
+  it("serializes the frame, posts to /to-figma, and shows success", async () => {
     const fetchSpy = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
       const u = String(input);
       if (u.endsWith("/to-figma") && init?.method === "POST") {
@@ -172,7 +172,6 @@ describe("ShareModal — Export to Figma (one-click)", () => {
 
     await waitFor(() => expect(screen.getByText(/Opened in Figma/i)).toBeTruthy());
     expect(fetchSpy.mock.calls.some(([u, i]) => String(u).endsWith("/to-figma") && (i as any)?.method === "POST")).toBe(true);
-    expect(trackSpy).toHaveBeenCalledWith({ name: "figma_export_run", props: expect.objectContaining({ outcome: "ok" }) });
   });
 
   it("shows an actionable message when the plugin isn't connected (no_bridge)", async () => {
@@ -184,6 +183,5 @@ describe("ShareModal — Export to Figma (one-click)", () => {
     fireEvent.click(screen.getByDisplayValue("hero"));
     fireEvent.click(screen.getByText("Export to Figma"));
     await waitFor(() => expect(screen.getByText(/Open the Arcade export plugin in Figma/i)).toBeTruthy());
-    expect(trackSpy).toHaveBeenCalledWith({ name: "figma_export_run", props: expect.objectContaining({ outcome: "no_bridge" }) });
   });
 });
