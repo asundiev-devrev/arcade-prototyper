@@ -193,7 +193,7 @@ describe("buildExecuteScript", () => {
       slj: 1, frame: { slug: "test", project: "p", width: 400, mode: "light" },
       root: {
         kind: "element", tag: "div", box: { x: 0, y: 0, width: 400, height: 300 }, layout: null,
-        style: { fill: "var(--color-bg-primary)" },
+        style: { fill: "--color-bg-primary" },
         children: [
           {
             kind: "component", component: "IconButton", source: "arcade/components",
@@ -203,7 +203,7 @@ describe("buildExecuteScript", () => {
             kind: "element", tag: "div", box: { x: 10, y: 70, width: 100, height: 40 }, layout: null, style: {},
             children: [{
               kind: "element", tag: "text", box: { x: 10, y: 70, width: 100, height: 20 },
-              layout: null, style: { characters: "Hi", color: "var(--color-text)" }, children: [],
+              layout: null, style: { characters: "Hi", color: "--color-text" }, children: [],
             }],
           },
         ],
@@ -223,6 +223,7 @@ describe("buildExecuteScript", () => {
     const mock = makeFigmaMock();
     // Mock the import calls to return promises that NEVER settle (the exact bug condition).
     mock.figma.importComponentSetByKeyAsync = () => new Promise(() => {});
+    mock.figma.importComponentByKeyAsync = () => new Promise(() => {});
     mock.figma.variables = {
       importVariableByKeyAsync: () => new Promise(() => {}),
       setBoundVariableForPaint: (base: any) => base,
@@ -232,15 +233,138 @@ describe("buildExecuteScript", () => {
     const result = await runRuntime(code, mock.figma);
     const elapsed = Date.now() - start;
 
-    // The runtime must complete in bounded time (well under the 30s bridge budget).
-    // Each import times out at 4s; 2 sequential calls = ~8s max. Allow 12s ceiling
-    // (generous margin for async overhead).
-    expect(elapsed).toBeLessThan(12000);
+    // The runtime must complete in bounded time (well under the 90s bridge budget).
+    // With pre-warm, all unique keys import in parallel with 20s timeout each.
+    // 1 set key + 2 variable keys → single 20s wave, not sequential 60s.
+    // Allow 30s ceiling (generous margin for async overhead + build phase).
+    expect(elapsed).toBeLessThan(30000);
     // The instance and text node failed to resolve (counted as fail/error).
     expect(result.made.fail).toBeGreaterThanOrEqual(1);
     // But the wrapper frame was still built (not a full hang).
     expect(result.made.frames).toBeGreaterThan(0);
-  }, 15000); // vitest timeout: 15s (greater than the 12s assertion ceiling)
+  }, 35000); // vitest timeout: 35s (greater than the 30s assertion ceiling)
+
+  it("falls back to bare COMPONENT when importComponentSetByKeyAsync hangs", async () => {
+    // Bare COMPONENTs (Tabs ee83…, Breadcrumb 0ecf…) exist in componentEntries but
+    // importComponentSetByKeyAsync on a COMPONENT key never settles. The runtime
+    // must race against importComponentByKeyAsync (which resolves) and win.
+    const slj: SljDocument = {
+      slj: 1, frame: { slug: "test", project: "p", width: 400, mode: "light" },
+      root: {
+        kind: "element", tag: "div", box: { x: 0, y: 0, width: 400, height: 400 }, layout: null, style: {},
+        children: [{
+          kind: "component", component: "BareComponent", source: "arcade/components",
+          props: {}, box: { x: 10, y: 10, width: 100, height: 40 }, layout: null, children: [],
+        }],
+      },
+    };
+    const mapping: FigmaComponentMapping = {
+      arcadeGen: "BareComponent", status: "mapped", generation: "0.3",
+      figma: { componentSetKey: "BARE_KEY", setName: "Bare" }, variants: [], note: "",
+    };
+    const mapsWithKey: ExecutePlanMaps = {
+      findComponentMapping: (n) => (n === "BareComponent" ? mapping : null),
+      findIconSetKey: () => null, findIconSetName: () => null, tokenNameToVariableKey: () => null,
+    };
+
+    const code = buildExecuteScript(slj, mapsWithKey);
+    // Lower the timeout constant from 20000 → 100 so the test completes quickly.
+    const fastCode = code.replace(/var IMPORT_TIMEOUT_MS = 20000;/, "var IMPORT_TIMEOUT_MS = 100;");
+
+    const mock = makeFigmaMock();
+    // importComponentSetByKeyAsync hangs forever (the real bug).
+    mock.figma.importComponentSetByKeyAsync = () => new Promise(() => {});
+    // importComponentByKeyAsync resolves a bare COMPONENT (with createInstance, no children).
+    const bareComp = {
+      type: "COMPONENT", variantProperties: {},
+      createInstance() {
+        mock.figma.__made.instances++;
+        return {
+          type: "INSTANCE", x: 0, y: 0, width: 0, height: 0, componentProperties: {},
+          layoutMode: "NONE", primaryAxisSizingMode: "FIXED", counterAxisSizingMode: "FIXED",
+          resize(w: number, h: number) { (this as any).width = w; (this as any).height = h; },
+          findAll() { return []; }, findOne() { return null; },
+        };
+      },
+    };
+    mock.figma.importComponentByKeyAsync = () => Promise.resolve(bareComp);
+
+    const start = Date.now();
+    const result = await runRuntime(fastCode, mock.figma);
+    const elapsed = Date.now() - start;
+
+    // Must complete within ~200ms (100ms timeout + overhead), not hang.
+    expect(elapsed).toBeLessThan(1000);
+    // The instance was successfully created (bare COMPONENT fallback worked).
+    expect(result.made.instances).toBe(1);
+    expect(result.made.fail).toBe(0);
+  }, 5000);
+
+  it("pre-warms all unique keys exactly once, caching prevents re-import during build", async () => {
+    // Plan with 2 instances of the SAME set key + 1 variable → pre-warm imports
+    // each unique key exactly once; subsequent build calls hit warm cache.
+    const slj: SljDocument = {
+      slj: 1, frame: { slug: "test", project: "p", width: 400, mode: "light" },
+      root: {
+        kind: "element", tag: "div", box: { x: 0, y: 0, width: 400, height: 400 }, layout: null,
+        style: { fill: "--color-bg-primary" },
+        children: [
+          {
+            kind: "component", component: "IconButton", source: "arcade/components",
+            props: {}, box: { x: 10, y: 10, width: 48, height: 48 }, layout: null, children: [],
+          },
+          {
+            kind: "component", component: "IconButton", source: "arcade/components",
+            props: {}, box: { x: 10, y: 70, width: 48, height: 48 }, layout: null, children: [],
+          },
+        ],
+      },
+    };
+    const mapping: FigmaComponentMapping = {
+      arcadeGen: "IconButton", status: "mapped", generation: "0.3",
+      figma: { componentSetKey: "IB_KEY", setName: "Icon Button" }, variants: [], note: "",
+    };
+    const mapsWithToken: ExecutePlanMaps = {
+      findComponentMapping: (n) => (n === "IconButton" ? mapping : null),
+      findIconSetKey: () => null, findIconSetName: () => null,
+      tokenNameToVariableKey: (n) => (n === "--color-bg-primary" ? "BG_VAR_KEY" : null),
+    };
+
+    const code = buildExecuteScript(slj, mapsWithToken);
+    const mock = makeFigmaMock({ setKey: "IB_KEY", setName: "Icon Button" });
+
+    let setImportCount = 0;
+    let compImportCount = 0;
+    let varImportCount = 0;
+    const componentSet = mock.figma.root.findAllWithCriteria()[0];
+    mock.figma.importComponentSetByKeyAsync = (key: string) => {
+      setImportCount++;
+      return Promise.resolve(key === "IB_KEY" ? componentSet : null);
+    };
+    mock.figma.importComponentByKeyAsync = (key: string) => {
+      compImportCount++;
+      return Promise.resolve(null);
+    };
+    const bgVar = { id: "v1", resolvedType: "COLOR" };
+    mock.figma.variables = {
+      importVariableByKeyAsync: (key: string) => {
+        varImportCount++;
+        return Promise.resolve(key === "BG_VAR_KEY" ? bgVar : null);
+      },
+      setBoundVariableForPaint: (base: any) => base,
+    };
+
+    const result = await runRuntime(code, mock.figma);
+
+    // Pre-warm phase imports 1 unique set key (IB_KEY) + 1 variable key (BG_VAR_KEY).
+    // importSetByKey races set+comp APIs concurrently → 1 set call + 1 comp call per key.
+    expect(setImportCount).toBe(1);
+    expect(compImportCount).toBe(1);
+    expect(varImportCount).toBe(1);
+    // Both instances were created (build phase hit warm cache, no re-import).
+    expect(result.made.instances).toBe(2);
+    expect(result.made.fail).toBe(0);
+  });
 });
 
 /** Run the sandbox script (top-level await + return) against a figma mock. */
@@ -312,7 +436,10 @@ function makeFigmaMock(opts?: {
     currentPage: { appendChild() {}, selection: [] as any[] },
     viewport: { scrollAndZoomIntoView() {} },
     root: { findAllWithCriteria: () => [componentSet] },
-    async importComponentSetByKeyAsync() { throw new Error("no remote import"); },
+    async importComponentSetByKeyAsync(key: string) {
+      return key === setKey ? componentSet : null;
+    },
+    async importComponentByKeyAsync() { return null; },
     async loadFontAsync() {},
   };
   // pageRoot + lastInstance are assigned during the run; read after via getters.

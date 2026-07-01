@@ -22,7 +22,7 @@ const ROUTE = /^\/api\/projects\/([a-z0-9-]+)\/export\/([a-z0-9-]+)\/to-figma(?:
 // File the export pipeline writes per frame — see server/middleware/export.ts
 // (POST /api/projects/:slug/export/:frame.slj.json → frameDir/SLJ.json).
 const SLJ_FILENAME = "SLJ.json";
-const EXEC_TIMEOUT_MS = 30_000;
+const EXEC_TIMEOUT_MS = 90_000;
 
 export interface FigmaExportDeps {
   loadSlj: (slug: string, frame: string) => Promise<SljDocument | null>;

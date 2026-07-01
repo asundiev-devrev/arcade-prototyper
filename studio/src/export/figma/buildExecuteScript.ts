@@ -7,6 +7,7 @@ import { sljToExecutePlan, type ExecutePlanMaps } from "./executePlan";
  *  variant, label, icon swap, token fill). Best-effort per node. Returns a
  *  summary. Plain ES5-ish JS — no optional chaining, no nullish coalescing, no TS. */
 const RUNTIME = `
+var IMPORT_TIMEOUT_MS = 20000;
 var made = { frames: 0, instances: 0, icons: 0, binds: 0, fail: 0 };
 var errs = [];
 var setCache = {};
@@ -20,10 +21,27 @@ function withTimeout(p, ms) {
   ]);
 }
 
+function collectKeys(node, acc) {
+  if (node.kind === "instance") {
+    if (node.componentSetKey) acc.sets[node.componentSetKey] = node.setName || "";
+    if (node.iconSetKey) acc.sets[node.iconSetKey] = node.iconSetName || "";
+  }
+  if (node.fillVariableKey) acc.vars[node.fillVariableKey] = true;
+  var kids = node.children || [];
+  for (var i = 0; i < kids.length; i++) collectKeys(kids[i], acc);
+  return acc;
+}
+
+async function importSetByKey(key) {
+  var viaSet = withTimeout(figma.importComponentSetByKeyAsync(key).catch(function(){ return null; }), IMPORT_TIMEOUT_MS);
+  var viaComp = withTimeout(figma.importComponentByKeyAsync(key).catch(function(){ return null; }), IMPORT_TIMEOUT_MS);
+  var results = await Promise.all([viaSet, viaComp]);
+  return results[0] || results[1] || null;
+}
+
 async function getLocalSet(key, setName) {
   if (setCache[key] !== undefined) return setCache[key];
-  var found = null;
-  try { found = await withTimeout(figma.importComponentSetByKeyAsync(key), 4000); } catch (e) { found = null; }
+  var found = await importSetByKey(key);
   if (!found) {
     var all = figma.root.findAllWithCriteria ? figma.root.findAllWithCriteria({ types: ["COMPONENT_SET"] }) : [];
     for (var i = 0; i < all.length; i++) { if (all[i].key === key) { found = all[i]; break; } }
@@ -38,6 +56,7 @@ async function getLocalSet(key, setName) {
 }
 
 function pickVariant(set, variant) {
+  if (set.type === "COMPONENT") return set;
   var comps = set.children.filter(function (c) { return c.type === "COMPONENT"; });
   if (variant) {
     for (var i = 0; i < comps.length; i++) {
@@ -92,7 +111,7 @@ async function setIcon(inst, iconKey, iconName) {
 async function bindFill(node, varKey) {
   if (!("fills" in node)) return;
   var v = varCache[varKey];
-  if (v === undefined) { try { v = await withTimeout(figma.variables.importVariableByKeyAsync(varKey), 4000); } catch (e) { v = null; } varCache[varKey] = v; }
+  if (v === undefined) { try { v = await withTimeout(figma.variables.importVariableByKeyAsync(varKey), IMPORT_TIMEOUT_MS); } catch (e) { v = null; } varCache[varKey] = v; }
   if (!v || v.resolvedType !== "COLOR") return;
   try {
     var base = (node.fills && node.fills[0]) ? Object.assign({}, node.fills[0]) : { type: "SOLID", color: { r: 0, g: 0, b: 0 } };
@@ -200,6 +219,18 @@ function planBounds(node, ox, oy, acc) {
 }
 
 var __root = __PLAN__.root;
+
+var __keys = collectKeys(__root, { sets: {}, vars: {} });
+var __setKeys = Object.keys(__keys.sets);
+var __varKeys = Object.keys(__keys.vars);
+await Promise.all(
+  __setKeys.map(function (k) { return importSetByKey(k).then(function (r) { setCache[k] = r; }); })
+  .concat(__varKeys.map(function (k) {
+    return withTimeout(figma.variables.importVariableByKeyAsync(k).catch(function(){ return null; }), IMPORT_TIMEOUT_MS)
+      .then(function (v) { varCache[k] = v || null; });
+  }))
+);
+
 var pageRoot = figma.createFrame();
 pageRoot.name = "Arcade Export — " + __PLAN__.frame.slug;
 pageRoot.fills = [];
