@@ -169,6 +169,20 @@ describe("buildExecuteScript", () => {
     expect(script).toMatch(/t\.fontSize\s*=/);        // runtime sets text.fontSize
     expect(script).toMatch(/f\.cornerRadius\s*=/);    // runtime applies frame.cornerRadius
   });
+
+  it("guards against whitespace-only fontFamily by falling back to Inter", () => {
+    const slj: any = {
+      frame: { slug: "f", project: "p", width: 100, mode: "light" },
+      root: { kind: "element", tag: "div", box: { x:0,y:0,width:100,height:40 }, layout: null, style: {},
+        children: [{ kind: "element", tag: "text", box: {x:0,y:0,width:40,height:16},
+          layout: null, children: [], style: { characters: "Hi", fontFamily: "   " } }] },
+    };
+    const MAPS = { findComponentMapping:()=>null, findIconSetKey:()=>null, findIconSetName:()=>null, tokenNameToVariableKey:()=>null };
+    const script = buildExecuteScript(slj, MAPS as any);
+    // Verify the runtime contains the fallback pattern: famRaw || "Inter"
+    expect(script).toContain('var famRaw = node.fontFamily ? String(node.fontFamily).split(",")[0].replace(/["\']/g,"").trim() : "";');
+    expect(script).toContain('var fam = famRaw || "Inter";');
+  });
 });
 
 /** Run the sandbox script (top-level await + return) against a figma mock. */

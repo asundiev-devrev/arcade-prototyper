@@ -148,7 +148,8 @@ async function build(node, parent, ox, oy) {
   if (node.kind === "text") {
     var t = figma.createText();
     parent.appendChild(t);
-    var fam = node.fontFamily ? String(node.fontFamily).split(",")[0].replace(/["']/g,"").trim() : "Inter";
+    var famRaw = node.fontFamily ? String(node.fontFamily).split(",")[0].replace(/["']/g,"").trim() : "";
+    var fam = famRaw || "Inter";
     var wnum = node.fontWeight || 400;
     var style = wnum >= 650 ? "Bold" : (wnum >= 550 ? "Semi Bold" : (wnum >= 450 ? "Medium" : "Regular"));
     var loaded = await ensureFont({ family: fam, style: style });
