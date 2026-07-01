@@ -97,11 +97,20 @@ export async function handleFigmaExport(slug: string, frame: string, deps: Figma
   }
 }
 
-// --- live deps (singleton bridge) ---
-let bridgeSingleton: BridgeServer | null = null;
-async function liveGetBridge(): Promise<BridgeServer> {
-  if (!bridgeSingleton) bridgeSingleton = await startBridgeServer({ hello: { serverVersion: "studio" } });
-  return bridgeSingleton;
+// --- live deps (process-wide singleton bridge) ---
+// Process-wide singleton: Vite re-evaluates server modules on config reloads,
+// and a module-level singleton would start a NEW WebSocket server (new port)
+// per copy — the plugin then connects to an orphaned instance while the live
+// handler sees no client. globalThis survives module re-evaluation.
+const BRIDGE_KEY = Symbol.for("arcade-studio.figma-bridge");
+export async function liveGetBridge(): Promise<BridgeServer> {
+  const g = globalThis as any;
+  if (!g[BRIDGE_KEY]) {
+    // Store the PROMISE so concurrent first calls don't race two servers
+    g[BRIDGE_KEY] = startBridgeServer({ hello: { serverVersion: "studio" } });
+  }
+  // Always await — g[BRIDGE_KEY] is a Promise<BridgeServer>, not BridgeServer
+  return await g[BRIDGE_KEY];
 }
 async function liveLoadSlj(slug: string, frame: string): Promise<SljDocument | null> {
   try {
