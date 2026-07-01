@@ -71,6 +71,14 @@ export function buildWalkContext(iframe: HTMLIFrameElement): WalkHandle {
     }
   }
 
+  // The container key is stamped at mount on the initial HostRoot fiber, but
+  // React double-buffers root fibers: after any later commit the committed
+  // tree may be this fiber's alternate. FiberRoot.current is by definition
+  // the live tree — walking the stale twin yields child === null and an
+  // empty export.
+  const fiberRoot = (rootFiber as unknown as { stateNode?: { current?: MinimalFiber } | null }).stateNode;
+  if (fiberRoot && typeof fiberRoot === "object" && fiberRoot.current) rootFiber = fiberRoot.current;
+
   // Token index from the iframe's :root computed style (DevRevThemeProvider injected them).
   const rootStyle = win.getComputedStyle(doc.documentElement);
   const tokenNames = tokenNamesFromRoot(rootStyle);

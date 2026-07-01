@@ -57,4 +57,62 @@ describe("exportFrameToSlj", () => {
       exportFrameToSlj({ iframe, projectSlug: "d", frameSlug: "f", mode: "light", width: 100 }),
     ).rejects.toThrow(/iframe/i);
   });
+
+  it("walks the FiberRoot.current, not the mount-time container fiber", async () => {
+    // React double-buffers root fibers: the container key is stamped at mount and
+    // may point to a stale HostRoot whose child is null. The committed tree lives
+    // on stateNode.current (possibly the alternate fiber). This test simulates that
+    // scenario: the containerKey fiber is stale (child: null), but its
+    // stateNode.current points to the live tree with a real child.
+    const iframe = document.createElement("iframe");
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument!;
+    doc.body.innerHTML = `<div id="root"><div>Live content</div></div>`;
+    const mount = doc.getElementById("root")!.firstElementChild! as Element & Record<string, unknown>;
+
+    const mountEl = doc.getElementById("root")!.firstElementChild!;
+    const liveChild = fakeFiber(mountEl as Element);
+    const liveRoot = { type: "HostRoot", child: liveChild, sibling: null, memoizedProps: {}, stateNode: null, return: null };
+    const fiberRoot = { current: liveRoot };
+    const staleRoot = { type: "HostRoot", child: null, sibling: null, memoizedProps: {}, stateNode: fiberRoot, return: null };
+    const rootContainer = doc.getElementById("root")! as Element & Record<string, unknown>;
+    rootContainer["__reactContainer$test"] = staleRoot;
+
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const slj = await exportFrameToSlj({
+      iframe,
+      projectSlug: "demo",
+      frameSlug: "01-bubble",
+      mode: "light",
+      width: 1440,
+    });
+
+    // The walk should see the live tree (child present), not an empty root.
+    expect(slj.root).toBeTruthy();
+    expect(slj.root.children).toBeTruthy();
+    expect(slj.root.children?.length).toBeGreaterThan(0);
+  });
+
+  it("uses the original fiber when stateNode.current is absent (older React or test fakes)", async () => {
+    // Sanity check: if stateNode is not a FiberRoot (older shape or test fakes),
+    // the walk should use the original fiber without crashing.
+    const iframe = fakeIframe();
+    const rootContainer = iframe.contentDocument!.getElementById("root")! as Element & Record<string, unknown>;
+    const origFiber = rootContainer["__reactFiber$test"] || rootContainer["__reactContainer$test"];
+    // Ensure no FiberRoot normalization is possible: stateNode is a DOM element.
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const slj = await exportFrameToSlj({
+      iframe,
+      projectSlug: "demo",
+      frameSlug: "01-bubble",
+      mode: "light",
+      width: 1440,
+    });
+
+    expect(slj.root).toBeTruthy();
+  });
 });
