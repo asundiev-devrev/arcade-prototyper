@@ -42,7 +42,12 @@ export interface PlanText {
   fontFamily?: string;
   lineHeight?: number;
 }
-export type PlanNode = PlanFrame | PlanInstance | PlanText;
+export interface PlanSvg {
+  kind: "svg";
+  box: Box;
+  markup: string;
+}
+export type PlanNode = PlanFrame | PlanInstance | PlanText | PlanSvg;
 
 export interface ExecutePlan {
   frame: { slug: string; project: string; width: number; mode: "light" | "dark" };
@@ -79,6 +84,8 @@ function isPointlessWrapper(frame: PlanFrame, isRoot: boolean, parentIsAbsolute:
   if (!parentIsAbsolute) return false;
   // Don't collapse if wrapper itself has layout (it positions its child)
   if (frame.layout !== null) return false;
+  // Don't collapse if the child is an svg node (it's already a leaf)
+  if (frame.children[0].kind === "svg") return false;
   return true;
 }
 
@@ -112,6 +119,13 @@ export function sljToExecutePlan(slj: SljDocument, maps: ExecutePlanMaps): Execu
       return { kind: "frame", box: node.box, layout: node.layout, children: node.children.map((c) => walk(c, depth + 1, node.layout)) };
     }
     const el = node as ElementNode;
+    if (el.tag === "svg" && el.style.svg !== undefined) {
+      return {
+        kind: "svg",
+        box: el.box,
+        markup: el.style.svg,
+      };
+    }
     if (el.tag === "text" && el.style.characters !== undefined) {
       return {
         kind: "text",

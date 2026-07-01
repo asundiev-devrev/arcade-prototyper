@@ -138,6 +138,34 @@ export function buildWalkContext(iframe: HTMLIFrameElement): WalkHandle {
       const hb = h.getBoundingClientRect();
       return { text: parts.join(" "), box: box ?? { x: hb.x, y: hb.y, width: hb.width, height: hb.height } };
     },
+    svgMarkup: (f) => {
+      const h = hostOf(f);
+      if (!h || h.tagName.toLowerCase() !== "svg") return null;
+      try {
+        const serializer = new win.XMLSerializer();
+        let markup = serializer.serializeToString(h);
+        // Cap at 20KB to avoid bloating the export with complex vectors
+        if (markup.length > 20000) return null;
+        // Replace currentColor with the computed color value
+        const computedColor = win.getComputedStyle(h).color;
+        if (computedColor) {
+          markup = markup.replace(/currentColor/g, computedColor);
+        }
+        // Replace CSS variables in fill/stroke attributes with computed values
+        // Minimal implementation: just handle var(--...) in fill and stroke
+        markup = markup.replace(/fill="var\(([^)]+)\)"/g, (match, varName) => {
+          const val = win.getComputedStyle(h).getPropertyValue(varName.trim());
+          return val ? `fill="${val}"` : match;
+        });
+        markup = markup.replace(/stroke="var\(([^)]+)\)"/g, (match, varName) => {
+          const val = win.getComputedStyle(h).getPropertyValue(varName.trim());
+          return val ? `stroke="${val}"` : match;
+        });
+        return markup;
+      } catch (e) {
+        return null;
+      }
+    },
   };
 
   const ctx: WalkCtx = {

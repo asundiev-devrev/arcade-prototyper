@@ -129,8 +129,23 @@ export function walkFiber(rootFiber: MinimalFiber, ctx: WalkCtx): SljNode {
       // composite / unknown → fall through to a frame that recurses (carry name)
     }
 
-    // host element, or composite/unknown component treated as a frame
+    // SVG vector capture: when the host is an svg element, emit a leaf with the markup
     const tag = ctx.reader.hostTag(f);
+    if (tag === "svg") {
+      const box = ctx.reader.box(f);
+      const markup = ctx.reader.svgMarkup(f);
+      const s = ctx.reader.style(f);
+      return {
+        kind: "element",
+        tag: "svg",
+        box,
+        layout: null,
+        style: { ...elementStyle(s, ctx.resolveColor), ...(markup ? { svg: markup } : {}) },
+        children: [],
+      };
+    }
+
+    // host element, or composite/unknown component treated as a frame
     const box = ctx.reader.box(f);
     const text = ctx.reader.text(f);
     const kids = childFibers(f, ctx);

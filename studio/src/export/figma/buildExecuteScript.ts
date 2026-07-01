@@ -171,6 +171,18 @@ async function build(node, parent, ox, oy) {
     made.instances++;
     return;
   }
+  if (node.kind === "svg") {
+    var sv = null;
+    try { sv = figma.createNodeFromSvg(node.markup); } catch (e) { sv = null; }
+    if (sv) {
+      parent.appendChild(sv);
+      sv.x = node.box.x - ox; sv.y = node.box.y - oy;
+      try { if (node.box.width > 0 && node.box.height > 0) sv.resize(node.box.width, node.box.height); } catch (e) {}
+      made.icons++;
+      return;
+    }
+    // fall through to empty frame if parse failed
+  }
   if (node.kind === "text") {
     var t = figma.createText();
     parent.appendChild(t);

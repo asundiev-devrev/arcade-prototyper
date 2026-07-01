@@ -33,6 +33,9 @@ export interface ElementStyle {
   fontWeight?: number;
   lineHeight?: number;
   color?: string;
+  // svg-only:
+  /** SVG markup string for vector icons. Figma parses this natively via createNodeFromSvg. */
+  svg?: string;
 }
 
 export interface ComponentNode {

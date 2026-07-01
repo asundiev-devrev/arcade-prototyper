@@ -36,4 +36,7 @@ export interface FiberReader {
    *  + trimmed, with their union bounding box. null when the element has no
    *  own text. Lets the walk keep text that shares a parent with element kids. */
   directText(f: MinimalFiber): { text: string; box: Box } | null;
+  /** SVG markup for a fiber whose host is an svg element. Returns serialized
+   *  outerHTML with currentColor resolved, or null if not svg / too large. */
+  svgMarkup(f: MinimalFiber): string | null;
 }

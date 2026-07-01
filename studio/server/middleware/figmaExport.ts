@@ -45,7 +45,7 @@ const MAPS = {
 export function countPlanNodes(node: any, acc = { instances: 0, frames: 0, text: 0 }) {
   if (node.kind === "instance") acc.instances++;
   else if (node.kind === "text") acc.text++;
-  else acc.frames++;
+  else acc.frames++; // frames + svg (both are pixel-rendered nodes)
   for (const c of node.children ?? []) countPlanNodes(c, acc);
   return acc;
 }
