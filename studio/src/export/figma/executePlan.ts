@@ -70,16 +70,20 @@ function fillFields(maps: ExecutePlanMaps, value: string | undefined): { fillVar
   return { fillColor: value };
 }
 
-function isPointlessWrapper(frame: PlanFrame, isRoot: boolean): boolean {
+function isPointlessWrapper(frame: PlanFrame, isRoot: boolean, parentIsAbsolute: boolean): boolean {
   if (isRoot) return false; // never collapse root
   if (frame.children.length !== 1) return false; // only single-child wrappers
   // Check if it has any visual styling
   if (frame.fillVariableKey || frame.fillColor || frame.cornerRadius) return false;
+  // Only collapse inside absolute-positioned parents (layout null)
+  if (!parentIsAbsolute) return false;
+  // Don't collapse if wrapper itself has layout (it positions its child)
+  if (frame.layout !== null) return false;
   return true;
 }
 
 export function sljToExecutePlan(slj: SljDocument, maps: ExecutePlanMaps): ExecutePlan {
-  function walk(node: SljNode, depth: number): PlanNode {
+  function walk(node: SljNode, depth: number, parentLayout: Layout | null): PlanNode {
     if (isComponentNode(node)) {
       const m = maps.findComponentMapping(node.component);
       if (m && m.status === "mapped" && m.figma) {
@@ -105,7 +109,7 @@ export function sljToExecutePlan(slj: SljDocument, maps: ExecutePlanMaps): Execu
         }
         return inst;
       }
-      return { kind: "frame", box: node.box, layout: node.layout, children: node.children.map((c) => walk(c, depth + 1)) };
+      return { kind: "frame", box: node.box, layout: node.layout, children: node.children.map((c) => walk(c, depth + 1, node.layout)) };
     }
     const el = node as ElementNode;
     if (el.tag === "text" && el.style.characters !== undefined) {
@@ -129,11 +133,12 @@ export function sljToExecutePlan(slj: SljDocument, maps: ExecutePlanMaps): Execu
       ...fillFields(maps, el.style.fill),
       ...(el.style.cornerRadius !== undefined ? { cornerRadius: el.style.cornerRadius } : {}),
       ...(derivedName ? { name: derivedName } : {}),
-      children: el.children.map((c) => walk(c, depth + 1)),
+      children: el.children.map((c) => walk(c, depth + 1, el.layout)),
     };
 
-    // Collapse pointless wrappers
-    if (isPointlessWrapper(frame, depth === 0)) {
+    // Collapse pointless wrappers (only in absolute context)
+    const parentIsAbsolute = parentLayout === null;
+    if (isPointlessWrapper(frame, depth === 0, parentIsAbsolute)) {
       const child = frame.children[0];
       // Transfer name to child if child is a frame without its own name
       if (child.kind === "frame" && frame.name && !child.name) {
@@ -144,5 +149,5 @@ export function sljToExecutePlan(slj: SljDocument, maps: ExecutePlanMaps): Execu
 
     return frame;
   }
-  return { frame: slj.frame, root: walk(slj.root, 0) };
+  return { frame: slj.frame, root: walk(slj.root, 0, null) };
 }

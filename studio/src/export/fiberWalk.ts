@@ -85,13 +85,31 @@ function childFibers(f: MinimalFiber, ctx: WalkCtx): MinimalFiber[] {
 }
 
 export function walkFiber(rootFiber: MinimalFiber, ctx: WalkCtx): SljNode {
-  function walk(f: MinimalFiber): SljNode | null {
+  function walk(f: MinimalFiber, isRoot: boolean): SljNode | null {
     const nm = fiberName(f);
 
     // Skip-list wrapper: pass through to its first meaningful child.
     if (nm && ctx.isSkippable(nm)) {
       const kids = childFibers(f, ctx);
-      return kids.length ? walk(kids[0]) : null;
+      return kids.length ? walk(kids[0], false) : null;
+    }
+
+    // Skip invisible nodes (except root): display:none OR visibility:hidden
+    // Also skip 0×0 boxes, but only if they have explicit display/visibility styling
+    // (avoids false positives from test fixtures with unmeasured elements).
+    if (!isRoot) {
+      const s = ctx.reader.style(f);
+      const display = s.getPropertyValue("display");
+      const visibility = s.getPropertyValue("visibility");
+      if (display === "none" || visibility === "hidden") {
+        return null;
+      }
+      // Additional check: 0×0 box combined with positioning (absolute fibers in Radix Tabs)
+      const box = ctx.reader.box(f);
+      const position = s.getPropertyValue("position");
+      if (box.width === 0 && box.height === 0 && (position === "absolute" || position === "fixed")) {
+        return null;
+      }
     }
 
     if (nm) {
@@ -129,7 +147,7 @@ export function walkFiber(rootFiber: MinimalFiber, ctx: WalkCtx): SljNode {
     // Read style once, used for both text styling and element styling
     const s = ctx.reader.style(f);
 
-    const childNodes = kids.map(walk).filter((n): n is SljNode => n !== null);
+    const childNodes = kids.map((k) => walk(k, false)).filter((n): n is SljNode => n !== null);
 
     // Mixed content: an element with BOTH direct text nodes and element
     // children (e.g. <div>Let's prepare <span>next meeting.</span></div>).
@@ -157,7 +175,7 @@ export function walkFiber(rootFiber: MinimalFiber, ctx: WalkCtx): SljNode {
       children: childNodes,
     };
   }
-  const root = walk(rootFiber);
+  const root = walk(rootFiber, true);
   if (!root) throw new Error("fiberWalk: root produced no node");
   return root;
 }
