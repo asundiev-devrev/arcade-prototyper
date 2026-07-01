@@ -37,6 +37,26 @@ function elementStyle(s: { getPropertyValue(p: string): string }, resolveColor: 
   return out;
 }
 
+// Capture computed text styling for a text leaf. Only sets fields that parse.
+function textStyle(
+  s: { getPropertyValue(p: string): string },
+  resolveColor: (v: string) => string,
+  characters: string,
+): ElementStyle {
+  const out: ElementStyle = { characters };
+  const color = s.getPropertyValue("color");
+  if (color) out.color = resolveColor(color);
+  const size = parseFloat(s.getPropertyValue("font-size"));
+  if (Number.isFinite(size) && size > 0) out.fontSize = size;
+  const weight = parseFloat(s.getPropertyValue("font-weight"));
+  if (Number.isFinite(weight) && weight > 0) out.fontWeight = weight;
+  const family = s.getPropertyValue("font-family");
+  if (family) out.fontFamily = family;
+  const lh = parseFloat(s.getPropertyValue("line-height"));
+  if (Number.isFinite(lh) && lh > 0) out.lineHeight = lh;
+  return out;
+}
+
 /** Serializable scalar props only (drop functions, ReactNodes). */
 function scalarProps(props: Record<string, unknown> | null): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -83,7 +103,7 @@ export function walkFiber(rootFiber: MinimalFiber, ctx: WalkCtx): SljNode {
         const box = ctx.reader.box(f);
         const text = ctx.reader.text(f);
         const children: SljNode[] = text
-          ? [{ kind: "element", tag: "text", box, layout: null, style: { characters: text }, children: [] }]
+          ? [{ kind: "element", tag: "text", box, layout: null, style: textStyle(ctx.reader.style(f), ctx.resolveColor, text), children: [] }]
           : [];
         const icon = ctx.iconNameFor(f) ?? undefined;
         return { kind: "component", component: nm, source: "arcade/components", props: scalarProps(f.memoizedProps), box, layout: null, children, icon };
@@ -99,7 +119,7 @@ export function walkFiber(rootFiber: MinimalFiber, ctx: WalkCtx): SljNode {
 
     // text leaf: visible text + no element children
     if (text && kids.length === 0) {
-      return { kind: "element", tag: "text", box, layout: null, style: { characters: text }, children: [] };
+      return { kind: "element", tag: "text", box, layout: null, style: textStyle(ctx.reader.style(f), ctx.resolveColor, text), children: [] };
     }
 
     const childNodes = kids.map(walk).filter((n): n is SljNode => n !== null);
