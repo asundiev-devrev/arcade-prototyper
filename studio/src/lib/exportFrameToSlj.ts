@@ -166,6 +166,34 @@ export function buildWalkContext(iframe: HTMLIFrameElement): WalkHandle {
         return null;
       }
     },
+    imageData: (f) => {
+      const h = hostOf(f);
+      if (!h) return null;
+      const tag = h.tagName.toLowerCase();
+      // Only capture img elements for v1 (background-image on divs skipped)
+      if (tag !== "img") return null;
+      try {
+        const img = h as HTMLImageElement;
+        if (!img.naturalWidth || !img.naturalHeight) return null;
+        // Cap at 512×512 to keep exports lean
+        const maxDim = 512;
+        const w = Math.min(img.naturalWidth, maxDim);
+        const h2 = Math.min(img.naturalHeight, maxDim);
+        const canvas = doc.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h2;
+        const ctx2 = canvas.getContext("2d");
+        if (!ctx2) return null;
+        ctx2.drawImage(img, 0, 0, w, h2);
+        const dataUrl = canvas.toDataURL("image/png");
+        // Strip "data:image/png;base64," prefix
+        const commaIdx = dataUrl.indexOf(",");
+        return commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : null;
+      } catch (e) {
+        // CORS-tainted canvas throws on toDataURL — return null silently
+        return null;
+      }
+    },
   };
 
   const ctx: WalkCtx = {

@@ -26,6 +26,12 @@ export interface ElementStyle {
   fill?: string;
   cornerRadius?: number;
   stroke?: { color: string; width: number };
+  /** True when computed overflow/overflow-x/overflow-y is hidden/clip/auto/scroll. */
+  clip?: true;
+  /** First box-shadow parsed from computed style. */
+  shadow?: { color: string; x: number; y: number; blur: number; spread: number };
+  /** Opacity < 1 from computed style. Absent means fully opaque. */
+  opacity?: number;
   // text-only:
   characters?: string;
   fontFamily?: string;
@@ -36,6 +42,9 @@ export interface ElementStyle {
   // svg-only:
   /** SVG markup string for vector icons. Figma parses this natively via createNodeFromSvg. */
   svg?: string;
+  // image-only:
+  /** Base64-encoded PNG pixel data (no data: prefix). Present on img elements. */
+  imageData?: string;
 }
 
 export interface ComponentNode {

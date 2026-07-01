@@ -39,4 +39,8 @@ export interface FiberReader {
   /** SVG markup for a fiber whose host is an svg element. Returns serialized
    *  outerHTML with currentColor resolved, or null if not svg / too large. */
   svgMarkup(f: MinimalFiber): string | null;
+  /** Base64-encoded PNG for img elements (or background-image hosts). Draws to
+   *  off-screen canvas (cap 512x512), toDataURL, strips prefix. Returns null
+   *  when CORS-tainted or not an image. */
+  imageData(f: MinimalFiber): string | null;
 }

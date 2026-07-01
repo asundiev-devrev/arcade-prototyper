@@ -26,6 +26,7 @@ describe("walkFiber — SVG capture", () => {
       text: () => null,
       directText: () => null,
       svgMarkup: (f) => (f as any).__svgMarkup ?? null,
+      imageData: () => null,
     };
     const ctx: WalkCtx = {
       reader,
@@ -56,6 +57,7 @@ describe("walkFiber — SVG capture", () => {
       text: () => null,
       directText: () => null,
       svgMarkup: () => null,
+      imageData: () => null,
     };
     const ctx: WalkCtx = {
       reader,

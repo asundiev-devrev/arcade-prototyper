@@ -26,6 +26,16 @@ function readStyleLike(s: { getPropertyValue(p: string): string }): StyleLike {
     alignItems: g("align-items"), marginLeft: g("margin-left") };
 }
 
+const CLIP_VALUES = new Set(["hidden", "clip", "auto", "scroll"]);
+
+function parseBoxShadow(raw: string): ElementStyle["shadow"] | undefined {
+  if (!raw || raw === "none") return undefined;
+  // Computed format: "rgba(r, g, b, a) Xpx Ypx Bpx Spx" or "rgb(...) X Y B"
+  const m = raw.match(/^(rgba?\([^)]+\))\s+([-\d.]+)px\s+([-\d.]+)px\s+([-\d.]+)px(?:\s+([-\d.]+)px)?/);
+  if (!m) return undefined;
+  return { color: m[1], x: parseFloat(m[2]), y: parseFloat(m[3]), blur: parseFloat(m[4]), spread: m[5] !== undefined ? parseFloat(m[5]) : 0 };
+}
+
 function elementStyle(s: { getPropertyValue(p: string): string }, resolveColor: (v: string) => string): ElementStyle {
   const out: ElementStyle = {};
   const bg = s.getPropertyValue("background-color");
@@ -34,6 +44,20 @@ function elementStyle(s: { getPropertyValue(p: string): string }, resolveColor: 
   if (Number.isFinite(radius) && radius > 0) out.cornerRadius = radius;
   const sw = parseFloat(s.getPropertyValue("border-top-width"));
   if (Number.isFinite(sw) && sw > 0) out.stroke = { color: resolveColor(s.getPropertyValue("border-top-color")), width: sw };
+  // Clipping: overflow/overflow-x/overflow-y
+  const ov = s.getPropertyValue("overflow");
+  const ovx = s.getPropertyValue("overflow-x");
+  const ovy = s.getPropertyValue("overflow-y");
+  if (CLIP_VALUES.has(ov) || CLIP_VALUES.has(ovx) || CLIP_VALUES.has(ovy)) out.clip = true;
+  // Box shadow (first shadow only)
+  const shadow = parseBoxShadow(s.getPropertyValue("box-shadow"));
+  if (shadow) out.shadow = shadow;
+  // Opacity (computed opacity is always a pure number string "0" to "1", never has "px")
+  const opacityRaw = s.getPropertyValue("opacity");
+  if (opacityRaw && !opacityRaw.includes("px")) {
+    const opacity = parseFloat(opacityRaw);
+    if (Number.isFinite(opacity) && opacity < 1) out.opacity = opacity;
+  }
   return out;
 }
 
@@ -143,6 +167,23 @@ export function walkFiber(rootFiber: MinimalFiber, ctx: WalkCtx): SljNode {
         style: { ...elementStyle(s, ctx.resolveColor), ...(markup ? { svg: markup } : {}) },
         children: [],
       };
+    }
+
+    // Image capture: when the host is img AND reader can capture pixel data, emit a leaf
+    if (tag === "img") {
+      const imgData = ctx.reader.imageData(f);
+      if (imgData) {
+        const box = ctx.reader.box(f);
+        const s = ctx.reader.style(f);
+        return {
+          kind: "element",
+          tag: "img",
+          box,
+          layout: null,
+          style: { ...elementStyle(s, ctx.resolveColor), imageData: imgData },
+          children: [],
+        };
+      }
     }
 
     // host element, or composite/unknown component treated as a frame

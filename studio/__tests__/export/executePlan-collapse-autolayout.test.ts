@@ -1,4 +1,6 @@
 // studio/__tests__/export/executePlan-collapse-autolayout.test.ts
+// Post pixel-first: layout is always null, so everything is absolute context.
+// Collapse happens unconditionally for styleless single-child wrappers.
 import { describe, it, expect } from "vitest";
 import { sljToExecutePlan } from "../../src/export/figma/executePlan";
 import type { SljDocument } from "../../src/export/slj";
@@ -10,8 +12,8 @@ const MAPS = {
   tokenNameToVariableKey: () => null,
 };
 
-describe("executePlan collapse respects auto-layout parent context", () => {
-  it("does NOT collapse wrapper inside auto-layout parent (layout non-null)", () => {
+describe("executePlan collapse in pixel-first mode (all absolute)", () => {
+  it("collapses wrapper even when SLJ element had auto-layout (pixel-first nulls it)", () => {
     const slj: SljDocument = {
       slj: 1,
       frame: { slug: "f", project: "p", width: 100, mode: "light" },
@@ -44,14 +46,13 @@ describe("executePlan collapse respects auto-layout parent context", () => {
     };
 
     const plan = sljToExecutePlan(slj, MAPS as any);
-    // Root is auto-layout → wrapper must NOT be collapsed
+    // Pixel-first: root layout forced to null → everything is absolute → collapse happens
     expect(plan.root.children).toHaveLength(1);
-    expect(plan.root.children[0].kind).toBe("frame");
-    expect((plan.root.children[0] as any).children).toHaveLength(1);
-    expect((plan.root.children[0] as any).children[0].kind).toBe("text");
+    expect(plan.root.children[0].kind).toBe("text");
+    expect((plan.root.children[0] as any).characters).toBe("Label");
   });
 
-  it("collapses wrapper inside absolute parent (layout null)", () => {
+  it("collapses wrapper inside absolute parent (layout null) — same as before", () => {
     const slj: SljDocument = {
       slj: 1,
       frame: { slug: "f", project: "p", width: 100, mode: "light" },
@@ -84,13 +85,12 @@ describe("executePlan collapse respects auto-layout parent context", () => {
     };
 
     const plan = sljToExecutePlan(slj, MAPS as any);
-    // Root is absolute → wrapper SHOULD be collapsed
     expect(plan.root.children).toHaveLength(1);
     expect(plan.root.children[0].kind).toBe("text");
     expect((plan.root.children[0] as any).characters).toBe("Label");
   });
 
-  it("does NOT collapse wrapper that itself has layout (even with absolute parent)", () => {
+  it("collapses wrapper with SLJ layout (pixel-first nulls it, so no layout on wrapper)", () => {
     const slj: SljDocument = {
       slj: 1,
       frame: { slug: "f", project: "p", width: 100, mode: "light" },
@@ -105,7 +105,7 @@ describe("executePlan collapse respects auto-layout parent context", () => {
             kind: "element",
             tag: "div",
             box: { x: 10, y: 10, width: 80, height: 30 },
-            layout: { mode: "horizontal", gap: 4, padding: [0, 0, 0, 0], align: "start" }, // wrapper HAS layout
+            layout: { mode: "horizontal", gap: 4, padding: [0, 0, 0, 0], align: "start" },
             style: {},
             children: [
               {
@@ -123,13 +123,12 @@ describe("executePlan collapse respects auto-layout parent context", () => {
     };
 
     const plan = sljToExecutePlan(slj, MAPS as any);
-    // Wrapper has its own layout → must NOT collapse
+    // Pixel-first nulls wrapper layout too → it's now styleless single-child → collapses
     expect(plan.root.children).toHaveLength(1);
-    expect(plan.root.children[0].kind).toBe("frame");
-    expect((plan.root.children[0] as any).layout).toEqual({ mode: "horizontal", gap: 4, padding: [0, 0, 0, 0], align: "start" });
+    expect(plan.root.children[0].kind).toBe("text");
   });
 
-  it("collapses deep chain only in absolute context", () => {
+  it("collapses deep chain in absolute context", () => {
     const slj: SljDocument = {
       slj: 1,
       frame: { slug: "f", project: "p", width: 100, mode: "light" },
@@ -171,7 +170,6 @@ describe("executePlan collapse respects auto-layout parent context", () => {
     };
 
     const plan = sljToExecutePlan(slj, MAPS as any);
-    // All absolute → full collapse
     expect(plan.root.children).toHaveLength(1);
     expect(plan.root.children[0].kind).toBe("text");
   });

@@ -33,7 +33,8 @@ describe("sljToExecutePlan", () => {
       style: { fill: "--surface-overlay" }, children: [],
     }), maps);
     expect(plan.root.kind).toBe("frame");
-    expect((plan.root as any).layout).toEqual({ mode: "vertical", gap: 8, padding: [0, 0, 0, 0], align: "start" });
+    // Pixel-first: layout is always null (absolute positioning)
+    expect((plan.root as any).layout).toBeNull();
     expect((plan.root as any).fillVariableKey).toBe("SURFACE_KEY");
   });
 

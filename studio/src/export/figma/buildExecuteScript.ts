@@ -129,6 +129,31 @@ function setSolid(node, color) {
   if (rgb) { try { node.fills = [{ type: "SOLID", color: { r: rgb.r, g: rgb.g, b: rgb.b }, opacity: rgb.a }]; } catch (e) {} }
 }
 
+function parseColor(color) {
+  var m = String(color).match(/rgba?\\(([^)]+)\\)/);
+  if (m) { var p = m[1].split(",").map(function (s) { return parseFloat(s.trim()); }); return { r: p[0]/255, g: p[1]/255, b: p[2]/255, a: p[3] == null ? 1 : p[3] }; }
+  if (color[0] === "#") { var h = color.slice(1); return { r: parseInt(h.slice(0,2),16)/255, g: parseInt(h.slice(2,4),16)/255, b: parseInt(h.slice(4,6),16)/255, a: 1 }; }
+  return { r: 0, g: 0, b: 0, a: 1 };
+}
+
+function b64decode(str) {
+  var chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  var lookup = {}; for (var i = 0; i < chars.length; i++) lookup[chars[i]] = i;
+  var clean = str.replace(/[^A-Za-z0-9+\\/=]/g, "");
+  var len = clean.length;
+  var padding = clean[len - 2] === "=" ? 2 : (clean[len - 1] === "=" ? 1 : 0);
+  var bytes = new Uint8Array((len * 3 / 4) - padding);
+  var j = 0;
+  for (var k = 0; k < len; k += 4) {
+    var a = lookup[clean[k]] || 0, b = lookup[clean[k+1]] || 0, c = lookup[clean[k+2]] || 0, d = lookup[clean[k+3]] || 0;
+    var triplet = (a << 18) | (b << 12) | (c << 6) | d;
+    if (j < bytes.length) bytes[j++] = (triplet >> 16) & 0xFF;
+    if (j < bytes.length) bytes[j++] = (triplet >> 8) & 0xFF;
+    if (j < bytes.length) bytes[j++] = triplet & 0xFF;
+  }
+  return bytes;
+}
+
 function applyLayout(frame, layout) {
   if (!layout) { frame.layoutMode = "NONE"; return; }
   frame.layoutMode = layout.mode === "horizontal" ? "HORIZONTAL" : "VERTICAL";
@@ -183,6 +208,30 @@ async function build(node, parent, ox, oy) {
     }
     // fall through to empty frame if parse failed
   }
+  if (node.kind === "image") {
+    try {
+      var imgBytes = b64decode(node.data);
+      var imgRef = figma.createImage(imgBytes);
+      var imgFrame = figma.createFrame();
+      imgFrame.name = "image";
+      imgFrame.fills = [{ type: "IMAGE", imageHash: imgRef.hash, scaleMode: "FILL" }];
+      imgFrame.clipsContent = true;
+      if (node.cornerRadius) { try { imgFrame.cornerRadius = node.cornerRadius; } catch (e) {} }
+      parent.appendChild(imgFrame);
+      try { imgFrame.resizeWithoutConstraints(Math.max(node.box.width, 1), Math.max(node.box.height, 1)); } catch (e) {}
+      imgFrame.x = node.box.x - ox; imgFrame.y = node.box.y - oy;
+      made.frames++;
+    } catch (e) {
+      var fallback = figma.createFrame();
+      fallback.name = "image (failed)";
+      fallback.fills = [];
+      parent.appendChild(fallback);
+      try { fallback.resizeWithoutConstraints(Math.max(node.box.width, 1), Math.max(node.box.height, 1)); } catch (e2) {}
+      fallback.x = node.box.x - ox; fallback.y = node.box.y - oy;
+      made.frames++;
+    }
+    return;
+  }
   if (node.kind === "text") {
     var t = figma.createText();
     parent.appendChild(t);
@@ -205,9 +254,14 @@ async function build(node, parent, ox, oy) {
   f.name = "frame";
   if (node.name) { try { f.name = node.name; } catch (e) {} }
   f.fills = [];
-  f.clipsContent = false;
+  f.clipsContent = node.clip ? true : false;
   applyLayout(f, node.layout);
   if (node.cornerRadius) { try { f.cornerRadius = node.cornerRadius; } catch (e) {} }
+  if (node.shadow) {
+    var sc = parseColor(node.shadow.color);
+    f.effects = [{ type: "DROP_SHADOW", color: { r: sc.r, g: sc.g, b: sc.b, a: sc.a }, offset: { x: node.shadow.x, y: node.shadow.y }, radius: node.shadow.blur, spread: node.shadow.spread, visible: true, blendMode: "NORMAL" }];
+  }
+  if (node.opacity != null && node.opacity < 1) { f.opacity = node.opacity; }
   parent.appendChild(f);
   try { f.resizeWithoutConstraints(Math.max(node.box.width, 1), Math.max(node.box.height, 1)); } catch (e) {}
   f.x = node.box.x - ox; f.y = node.box.y - oy;

@@ -17,8 +17,17 @@ export interface PlanFrame {
   fillVariableKey?: string;
   fillColor?: string;
   cornerRadius?: number;
+  clip?: true;
+  shadow?: { color: string; x: number; y: number; blur: number; spread: number };
+  opacity?: number;
   name?: string;
   children: PlanNode[];
+}
+export interface PlanImage {
+  kind: "image";
+  box: Box;
+  data: string;
+  cornerRadius?: number;
 }
 export interface PlanInstance {
   kind: "instance";
@@ -48,7 +57,7 @@ export interface PlanSvg {
   box: Box;
   markup: string;
 }
-export type PlanNode = PlanFrame | PlanInstance | PlanText | PlanSvg;
+export type PlanNode = PlanFrame | PlanInstance | PlanText | PlanSvg | PlanImage;
 
 export interface ExecutePlan {
   frame: { slug: string; project: string; width: number; mode: "light" | "dark" };
@@ -81,6 +90,8 @@ function isPointlessWrapper(frame: PlanFrame, isRoot: boolean, parentIsAbsolute:
   if (frame.children.length !== 1) return false; // only single-child wrappers
   // Check if it has any visual styling
   if (frame.fillVariableKey || frame.fillColor || frame.cornerRadius) return false;
+  // A clipping frame is visual (it clips overflow) — never collapse
+  if (frame.clip) return false;
   // Only collapse inside absolute-positioned parents (layout null)
   if (!parentIsAbsolute) return false;
   // Don't collapse if wrapper itself has layout (it positions its child)
@@ -117,7 +128,8 @@ export function sljToExecutePlan(slj: SljDocument, maps: ExecutePlanMaps): Execu
         }
         return inst;
       }
-      return { kind: "frame", box: node.box, layout: node.layout, children: node.children.map((c) => walk(c, depth + 1, node.layout)) };
+      // Pixel-first: always null layout (absolute positioning for everything)
+      return { kind: "frame", box: node.box, layout: null, children: node.children.map((c) => walk(c, depth + 1, null)) };
     }
     const el = node as ElementNode;
     if (el.tag === "svg" && el.style.svg !== undefined) {
@@ -125,6 +137,15 @@ export function sljToExecutePlan(slj: SljDocument, maps: ExecutePlanMaps): Execu
         kind: "svg",
         box: el.box,
         markup: el.style.svg,
+      };
+    }
+    // Image node: img element with captured pixel data
+    if (el.style.imageData !== undefined) {
+      return {
+        kind: "image",
+        box: el.box,
+        data: el.style.imageData,
+        ...(el.style.cornerRadius !== undefined ? { cornerRadius: el.style.cornerRadius } : {}),
       };
     }
     if (el.tag === "text" && el.style.characters !== undefined) {
@@ -145,20 +166,24 @@ export function sljToExecutePlan(slj: SljDocument, maps: ExecutePlanMaps): Execu
         ...(isMultiline ? { wrap: true } : {}),
       };
     }
-    // Derive name: from element.name if present, else from layout
-    const derivedName = el.name ?? (el.layout?.mode === "horizontal" ? "row" : el.layout ? "column" : undefined);
+    // Derive name: from element.name if present (pixel-first: no layout-based naming)
+    const derivedName = el.name ?? undefined;
+    // Pixel-first: layout always null — absolute positioning for everything
     const frame: PlanFrame = {
       kind: "frame",
       box: el.box,
-      layout: el.layout,
+      layout: null,
       ...fillFields(maps, el.style.fill),
       ...(el.style.cornerRadius !== undefined ? { cornerRadius: el.style.cornerRadius } : {}),
+      ...(el.style.clip ? { clip: true } : {}),
+      ...(el.style.shadow ? { shadow: el.style.shadow } : {}),
+      ...(el.style.opacity !== undefined ? { opacity: el.style.opacity } : {}),
       ...(derivedName ? { name: derivedName } : {}),
-      children: el.children.map((c) => walk(c, depth + 1, el.layout)),
+      children: el.children.map((c) => walk(c, depth + 1, null)),
     };
 
-    // Collapse pointless wrappers (only in absolute context)
-    const parentIsAbsolute = parentLayout === null;
+    // Collapse pointless wrappers (always absolute context in pixel-first)
+    const parentIsAbsolute = true; // pixel-first: everything is absolute
     if (isPointlessWrapper(frame, depth === 0, parentIsAbsolute)) {
       const child = frame.children[0];
       // Transfer name to child if child is a frame without its own name
