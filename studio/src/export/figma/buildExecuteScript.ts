@@ -154,6 +154,46 @@ function b64decode(str) {
   return bytes;
 }
 
+function applyCorners(f, node) {
+  // Per-corner radius when corners differ; else uniform cornerRadius. Individual
+  // corner setters are best-effort — fall back to the uniform radius.
+  if (node.corners) {
+    var c = node.corners;
+    var ok = false;
+    try { f.topLeftRadius = c.tl; f.topRightRadius = c.tr; f.bottomRightRadius = c.br; f.bottomLeftRadius = c.bl; ok = true; } catch (e) {}
+    if (!ok) { try { f.cornerRadius = Math.max(c.tl, c.tr, c.br, c.bl); } catch (e2) {} }
+    return;
+  }
+  if (node.cornerRadius) { try { f.cornerRadius = node.cornerRadius; } catch (e) {} }
+}
+
+function applyBorders(f, borders) {
+  if (!borders || !("strokes" in f)) return;
+  var sides = ["top", "right", "bottom", "left"];
+  var firstColor = null;
+  var maxW = 0;
+  var weights = { top: 0, right: 0, bottom: 0, left: 0 };
+  for (var i = 0; i < sides.length; i++) {
+    var side = borders[sides[i]];
+    if (side && side.width > 0) {
+      weights[sides[i]] = side.width;
+      if (side.width > maxW) maxW = side.width;
+      if (!firstColor) firstColor = side.color;
+    }
+  }
+  if (!firstColor) return;
+  var col = parseColor(firstColor);
+  try { f.strokes = [{ type: "SOLID", color: { r: col.r, g: col.g, b: col.b }, opacity: col.a }]; } catch (e) { return; }
+  // Try per-side weights; fall back to a uniform strokeWeight (max side) if the
+  // individual setters throw (older API / node type without side weights).
+  var perSideOk = true;
+  try {
+    f.strokeTopWeight = weights.top; f.strokeRightWeight = weights.right;
+    f.strokeBottomWeight = weights.bottom; f.strokeLeftWeight = weights.left;
+  } catch (e2) { perSideOk = false; }
+  if (!perSideOk) { try { f.strokeWeight = maxW; } catch (e3) {} }
+}
+
 function applyLayout(frame, layout) {
   if (!layout) { frame.layoutMode = "NONE"; return; }
   frame.layoutMode = layout.mode === "horizontal" ? "HORIZONTAL" : "VERTICAL";
@@ -256,7 +296,8 @@ async function build(node, parent, ox, oy) {
   f.fills = [];
   f.clipsContent = node.clip ? true : false;
   applyLayout(f, node.layout);
-  if (node.cornerRadius) { try { f.cornerRadius = node.cornerRadius; } catch (e) {} }
+  applyCorners(f, node);
+  applyBorders(f, node.borders);
   if (node.shadow) {
     var sc = parseColor(node.shadow.color);
     f.effects = [{ type: "DROP_SHADOW", color: { r: sc.r, g: sc.g, b: sc.b, a: sc.a }, offset: { x: node.shadow.x, y: node.shadow.y }, radius: node.shadow.blur, spread: node.shadow.spread, visible: true, blendMode: "NORMAL" }];
@@ -265,6 +306,9 @@ async function build(node, parent, ox, oy) {
   parent.appendChild(f);
   try { f.resizeWithoutConstraints(Math.max(node.box.width, 1), Math.max(node.box.height, 1)); } catch (e) {}
   f.x = node.box.x - ox; f.y = node.box.y - oy;
+  // CSS rotate() is clockwise-positive; Figma rotation is counterclockwise-positive.
+  // Apply after positioning; small illustration cards read as layered/rotated.
+  if (node.rotation) { try { f.rotation = -node.rotation; } catch (e) {} }
   if (node.fillVariableKey) { await bindFill(f, node.fillVariableKey); } else if (node.fillColor) { setSolid(f, node.fillColor); }
   made.frames++;
   var childOx = node.layout ? ox : node.box.x;
@@ -310,6 +354,8 @@ var bounds = planBounds(__root, rOx, rOy, { w: 1, h: 1 });
 try { pageRoot.resizeWithoutConstraints(Math.max(bounds.w, 1), Math.max(bounds.h, 1)); } catch (e) {}
 if (__root.kind === "frame" && !__root.layout) {
   if (__root.fillVariableKey) { await bindFill(pageRoot, __root.fillVariableKey); } else if (__root.fillColor) { setSolid(pageRoot, __root.fillColor); }
+  applyCorners(pageRoot, __root);
+  applyBorders(pageRoot, __root.borders);
   made.frames++; // pageRoot merged with __root
   for (var i = 0; i < __root.children.length; i++) { await build(__root.children[i], pageRoot, rOx, rOy); }
 } else {

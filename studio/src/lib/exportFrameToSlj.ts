@@ -108,6 +108,20 @@ export function buildWalkContext(iframe: HTMLIFrameElement): WalkHandle {
       const r = h.getBoundingClientRect();
       return { x: r.x, y: r.y, width: r.width, height: r.height };
     },
+    unrotatedSize: (f) => {
+      const h = hostOf(f) as HTMLElement | null;
+      if (!h || typeof h.offsetWidth !== "number") return null;
+      return { width: h.offsetWidth, height: h.offsetHeight };
+    },
+    placeholder: (f) => {
+      const h = hostOf(f);
+      if (!h) return null;
+      const tag = h.tagName.toLowerCase();
+      if (tag !== "input" && tag !== "textarea") return null;
+      const ph = h.getAttribute("placeholder");
+      const t = ph?.trim();
+      return t && t.length > 0 ? t : null;
+    },
     style: (f) => { const h = hostOf(f); return h ? win.getComputedStyle(h) : { getPropertyValue: () => "" }; },
     text: (f) => { const h = hostOf(f); const t = h?.textContent?.trim(); return t && t.length > 0 ? t : null; },
     directText: (f) => {

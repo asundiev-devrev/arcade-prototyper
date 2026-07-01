@@ -21,11 +21,27 @@ export interface Layout {
   align: "start" | "center" | "end" | "stretch";
 }
 
+/** One rendered border edge: a color + a width in px. */
+export interface BorderSide {
+  color: string;
+  width: number;
+}
+
 export interface ElementStyle {
   /** Token name(s) (e.g. "--bg-neutral-soft") when resolvable, else a raw "#rrggbb"/rgb() string. */
   fill?: string;
+  /** Uniform corner radius (all four corners equal). */
   cornerRadius?: number;
+  /** Per-corner radii, present only when the four corners differ. */
+  corners?: { tl: number; tr: number; br: number; bl: number };
+  /** Legacy uniform stroke. Retained for back-compat; new code uses `borders`. */
   stroke?: { color: string; width: number };
+  /** Per-side borders, keyed by edge. Only sides with width>0 and a visible
+   *  style are present (e.g. a divider is `{ bottom: … }`). */
+  borders?: { top?: BorderSide; right?: BorderSide; bottom?: BorderSide; left?: BorderSide };
+  /** Clockwise rotation in degrees from a CSS `transform: rotate(...)`. Absent
+   *  when there is no rotation. box.width/height are the UN-rotated size. */
+  rotation?: number;
   /** True when computed overflow/overflow-x/overflow-y is hidden/clip/auto/scroll. */
   clip?: true;
   /** First box-shadow parsed from computed style. */

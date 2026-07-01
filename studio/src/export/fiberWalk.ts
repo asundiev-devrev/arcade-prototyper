@@ -36,14 +36,51 @@ function parseBoxShadow(raw: string): ElementStyle["shadow"] | undefined {
   return { color: m[1], x: parseFloat(m[2]), y: parseFloat(m[3]), blur: parseFloat(m[4]), spread: m[5] !== undefined ? parseFloat(m[5]) : 0 };
 }
 
+const HIDDEN_BORDER_STYLES = new Set(["none", "hidden"]);
+
+/** rotation degrees (clockwise) decoded from a computed `transform` matrix, or
+ *  undefined when there's no meaningful rotation. */
+function rotationDegrees(transform: string): number | undefined {
+  if (!transform || transform === "none") return undefined;
+  // 2D form: matrix(a, b, c, d, e, f). rotation = atan2(b, a).
+  const m = transform.match(/^matrix\(\s*([-\d.eE]+)\s*,\s*([-\d.eE]+)\s*,/);
+  if (!m) return undefined;
+  const a = parseFloat(m[1]);
+  const b = parseFloat(m[2]);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return undefined;
+  const deg = (Math.atan2(b, a) * 180) / Math.PI;
+  return Math.abs(deg) > 0.1 ? deg : undefined;
+}
+
 function elementStyle(s: { getPropertyValue(p: string): string }, resolveColor: (v: string) => string): ElementStyle {
   const out: ElementStyle = {};
   const bg = s.getPropertyValue("background-color");
   if (bg && !TRANSPARENT.has(bg.trim())) out.fill = resolveColor(bg);
-  const radius = parseFloat(s.getPropertyValue("border-top-left-radius"));
-  if (Number.isFinite(radius) && radius > 0) out.cornerRadius = radius;
-  const sw = parseFloat(s.getPropertyValue("border-top-width"));
-  if (Number.isFinite(sw) && sw > 0) out.stroke = { color: resolveColor(s.getPropertyValue("border-top-color")), width: sw };
+  // Per-corner radius: read all four; collapse to cornerRadius when equal.
+  const tl = parseFloat(s.getPropertyValue("border-top-left-radius")) || 0;
+  const tr = parseFloat(s.getPropertyValue("border-top-right-radius")) || 0;
+  const br = parseFloat(s.getPropertyValue("border-bottom-right-radius")) || 0;
+  const bl = parseFloat(s.getPropertyValue("border-bottom-left-radius")) || 0;
+  if (tl > 0 || tr > 0 || br > 0 || bl > 0) {
+    if (tl === tr && tr === br && br === bl) out.cornerRadius = tl;
+    else out.corners = { tl, tr, br, bl };
+  }
+  // Per-side borders: capture each side with width>0 and a visible style.
+  const sides = ["top", "right", "bottom", "left"] as const;
+  const borders: NonNullable<ElementStyle["borders"]> = {};
+  let anyBorder = false;
+  for (const side of sides) {
+    const w = parseFloat(s.getPropertyValue(`border-${side}-width`));
+    const style = (s.getPropertyValue(`border-${side}-style`) || "").trim();
+    if (Number.isFinite(w) && w > 0 && !HIDDEN_BORDER_STYLES.has(style)) {
+      borders[side] = { color: resolveColor(s.getPropertyValue(`border-${side}-color`)), width: w };
+      anyBorder = true;
+    }
+  }
+  if (anyBorder) out.borders = borders;
+  // CSS rotation (skew/scale ignored for v1).
+  const rot = rotationDegrees(s.getPropertyValue("transform"));
+  if (rot !== undefined) out.rotation = rot;
   // Clipping: overflow/overflow-x/overflow-y
   const ov = s.getPropertyValue("overflow");
   const ovx = s.getPropertyValue("overflow-x");
@@ -190,6 +227,7 @@ export function walkFiber(rootFiber: MinimalFiber, ctx: WalkCtx): SljNode {
     const box = ctx.reader.box(f);
     const text = ctx.reader.text(f);
     const kids = childFibers(f, ctx);
+    const isFormField = tag === "input" || tag === "textarea";
 
     // Name for Figma layer: component name for composites, semantic tag for host elements
     const SEMANTIC_TAGS = new Set(["h1", "h2", "h3", "h4", "h5", "h6", "p", "nav", "aside", "header", "footer", "main", "section", "ul", "ol", "li", "button", "a", "img", "form", "table"]);
@@ -202,6 +240,7 @@ export function walkFiber(rootFiber: MinimalFiber, ctx: WalkCtx): SljNode {
 
     // Read style once, used for both text styling and element styling
     const s = ctx.reader.style(f);
+    const elStyle = elementStyle(s, ctx.resolveColor);
 
     const childNodes = kids.map((k) => walk(k, false)).filter((n): n is SljNode => n !== null);
 
@@ -217,6 +256,34 @@ export function walkFiber(rootFiber: MinimalFiber, ctx: WalkCtx): SljNode {
       }
     }
 
+    // Placeholder text: an <input>/<textarea> shows its placeholder as an
+    // attribute, not as textContent, so the walk would render an empty box.
+    // Emit a text leaf styled from the field's own computed style (color at
+    // the field's own color — ::placeholder color isn't reliably readable) so
+    // a composer like "Ask me anything" is visible in the export.
+    if (isFormField && !text && childNodes.length === 0) {
+      const ph = ctx.reader.placeholder?.(f) ?? null;
+      if (ph) {
+        childNodes.push({ kind: "element", tag: "text", box, layout: null,
+          style: textStyle(s, ctx.resolveColor, ph), children: [] });
+      }
+    }
+
+    // For a rotated element, box() is the axis-aligned bbox of the rotated
+    // shape — the wrong SIZE for a rotated Figma frame. Substitute the intrinsic
+    // (un-rotated) size when available so the runtime can place + rotate it.
+    let outBox = box;
+    if (elStyle.rotation !== undefined) {
+      const size = ctx.reader.unrotatedSize?.(f) ?? null;
+      if (size && size.width > 0 && size.height > 0) {
+        outBox = { x: box.x, y: box.y, width: size.width, height: size.height };
+      } else {
+        // No reliable intrinsic size → drop rotation, keep the bbox flat. Still
+        // renders the fill/shadow/border so a stacked illustration reads.
+        delete elStyle.rotation;
+      }
+    }
+
     const childBoxes = kids.map((k) => ctx.reader.box(k));
     const layout: Layout | null = inferLayout(readStyleLike(s), childBoxes);
     const cls = ctx.reader.hostClassName(f);
@@ -225,9 +292,9 @@ export function walkFiber(rootFiber: MinimalFiber, ctx: WalkCtx): SljNode {
       tag: tag ?? "div",
       ...(cls ? { className: cls } : {}),
       ...(name ? { name } : {}),
-      box,
+      box: outBox,
       layout,
-      style: elementStyle(s, ctx.resolveColor),
+      style: elStyle,
       children: childNodes,
     };
   }

@@ -28,6 +28,16 @@ export interface FiberReader {
   hostClassName(f: MinimalFiber): string | null;
   /** Frame-relative box of the fiber's host node. */
   box(f: MinimalFiber): Box;
+  /** The host element's UN-transformed layout size (offsetWidth/offsetHeight),
+   *  or null when unavailable. `box()` returns the axis-aligned bbox of the
+   *  possibly-rotated element, which is the wrong SIZE for a rotated frame;
+   *  this gives the intrinsic size so a rotated frame can be placed correctly.
+   *  Optional: only consulted when a node carries a rotation. */
+  unrotatedSize?(f: MinimalFiber): { width: number; height: number } | null;
+  /** The placeholder attribute of an <input>/<textarea> host (trimmed), or null
+   *  when the element isn't a form field or has no placeholder. Optional: only
+   *  consulted for input/textarea hosts. */
+  placeholder?(f: MinimalFiber): string | null;
   /** A computed-style getter for the fiber's host node (kebab CSS props). */
   style(f: MinimalFiber): { getPropertyValue(prop: string): string };
   /** Visible text directly in the fiber's host node subtree (for prune-with-text + text leaves). */

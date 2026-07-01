@@ -17,6 +17,9 @@ export interface PlanFrame {
   fillVariableKey?: string;
   fillColor?: string;
   cornerRadius?: number;
+  corners?: { tl: number; tr: number; br: number; bl: number };
+  borders?: { top?: { color: string; width: number }; right?: { color: string; width: number }; bottom?: { color: string; width: number }; left?: { color: string; width: number } };
+  rotation?: number;
   clip?: true;
   shadow?: { color: string; x: number; y: number; blur: number; spread: number };
   opacity?: number;
@@ -89,7 +92,9 @@ function isPointlessWrapper(frame: PlanFrame, isRoot: boolean, parentIsAbsolute:
   if (isRoot) return false; // never collapse root
   if (frame.children.length !== 1) return false; // only single-child wrappers
   // Check if it has any visual styling
-  if (frame.fillVariableKey || frame.fillColor || frame.cornerRadius) return false;
+  if (frame.fillVariableKey || frame.fillColor || frame.cornerRadius || frame.corners) return false;
+  // Borders, shadow and rotation are visual too — never collapse those away.
+  if (frame.borders || frame.shadow || frame.rotation) return false;
   // A clipping frame is visual (it clips overflow) — never collapse
   if (frame.clip) return false;
   // Only collapse inside absolute-positioned parents (layout null)
@@ -175,6 +180,9 @@ export function sljToExecutePlan(slj: SljDocument, maps: ExecutePlanMaps): Execu
       layout: null,
       ...fillFields(maps, el.style.fill),
       ...(el.style.cornerRadius !== undefined ? { cornerRadius: el.style.cornerRadius } : {}),
+      ...(el.style.corners ? { corners: el.style.corners } : {}),
+      ...(el.style.borders ? { borders: el.style.borders } : {}),
+      ...(el.style.rotation !== undefined ? { rotation: el.style.rotation } : {}),
       ...(el.style.clip ? { clip: true } : {}),
       ...(el.style.shadow ? { shadow: el.style.shadow } : {}),
       ...(el.style.opacity !== undefined ? { opacity: el.style.opacity } : {}),
