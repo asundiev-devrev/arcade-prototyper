@@ -41,6 +41,7 @@ export interface PlanText {
   fontWeight?: number;
   fontFamily?: string;
   lineHeight?: number;
+  wrap?: true;
 }
 export interface PlanSvg {
   kind: "svg";
@@ -127,6 +128,11 @@ export function sljToExecutePlan(slj: SljDocument, maps: ExecutePlanMaps): Execu
       };
     }
     if (el.tag === "text" && el.style.characters !== undefined) {
+      // Detect if text was multiline in the browser
+      const isMultiline =
+        (el.style.lineHeight !== undefined && el.box.height >= el.style.lineHeight * 1.8) ||
+        (el.style.lineHeight === undefined && el.style.fontSize !== undefined && el.box.height >= el.style.fontSize * 2.2);
+
       return {
         kind: "text",
         box: el.box,
@@ -136,6 +142,7 @@ export function sljToExecutePlan(slj: SljDocument, maps: ExecutePlanMaps): Execu
         ...(el.style.fontWeight !== undefined ? { fontWeight: el.style.fontWeight } : {}),
         ...(el.style.fontFamily !== undefined ? { fontFamily: el.style.fontFamily } : {}),
         ...(el.style.lineHeight !== undefined ? { lineHeight: el.style.lineHeight } : {}),
+        ...(isMultiline ? { wrap: true } : {}),
       };
     }
     // Derive name: from element.name if present, else from layout

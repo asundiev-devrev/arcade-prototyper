@@ -196,7 +196,7 @@ async function build(node, parent, ox, oy) {
     try { t.characters = node.characters; } catch (e) {}
     if (node.fontSize) { try { t.fontSize = node.fontSize; } catch (e) {} }
     if (node.lineHeight) { try { t.lineHeight = { value: node.lineHeight, unit: "PIXELS" }; } catch (e) {} }
-    if (node.box.width > 0) { try { t.textAutoResize = "HEIGHT"; t.resize(node.box.width, t.height); } catch (e) {} }
+    if (node.wrap && node.box.width > 0) { try { t.textAutoResize = "HEIGHT"; t.resize(node.box.width, t.height); } catch (e) {} }
     t.x = node.box.x - ox; t.y = node.box.y - oy;
     if (node.fillVariableKey) { await bindFill(t, node.fillVariableKey); } else if (node.fillColor) { setSolid(t, node.fillColor); }
     return;
