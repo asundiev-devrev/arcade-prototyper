@@ -155,6 +155,20 @@ describe("buildExecuteScript", () => {
     expect(m2.lastInstance.primaryAxisSizingMode).toBe("FIXED");
     void docWith;
   });
+
+  it("emits runtime that applies text fontSize/color and frame cornerRadius", () => {
+    const slj: any = {
+      frame: { slug: "f", project: "p", width: 100, mode: "light" },
+      root: { kind: "element", tag: "div", box: { x:0,y:0,width:100,height:40 }, layout: null,
+        style: { fill: "#fff", cornerRadius: 8 },
+        children: [{ kind: "element", tag: "text", box: {x:0,y:0,width:40,height:16},
+          layout: null, children: [], style: { characters: "Hi", color: "#141a1a", fontSize: 13, fontWeight: 500, fontFamily: "Inter" } }] },
+    };
+    const MAPS = { findComponentMapping:()=>null, findIconSetKey:()=>null, findIconSetName:()=>null, tokenNameToVariableKey:()=>null };
+    const script = buildExecuteScript(slj, MAPS as any);
+    expect(script).toMatch(/t\.fontSize\s*=/);        // runtime sets text.fontSize
+    expect(script).toMatch(/f\.cornerRadius\s*=/);    // runtime applies frame.cornerRadius
+  });
 });
 
 /** Run the sandbox script (top-level await + return) against a figma mock. */

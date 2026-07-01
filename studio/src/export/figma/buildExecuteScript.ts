@@ -45,8 +45,8 @@ function pickVariant(set, variant) {
 
 async function ensureFont(fn) {
   var k = fn.family + "|" + fn.style;
-  if (fonts[k]) return true;
-  try { await figma.loadFontAsync(fn); fonts[k] = true; return true; } catch (e) { return false; }
+  if (fonts[k]) return fonts[k];
+  try { await figma.loadFontAsync(fn); fonts[k] = fn; return fn; } catch (e) { return null; }
 }
 
 async function setLabel(inst, propName, chars) {
@@ -148,9 +148,14 @@ async function build(node, parent, ox, oy) {
   if (node.kind === "text") {
     var t = figma.createText();
     parent.appendChild(t);
-    var okFont = await ensureFont({ family: "Inter", style: "Regular" });
-    if (okFont) { try { t.fontName = { family: "Inter", style: "Regular" }; } catch (e) {} }
+    var fam = node.fontFamily ? String(node.fontFamily).split(",")[0].replace(/["']/g,"").trim() : "Inter";
+    var wnum = node.fontWeight || 400;
+    var style = wnum >= 650 ? "Bold" : (wnum >= 550 ? "Semi Bold" : (wnum >= 450 ? "Medium" : "Regular"));
+    var loaded = await ensureFont({ family: fam, style: style });
+    if (!loaded) loaded = await ensureFont({ family: "Inter", style: "Regular" });
+    if (loaded) { try { t.fontName = loaded; } catch (e) {} }
     try { t.characters = node.characters; } catch (e) {}
+    if (node.fontSize) { try { t.fontSize = node.fontSize; } catch (e) {} }
     t.x = node.box.x - ox; t.y = node.box.y - oy;
     if (node.fillVariableKey) { await bindFill(t, node.fillVariableKey); } else if (node.fillColor) { setSolid(t, node.fillColor); }
     return;
@@ -160,6 +165,7 @@ async function build(node, parent, ox, oy) {
   f.fills = [];
   f.clipsContent = false;
   applyLayout(f, node.layout);
+  if (node.cornerRadius) { try { f.cornerRadius = node.cornerRadius; } catch (e) {} }
   parent.appendChild(f);
   try { f.resizeWithoutConstraints(Math.max(node.box.width, 1), Math.max(node.box.height, 1)); } catch (e) {}
   f.x = node.box.x - ox; f.y = node.box.y - oy;
