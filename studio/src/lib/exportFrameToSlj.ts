@@ -111,7 +111,7 @@ export function buildWalkContext(iframe: HTMLIFrameElement): WalkHandle {
     style: (f) => { const h = hostOf(f); return h ? win.getComputedStyle(h) : { getPropertyValue: () => "" }; },
     text: (f) => { const h = hostOf(f); const t = h?.textContent?.trim(); return t && t.length > 0 ? t : null; },
     directText: (f) => {
-      const h = hostOf(f);
+      const h = f.stateNode instanceof win.Element ? (f.stateNode as Element) : null;
       if (!h) return null;
       const parts: string[] = [];
       let box: Box | null = null;
