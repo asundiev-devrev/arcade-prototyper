@@ -18,6 +18,9 @@ export type FigmaComponentMapping = {
   figma: { componentSetKey: string; setName: string } | null;
   variants: VariantAxis[];
   textNode?: TextNodeHint;
+  /** Container components (Tabs, Modal, Popover, etc.) wrap arbitrary page content —
+   *  the walk must recurse into them as frames, never prune-with-text. */
+  container?: boolean;
   note: string;
 };
 

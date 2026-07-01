@@ -145,7 +145,12 @@ export function buildWalkContext(iframe: HTMLIFrameElement): WalkHandle {
     isComponent: (name) => {
       if (findIconMapping(name)) return "icon";
       const m = findComponentMapping(name);
-      if (m && m.status === "mapped") return "primitive";
+      if (m && m.status === "mapped") {
+        // Container components (Tabs, Modal, Popover) wrap arbitrary page content —
+        // recurse into them as frames, never prune-with-text.
+        if (m.container) return "composite";
+        return "primitive";
+      }
       return "composite";
     },
     resolveColor: (value) => resolveToken(tokenIndex, value),

@@ -80,6 +80,7 @@ export const COMPONENT_ENTRIES: FigmaComponentMapping[] = [
     generation: "0.3",
     figma: { componentSetKey: "ee83688019e9eaf97359ee86016e4b65a4db0d4c", setName: "Tabs" },
     variants: [],
+    container: true,
     note: "Unprefixed 'Tabs' (bare COMPONENT, no variant axes). Tab rows are '_Tab Item' (key 891e2f83…), handled per-item by #3.",
   },
   {
@@ -159,6 +160,7 @@ export const COMPONENT_ENTRIES: FigmaComponentMapping[] = [
     variants: [
       { prop: "size", figmaProp: "Size", valueMap: { sm: "Small", md: "Medium", lg: "Large" } },
     ],
+    container: true,
     note: "Owner-linked Modal (node 4602:43787) resolves to 'Modal Content' set. Axis Size.",
   },
   {
@@ -167,6 +169,7 @@ export const COMPONENT_ENTRIES: FigmaComponentMapping[] = [
     generation: "0.3",
     figma: { componentSetKey: "6a9dc99a75e632b481f5c0ac0c1fd7ba7ae03ebb", setName: "Popover" },
     variants: [],
+    container: true,
     note: "Owner-linked canonical Popover (node 4592:40710). NOTE: the set has internal Figma errors so variant defs aren't readable; instance with defaults. Re-verify variant axes when the set is fixed in 0.3.",
   },
   {
