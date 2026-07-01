@@ -67,6 +67,9 @@ export async function handleFigmaExport(slug: string, frame: string, deps: Figma
     return { status: 409, body: { error: { code: "no_bridge", message: "No Figma plugin connected. Open the Arcade export plugin in Figma, then try again." } } };
   }
 
+  // Deliberate double-build: buildExecuteScript re-derives this plan internally.
+  // Both calls are pure/synchronous over the same SLJ + const MAPS, so counts
+  // cannot drift from what executes; frames are small, so the cost is negligible.
   const plan = sljToExecutePlan(slj, MAPS);
   const counts = countPlanNodes(plan.root);
 
