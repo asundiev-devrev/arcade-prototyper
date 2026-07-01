@@ -122,9 +122,24 @@ export function walkFiber(rootFiber: MinimalFiber, ctx: WalkCtx): SljNode {
       return { kind: "element", tag: "text", box, layout: null, style: textStyle(ctx.reader.style(f), ctx.resolveColor, text), children: [] };
     }
 
-    const childNodes = kids.map(walk).filter((n): n is SljNode => n !== null);
-    const childBoxes = kids.map((k) => ctx.reader.box(k));
+    // Read style once, used for both text styling and element styling
     const s = ctx.reader.style(f);
+
+    const childNodes = kids.map(walk).filter((n): n is SljNode => n !== null);
+
+    // Mixed content: an element with BOTH direct text nodes and element
+    // children (e.g. <div>Let's prepare <span>next meeting.</span></div>).
+    // childFibers can't see HostText fibers, so read the DOM's direct text
+    // and keep it as a sibling text leaf — otherwise it is silently lost.
+    if (kids.length > 0) {
+      const direct = ctx.reader.directText(f);
+      if (direct) {
+        childNodes.unshift({ kind: "element", tag: "text", box: direct.box, layout: null,
+          style: textStyle(s, ctx.resolveColor, direct.text), children: [] });
+      }
+    }
+
+    const childBoxes = kids.map((k) => ctx.reader.box(k));
     const layout: Layout | null = inferLayout(readStyleLike(s), childBoxes);
     const cls = ctx.reader.hostClassName(f);
     return {

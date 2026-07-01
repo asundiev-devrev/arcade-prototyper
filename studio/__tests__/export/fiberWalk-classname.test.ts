@@ -15,6 +15,7 @@ function reader(): FiberReader {
     box: () => ({ x: 0, y: 0, width: 10, height: 10 }),
     style: () => ({ getPropertyValue: () => "" }),
     text: (f) => (f === textFiber ? "Hi" : null),
+    directText: () => null,
   };
 }
 const ctx = (): WalkCtx => ({

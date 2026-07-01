@@ -110,6 +110,34 @@ export function buildWalkContext(iframe: HTMLIFrameElement): WalkHandle {
     },
     style: (f) => { const h = hostOf(f); return h ? win.getComputedStyle(h) : { getPropertyValue: () => "" }; },
     text: (f) => { const h = hostOf(f); const t = h?.textContent?.trim(); return t && t.length > 0 ? t : null; },
+    directText: (f) => {
+      const h = hostOf(f);
+      if (!h) return null;
+      const parts: string[] = [];
+      let box: Box | null = null;
+      for (const n of Array.from(h.childNodes)) {
+        if (n.nodeType === 3 && n.textContent && n.textContent.trim().length > 0) {
+          parts.push(n.textContent.trim());
+          const range = h.ownerDocument.createRange();
+          range.selectNodeContents(n);
+          // JSDOM Range lacks getBoundingClientRect; in that env we'll use the
+          // host's box as the fallback below. Production iframe (real DOM) has it.
+          if (typeof range.getBoundingClientRect === "function") {
+            const r = range.getBoundingClientRect();
+            if (r.width > 0 || r.height > 0) {
+              box = box
+                ? { x: Math.min(box.x, r.x), y: Math.min(box.y, r.y),
+                    width: Math.max(box.x + box.width, r.x + r.width) - Math.min(box.x, r.x),
+                    height: Math.max(box.y + box.height, r.y + r.height) - Math.min(box.y, r.y) }
+                : { x: r.x, y: r.y, width: r.width, height: r.height };
+            }
+          }
+        }
+      }
+      if (parts.length === 0) return null;
+      const hb = h.getBoundingClientRect();
+      return { text: parts.join(" "), box: box ?? { x: hb.x, y: hb.y, width: hb.width, height: hb.height } };
+    },
   };
 
   const ctx: WalkCtx = {

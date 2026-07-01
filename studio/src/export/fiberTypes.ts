@@ -32,4 +32,8 @@ export interface FiberReader {
   style(f: MinimalFiber): { getPropertyValue(prop: string): string };
   /** Visible text directly in the fiber's host node subtree (for prune-with-text + text leaves). */
   text(f: MinimalFiber): string | null;
+  /** Direct child TEXT nodes of the host element (not descendants), concatenated
+   *  + trimmed, with their union bounding box. null when the element has no
+   *  own text. Lets the walk keep text that shares a parent with element kids. */
+  directText(f: MinimalFiber): { text: string; box: Box } | null;
 }

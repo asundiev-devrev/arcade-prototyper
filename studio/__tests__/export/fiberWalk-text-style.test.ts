@@ -17,6 +17,7 @@ function makeCtx(styleMap: Record<string,string>) {
       text: () => "Hello",
       style: () => fakeStyle(styleMap),
       hostClassName: () => null,
+      directText: () => null,
     },
   } as any;
 }

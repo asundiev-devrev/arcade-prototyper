@@ -24,6 +24,7 @@ const reader: FiberReader = {
   box: () => box,
   style: () => ({ getPropertyValue: (p) => (p === "display" ? "flex" : p === "flex-direction" ? "column" : p === "background-color" ? "rgba(0, 0, 0, 0)" : "0px") }),
   text: (f) => (f as any).__text ?? null,
+  directText: () => null,
 };
 const ctx: WalkCtx = {
   reader,
