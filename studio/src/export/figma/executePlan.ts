@@ -17,6 +17,7 @@ export interface PlanFrame {
   fillVariableKey?: string;
   fillColor?: string;
   cornerRadius?: number;
+  name?: string;
   children: PlanNode[];
 }
 export interface PlanInstance {
@@ -69,8 +70,16 @@ function fillFields(maps: ExecutePlanMaps, value: string | undefined): { fillVar
   return { fillColor: value };
 }
 
+function isPointlessWrapper(frame: PlanFrame, isRoot: boolean): boolean {
+  if (isRoot) return false; // never collapse root
+  if (frame.children.length !== 1) return false; // only single-child wrappers
+  // Check if it has any visual styling
+  if (frame.fillVariableKey || frame.fillColor || frame.cornerRadius) return false;
+  return true;
+}
+
 export function sljToExecutePlan(slj: SljDocument, maps: ExecutePlanMaps): ExecutePlan {
-  function walk(node: SljNode): PlanNode {
+  function walk(node: SljNode, depth: number): PlanNode {
     if (isComponentNode(node)) {
       const m = maps.findComponentMapping(node.component);
       if (m && m.status === "mapped" && m.figma) {
@@ -96,7 +105,7 @@ export function sljToExecutePlan(slj: SljDocument, maps: ExecutePlanMaps): Execu
         }
         return inst;
       }
-      return { kind: "frame", box: node.box, layout: node.layout, children: node.children.map(walk) };
+      return { kind: "frame", box: node.box, layout: node.layout, children: node.children.map((c) => walk(c, depth + 1)) };
     }
     const el = node as ElementNode;
     if (el.tag === "text" && el.style.characters !== undefined) {
@@ -111,14 +120,29 @@ export function sljToExecutePlan(slj: SljDocument, maps: ExecutePlanMaps): Execu
         ...(el.style.lineHeight !== undefined ? { lineHeight: el.style.lineHeight } : {}),
       };
     }
-    return {
+    // Derive name: from element.name if present, else from layout
+    const derivedName = el.name ?? (el.layout?.mode === "horizontal" ? "row" : el.layout ? "column" : undefined);
+    const frame: PlanFrame = {
       kind: "frame",
       box: el.box,
       layout: el.layout,
       ...fillFields(maps, el.style.fill),
       ...(el.style.cornerRadius !== undefined ? { cornerRadius: el.style.cornerRadius } : {}),
-      children: el.children.map(walk),
+      ...(derivedName ? { name: derivedName } : {}),
+      children: el.children.map((c) => walk(c, depth + 1)),
     };
+
+    // Collapse pointless wrappers
+    if (isPointlessWrapper(frame, depth === 0)) {
+      const child = frame.children[0];
+      // Transfer name to child if child is a frame without its own name
+      if (child.kind === "frame" && frame.name && !child.name) {
+        child.name = frame.name;
+      }
+      return child;
+    }
+
+    return frame;
   }
-  return { frame: slj.frame, root: walk(slj.root) };
+  return { frame: slj.frame, root: walk(slj.root, 0) };
 }

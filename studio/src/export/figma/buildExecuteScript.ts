@@ -170,6 +170,7 @@ async function build(node, parent, ox, oy) {
   }
   var f = figma.createFrame();
   f.name = "frame";
+  if (node.name) { try { f.name = node.name; } catch (e) {} }
   f.fills = [];
   f.clipsContent = false;
   applyLayout(f, node.layout);
@@ -210,6 +211,7 @@ var bounds = planBounds(__root, rOx, rOy, { w: 1, h: 1 });
 try { pageRoot.resizeWithoutConstraints(Math.max(bounds.w, 1), Math.max(bounds.h, 1)); } catch (e) {}
 if (__root.kind === "frame" && !__root.layout) {
   if (__root.fillVariableKey) { await bindFill(pageRoot, __root.fillVariableKey); } else if (__root.fillColor) { setSolid(pageRoot, __root.fillColor); }
+  made.frames++; // pageRoot merged with __root
   for (var i = 0; i < __root.children.length; i++) { await build(__root.children[i], pageRoot, rOx, rOy); }
 } else {
   await build(__root, pageRoot, rOx, rOy);

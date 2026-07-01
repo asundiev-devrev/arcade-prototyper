@@ -55,6 +55,10 @@ export interface ElementNode {
   /** The host element's literal class attribute, for JSX emission (Customize).
    *  Absent on text nodes and the Figma-export path (which ignores it). */
   className?: string;
+  /** Layer name for the Figma export: component name for composite/unknown
+   *  components, semantic tag name (h1-h6, nav, etc.), or derived from layout
+   *  (row/column). Absent for generic div/span/text. */
+  name?: string;
   box: Box;
   layout: Layout | null;
   style: ElementStyle;

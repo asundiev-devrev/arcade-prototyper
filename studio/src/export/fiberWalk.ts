@@ -108,7 +108,7 @@ export function walkFiber(rootFiber: MinimalFiber, ctx: WalkCtx): SljNode {
         const icon = ctx.iconNameFor(f) ?? undefined;
         return { kind: "component", component: nm, source: "arcade/components", props: scalarProps(f.memoizedProps), box, layout: null, children, icon };
       }
-      // composite / unknown → fall through to a frame that recurses
+      // composite / unknown → fall through to a frame that recurses (carry name)
     }
 
     // host element, or composite/unknown component treated as a frame
@@ -116,6 +116,10 @@ export function walkFiber(rootFiber: MinimalFiber, ctx: WalkCtx): SljNode {
     const box = ctx.reader.box(f);
     const text = ctx.reader.text(f);
     const kids = childFibers(f, ctx);
+
+    // Name for Figma layer: component name for composites, semantic tag for host elements
+    const SEMANTIC_TAGS = new Set(["h1", "h2", "h3", "h4", "h5", "h6", "p", "nav", "aside", "header", "footer", "main", "section", "ul", "ol", "li", "button", "a", "img", "form", "table"]);
+    const name = nm ?? (tag && SEMANTIC_TAGS.has(tag) ? tag : undefined);
 
     // text leaf: visible text + no element children
     if (text && kids.length === 0) {
@@ -146,6 +150,7 @@ export function walkFiber(rootFiber: MinimalFiber, ctx: WalkCtx): SljNode {
       kind: "element",
       tag: tag ?? "div",
       ...(cls ? { className: cls } : {}),
+      ...(name ? { name } : {}),
       box,
       layout,
       style: elementStyle(s, ctx.resolveColor),
