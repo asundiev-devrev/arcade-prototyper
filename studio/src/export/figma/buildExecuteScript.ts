@@ -13,10 +13,17 @@ var setCache = {};
 var fonts = {};
 var varCache = {};
 
+function withTimeout(p, ms) {
+  return Promise.race([
+    p,
+    new Promise(function (resolve) { setTimeout(function () { resolve(null); }, ms); })
+  ]);
+}
+
 async function getLocalSet(key, setName) {
   if (setCache[key] !== undefined) return setCache[key];
   var found = null;
-  try { found = await figma.importComponentSetByKeyAsync(key); } catch (e) { found = null; }
+  try { found = await withTimeout(figma.importComponentSetByKeyAsync(key), 4000); } catch (e) { found = null; }
   if (!found) {
     var all = figma.root.findAllWithCriteria ? figma.root.findAllWithCriteria({ types: ["COMPONENT_SET"] }) : [];
     for (var i = 0; i < all.length; i++) { if (all[i].key === key) { found = all[i]; break; } }
@@ -85,7 +92,7 @@ async function setIcon(inst, iconKey, iconName) {
 async function bindFill(node, varKey) {
   if (!("fills" in node)) return;
   var v = varCache[varKey];
-  if (v === undefined) { try { v = await figma.variables.importVariableByKeyAsync(varKey); } catch (e) { v = null; } varCache[varKey] = v; }
+  if (v === undefined) { try { v = await withTimeout(figma.variables.importVariableByKeyAsync(varKey), 4000); } catch (e) { v = null; } varCache[varKey] = v; }
   if (!v || v.resolvedType !== "COLOR") return;
   try {
     var base = (node.fills && node.fills[0]) ? Object.assign({}, node.fills[0]) : { type: "SOLID", color: { r: 0, g: 0, b: 0 } };

@@ -183,6 +183,64 @@ describe("buildExecuteScript", () => {
     expect(script).toContain('var famRaw = node.fontFamily ? String(node.fontFamily).split(",")[0].replace(/["\']/g,"").trim() : "";');
     expect(script).toContain('var fam = famRaw || "Inter";');
   });
+
+  it("completes within bounded time when library imports never settle", async () => {
+    // When the Arcade library is not enabled in a file, importComponentSetByKeyAsync
+    // and importVariableByKeyAsync never resolve or reject — they just hang. This
+    // test models that: mocks return promises that never settle, then asserts the
+    // runtime completes with failures counted (not an infinite hang).
+    const slj: SljDocument = {
+      slj: 1, frame: { slug: "test", project: "p", width: 400, mode: "light" },
+      root: {
+        kind: "element", tag: "div", box: { x: 0, y: 0, width: 400, height: 300 }, layout: null,
+        style: { fill: "var(--color-bg-primary)" },
+        children: [
+          {
+            kind: "component", component: "IconButton", source: "arcade/components",
+            props: {}, box: { x: 10, y: 10, width: 48, height: 48 }, layout: null, children: [],
+          },
+          {
+            kind: "element", tag: "div", box: { x: 10, y: 70, width: 100, height: 40 }, layout: null, style: {},
+            children: [{
+              kind: "element", tag: "text", box: { x: 10, y: 70, width: 100, height: 20 },
+              layout: null, style: { characters: "Hi", color: "var(--color-text)" }, children: [],
+            }],
+          },
+        ],
+      },
+    };
+    const mapping: FigmaComponentMapping = {
+      arcadeGen: "IconButton", status: "mapped", generation: "0.3",
+      figma: { componentSetKey: "NEVER_KEY", setName: "Never Set" }, variants: [], note: "",
+    };
+    const mapsWithToken: ExecutePlanMaps = {
+      findComponentMapping: (n) => (n === "IconButton" ? mapping : null),
+      findIconSetKey: () => null, findIconSetName: () => null,
+      tokenNameToVariableKey: (n) => (n === "--color-bg-primary" ? "BG_VAR_KEY" : n === "--color-text" ? "TXT_VAR_KEY" : null),
+    };
+
+    const code = buildExecuteScript(slj, mapsWithToken);
+    const mock = makeFigmaMock();
+    // Mock the import calls to return promises that NEVER settle (the exact bug condition).
+    mock.figma.importComponentSetByKeyAsync = () => new Promise(() => {});
+    mock.figma.variables = {
+      importVariableByKeyAsync: () => new Promise(() => {}),
+      setBoundVariableForPaint: (base: any) => base,
+    };
+
+    const start = Date.now();
+    const result = await runRuntime(code, mock.figma);
+    const elapsed = Date.now() - start;
+
+    // The runtime must complete in bounded time (well under the 30s bridge budget).
+    // Each import times out at 4s; 2 sequential calls = ~8s max. Allow 12s ceiling
+    // (generous margin for async overhead).
+    expect(elapsed).toBeLessThan(12000);
+    // The instance and text node failed to resolve (counted as fail/error).
+    expect(result.made.fail).toBeGreaterThanOrEqual(1);
+    // But the wrapper frame was still built (not a full hang).
+    expect(result.made.frames).toBeGreaterThan(0);
+  }, 15000); // vitest timeout: 15s (greater than the 12s assertion ceiling)
 });
 
 /** Run the sandbox script (top-level await + return) against a figma mock. */
