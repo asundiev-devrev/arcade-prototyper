@@ -4,7 +4,7 @@
 
 **Goal:** Rebuild a selected Studio frame in Figma with deterministic fidelity — real Arcade components + bound color variables for mapped nodes, faithful rendering (incl. text styling) for everything else — via a real, shippable transport.
 
-**Architecture:** Studio middleware serializes the live frame to SLJ, builds a Plugin-API script (`buildExecuteScript`, already on HEAD), and sends it over the existing `wsServer.ts` WebSocket to a **Figma bridge plugin we build in this plan** (the piece that was never built). Two deterministic tiers: Tier 1 (mapped components/tokens by key) + Tier 2 (faithful render from captured styles). No agent, no LLM in v1.
+**Architecture:** Studio middleware serializes the live frame to SLJ, builds a Plugin-API script (`buildExecuteScript`, already on HEAD), and sends it over the existing `wsServer.ts` WebSocket to a Figma **Desktop Bridge plugin**. v1 REUSES the existing, protocol-compatible `figma-console-mcp` bridge plugin (verified); a Studio-owned plugin is a v2 hardening item. Two deterministic tiers: Tier 1 (mapped components/tokens by key) + Tier 2 (faithful render from captured styles). No agent, no LLM in v1.
 
 **Tech Stack:** TypeScript, Vite middleware, `ws`, Figma Plugin API (plugin manifest + `code.js`), Vitest.
 
@@ -23,10 +23,8 @@
 
 ## File Structure
 
-- `studio/figma-plugin/manifest.json` — Figma plugin manifest (NEW). The bridge plugin users run in Figma Desktop.
-- `studio/figma-plugin/code.js` — plugin main thread: connects to `ws://localhost:9223-9232`, handles `EXECUTE_CODE`, evals, replies (NEW).
-- `studio/figma-plugin/ui.html` — minimal plugin UI hosting the WebSocket (Figma plugins can only open sockets from the UI iframe) (NEW).
-- `studio/src/export/slj.ts` — extend `ElementStyle` text fields already exist; no type change needed (VERIFY only).
+- Transport plugin — REUSED, not created: the existing `figma-console-mcp` Desktop Bridge (`~/.figma-console-mcp/plugin/`), protocol-compatible with Studio's `wsServer.ts` (verified). No plugin files created in v1.
+- `studio/src/export/slj.ts` — `ElementStyle` text fields already exist; no type change needed (VERIFY only).
 - `studio/src/export/fiberWalk.ts` — extend `elementStyle` + both text-leaf emissions to capture text color/size/weight/family/lineHeight (MODIFY `:29-38`, `:84-86`, `:101-102`).
 - `studio/src/export/figma/buildExecuteScript.ts` — apply captured text styling + cornerRadius in the runtime (MODIFY the text branch + frame branch).
 - `studio/src/export/figma/executePlan.ts` — carry text style + radius from SLJ into the plan (MODIFY `PlanText`, `walk`).
@@ -37,152 +35,46 @@
 
 ---
 
-## Task 1: Build the Figma bridge plugin (the transport)
+## Task 1: Confirm the transport works with the EXISTING bridge plugin
 
-**Files:**
-- Create: `studio/figma-plugin/manifest.json`
-- Create: `studio/figma-plugin/code.js`
-- Create: `studio/figma-plugin/ui.html`
-- Test: `studio/__tests__/figma-plugin/protocol.test.ts`
+> **Corrected from a prior draft:** a compatible bridge plugin ALREADY EXISTS —
+> the `figma-console-mcp` "Figma Desktop Bridge" (installed at
+> `~/.figma-console-mcp/plugin/`). Its ws handler speaks Studio's exact protocol
+> (VERIFIED: `ui-full.html` ~L891-912 does `if (!message.id || !message.method)
+> return; handler(message.params) → send {id,result}/{id,error}`, and its
+> `methodMap` has an `EXECUTE_CODE` handler that evals `params.code`). Studio's
+> `wsServer.ts` (`:44,:68`) sends `{type:"SERVER_HELLO"}` then
+> `{id, method:"EXECUTE_CODE", params:{code,timeout}}` and reads `{id,result|error}`.
+> They match. So v1 does NOT build a plugin — it REUSES this one. Owning a
+> minimal Studio-branded plugin (no third-party dependency, versioned with the
+> app) is a v2 hardening item, listed in "Out of scope".
+
+**Files:** none created. This task is a wiring/verification gate, not a build.
 
 **Interfaces:**
-- Consumes: Studio's `wsServer.ts` protocol (VERIFIED `wsServer.ts:44,68`): server→plugin `{type:"SERVER_HELLO",data}` on connect and `{id, method:"EXECUTE_CODE", params:{code,timeout}}` per run; plugin→server reply `{id, result}` or `{id, error}`.
-- Produces: a runnable Figma plugin that evals `code` against the `figma` global and returns its value.
+- Consumes: the existing Desktop Bridge plugin + Studio's `wsServer.ts` (unchanged).
+- Produces: a confirmed end-to-end transport for Tasks 2–5's output.
 
-- [ ] **Step 1: Write the failing protocol test**
+- [ ] **Step 1: Confirm Studio still starts the bridge server**
 
-The plugin's reply-shaping logic is pure and testable without Figma. Extract it into `code.js` as a named function the test can import via a small shim. First, the test:
+`figmaExport.ts` already calls `startBridgeServer()` and sends via `bridge.runCode(...)` (VERIFIED `figmaExport.ts:53-55,67-70`). No code change. Read those lines to confirm the send path is intact.
 
-```ts
-// studio/__tests__/figma-plugin/protocol.test.ts
-import { describe, it, expect } from "vitest";
-import { shapeReply } from "../../figma-plugin/replyShape.mjs";
+- [ ] **Step 2: Manual transport gate (needs Figma Desktop)**
 
-describe("bridge plugin reply shaping", () => {
-  it("wraps a successful result under the request id", () => {
-    expect(shapeReply("7", { made: { instances: 3 } }, null))
-      .toEqual({ id: "7", result: { made: { instances: 3 } } });
-  });
-  it("wraps an error message under the request id", () => {
-    expect(shapeReply("7", null, new Error("boom")))
-      .toEqual({ id: "7", error: "boom" });
-  });
-  it("ignores messages without EXECUTE_CODE method upstream (returns null shape)", () => {
-    // shapeReply is only called for EXECUTE_CODE; guard is in code.js. Sanity:
-    expect(shapeReply("1", undefined, null)).toEqual({ id: "1", result: undefined });
-  });
-});
-```
+1. `pnpm run studio` (from repo root).
+2. In Figma Desktop, open the target design file → Plugins → Development → run
+   **Figma Desktop Bridge** (the `figma-console-mcp` plugin). It scans ports
+   9223–9232 and connects to Studio's server.
+3. Confirm connection: Studio's `bridge.isConnected()` returns true (the export
+   handler stops returning `no_bridge`). A quick check — trigger an export of any
+   frame; a `no_bridge` error means the plugin isn't connected, anything else
+   means the transport is live.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 3: No commit (no code changed).** Proceed to Task 2.
 
-Run: `pnpm run studio:test __tests__/figma-plugin/protocol.test.ts`
-Expected: FAIL — cannot find `../../figma-plugin/replyShape.mjs`.
-
-- [ ] **Step 3: Create the shared reply-shaping helper**
-
-```js
-// studio/figma-plugin/replyShape.mjs
-// Pure helper shared by code.js (via inline copy) and the unit test.
-export function shapeReply(id, result, error) {
-  if (error) return { id: id, error: error && error.message ? error.message : String(error) };
-  return { id: id, result: result };
-}
-```
-
-- [ ] **Step 4: Create the plugin manifest**
-
-```json
-// studio/figma-plugin/manifest.json
-{
-  "name": "Arcade Studio Export Bridge",
-  "id": "arcade-studio-export-bridge",
-  "api": "1.0.0",
-  "main": "code.js",
-  "ui": "ui.html",
-  "editorType": ["figma"],
-  "documentAccess": "dynamic-page",
-  "networkAccess": {
-    "allowedDomains": ["http://localhost:9223","http://localhost:9224","http://localhost:9225","http://localhost:9226","http://localhost:9227","http://localhost:9228","http://localhost:9229","http://localhost:9230","http://localhost:9231","http://localhost:9232"]
-  }
-}
-```
-
-- [ ] **Step 5: Create the plugin main thread (`code.js`)**
-
-The socket lives in the UI iframe (Figma plugins can only open WebSockets from UI). `code.js` relays: UI→main forwards `EXECUTE_CODE` codes to eval; main→UI sends replies back to the socket.
-
-```js
-// studio/figma-plugin/code.js
-figma.showUI(__html__, { visible: true, width: 240, height: 120 });
-
-// Reply shaping (mirror of replyShape.mjs — kept inline; Figma plugins can't import).
-function shapeReply(id, result, error) {
-  if (error) return { id: id, error: error && error.message ? error.message : String(error) };
-  return { id: id, result: result };
-}
-
-figma.ui.onmessage = async (msg) => {
-  if (!msg || msg.type !== "EXECUTE_CODE") return;
-  var reply;
-  try {
-    // Figma sandbox forbids the AsyncFunction constructor; eval an async IIFE.
-    var wrapped = "(async function(){\n" + msg.code + "\n})()";
-    var out = await eval(wrapped);
-    reply = shapeReply(msg.id, out, null);
-  } catch (e) {
-    reply = shapeReply(msg.id, null, e);
-  }
-  figma.ui.postMessage({ type: "REPLY", payload: reply });
-};
-```
-
-- [ ] **Step 6: Create the plugin UI (`ui.html`) — the WebSocket host**
-
-```html
-<!-- studio/figma-plugin/ui.html -->
-<!DOCTYPE html><html><body>
-<div id="s" style="font:12px sans-serif;padding:8px">Connecting to Arcade Studio…</div>
-<script>
-var PORTS = [9223,9224,9225,9226,9227,9228,9229,9230,9231,9232];
-var ws = null, statusEl = document.getElementById("s");
-function setStatus(t){ statusEl.textContent = t; }
-function tryPort(i){
-  if (i >= PORTS.length) { setStatus("Studio not found. Is it running?"); setTimeout(function(){tryPort(0);}, 3000); return; }
-  var sock = new WebSocket("ws://localhost:" + PORTS[i]);
-  sock.onopen = function(){ ws = sock; setStatus("Connected to Arcade Studio ✓"); };
-  sock.onclose = function(){ if (ws === sock) ws = null; tryPort(i+1); };
-  sock.onerror = function(){ try{sock.close();}catch(e){} };
-  sock.onmessage = function(ev){
-    var msg; try { msg = JSON.parse(ev.data); } catch(e){ return; }
-    if (msg.type === "SERVER_HELLO") return;
-    if (msg.method === "EXECUTE_CODE") {
-      parent.postMessage({ pluginMessage: { type: "EXECUTE_CODE", id: msg.id, code: msg.params.code } }, "*");
-    }
-  };
-}
-window.onmessage = function(ev){
-  var pm = ev.data && ev.data.pluginMessage;
-  if (pm && pm.type === "REPLY" && ws && ws.readyState === 1) ws.send(JSON.stringify(pm.payload));
-};
-tryPort(0);
-</script>
-</body></html>
-```
-
-- [ ] **Step 7: Run the protocol test to verify it passes**
-
-Run: `pnpm run studio:test __tests__/figma-plugin/protocol.test.ts`
-Expected: PASS (3 tests).
-
-- [ ] **Step 8: Commit**
-
-```bash
-git add studio/figma-plugin/manifest.json studio/figma-plugin/code.js studio/figma-plugin/ui.html studio/figma-plugin/replyShape.mjs studio/__tests__/figma-plugin/protocol.test.ts
-git commit -m "feat(studio/figma-export): add Figma bridge plugin for export transport"
-```
-
-**Manual gate (after Task 5, needs Figma Desktop):** Import `studio/figma-plugin/manifest.json` via Plugins → Development → Import plugin from manifest; Run it; confirm "Connected to Arcade Studio ✓" while `pnpm run studio` is up.
+**Dependency note for the plan executor:** every "Manual gate" below assumes this
+existing plugin is running and connected. If it isn't, exports fail with
+`no_bridge` — that's a setup issue, not a code bug.
 
 ---
 
@@ -694,17 +586,19 @@ git commit -m "feat(studio/figma-export): DS-gap counts + typed export telemetry
 ```markdown
 # Export to Figma — one-time setup
 
-Export runs through a small Figma plugin that talks to Studio on your machine.
+Export runs through a small Figma "Desktop Bridge" plugin that talks to Studio
+on your machine. v1 reuses the existing `figma-console-mcp` bridge plugin (a
+Studio-owned, branded plugin is a v2 hardening item).
 
 1. Open Figma Desktop and the file you want to export into.
-2. Plugins → Development → Import plugin from manifest… → choose
-   `studio/figma-plugin/manifest.json` (ships inside the app bundle).
-3. Run **Arcade Studio Export Bridge**. It shows "Connected to Arcade Studio ✓".
+2. Run the **Figma Desktop Bridge** plugin (Plugins → Development). If not yet
+   installed, import its manifest from `~/.figma-console-mcp/plugin/manifest.json`.
+3. It scans ports 9223–9232 and connects to Studio automatically.
 4. In Studio, open a frame → Export to Figma. The frame rebuilds in Figma using
    real Arcade components where mapped, faithful layers everywhere else.
 
-Keep the plugin running while you export. If it says "Studio not found", make
-sure Studio is open, then it retries automatically.
+Keep the plugin running while you export. If Studio isn't found, start it, then
+the plugin retries automatically.
 ```
 
 - [ ] **Step 2: Run the full test suite**
@@ -729,7 +623,7 @@ These are the go/no-go checks the whole effort exists to satisfy. Do them in ord
 - [ ] **G2 — Tier-1 fidelity:** In the exported frame, spot-check that Button/Chat Item/Bubble/Icon Button/Menu are **real component instances** (select one → it shows a main-component link), not raw frames.
 - [ ] **G3 — Tier-2 fidelity:** Confirm text renders at the right **size/weight/color** (not all Inter Regular black), and unmapped containers carry their fills/radii — no empty gray boxes.
 - [ ] **G4 — Side-by-side:** Screenshot the Figma result next to the Studio render of the same frame. This is the artifact the spec's success bar requires. Judge fidelity; log gaps (mixed-color text runs, gradients, images are known v1 limitations).
-- [ ] **G5 — Packaged app:** Repeat G1 from the packaged `.app` (not just `pnpm run studio`) to confirm the bundled plugin manifest path + ws-bridge survive packaging.
+- [ ] **G5 — Packaged app:** Repeat G1 from the packaged `.app` (not just `pnpm run studio`) to confirm the ws-bridge server starts and the bridge plugin connects to it under packaging (the plugin is external/user-run in v1, so this checks Studio's server side, not a bundled manifest).
 
 ---
 
@@ -738,3 +632,8 @@ These are the go/no-go checks the whole effort exists to satisfy. Do them in ord
 - Multi-frame annotated flow (arrows, interaction annotations, overview) + any agent.
 - Mixed-color/multi-weight text runs within one node, gradients, image fills, box-shadow, per-side borders.
 - Growing the component/token map beyond current coverage + auto re-resolution of stale keys.
+- **Studio-owned bridge plugin:** v1 reuses the existing `figma-console-mcp`
+  Desktop Bridge (protocol-compatible, verified). v2 should ship a minimal,
+  Studio-branded, versioned-with-the-app bridge plugin to remove the third-party
+  dependency and drift risk — NOT because one must be built to function, but for
+  ownership/distribution in the packaged product.
