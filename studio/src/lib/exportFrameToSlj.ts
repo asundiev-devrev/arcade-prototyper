@@ -28,6 +28,10 @@ const SKIPPABLE = new Set([
 export interface WalkHandle {
   /** The HostRoot fiber reached from the iframe's #root container. */
   rootFiber: MinimalFiber;
+  /** Design-token name → resolved raw color value, snapshot from :root. The
+   *  Figma consumer uses this as the raw paint floor when a token has no
+   *  bindable Figma variable. */
+  tokenValues: Record<string, string>;
   /** Walk an arbitrary subtree fiber into an SLJ node (uses the shared ctx). */
   walkFrom(fiber: MinimalFiber): SljNode;
   /** Find the fiber for a named component instance whose call-site is line:col.
@@ -47,6 +51,19 @@ export interface WalkHandle {
  * container's `__reactContainer$<id>` key points at the live committed HostRoot
  * fiber — the correct, complete tree.
  */
+/** Snapshot every design-token custom property on :root as name→resolved value
+ *  (e.g. "--stroke-neutral-subtle" → "rgb(230, 230, 230)"). This is the raw
+ *  color floor the Figma consumer paints when a token's variable can't be bound.
+ *  Exported so the export path can attach it to the SLJ document. */
+export function captureTokenValues(rootStyle: CSSStyleDeclaration): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const name of tokenNamesFromRoot(rootStyle)) {
+    const v = rootStyle.getPropertyValue(name).trim();
+    if (v) out[name] = v;
+  }
+  return out;
+}
+
 export function buildWalkContext(iframe: HTMLIFrameElement): WalkHandle {
   const doc = iframe.contentDocument;
   const win = iframe.contentWindow as (Window & typeof globalThis) | null;
@@ -242,6 +259,26 @@ export function buildWalkContext(iframe: HTMLIFrameElement): WalkHandle {
       }
       return null;
     },
+    // Pixel floor: the first icon-mapped descendant's serialized SVG + box, for
+    // rendering when a mapped instance can't be created. Finds the icon-named
+    // fiber (as iconNameFor does), then serializes its svg host via the reader.
+    iconSvgFor: (f: MinimalFiber): { markup: string; box: Box } | null => {
+      const queue: (MinimalFiber | null)[] = [f.child];
+      let guard = 0;
+      while (queue.length && guard++ < 200) {
+        const n = queue.shift();
+        if (!n) continue;
+        const name = fiberName(n);
+        if (name && findIconMapping(name)) {
+          const markup = reader.svgMarkup(n);
+          if (markup) return { markup, box: reader.box(n) };
+          return null;
+        }
+        if (n.child) queue.push(n.child);
+        if (n.sibling) queue.push(n.sibling);
+      }
+      return null;
+    },
   };
 
   // Locate a named-component fiber by name (line:col disambiguates duplicates).
@@ -273,6 +310,7 @@ export function buildWalkContext(iframe: HTMLIFrameElement): WalkHandle {
 
   return {
     rootFiber,
+    tokenValues: captureTokenValues(rootStyle),
     walkFrom: (fiber) => walkFiber(fiber, ctx),
     findComponentFiber,
   };
@@ -307,6 +345,7 @@ export async function exportFrameToSlj(args: ExportArgs): Promise<SljDocument> {
   const slj: SljDocument = {
     slj: SLJ_VERSION,
     frame: { slug: args.frameSlug, project: args.projectSlug, width: args.width, mode: args.mode },
+    tokens: handle.tokenValues,
     root,
   };
 

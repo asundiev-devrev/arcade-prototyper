@@ -124,6 +124,69 @@ describe("buildExecuteScript — per-side borders", () => {
   });
 });
 
+describe("buildExecuteScript — border color variable binding (bug class: black-defaulted tokens)", () => {
+  const TOKEN_MAPS: ExecutePlanMaps = {
+    findComponentMapping: () => null,
+    findIconSetKey: () => null,
+    findIconSetName: () => null,
+    tokenNameToVariableKey: (t: string) => (t === "--stroke-neutral-subtle" ? "VarKey:stroke" : null),
+  };
+
+  function makeBindingMock() {
+    const base = makeFigmaMock();
+    let bound = false;
+    base.figma.variables = {
+      async importVariableByKeyAsync(key: string) { return { id: "id:" + key, key, resolvedType: "COLOR" }; },
+      setBoundVariableForPaint: (paint: any, _field: string, v: any) => { bound = true; return { ...paint, boundVariables: { color: { id: v.id } } }; },
+    };
+    // NOTE: base.pageRoot is a getter — spreading base would lose it. Return
+    // an object that forwards figma + a live pageRoot getter.
+    return {
+      figma: base.figma,
+      get pageRoot() { return base.pageRoot; },
+      wasBound: () => bound,
+    };
+  }
+
+  // SLJ carrying the token→raw dict so the plan emits a raw floor + key.
+  const tokSlj = (): SljDocument => ({
+    slj: 1, frame: { slug: "f", project: "p", width: 400, mode: "light" },
+    tokens: { "--stroke-neutral-subtle": "rgb(230, 230, 230)" },
+    root: {
+      kind: "element", tag: "div", box: { x: 0, y: 0, width: 256, height: 900 }, layout: null, style: {},
+      children: [{
+        kind: "element", tag: "div", box: { x: 0, y: 0, width: 256, height: 900 }, layout: null,
+        style: { borders: { right: { color: "--stroke-neutral-subtle", width: 1 } } }, children: [],
+      }],
+    },
+  });
+
+  it("binds a stroke to the color variable when import succeeds", async () => {
+    const mock = makeBindingMock();
+    await runRuntime(buildExecuteScript(tokSlj(), TOKEN_MAPS), mock.figma);
+    const child = mock.pageRoot.children[0];
+    expect(child.strokes).toHaveLength(1);
+    expect(child.strokes[0].boundVariables?.color?.id).toBe("id:VarKey:stroke");
+    expect(mock.wasBound()).toBe(true);
+    expect(child.strokeRightWeight).toBe(1);
+  });
+
+  it("FLOOR: when the variable import FAILS, the stroke keeps its true raw color (never black)", async () => {
+    const mock = makeFigmaMock();
+    // Variables API unavailable / import returns null (e.g. non-Enterprise plan).
+    mock.figma.variables = { async importVariableByKeyAsync() { return null; }, setBoundVariableForPaint: (p: any) => p };
+    await runRuntime(buildExecuteScript(tokSlj(), TOKEN_MAPS), mock.figma);
+    const child = mock.pageRoot.children[0];
+    expect(child.strokes).toHaveLength(1);
+    const c = child.strokes[0].color;
+    // rgb(230,230,230) → ~0.902, NOT black (0).
+    expect(c.r).toBeCloseTo(230 / 255, 2);
+    expect(c.g).toBeCloseTo(230 / 255, 2);
+    expect(c.b).toBeCloseTo(230 / 255, 2);
+    expect(child.strokes[0].boundVariables).toBeUndefined();
+  });
+});
+
 describe("buildExecuteScript — per-corner radius", () => {
   it("applies individual corner radii", async () => {
     const slj: SljDocument = {

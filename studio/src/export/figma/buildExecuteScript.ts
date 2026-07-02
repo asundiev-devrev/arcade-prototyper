@@ -108,11 +108,24 @@ async function setIcon(inst, iconKey, iconName) {
   if (target) { try { child.swapComponent(target); } catch (e) {} }
 }
 
-async function bindFill(node, varKey) {
-  if (!("fills" in node)) return;
+async function importColorVar(varKey) {
   var v = varCache[varKey];
   if (v === undefined) { try { v = await withTimeout(figma.variables.importVariableByKeyAsync(varKey), IMPORT_TIMEOUT_MS); } catch (e) { v = null; } varCache[varKey] = v; }
-  if (!v || v.resolvedType !== "COLOR") return;
+  return (v && v.resolvedType === "COLOR") ? v : null;
+}
+
+// Paint a node's fill with a raw color FLOOR, then bind a color variable on top
+// when one imports. rawColor is the true resolved color (always painted if
+// present); varKey adds the DS variable binding for fidelity. If the variable
+// can't be imported (Variables API is Enterprise-only), the raw floor remains —
+// a token fill NEVER degrades to black/invisible. At least one of rawColor/
+// varKey should be present.
+async function bindFill(node, varKey, rawColor) {
+  if (!("fills" in node)) return;
+  if (rawColor) setSolid(node, rawColor); // establish the raw floor first
+  if (!varKey) return;
+  var v = await importColorVar(varKey);
+  if (!v) return; // keep the raw floor
   try {
     var base = (node.fills && node.fills[0]) ? Object.assign({}, node.fills[0]) : { type: "SOLID", color: { r: 0, g: 0, b: 0 } };
     node.fills = [figma.variables.setBoundVariableForPaint(base, "color", v)];
@@ -167,10 +180,10 @@ function applyCorners(f, node) {
   if (node.cornerRadius) { try { f.cornerRadius = node.cornerRadius; } catch (e) {} }
 }
 
-function applyBorders(f, borders) {
+async function applyBorders(f, borders) {
   if (!borders || !("strokes" in f)) return;
   var sides = ["top", "right", "bottom", "left"];
-  var firstColor = null;
+  var firstSide = null;
   var maxW = 0;
   var weights = { top: 0, right: 0, bottom: 0, left: 0 };
   for (var i = 0; i < sides.length; i++) {
@@ -178,12 +191,35 @@ function applyBorders(f, borders) {
     if (side && side.width > 0) {
       weights[sides[i]] = side.width;
       if (side.width > maxW) maxW = side.width;
-      if (!firstColor) firstColor = side.color;
+      if (!firstSide) firstSide = side;
     }
   }
-  if (!firstColor) return;
-  var col = parseColor(firstColor);
-  try { f.strokes = [{ type: "SOLID", color: { r: col.r, g: col.g, b: col.b }, opacity: col.a }]; } catch (e) { return; }
+  // Skip entirely when there is no paintable color AND no bindable variable —
+  // a width-only side must NOT fall through to the opaque-black default.
+  if (!firstSide) return;
+  if (!firstSide.color && !firstSide.colorVariableKey) return;
+  // Raw color FLOOR: paint the true color first (so a failed variable import
+  // never leaves a black border). parseColor only ever sees a real rgb/hex here
+  // because the plan strips bare "--token" strings out of the color field.
+  var paint = null;
+  if (firstSide.color) {
+    var col = parseColor(firstSide.color);
+    paint = { type: "SOLID", color: { r: col.r, g: col.g, b: col.b }, opacity: col.a };
+  }
+  if (firstSide.colorVariableKey) {
+    var v = await importColorVar(firstSide.colorVariableKey);
+    if (v) {
+      // Bind onto the raw floor when we have one; else start from a neutral base
+      // (the bound variable supplies the real color in the target file).
+      var base = paint || { type: "SOLID", color: { r: 0, g: 0, b: 0 }, opacity: 1 };
+      try { paint = figma.variables.setBoundVariableForPaint(base, "color", v); made.binds++; } catch (e1) {}
+    }
+  }
+  // No raw color AND no successful bind (legacy token-only SLJ on a plan without
+  // Variables) → skip the stroke rather than paint opaque black. Black is never
+  // emitted by construction.
+  if (!paint) return;
+  try { f.strokes = [paint]; } catch (e) { return; }
   // Try per-side weights; fall back to a uniform strokeWeight (max side) if the
   // individual setters throw (older API / node type without side weights).
   var perSideOk = true;
@@ -207,9 +243,21 @@ function applyLayout(frame, layout) {
 async function build(node, parent, ox, oy) {
   if (node.kind === "instance") {
     var set = await getLocalSet(node.componentSetKey, node.setName);
-    if (!set) { made.fail++; if (errs.length < 12) errs.push("set " + node.setName); return; }
+    // Cold-import wall: the component set can't be resolved. Render the pixel
+    // FLOOR (faithful box + label + icon) instead of drawing nothing, so a
+    // failed component never vanishes. No instance node is created here, so
+    // there is never a double-render.
+    if (!set) {
+      made.fail++; if (errs.length < 12) errs.push("set " + node.setName);
+      if (node.fallback) { await build(node.fallback, parent, ox, oy); }
+      return;
+    }
     var comp = pickVariant(set, node.variant ? node.variant : null);
-    if (!comp) { made.fail++; return; }
+    if (!comp) {
+      made.fail++;
+      if (node.fallback) { await build(node.fallback, parent, ox, oy); }
+      return;
+    }
     var inst = comp.createInstance();
     parent.appendChild(inst);
     // Resize to the DOM box. For TEXT-BEARING instances (Bubble, etc.) the
@@ -287,7 +335,7 @@ async function build(node, parent, ox, oy) {
     if (node.lineHeight) { try { t.lineHeight = { value: node.lineHeight, unit: "PIXELS" }; } catch (e) {} }
     if (node.wrap && node.box.width > 0) { try { t.textAutoResize = "HEIGHT"; t.resize(node.box.width, t.height); } catch (e) {} }
     t.x = node.box.x - ox; t.y = node.box.y - oy;
-    if (node.fillVariableKey) { await bindFill(t, node.fillVariableKey); } else if (node.fillColor) { setSolid(t, node.fillColor); }
+    if (node.fillVariableKey || node.fillColor) { await bindFill(t, node.fillVariableKey, node.fillColor); }
     return;
   }
   var f = figma.createFrame();
@@ -297,7 +345,7 @@ async function build(node, parent, ox, oy) {
   f.clipsContent = node.clip ? true : false;
   applyLayout(f, node.layout);
   applyCorners(f, node);
-  applyBorders(f, node.borders);
+  await applyBorders(f, node.borders);
   if (node.shadow) {
     var sc = parseColor(node.shadow.color);
     f.effects = [{ type: "DROP_SHADOW", color: { r: sc.r, g: sc.g, b: sc.b, a: sc.a }, offset: { x: node.shadow.x, y: node.shadow.y }, radius: node.shadow.blur, spread: node.shadow.spread, visible: true, blendMode: "NORMAL" }];
@@ -309,7 +357,7 @@ async function build(node, parent, ox, oy) {
   // CSS rotate() is clockwise-positive; Figma rotation is counterclockwise-positive.
   // Apply after positioning; small illustration cards read as layered/rotated.
   if (node.rotation) { try { f.rotation = -node.rotation; } catch (e) {} }
-  if (node.fillVariableKey) { await bindFill(f, node.fillVariableKey); } else if (node.fillColor) { setSolid(f, node.fillColor); }
+  if (node.fillVariableKey || node.fillColor) { await bindFill(f, node.fillVariableKey, node.fillColor); }
   made.frames++;
   var childOx = node.layout ? ox : node.box.x;
   var childOy = node.layout ? oy : node.box.y;
@@ -353,9 +401,9 @@ var rOx = __root.box.x, rOy = __root.box.y;
 var bounds = planBounds(__root, rOx, rOy, { w: 1, h: 1 });
 try { pageRoot.resizeWithoutConstraints(Math.max(bounds.w, 1), Math.max(bounds.h, 1)); } catch (e) {}
 if (__root.kind === "frame" && !__root.layout) {
-  if (__root.fillVariableKey) { await bindFill(pageRoot, __root.fillVariableKey); } else if (__root.fillColor) { setSolid(pageRoot, __root.fillColor); }
+  if (__root.fillVariableKey || __root.fillColor) { await bindFill(pageRoot, __root.fillVariableKey, __root.fillColor); }
   applyCorners(pageRoot, __root);
-  applyBorders(pageRoot, __root.borders);
+  await applyBorders(pageRoot, __root.borders);
   made.frames++; // pageRoot merged with __root
   for (var i = 0; i < __root.children.length; i++) { await build(__root.children[i], pageRoot, rOx, rOy); }
 } else {

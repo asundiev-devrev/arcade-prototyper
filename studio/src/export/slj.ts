@@ -75,6 +75,17 @@ export interface ComponentNode {
    *  IconButton's "ChevronLeftSmall"), captured at prune time. Absent for
    *  components with no recognized icon. */
   icon?: string;
+  /** PIXEL FLOOR for mapped components. The component's OWN visual style (fill,
+   *  border, radius, shadow — NOT its internal subtree, which is pruned) so that
+   *  when the real Figma instance can't be created (the cold-import wall), the
+   *  runtime still paints a faithful box instead of drawing nothing. Absent when
+   *  the primitive had no visual style of its own. */
+  fallbackStyle?: ElementStyle;
+  /** Serialized SVG of the glyph inside this component, for the same pixel floor
+   *  (icons render via createNodeFromSvg). The `icon` name is for DS icon-swap on
+   *  a successful instance; this markup is for the fallback render. Absent when
+   *  no icon or markup too large. */
+  iconSvg?: { markup: string; box: Box };
 }
 
 export interface ElementNode {
@@ -98,6 +109,13 @@ export type SljNode = ComponentNode | ElementNode;
 export interface SljDocument {
   slj: typeof SLJ_VERSION;
   frame: { slug: string; project: string; width: number; mode: "light" | "dark" };
+  /** Token name → its resolved raw color value (e.g. "--stroke-neutral-subtle"
+   *  → "rgb(230, 230, 230)"), captured once from :root. Lets the plan always
+   *  emit a paintable RAW fallback color alongside any Figma-variable key, so a
+   *  token whose variable can't be imported (Variables API is Enterprise-only)
+   *  still renders its true color instead of black/invisible. Absent on legacy
+   *  SLJs (the plan then falls back to width-only-skip, never black). */
+  tokens?: Record<string, string>;
   root: SljNode;
 }
 

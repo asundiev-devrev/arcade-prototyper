@@ -77,6 +77,39 @@ describe("sljToExecutePlan", () => {
     expect((plan.root as any).characters).toBe("Sessions");
   });
 
+  it("attaches a pixel-floor fallback frame (box + fill + label + icon svg) to a mapped instance", () => {
+    const plan = sljToExecutePlan(doc({
+      kind: "component", component: "ChatBubble", source: "arcade/components",
+      props: { variant: "sender" }, box: { x: 10, y: 20, width: 120, height: 40 }, layout: null,
+      children: [{ kind: "element", tag: "text", box: { x: 14, y: 24, width: 80, height: 16 }, layout: null, style: { characters: "Hi", color: "rgb(0,0,0)" }, children: [] }],
+      fallbackStyle: { fill: "rgb(240, 240, 240)", cornerRadius: 12 },
+      iconSvg: { markup: "<svg><path d='M0 0'/></svg>", box: { x: 90, y: 24, width: 16, height: 16 } },
+    } as any), maps);
+    const inst: any = plan.root;
+    expect(inst.kind).toBe("instance");
+    const fb = inst.fallback;
+    expect(fb).toBeDefined();
+    expect(fb.kind).toBe("frame");
+    expect(fb.box).toEqual({ x: 10, y: 20, width: 120, height: 40 });
+    expect(fb.fillColor).toBe("rgb(240, 240, 240)");
+    expect(fb.cornerRadius).toBe(12);
+    // label text leaf + icon svg leaf
+    const kinds = fb.children.map((c: any) => c.kind).sort();
+    expect(kinds).toEqual(["svg", "text"]);
+    const txt = fb.children.find((c: any) => c.kind === "text");
+    expect(txt.characters).toBe("Hi");
+    const svg = fb.children.find((c: any) => c.kind === "svg");
+    expect(svg.markup).toContain("<svg>");
+  });
+
+  it("omits the fallback when a mapped component has no paintable style, label, or icon", () => {
+    const plan = sljToExecutePlan(doc({
+      kind: "component", component: "IconButton", source: "arcade/components",
+      props: {}, box: { x: 0, y: 0, width: 20, height: 20 }, layout: null, children: [],
+    }), maps);
+    expect((plan.root as any).fallback).toBeUndefined();
+  });
+
   it("an unmapped component degrades to a frame (so its children still build)", () => {
     const plan = sljToExecutePlan(doc({
       kind: "component", component: "MysteryComposite", source: "arcade-prototypes",

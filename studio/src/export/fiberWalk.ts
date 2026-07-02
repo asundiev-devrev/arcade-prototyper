@@ -1,5 +1,5 @@
 // studio/src/export/fiberWalk.ts
-import type { ElementStyle, Layout, SljNode } from "./slj";
+import type { Box, ElementStyle, Layout, SljNode } from "./slj";
 import { inferLayout, type StyleLike } from "./inferLayout";
 import { fiberName, type FiberReader, type MinimalFiber } from "./fiberTypes";
 
@@ -15,6 +15,10 @@ export interface WalkCtx {
    *  first icon-mapped descendant (e.g. "ChevronLeftSmall"), or null. Lets the
    *  walk record the glyph identity without un-pruning the subtree. */
   iconNameFor: (f: MinimalFiber) => string | null;
+  /** For a pruned mapped primitive, the serialized SVG markup + box of the first
+   *  icon-bearing descendant, for the fallback pixel floor (rendered when the
+   *  real instance can't be created). null when no svg/icon or markup too large. */
+  iconSvgFor?: (f: MinimalFiber) => { markup: string; box: Box } | null;
 }
 
 const TRANSPARENT = new Set(["rgba(0, 0, 0, 0)", "transparent", "rgba(0,0,0,0)"]);
@@ -185,7 +189,16 @@ export function walkFiber(rootFiber: MinimalFiber, ctx: WalkCtx): SljNode {
           ? [{ kind: "element", tag: "text", box, layout: null, style: textStyle(ctx.reader.style(f), ctx.resolveColor, text), children: [] }]
           : [];
         const icon = ctx.iconNameFor(f) ?? undefined;
-        return { kind: "component", component: nm, source: "arcade/components", props: scalarProps(f.memoizedProps), box, layout: null, children, icon };
+        // Pixel floor: capture the primitive's OWN visual style + its glyph SVG so
+        // the runtime can render a faithful box if the DS instance can't import.
+        const fallbackStyle = elementStyle(ctx.reader.style(f), ctx.resolveColor);
+        const iconSvg = ctx.iconSvgFor?.(f) ?? null;
+        return {
+          kind: "component", component: nm, source: "arcade/components",
+          props: scalarProps(f.memoizedProps), box, layout: null, children, icon,
+          ...(Object.keys(fallbackStyle).length ? { fallbackStyle } : {}),
+          ...(iconSvg ? { iconSvg } : {}),
+        };
       }
       // composite / unknown → fall through to a frame that recurses (carry name)
     }
