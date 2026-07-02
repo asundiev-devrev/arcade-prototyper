@@ -82,7 +82,7 @@ describe("buildHiFiDirective", () => {
 
   it("names the real figmanage read with the exact file key + node id", () => {
     const out = buildHiFiDirective(ctx);
-    expect(out).toContain("figmanage reading get-nodes --depth 4 ABC123 3532:40693");
+    expect(out).toContain("figmanage reading get-nodes --depth 2 ABC123 3532:40693");
   });
 
   it("tells the agent the summary is lossy and the PNG wins", () => {
@@ -102,7 +102,7 @@ describe("buildHiFiDirective", () => {
 
   it("when no reference PNG is attached, tells the agent to export one itself", () => {
     const out = buildHiFiDirective({ ...ctx, hasReferencePng: false });
-    expect(out).toContain("figmanage export nodes --format png --scale 2 --json ABC123 3532:40693");
+    expect(out).toContain("figmanage export nodes --format png --scale 1 --json ABC123 3532:40693");
   });
 
   it("when a reference PNG IS attached, points at the attached PNG (no export step)", () => {
@@ -127,5 +127,30 @@ describe("buildHiFiDirective", () => {
     // component names+props — the directive must point the agent at them.
     expect(out).toMatch(/@\[/);
     expect(out).toMatch(/component/i);
+  });
+
+  it("uses cap-safe self-fetch: scale-1 PNG, not scale-2 (avoids 30s export timeout)", () => {
+    const out = buildHiFiDirective({ ...ctx, hasReferencePng: false });
+    expect(out).toContain("--scale 1");
+    expect(out).not.toContain("--scale 2");
+  });
+
+  it("uses a shallow depth read and reads large output in chunks (avoids the 256KB read cap)", () => {
+    const out = buildHiFiDirective(ctx);
+    expect(out).toMatch(/get-nodes --depth 2/);
+    expect(out).not.toMatch(/get-nodes --depth 4/);
+    // Names the offset/limit-or-grep escape for persisted-to-file output.
+    expect(out).toMatch(/offset|limit|grep/i);
+  });
+
+  it("splits roles: text comes from the node tree characters, PNG is layout/color", () => {
+    const out = buildHiFiDirective(ctx);
+    expect(out).toMatch(/characters/);
+    expect(out).toMatch(/do not .*(OCR|read text).*(from|off).*PNG/i);
+  });
+
+  it("tells the agent not to fabricate on fetch failure", () => {
+    const out = buildHiFiDirective({ ...ctx, hasReferencePng: false });
+    expect(out).toMatch(/retry shallower|faithful partial|do NOT .*invent/i);
   });
 });
