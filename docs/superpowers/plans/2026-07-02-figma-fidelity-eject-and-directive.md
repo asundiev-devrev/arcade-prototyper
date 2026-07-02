@@ -118,7 +118,9 @@ Replace the node-tree read line (currently `figmanage reading get-nodes --depth 
     "partial beats a confident fabrication.",
 ```
 
-Then update the pre-existing test that pins `--scale 2` (fidelityDirective.test.ts, the `"when no reference PNG is attached, tells the agent to export one itself"` test at ~line 103–106): change its expectation from `--scale 2` to `--scale 1`:
+Then update **BOTH** pre-existing tests that will break — the plan MUST touch both or Step 4's "Expected: PASS (all)" gate fails on an unexplained red:
+
+**(a)** The `--scale 2` test (`"when no reference PNG is attached, tells the agent to export one itself"`, ~line 103–106): change `--scale 2` to `--scale 1`:
 
 ```ts
   it("when no reference PNG is attached, tells the agent to export one itself", () => {
@@ -127,10 +129,19 @@ Then update the pre-existing test that pins `--scale 2` (fidelityDirective.test.
   });
 ```
 
+**(b)** The depth-4 test (`"names the real figmanage read with the exact file key + node id"`, at **lines 83–86** — verified present) currently asserts `--depth 4`. Change it to `--depth 2`:
+
+```ts
+  it("names the real figmanage read with the exact file key + node id", () => {
+    const out = buildHiFiDirective(ctx);
+    expect(out).toContain("figmanage reading get-nodes --depth 2 ABC123 3532:40693");
+  });
+```
+
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `pnpm run studio:test __tests__/server/figma/fidelityDirective.test.ts`
-Expected: PASS (all, including the updated scale-1 test).
+Expected: PASS (all, including BOTH updated tests — scale-1 and depth-2).
 
 - [ ] **Step 5: Commit**
 
@@ -159,15 +170,32 @@ Fixes defect A + review S3.1. On a digest miss the function bails before appendi
 - Consumes: `detectHiFiIntent` from `../figma/fidelityDirective` (add to the existing import on line 22: `import { shouldUseHiFi, detectHiFiIntent, buildHiFiDirective } from "../figma/fidelityDirective";`), `buildHiFiDirective` (already imported).
 - Produces: `enrichPromptWithFigmaContext` — same signature — now always appends `<high_fidelity_mode>` when `detectHiFiIntent(prompt)` is true, even when the digest missed.
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Write the failing test — with a MANDATORY digest-miss mock (review S3)**
 
-The existing test file mocks `runFigmaKitEmitBranch` and drives real `/api/chat`. For a unit-level assertion on the enriched prompt, add a test that captures what the claude branch received. The fake CLI already writes its argv/prompt to `ARCADE_TEST_PROMPT_OUT` (see chat-figma-context.test.ts setup). Add to that file a new describe block:
+The existing test file mocks `runFigmaKitEmitBranch` and drives real `/api/chat`. The fake CLI writes its full argv (which includes the `-p <prompt>` the claude branch built) to `ARCADE_TEST_PROMPT_OUT` (verified: `fixtures/fake-claude.sh` does `printf "%s\n" "$@" > "$ARCADE_TEST_PROMPT_OUT"`), so `sent` contains the enriched prompt.
+
+**Do NOT rely on `figmanage` being absent to force a digest miss** (adversarial S3): `getFigmaIngest()` is a module-level singleton that freezes its disk dir on first construction, and on a box where figmanage IS installed the "miss" precondition evaporates and this test silently asserts the wrong branch. Mock the ingest module explicitly, mirroring how the file already mocks `runFigmaKitEmitBranch`. Add near the top of `chat-figma-context.test.ts`, BEFORE the `import { chatMiddleware }` line (vi.mock is hoisted; the import must bind the stub):
+
+```ts
+// Force a deterministic Figma-digest MISS regardless of whether figmanage is
+// installed/logged-in on the runner. getCached → undefined, phase-1 → not-ok.
+vi.mock("../../../server/figmaIngest", () => ({
+  getFigmaIngest: async () => ({
+    getCached: () => undefined,
+    getPhase1Pending: () => undefined,
+    ingestPhase1: async () => ({ ok: false, reason: "test: forced miss", source: {} }),
+    ingest: async () => ({ ok: false, reason: "test: forced miss", source: {} }),
+  }),
+}));
+```
+
+Then add the new describe block:
 
 ```ts
 describe("hi-fi directive survives a Figma digest miss", () => {
   it("appends <high_fidelity_mode> even when no digest/PNG is available", async () => {
-    // No figma-ingest cache + no figmanage in the test env → digest misses.
-    // A precise-intent prompt with a URL must STILL carry the directive.
+    // Ingest is mocked to miss (above). A precise-intent prompt with a URL must
+    // STILL carry the directive — this is the defect-A regression guard.
     const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
     const prompt =
       "Implement this precisely https://www.figma.com/design/k/x?node-id=1-2";
@@ -182,7 +210,7 @@ describe("hi-fi directive survives a Figma digest miss", () => {
 });
 ```
 
-Note: this requires the digest to actually miss in the test env. Confirm `figmanage` is not on PATH in CI/test (the ingest `getNode` throws → phase-1 fails → `result` null). If the env has a real figmanage, stub `getFigmaIngest` the way the file already stubs `runFigmaKitEmitBranch` (vi.mock), returning an object whose `getCached`→undefined and `ingestPhase1`→`{ok:false}`.
+Note on scope: this `vi.mock` applies to the WHOLE file. The file's existing kit-emit routing tests don't touch `getFigmaIngest` (kit-emit is mocked separately and the deterministic branch fetches figmanage directly, not via the ingest singleton), so mocking ingest-miss is safe for them — but run the full file in Step 4 to confirm no existing test depended on a real ingest.
 
 - [ ] **Step 2: Run to verify it fails**
 
@@ -573,44 +601,79 @@ export async function ejectComposite(name: string, destDir: string): Promise<str
 Run: `pnpm run studio:test __tests__/server/figma/ejectComposite.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Add the RENDER check (review M4)**
+- [ ] **Step 5: Add the "rewritten output is frame-legal + compiles" check (review M4) — in the SAME node file**
 
-Append to `studio/__tests__/server/figma/ejectComposite.test.ts` a jsdom render of the ejected file, resolving its `arcade-prototypes` / `arcade/components` specifiers to the real modules via vitest aliases. Because the ejected file is emitted to a temp dir (not under Vite), import it through a small dynamic-import shim OR assert render of the ORIGINAL composite with rewritten imports mapped. Simplest robust check: transform the rewritten source with esbuild and assert it compiles AND that a smoke-mount of the real `ComputerScene` (imported from the barrel, which uses the same wrapper resolution) renders without throwing:
+This is the M4 guard done correctly. The earlier plan draft rendered `<ComputerScene>` from the **dist barrel** (`prototype-kit` → `dist/index.js`) — that exercises the *shipped* composite with its ORIGINAL `@xorkavi/arcade-gen` imports, NOT the rewritten output, so it proves nothing about the rewrite (adversarial S1). And a `@testing-library/react` import in this `// @vitest-environment node` file pulls arcade-gen's Highcharts modules, which crash under the `node` env and take down the whole file (adversarial B1).
+
+So: keep the M4 guard as a pure-node check on the **rewritten string** — assert every import specifier is frame-legal and the rewritten source compiles via esbuild (types stripped, syntax verified). Append to `studio/__tests__/server/figma/ejectComposite.test.ts` (still `// @vitest-environment node`):
 
 ```ts
-// @vitest-environment jsdom (add a second test file if mixing envs is awkward)
-import { render, cleanup } from "@testing-library/react";
-import * as React from "react";
-import { ComputerScene } from "../../../prototype-kit";
+import { transform } from "esbuild";
 
-it("the composite renders under the frame's arcade/components wrapper resolution", () => {
-  // Guards review M4: arcade/components swaps size-narrowed Button/IconButton/
-  // ChatBubble. Rendering proves the ejected import target is behaviorally OK,
-  // not just parseable.
-  const { container } = render(<ComputerScene state="empty" />);
-  expect(container.firstChild).toBeTruthy();
-  cleanup();
+describe("ejected ComputerScene is frame-legal and compiles", () => {
+  it("has only frame-legal import specifiers (react / arcade / arcade-prototypes)", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "eject-legal-"));
+    try {
+      const out = fs.readFileSync(await ejectComposite("ComputerScene", dir), "utf8");
+      const specifiers = [...out.matchAll(/from\s+["']([^"']+)["']/g)].map((m) => m[1]);
+      const ALLOWED = new Set(["react", "arcade", "arcade/components", "arcade-prototypes"]);
+      const illegal = specifiers.filter((s) => !ALLOWED.has(s));
+      expect(illegal).toEqual([]);   // no ./*.js, no @xorkavi/arcade-gen left behind
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("the rewritten source compiles (syntax valid after rewrite)", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "eject-compile-"));
+    try {
+      const out = fs.readFileSync(await ejectComposite("ComputerScene", dir), "utf8");
+      // esbuild strips types + verifies syntax; loader tsx handles JSX. Throws on bad syntax.
+      const res = await transform(out, { loader: "tsx", jsx: "automatic" });
+      expect(res.code.length).toBeGreaterThan(0);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 ```
 
-If mixing `node` + `jsdom` in one file is awkward, put this render test in a sibling `studio/__tests__/server/figma/ejectComposite-render.test.tsx` with `// @vitest-environment jsdom`.
+- [ ] **Step 5b: Add a MANDATORY separate jsdom smoke-render file (review B1)**
+
+The behavioral render MUST live in its own file with `// @vitest-environment jsdom` — it CANNOT be appended to the node file above (mixing envs there is a suite-load crash, not a hedge). This is a smoke test that the arcade/components wrapper resolution mounts; it renders the barrel `ComputerScene` (the rewritten-file behavior is covered by Step 5's compile check + the render proves the wrapper swap is sound). Create `studio/__tests__/server/figma/ejectComposite-render.test.tsx`:
+
+```tsx
+// @vitest-environment jsdom
+import { describe, it, expect, afterEach } from "vitest";
+import * as React from "react";
+import { render, cleanup } from "@testing-library/react";
+import { ComputerScene } from "../../../prototype-kit";
+
+afterEach(() => cleanup());
+
+describe("ComputerScene renders under the frame's arcade/components resolution", () => {
+  it("mounts the empty state without throwing (wrapper swap is sound — review M4)", () => {
+    const { container } = render(<ComputerScene state="empty" />);
+    expect(container.firstChild).toBeTruthy();
+  });
+});
+```
 
 - [ ] **Step 6: Run + commit**
 
-Run: `pnpm run studio:test __tests__/server/figma/ejectComposite`
-Expected: PASS.
+Run: `pnpm run studio:test __tests__/server/figma/ejectComposite.test.ts __tests__/server/figma/ejectComposite-render.test.tsx`
+Expected: PASS (both files).
 
 ```bash
 cd /Users/andrey.sundiev/arcade-prototyper
-git add studio/server/figma/ejectComposite.ts "studio/__tests__/server/figma/ejectComposite.test.ts"
-# include the render sibling if created:
-git add studio/__tests__/server/figma/ejectComposite-render.test.tsx 2>/dev/null || true
+git add studio/server/figma/ejectComposite.ts studio/__tests__/server/figma/ejectComposite.test.ts studio/__tests__/server/figma/ejectComposite-render.test.tsx
 git commit -m "feat(studio/figma): eject-to-source helper (import-rewrite + copy)
 
 Copies a kit composite's real source into a frame dir with imports rewritten
 to frame specifiers (arcade-prototypes / arcade/components), preserving 'as'
-aliases + type qualifiers. Render test guards the arcade/components wrapper
-swap (review M4).
+aliases + type qualifiers. Node test asserts the rewritten output is
+frame-legal + compiles (review M4/S1); separate jsdom file smoke-renders the
+composite to guard the arcade/components wrapper swap (review B1).
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
@@ -629,7 +692,7 @@ The agent chooses the frame slug mid-turn, so Studio can't eject into `frames/<s
 
 - [ ] **Step 1: Write the failing test**
 
-Add to `chat-figma-context.test.ts`:
+Add to `chat-figma-context.test.ts` (the file-level `getFigmaIngest` miss-mock from Task 2 is already in place and is fine here — eject does NOT depend on the digest, only on `detectComposeBaseIntent` + the claude branch running):
 
 ```ts
 describe("eject-to-source on a compose-base turn", () => {
@@ -937,4 +1000,30 @@ If it matches: capture the screenshot to the spec's acceptance section / handoff
 
 **Type consistency:** `detectComposeBaseIntent`/`extractComposeBaseComposite`/`EJECTABLE_COMPOSITES` (Task 3) consumed verbatim in Task 5. `rewriteCompositeSource`/`ejectComposite` (Task 4) consumed in Task 5. `detectHiFiIntent`/`buildHiFiDirective` (Task 1/existing) consumed in Task 2. Names match across tasks.
 
-**Known risk to watch during execution:** Task 2's test assumes the digest MISSES in the test env (no `figmanage`). If the env resolves a real digest, the test must mock `getFigmaIngest` (noted in Task 2 Step 1). Task 5's `.eject` dir must not trip the project watcher (Task 5 Step 5 verifies).
+## Adversarial review of THIS PLAN — findings incorporated (2026-07-02)
+
+An unbiased adversarial agent executed the plan's own snippets against the real files.
+Two blocking, two serious; all fixed in-plan. (Several sharp attacks were falsified by the
+agent — the multi-line-import regex works, `.eject` triggers no watcher/Tailwind hazard,
+line refs had NOT drifted, bare `<ComputerScene>` renders under jsdom without a provider.)
+
+- **B1 (blocking, fixed):** appending the jsdom render test to the `node`-env eject file is
+  a suite-LOAD crash (arcade-gen Highcharts import dies under `node`), taking down the pure
+  unit tests too. → Task 4 Step 5b makes the render a MANDATORY separate `.tsx` file with
+  `// @vitest-environment jsdom`; the hedge is gone.
+- **B2 (blocking, fixed):** Task 1 changed `--depth 4`→`--depth 2` but the plan only updated
+  ONE pre-existing test; a SECOND (`fidelityDirective.test.ts:83-86`, pins depth-4) would go
+  red at Step 4's "Expected: PASS (all)". → Task 1 Step 3 now updates BOTH tests.
+- **S1 (serious, fixed):** the old render test rendered the DIST barrel (original imports),
+  proving nothing about the rewritten output. → Task 4 Step 5 now asserts the *rewritten*
+  string is frame-legal (no `./*.js`, no `@xorkavi/arcade-gen`) + compiles via esbuild; the
+  jsdom render (5b) is a separate wrapper-swap smoke test.
+- **S3 (serious, fixed):** Task 2/5 tests silently relied on `figmanage` being ABSENT to
+  force a digest miss (fragile: `getFigmaIngest` is a frozen singleton; on a box with
+  figmanage the tests assert the wrong branch). → Task 2 Step 1 now mandates an explicit
+  file-level `vi.mock("../../../server/figmaIngest", …)` miss-mock; Task 5 notes it reuses it.
+
+**Known risk still to watch during execution:** Task 5's `.eject` dir must not trip the
+project watcher — adversarial verified it does NOT (watcher gates full-reload on
+`dir === "frames"`, Tailwind `@source` scans only `**/frames/**`), so Task 5 Step 5 is a
+belt-and-suspenders confirmation, not load-bearing.
