@@ -35,6 +35,17 @@ vi.mock("../../../server/figma/kitEmitBranch", () => ({
   runFigmaKitEmitBranch: kitEmitSpy,
 }));
 
+// Force a deterministic Figma-digest MISS regardless of whether figmanage is
+// installed/logged-in on the runner. getCached → undefined, phase-1 → not-ok.
+vi.mock("../../../server/figmaIngest", () => ({
+  getFigmaIngest: async () => ({
+    getCached: () => undefined,
+    getPhase1Pending: () => undefined,
+    ingestPhase1: async () => ({ ok: false, reason: "test: forced miss", source: {} }),
+    ingest: async () => ({ ok: false, reason: "test: forced miss", source: {} }),
+  }),
+}));
+
 // Import AFTER the mock so chat.ts binds the stub.
 import { chatMiddleware } from "../../../server/middleware/chat";
 
@@ -154,5 +165,22 @@ describe("/api/chat Figma-URL routing (kit-emit branch)", () => {
     await post(p.slug, "https://www.figma.com/design/k/x?node-id=1-2");
     const stream = await drainStream(p.slug);
     expect(stream).toContain("Importing the Figma design (stub)");
+  });
+});
+
+describe("hi-fi directive survives a Figma digest miss", () => {
+  it("appends <high_fidelity_mode> even when no digest/PNG is available", async () => {
+    // Ingest is mocked to miss (above). A precise-intent prompt with a URL must
+    // STILL carry the directive — this is the defect-A regression guard.
+    const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
+    const prompt =
+      "Implement this precisely https://www.figma.com/design/k/x?node-id=1-2";
+    const res = await post(p.slug, prompt);
+    expect(res.status).toBe(202);
+    await drainStream(p.slug);
+
+    // Claude branch ran (not kit-emit — precise intent routes to generator).
+    const sent = fs.readFileSync(process.env.ARCADE_TEST_PROMPT_OUT!, "utf8");
+    expect(sent).toContain("<high_fidelity_mode>");
   });
 });

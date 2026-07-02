@@ -19,7 +19,7 @@ import { parseFigmaUrl } from "../figmaCli";
 import { frameDir } from "../paths";
 import { getFigmaIngest } from "../figmaIngest";
 import { buildFigmaContextBlock } from "../figma/promptBlock";
-import { shouldUseHiFi, buildHiFiDirective } from "../figma/fidelityDirective";
+import { shouldUseHiFi, detectHiFiIntent, buildHiFiDirective } from "../figma/fidelityDirective";
 import { shouldGenerateFromFigma } from "../figma/generationIntent";
 import { runFigmaKitEmitBranch } from "../figma/kitEmitBranch";
 import { getFigmaSystemIngest, type FigmaSystemIngest } from "../figmaSystemIngest";
@@ -467,9 +467,27 @@ async function enrichPromptWithFigmaContext(
       result = rest;
     }
   }
+  // Directive decision is CONTEXT-FREE: it depends only on the prompt + URL,
+  // both of which we have even when the digest missed. This is the fix for the
+  // "agent gets a naked prompt with no faithfulness directive on a slow/failed
+  // Figma fetch" bug (review S3.1). Do NOT gate this on shouldUseHiFi — that
+  // needs digest-derived {classified, hasHighConfidenceComposite} which is
+  // absent on a miss. shouldUseHiFi stays only as a digest-SUCCESS upgrade.
+  const explicitHiFi = detectHiFiIntent(prompt);
+
   if (!result) {
     console.warn("[studio] figma ingest miss; proceeding without structured context");
-    return { prompt, images };
+    if (!explicitHiFi) return { prompt, images };
+    // No digest, but the designer asked for a precise build: append the
+    // directive with hasReferencePng:false so it tells the agent to export +
+    // read its own (cap-safe) PNG.
+    onNarration?.("high-fidelity mode (no cached design context — agent will fetch)");
+    const directive = buildHiFiDirective({
+      fileKey: parsed.fileId,
+      nodeId: parsed.nodeId,
+      hasReferencePng: false,
+    });
+    return { prompt: `${prompt}\n\n${directive}`, images };
   }
 
   const block = buildFigmaContextBlock(result);
@@ -480,15 +498,11 @@ async function enrichPromptWithFigmaContext(
     parts.push(`${result.diagnostics.warnings.length} diagnostic${result.diagnostics.warnings.length > 1 ? "s" : ""}`);
   }
 
-  // High-fidelity mode: append a directive that suspends the speed shortcuts
-  // and forces a real tree read + PNG-as-ground-truth + self-review. Fires on
-  // explicit precise-implementation intent OR on a novel design (classifier
-  // ran and found no high-confidence template to iterate on) — the latter is
-  // the "exploring a new direction" case that otherwise churns to Cursor.
-  // Ordinary "sketch me X" prompts that DO match a template keep the fast path.
+  // Digest succeeded. Append the directive when EITHER explicit intent OR the
+  // novel-design upgrade (classifier ran, no high-confidence template) fires.
   const hasHighConfidenceComposite = result.composites.some((c) => c.confidence === "high");
   let block2 = block;
-  if (shouldUseHiFi(prompt, { classified: result.classified, hasHighConfidenceComposite })) {
+  if (explicitHiFi || shouldUseHiFi(prompt, { classified: result.classified, hasHighConfidenceComposite })) {
     parts.push("high-fidelity mode");
     block2 = `${block}\n\n${buildHiFiDirective({
       fileKey: parsed.fileId,
