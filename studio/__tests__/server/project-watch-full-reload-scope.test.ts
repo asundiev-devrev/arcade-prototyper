@@ -78,7 +78,7 @@ function setupServerStub() {
 }
 
 describe("projectWatchPlugin full-reload scope", () => {
-  it("broadcasts full-reload only for frames/<id>/index.tsx writes", async () => {
+  it("broadcasts full-reload for frame-dir source writes, not scaffold writes", async () => {
     const { server, sent } = setupServerStub();
     const plugin = projectWatchPlugin();
     plugin.configureServer!.call({} as never, server as never);
@@ -90,7 +90,8 @@ describe("projectWatchPlugin full-reload scope", () => {
       recursive: true,
     });
 
-    // Scaffold writes — must NOT trigger full-reload.
+    // Scaffold writes — must NOT trigger full-reload (they raced the chat POST
+    // in the 0.23.6 regression; theme-overrides.css HMRs on its own).
     const scaffoldPaths = [
       path.join(TMP_ROOT, slug, "theme-overrides.css"),
       path.join(TMP_ROOT, slug, "shared", "devrev.ts"),
@@ -107,6 +108,28 @@ describe("projectWatchPlugin full-reload scope", () => {
     await fakeWatcher.handler!(
       "add",
       path.join(TMP_ROOT, slug, "frames", "f1", "index.tsx"),
+    );
+    expect(sent).toEqual([{ type: "full-reload", path: "*" }]);
+  });
+
+  it("broadcasts full-reload when an ejected sibling module is written to a frame dir", async () => {
+    // Regression for the eject workflow: the agent writes index.tsx (with
+    // `import { ComputerScene } from "./ComputerScene"`) a beat BEFORE it copies
+    // ComputerScene.tsx next to it. index.tsx's resolution of ./ComputerScene
+    // failed and Vite cached the miss; reloading only on index.tsx left the
+    // "[vite:import-analysis] Failed to resolve ./ComputerScene" overlay stuck
+    // until a manual restart. A sibling .tsx write must also reload so the
+    // arrival re-runs resolution.
+    const { server, sent } = setupServerStub();
+    const plugin = projectWatchPlugin();
+    plugin.configureServer!.call({} as never, server as never);
+
+    const slug = "p-eject";
+    await fs.mkdir(path.join(TMP_ROOT, slug, "frames", "f1"), { recursive: true });
+
+    await fakeWatcher.handler!(
+      "add",
+      path.join(TMP_ROOT, slug, "frames", "f1", "ComputerScene.tsx"),
     );
     expect(sent).toEqual([{ type: "full-reload", path: "*" }]);
   });

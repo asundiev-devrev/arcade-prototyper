@@ -23,16 +23,27 @@ export function projectWatchPlugin(): Plugin {
         const slug = parts[0];
         if (!slug || !/^[a-z0-9][a-z0-9-]{0,62}$/i.test(slug)) return;
 
-        // Frame index write: `<slug>/frames/<frameId>/index.tsx`.
-        // parts === [slug, "frames", frameId, "index.tsx"]
+        // Frame source write: `<slug>/frames/<frameId>/<file>.tsx|.ts`.
+        // parts === [slug, "frames", frameId, "<file>.tsx"]
+        // This covers index.tsx AND sibling modules the index imports — an
+        // ejected composite (`frames/<id>/ComputerScene.tsx`, imported by
+        // index.tsx via `./ComputerScene`) is written a beat AFTER index.tsx,
+        // so index.tsx's `./ComputerScene` resolution failed and Vite cached
+        // the miss. Reloading only on index.tsx left that stale failure on
+        // screen ("[vite:import-analysis] Failed to resolve ./ComputerScene")
+        // until a manual restart. Reload on any frame-dir source file so the
+        // sibling's arrival re-runs resolution. Still scoped to files DIRECTLY
+        // in a frame dir (parts.length === 4) — NOT theme-overrides.css,
+        // shared/*.ts, or root scaffold files, whose reloads used to race the
+        // chat POST (see 0.23.6 regression / project-watch-full-reload-scope).
         const dir = parts[1];
         const frameId = parts[2];
         const fileName = parts[3];
-        const isFrameIndex =
+        const isFrameSource =
           dir === "frames" &&
           !!frameId &&
-          fileName === "index.tsx" &&
-          parts.length === 4;
+          parts.length === 4 &&
+          /\.(tsx|ts)$/.test(fileName);
 
         // Reconcile project frame state on any tsx/ts/css change (covers
         // shared/*.ts deletes, theme-overrides.css edits, frame
@@ -53,7 +64,7 @@ export function projectWatchPlugin(): Plugin {
           // started server-side — leaving the chat pane idle until the agent
           // happened to flush a frame much later. Vite's normal HMR handles
           // the rest (CSS hot-replaces; shared/*.ts is module-graph HMR).
-          if (isFrameIndex) {
+          if (isFrameSource) {
             server.ws.send({ type: "full-reload", path: "*" });
           }
         }
