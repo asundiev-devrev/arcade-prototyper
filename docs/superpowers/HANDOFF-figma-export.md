@@ -1,40 +1,129 @@
-# Handoff — Figma Export (pixel-first v1)
+# Handoff — Figma Export (pixel-fidelity)
 
-**Date:** 2026-07-02
-**Branch:** `feat/figma-export-v1` (pushed to origin, 29 commits ahead of `main`)
-**Status:** Working end-to-end. Live-verified on real DevRev frames. NOT merged.
-**Full suite:** 1822 passed / 2 skipped. `pnpm run studio:test`.
+**Last updated:** 2026-07-02 (session 2)
+**Branch:** `feat/figma-export-v1` (pushed; 30 commits ahead of `main`; latest `39f009c`)
+**Status:** Working end-to-end. NOT merged. **Step-1 pixel fidelity NOT yet achieved
+— this is the whole remaining job.** Full suite: 1832 passed / 2 skipped
+(`pnpm run studio:test`).
 
-Read this, then the ledger `.superpowers/sdd/progress.md` (per-round detail), then
-the original spec/plan if you need the deep history:
-- Spec: `docs/superpowers/specs/2026-06-30-figma-export-agentic-design.md`
-- Plan: `docs/superpowers/plans/2026-07-01-figma-export-v1-deterministic.md`
-
----
-
-## TL;DR — where this landed
-
-"Export to Figma" now rebuilds a selected Studio frame in Figma with **real
-pixel fidelity + real components layered on top**. Last live export of the
-ComputerScene chat frame: **94 frames, 34 real component instances, 10 vector
-icons, 35 bound color variables, 0 failures** — and the screenshot reads as the
-actual product (clean panels, real avatars, borders, chat bubbles, composer with
-placeholder). It is at or above the html.to.design browser-extension clone on
-everything except one illustration (see Known Gaps), and it carries what the
-clone fundamentally cannot: real DS component instances + bound color variables.
-
-**The architecture pivoted mid-session** (owner-approved). The original plan was
-"deterministic two-tier: mapped components + inferred-auto-layout faithful
-render." That produced exports that were *neither* pixel-faithful *nor* reliably
-componentized — auto-layout inference re-flowed absolutely-positioned content and
-overlapped it. The owner's bar became: **be no worse than the dumb html.to.design
-clone (pixel-perfect absolute positioning), then progressively replace pixels
-with real components.** That is now the design. Auto-layout inference is captured
-in the SLJ but NOT consumed (reserved for a v2 with a verify loop).
+> **READ THIS FIRST — the mandate (do not drift from it):**
+>
+> 1. **Pixel-perfect FIRST.** Build a pixel-perfect snapshot of the Arcade Studio
+>    frame (like html.to.design / Figma's own clone extension do). Only once that
+>    is perfected do we progressively replace pixels with mapped components.
+> 2. **Component mapping is deterministic and comes LATER.** We don't guess Studio→
+>    library mappings; we map them directly. But not until pixels are right.
+> 3. **The bar is html.to.design.** If we can't match that clone's pixel fidelity,
+>    we shouldn't ship this at all. The clone is the metric.
+>
+> **The reference files (same Figma file `SjUSTwykUm39dzRtj6jxiX`):**
+> - html.to.design clone (THE BAR): node `35:3435`
+> - Real Arcade frame render (ground truth): screenshot the live frame at
+>   `http://localhost:5556/api/frames/computer-chat/01-computer`
+> - Our latest export (session 2): node `51:6808`
+> - Test project: `~/Library/Application Support/arcade-studio/projects/computer-chat`
 
 ---
 
-## How it actually works (verified, current on HEAD)
+## SESSION 2 (2026-07-02) — what happened, honestly
+
+**Outcome: the latest export (`51:6808`) is visually identical to the pre-session
+baseline.** No pixel-fidelity progress. Here is exactly why, so the next agent
+does not repeat it.
+
+### The drift (the mistake to avoid)
+
+The mandate is **step-1 pixel fidelity**. Instead this session shipped two
+**failure-path fallbacks that belong to step 2** and are invisible on a healthy
+file:
+
+- **Color floor** (commit `39f009c`): token-colored borders/fills now carry a raw
+  color fallback so they never render black/invisible when a Figma *variable*
+  can't be bound. Only fires when variable binding FAILS.
+- **Component floor** (same commit): when a mapped component's library can't
+  cold-import, render a faithful box (fill+label+icon) instead of nothing. Only
+  fires when `importComponentSetByKeyAsync` returns null.
+
+**Why the export looks identical:** on the test file the Arcade library IS enabled,
+so every component imported fine (metadata for `51:6808` is full of `<instance>`
+nodes) and every color variable bound fine. **Both fallbacks are no-ops by
+construction when nothing fails.** The work hardens tester machines / non-Enterprise
+plans (real, but step 2), and does nothing for the pixel bar.
+
+### The root reasoning error (so it isn't repeated)
+
+1. Session correctly identified the real step-1 gaps vs the clone (see below).
+2. Built a **deterministic runtime probe** (`studio/scripts/runtime-probe.mts`)
+   that runs the real Figma runtime string against a *recording mock* — no bridge.
+   Useful, BUT it proves *which nodes get built*, **NOT whether pixels render
+   correctly**.
+3. The probe showed the doc-card's pink layers *exist as nodes* → session wrongly
+   concluded "flat-gray is a stale screenshot, non-bug." **A pixel-blind
+   instrument was used to dismiss a pixel problem.**
+4. Then chased bugs the probe *could* see without a bridge (border-black,
+   component-vanish) — **streetlight effect: optimized for what the instrument
+   could measure, not what the mandate asked for.**
+
+**Lesson for next agent:** the ONLY valid fidelity metric is a **pixel diff of the
+real Figma render against the clone / real frame**. Node-count / node-existence
+probes cannot tell you if the picture is right. Do not let them.
+
+### What session 2 actually changed (committed, tested, adversarially reviewed)
+- `studio/src/export/slj.ts`: `SljDocument.tokens` (token→raw color dict);
+  `ComponentNode.fallbackStyle` + `iconSvg`.
+- `studio/src/lib/exportFrameToSlj.ts`: `captureTokenValues()`, `iconSvgFor()`.
+- `studio/src/export/fiberWalk.ts`: capture fallbackStyle + icon svg at prune time.
+- `studio/src/export/figma/executePlan.ts`: `resolveColorValue` (emit variable key
+  AND raw floor), `buildFallbackFrame`, `PlanBorderSide`, `PlanInstance.fallback`.
+- `studio/src/export/figma/buildExecuteScript.ts`: `bindFill(node,varKey,rawColor)`
+  paints raw floor then binds; `applyBorders` async, skips (never black) when no
+  paint; instance path renders `node.fallback` on import failure.
+- `studio/scripts/runtime-probe.mts`: the deterministic probe (keep it — it's a
+  good inner-loop tool, just NOT a fidelity metric).
+- Spec: `docs/superpowers/specs/2026-07-02-figma-export-pixel-floor.md`.
+
+**These are fine to keep** (they harden step 2 and fix a real minor black-border
+bug), but they are **not the mandate** and did not move the pixel bar.
+
+---
+
+## THE ACTUAL OPEN PROBLEM (start here) — step-1 pixel fidelity
+
+Compare our export (`51:6808`) to the clone (`35:3435`) and the real frame. Known
+gaps where we are BELOW the clone:
+
+1. **Doc-card "Q3 launch brief" illustration renders flat gray.** THE headline gap.
+   The stacked-pages illustration is **plain divs** (verified in the live DOM):
+   alpha fills `rgba(255,52,45,0.16 / 0.12)`, `border-radius`, `overflow:hidden`
+   clip, absolute nesting, a subtle CSS-var transform. **No gradients, no
+   pseudo-elements, no SVG paths, no bg-images.** The Figma metadata for `51:6808`
+   confirms the PageLayer frames + skeleton bars ARE built (nodes 51:7681–7693) —
+   so this is a **pixel-RENDERING bug, not a capture bug**. Suspects (verify with a
+   real Figma render, not the probe): alpha-fill application, clip on the 152px
+   card vs 400px-tall children, z-order/stacking, or the CSS-var transform. This is
+   a *capturable-primitive* that renders wrong — exactly the step-1 class to fix.
+2. **Icons in reaction rows / some buttons show as "+" placeholders** vs the clone's
+   real glyphs (on files where icon swap doesn't resolve).
+3. **Rotation pivot drift** (Figma rotates top-left, CSS center) on small rotated cards.
+4. Stray spinner glyph near the frame title; top-right control cluster slightly off.
+
+**Where we already MATCH or BEAT the clone:** real avatar photos (clone shows gray
+circles), the composer bar + "Ask me anything" placeholder (a genuine session-1
+fix, verified present), font sizes/weights/colors, per-side borders, per-corner radius.
+
+### Recommended approach for the next session (aligned to the mandate)
+1. **Set up the pixel metric FIRST.** Render our export in real Figma → screenshot →
+   diff against the clone `35:3435` (and the real frame). Make "worse than the clone"
+   a visible number. Do NOT proceed on node-existence evidence.
+2. **Fix the doc-card** (gap #1) as the first pixel win — it's a rendering bug on
+   already-captured primitives, so it's pure step-1. Reproduce in real Figma,
+   isolate which property (alpha/clip/z-order/transform) is wrong, fix, re-diff.
+3. **Sweep for other capturable-primitives-that-render-wrong** the same way. Only
+   when the pixel snapshot matches the clone do you touch component mapping (step 2).
+
+---
+
+## How it works (verified, current on HEAD) — carried from session 1
 
 1. **Browser serializer** (`studio/src/lib/exportFrameToSlj.ts` +
    `studio/src/export/fiberWalk.ts`): walks the frame iframe's live React fiber
@@ -53,211 +142,137 @@ in the SLJ but NOT consumed (reserved for a v2 with a verify loop).
    `studio/server/figmaBridge/wsServer.ts`): Studio middleware sends the script
    over a WebSocket to a Figma **Desktop Bridge plugin** (reuses the existing
    `figma-console-mcp` plugin). One `EXECUTE_CODE` round trip. Bridge singleton
-   lives on `globalThis` (survives Vite module reloads — see commit 3463f7b).
+   lives on `globalThis` (survives Vite module reloads — commit 3463f7b).
 
 ### What the serializer captures today (SLJ `ElementStyle`, `slj.ts`)
 `fill`, `color`, `fontFamily/fontSize/fontWeight/lineHeight`, `cornerRadius`,
 per-corner `corners{tl,tr,br,bl}`, per-side `borders{top,right,bottom,left}`,
 `rotation`, `clip`, `shadow`, `opacity`, `svg` (icon vector markup),
 `imageData` (canvas→base64 for `<img>`), placeholder text for input/textarea.
+**Session 2 added:** `tokens` dict (name→raw color), `ComponentNode.fallbackStyle`,
+`ComponentNode.iconSvg`.
+
+### What is NOT captured (the long tail — relevant if a step-1 gap needs it)
+`background-image` on divs, CSS gradients, pseudo-elements (`::before/::after`),
+CSS `filter`/`backdrop-filter`, `mask`/`clip-path`, non-rotation transforms
+(scale/skew/translate), `text-decoration`/`letter-spacing`/`text-transform`/
+`text-align`/italic, blend modes, `outline`, `<img>` object-fit. **Note:** the
+doc-card gap #1 does NOT need any of these — it's plain divs — so fix the rendering
+first before assuming a capture gap.
 
 ---
 
-## CRITICAL gotchas that cost real time this session (do NOT re-learn these)
+## CRITICAL gotchas that cost real time (do NOT re-learn these)
 
 1. **`curl POST …/to-figma` replays the STORED `SLJ.json` on disk — it does NOT
-   re-serialize.** The SLJ is only regenerated when you export through the
-   browser UI (a hidden iframe mounts the frame, walks it, POSTs fresh SLJ). If
-   you change `fiberWalk.ts`/`exportFrameToSlj.ts`/`slj.ts` and want to see it,
-   you MUST re-export via the UI (Playwright: open project → Share → pick frame →
-   Export to Figma), or the stale on-disk SLJ silently masks your change. I
-   burned a full verify cycle screenshotting a "WS6" result that was actually the
-   old SLJ. Confirm with: does the fresh `SLJ.json` carry your new field? (e.g.
-   `borders` count > 0, old `stroke` gone).
-   - `buildExecuteScript.ts` / `executePlan.ts` changes DON'T need re-serialize
-     (they consume the stored SLJ) but DO need a Vite **server restart**
-     (middleware doesn't hot-reload).
-   - `fiberWalk.ts` / client changes hot-reload in the browser, no restart, but
-     DO need a UI re-export to rewrite the SLJ.
-
-2. **Server middleware does not hot-reload.** Any edit under `server/**` →
-   `kill $(lsof -ti :5556)` and `pnpm run studio` again.
-
-3. **The Desktop Bridge drops constantly.** Symptoms: export returns `409
-   no_bridge` while the plugin looks connected; or the figma-console MCP
-   disconnects. Fixes that worked: reload the plugin (Plugins → Development →
-   Figma Desktop Bridge, or `figma_reload_plugin`), and after a server restart the
-   plugin reconnects to the NEW ws server only after a reload — poll the export a
-   few times. The globalThis singleton (3463f7b) fixed the *worst* case (Vite
-   spawning multiple ws servers on different ports, plugin connected to an orphan).
-
-4. **Screenshots: two transports, both flaky, use whichever is up.**
-   - figma-console MCP `figma_capture_screenshot` (live plugin render, no cloud
-     lag) — but disconnects often.
-   - **Official Figma MCP `mcp__plugin_figma_figma__get_screenshot`** (fileKey
-     `SjUSTwykUm39dzRtj6jxiX`, nodeId from the export's `rootId`) — reads from
-     Figma cloud, so the node needs ~20-40s to index after export, and the
-     Desktop app must sync to cloud. Returns a short-lived URL; `curl` it to a
-     PNG and Read the PNG.
-   - The test file is the **DevRev "Arcade Pixel-Fidelity Spike — Full Screen"**
-     file, key `SjUSTwykUm39dzRtj6jxiX`.
-
-5. **Figma cold-import is BROKEN for most of the Arcade UI Kit — this is a Figma
-   platform wall, not our bug** (see WS3/WS4 below). Do not spend time trying to
-   make `importComponentSetByKeyAsync` work for arbitrary components; it silently
-   never resolves.
+   re-serialize.** The SLJ is only regenerated by exporting through the browser UI
+   (hidden iframe mounts the frame, walks it, POSTs fresh SLJ). If you change
+   `fiberWalk.ts`/`exportFrameToSlj.ts`/`slj.ts`, you MUST re-export via the UI
+   (Playwright: open project → Share → pick frame → Export to Figma) or the stale
+   on-disk SLJ silently masks your change. **Session 2 lost a full cycle to this:
+   fixes were committed but the user's export ran against a stale server + stale
+   SLJ and showed baseline.** Confirm the fresh `SLJ.json` mtime is NOW and carries
+   your new field.
+   - `buildExecuteScript.ts` / `executePlan.ts` changes consume the stored SLJ (no
+     re-serialize needed) but DO need a Vite **server restart**.
+   - `fiberWalk.ts` / client changes hot-reload in the browser, no restart, but DO
+     need a UI re-export to rewrite the SLJ.
+2. **Server middleware does not hot-reload.** Any edit under `server/**` (or the
+   src the middleware imports at boot) → `kill $(lsof -ti :5556)` and
+   `pnpm run studio` again. **A stale server will run OLD code and look like your
+   fix did nothing.** Always confirm the running server started AFTER your commit.
+3. **The Desktop Bridge drops constantly.** Export returns `409 no_bridge` while the
+   plugin looks connected. Fix: reload the plugin (Plugins → Development → Figma
+   Desktop Bridge). After a server restart the plugin reconnects to the NEW ws
+   server only after a reload — poll a few times. **The bridge write path requires
+   the plugin to be manually Run in Figma Desktop — an agent cannot do this; ask
+   the user.**
+4. **Screenshots: two transports, both flaky.**
+   - `mcp__plugin_figma_figma__get_screenshot(fileKey: SjUSTwykUm39dzRtj6jxiX,
+     nodeId: <rootId>)` — reads Figma cloud; node needs ~20-40s to index after
+     export; returns a short-lived URL; `curl` it to PNG and Read it. (Most reliable.)
+   - figma-console MCP `figma_capture_screenshot` — live plugin render, but
+     disconnects often.
+5. **Figma cold-import is BROKEN for most of the Arcade UI Kit** —
+   `importComponentSetByKeyAsync`/`importStyleByKeyAsync` silently never settle for
+   most components (Radio/Toggle/Toast/Menu/text-styles) on files where the kit
+   library is stale/huge. Button/Checkbox/IconButton import warm (~13ms). This is a
+   Figma platform wall, NOT our bug. (Session 2's component floor is the mitigation,
+   but that's step 2.) The current test file `SjUSTwykUm39dzRtj6jxiX` HAS the library
+   enabled, so imports succeed there.
 
 ---
 
-## The 15 bugs fixed this session (all live-found, all have tests)
+## Bugs fixed across both sessions (all live-found, all have tests)
 
-Serializer/tree:
-- **f1f9a0a** — walked the STALE root fiber. React double-buffers root fibers;
-  the `__reactContainer$` key points at the mount-time fiber whose live tree is
-  its `alternate`. Fix: normalize to `FiberRoot.current`. (This caused the very
-  first "1×1 empty frame".)
-- **b1936ed** — mixed text+element parents dropped their own direct text (HostText
-  fibers are invisible to the fiber walk). Added `FiberReader.directText` (reads
-  DOM child text nodes).
-- **f78211b** — that directText then DUPLICATED text 11× because `hostOf` descends
-  `.child`, so every Radix wrapper fiber returned the same host's text. Fix: emit
-  only from the fiber that IS the host (`stateNode instanceof Element`).
-- **912cb53** — mapped container components (Tabs/Modal/Popover) were pruned like
-  leaf widgets, swallowing whole page regions into one text blob. Added
-  `container: true` → recurse instead of instance-swap.
-- **df7ff29** — 17-deep styleless wrapper chains all named "frame" (unusable layer
-  panel). Collapse styleless single-child frames; name layers from
-  component/semantic-tag/layout. (Collapse is position-safe because boxes are
-  absolute.)
-- **473ede1** — hidden nodes (`display:none`, `visibility:hidden`, 0×0) exported as
-  stray glyphs (inactive tab panels). Now skipped (root never skipped).
+**Session 1** (serializer/tree + runtime + the pixel-first pivot):
+- `f1f9a0a` walked the STALE root fiber (React double-buffers; use `FiberRoot.current`).
+- `b1936ed` mixed text+element parents dropped direct text (added `FiberReader.directText`).
+- `f78211b` directText DUPLICATED 11× (emit only from the fiber that IS the host).
+- `912cb53` mapped container components pruned like leaves (added `container:true`).
+- `df7ff29` 17-deep styleless wrapper chains (collapse styleless single-child frames).
+- `473ede1` hidden nodes exported as stray glyphs (skip display:none/visibility:hidden/0×0).
+- `2e17c48` library-not-enabled made imports hang forever (bounded `withTimeout`).
+- `9ae74ee` cold imports slow+serial (parallel pre-warm + racing set/comp imports).
+- `3463f7b` bridge singleton spawned multiple ws servers (moved to `globalThis`).
+- `31b6cc6` (WS5) pixel-first pivot: killed layout inference, added clipping, shadow,
+  opacity, image capture.
+- `8ec47b9` (WS1) SVG vector capture for all ~120 icons, zero mapping.
+- `bf00712` (WS2) wrap only text that was multi-line in the browser.
+- `42e5936 / 695c34d / 1f0eb3c` (WS6) per-side borders + per-corner radius (were
+  captured then dropped), CSS rotation capture, input/textarea placeholder text.
 
-Runtime/transport:
-- **2e17c48** — a library not enabled in the target file made
-  `importComponentSetByKeyAsync` hang forever (no reject). Bounded with
-  `withTimeout`.
-- **9ae74ee** — cold imports were slow+serial, and bare-COMPONENT keys hang the
-  set-import API. Added parallel pre-warm + `importSetByKey` racing set/comp
-  imports + realistic budgets (90s exec).
-- **3463f7b** — bridge singleton was module-level; Vite re-eval spawned multiple
-  ws servers → plugin connected to an orphan → false `no_bridge`. Moved to
-  `globalThis`.
-
-Pixel fidelity (the pivot):
-- **31b6cc6** (WS5) — pixel-first: killed layout inference (layout always null),
-  added overflow clipping, box-shadow, opacity, image capture (canvas→base64→IMAGE
-  fill with an inline ES5 base64 decoder).
-- **8ec47b9** (WS1) — SVG vector capture: icons not in the icon map now render as
-  real Figma vectors via `createNodeFromSvg` (currentColor + CSS-var resolved,
-  20KB cap). Kills the "empty icon" class for ALL ~120 icons, zero mapping.
-- **bf00712** (WS2) — wrap only text that was multi-line in the browser (killed
-  "Setti ngs" wrapping; Figma font metrics run wider than the browser's).
-- **42e5936 / 695c34d / 1f0eb3c** (WS6) — per-side borders + per-corner radius
-  (were captured then DROPPED — never plumbed through plan/runtime), CSS rotation
-  capture (`offsetWidth/Height` for un-rotated size to dodge the getBoundingClientRect
-  bbox trap), input/textarea placeholder text.
-
-Earlier deterministic-plan work (Tasks 2-6, pre-pivot, still live): text
-styling capture/carry/apply, radius, DS-gap counts + typed telemetry
-(`figma_export_started/succeeded/failed`), setup doc.
+**Session 2** (`39f009c`): color floor (token→variable+raw fallback, never black),
+component floor (fallback box on cold-import failure). *Both step-2 failure-path
+hardening — see the honesty section above.*
 
 ---
 
-## Known gaps (honest, in priority order)
+## Known gaps (honest, priority order for the mandate)
 
-1. **Doc-card illustration renders flat.** The "Q3 launch brief" card's layered
-   document mockup shows as flat gray bars vs the clone's stacked rotated pages.
-   Rotation captured 0° on these — they are almost certainly built with SVG
-   `<path>`s or CSS pseudo-elements (`::before`/`::after`) or background-images on
-   divs, none of which we capture. **This is the #1 remaining fidelity gap and the
-   likely next task.** Options: capture pseudo-element content (hard — not in the
-   fiber tree, needs `getComputedStyle(el, '::before')`), or capture div
-   background-images (WS5 explicitly skipped these — only `<img>` handled), or
-   rasterize stubborn subtrees to a single image via html2canvas-in-the-iframe.
-2. **Component mapping stuck at ~17 + cold-import wall (WS3/WS4 BLOCKED).** See
-   next section — needs a product decision.
-3. **Typography style LINKING not done (WS4).** Raw font/size/weight/lineHeight
-   ARE applied (pixels match), but text isn't linked to Figma text styles. Blocked
-   by the same cold-import wall (`importStyleByKeyAsync` hangs).
-4. Rotation pivot: Figma rotates about top-left, CSS about center — minor drift on
-   small rotated cards. Needs `relativeTransform` to fix perfectly.
-5. Multi-color-per-side borders keep all widths but only the first side's color.
-6. Stray spinner glyph near the frame title; top-right control cluster slightly
-   off. Minor.
-
----
-
-## WS3/WS4 — the cold-import wall (needs an owner decision, do not brute-force)
-
-**Verified fact:** `importComponentSetByKeyAsync` / `importStyleByKeyAsync` NEVER
-settle for MOST Arcade UI Kit components (Radio, Toggle, Toast, Menu, Accordion,
-text styles) — no error, silent hang 6+ minutes. Button/Checkbox/IconButton
-import in ~13ms (they're warm/cached in the file). Toggle resolved once at 42ms
-then hung on retry — nondeterministic. Color VARIABLES always import fine (35
-bound live). REST confirms every key is valid and live (file
-`a2uKnm88LxRXEWAL1kOqeQ`, 874 sets / 5366 components). Root cause: Figma's backend
-chokes on cold-importing from a huge library with stale publish records. **Not
-fixable from our side.**
-
-Discovery is DONE and saved:
-- `.superpowers/sdd/ws3-candidates.json` — 22 component candidates (arcadeGen →
-  library key + variant axes + confidence) + 29 text styles (key + font props).
-  Keys REST-verified.
-
-**The unblock plan (recommended): a slim "Arcade Export Kit" published Figma file**
-(~40 mapped components + one text sample per style), built INSIDE the kit file
-where everything is local (nothing to import, nothing hangs), then published once.
-Fresh file → fresh publish state → 40 comps instead of 5366 → cold imports should
-be fast. **One publish click by the kit owner; ZERO end-user steps.** The owner
-REJECTED the alternative (per-file manual sticker-sheet paste) as too cumbersome,
-and per-export generation is impossible (same broken import pipe).
-Once the slim kit exists: write the 22 map rows in `componentEntries.ts`
-(verify each key imports live over the bridge FIRST — the stale-key trap is real),
-then wire WS4 typography (computed font/size/weight → text-style key →
-`importStyleByKeyAsync` + `setTextStyleIdAsync`, raw props stay as fallback).
+1. **Doc-card illustration flat gray — THE step-1 gap.** Plain divs, nodes build,
+   pixels wrong. Rendering bug (alpha/clip/z-order/transform). Fix FIRST, in real Figma.
+2. **Icon "+" placeholders** on files without icon-set resolution.
+3. **Rotation pivot drift** (top-left vs center); needs `relativeTransform`.
+4. Multi-color-per-side borders keep all widths but only the first side's color.
+5. Stray spinner glyph near title; top-right control cluster slightly off.
+6. Typography style LINKING not done (raw font/size/weight applied; not linked to
+   Figma text styles). Blocked by the same cold-import wall. **Step 2.**
+7. Component mapping stuck at ~17 + cold-import wall. **Step 2 — do not touch until
+   pixels match the clone.**
 
 ---
 
 ## How to run / verify (exact steps)
 
-1. `pnpm run studio` from repo root (serves :5556). Middleware changes need a
-   full restart.
-2. Figma Desktop open on the Pixel-Fidelity Spike file; run the Figma Desktop
-   Bridge plugin (Plugins → Development). If exports 409, reload the plugin.
-3. Export via UI (regenerates SLJ): Playwright to
-   `http://localhost:5556/#/project/<slug>` → wait → click Share → pick frame →
-   Export to Figma → wait ~15s.
-   - Test frames used: `computer-chat/01-computer` (ComputerScene, the hard one),
-     `computer-settings/01-computer-settings`,
-     `this-is-computer-s-web-oauth-page/01-figma-1747-21118`.
-4. Screenshot: get the export `rootId` from the API response, then
+1. `pnpm run studio` from repo root (serves :5556). **Middleware changes need a full
+   restart; confirm the server PID started AFTER your latest commit.**
+2. Figma Desktop open on the Pixel-Fidelity Spike file (`SjUSTwykUm39dzRtj6jxiX`);
+   run the Figma Desktop Bridge plugin (Plugins → Development). **This is a manual
+   step; if you're an agent, ask the user to do it.** If exports 409, reload the plugin.
+3. Export via UI (REGENERATES SLJ — mandatory after any serializer change):
+   Playwright to `http://localhost:5556/#/project/computer-chat` → Share → pick
+   frame → Export to Figma → wait ~15s. **Verify `SLJ.json` mtime is NOW.**
+4. Screenshot: get `rootId` from the export response, then
    `mcp__plugin_figma_figma__get_screenshot(fileKey: SjUSTwykUm39dzRtj6jxiX,
-   nodeId: <rootId>)` after ~20-40s indexing; `curl` the URL to a PNG; Read it.
-5. Compare against the html.to.design clone at node `35:3435` in the same file
-   (that's the fidelity bar the owner set).
+   nodeId: <rootId>)` after ~20-40s; `curl` the URL to PNG; Read it.
+5. **DIFF against the clone `35:3435` — that is the metric. Not node counts.**
+6. The deterministic probe `pnpm tsx studio/scripts/runtime-probe.mts <SLJ.json>
+   [--json] [--live-maps]` is a fast inner loop for "what nodes get built / are any
+   black / do any vanish" — but it is NOT a fidelity metric. Do not conclude
+   pixel-correctness from it.
 
-Repo conventions: pnpm only; Conventional Commits scope `studio/figma-export`;
-never `git add -A` (loose scratch/screenshots in root are untracked by design);
+Repo conventions: pnpm only; Conventional Commits scope `studio/figma-export`; never
+`git add -A` (loose scratch/screenshots in root are untracked by design);
 `pnpm run studio:test <path>` for one file.
 
 ---
 
-## Recommended next moves (in order)
+## Discipline note (the meta-lesson from session 2)
 
-1. **Whole-branch review** (superpowers:requesting-code-review) — 29 commits, many
-   are same-file iterative fixes; worth a coherence pass before merge. Watch for:
-   the `stroke` field (now superseded by `borders` — check nothing still reads
-   it), `inferLayout` now dead-but-captured (confirm intentional), the base64
-   decoder in the runtime string, plan double-build (documented deliberate).
-2. **Doc-card illustration** (Known Gap #1) — highest-visibility fidelity win.
-   Investigate whether it's SVG paths / pseudo-elements / div background-images
-   FIRST (inspect the live DOM), then pick capture strategy.
-3. **Slim Export Kit decision** with owner → then WS3 map rows + WS4 typography.
-4. **Manual gates G1-G5** (real Figma, from the original plan) + packaged-app run.
-
-## Discipline note
-Every fix this session was root-caused live (systematic-debugging), TDD'd, and
-verified against a real export screenshot — not assumed. Keep that: the
-stored-SLJ-vs-fresh-SLJ trap (gotcha #1) means "the test passed" is NOT the same
-as "the export changed." Always re-export via UI and screenshot before claiming a
-fidelity fix works.
+Every fix must be verified against a **real Figma render diffed to the clone** before
+claiming a fidelity win. The stored-SLJ-vs-fresh-SLJ trap (gotcha #1) + the
+stale-server trap (gotcha #2) mean "the test passed" and "the probe shows nodes" are
+NOT the same as "the exported picture improved." Session 2's entire miss traces to
+trusting a pixel-blind instrument over the pixel bar the owner set. **Stay on the
+mandate: pixel-perfect snapshot first, measured against html.to.design, then components.**
