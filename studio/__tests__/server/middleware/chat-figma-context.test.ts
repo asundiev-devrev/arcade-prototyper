@@ -183,6 +183,30 @@ describe("hi-fi directive survives a Figma digest miss", () => {
     const sent = fs.readFileSync(process.env.ARCADE_TEST_PROMPT_OUT!, "utf8");
     expect(sent).toContain("<high_fidelity_mode>");
   });
+
+  it("uses the wider precise-mode digest-race budget on a hi-fi turn", async () => {
+    // The precisely-4 live gate showed phase-1 finishing at 15.69s and missing
+    // the flat 15s race by 0.69s, so a precise turn got NO design context and
+    // freelanced. Hi-fi turns now wait longer; the distinct "precise mode"
+    // narration is the observable proxy that the wider-budget branch was taken.
+    const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
+    const stream = await (async () => {
+      await post(p.slug, "Implement this precisely https://www.figma.com/design/k/x?node-id=1-2");
+      return drainStream(p.slug);
+    })();
+    expect(stream).toContain("precise mode");
+  });
+
+  it("keeps the fast narration (no precise-mode wait) on a non-hi-fi Figma turn", async () => {
+    // A generation-intent-but-not-hi-fi prompt (build intent via "functional",
+    // no precise/exact phrasing) routes to the generator but must NOT pay the
+    // wider digest wait — it keeps the fast 15s budget.
+    const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
+    await post(p.slug, "make the input functional https://www.figma.com/design/k/x?node-id=1-2");
+    const stream = await drainStream(p.slug);
+    expect(stream).toContain("Loading Figma design context…");
+    expect(stream).not.toContain("precise mode");
+  });
 });
 
 describe("eject-to-source on a compose-base turn", () => {

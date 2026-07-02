@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { compactTree } from "../../../server/figma/compactTree";
+import { compactTree, DEPTH_CAP, MAX_NODES } from "../../../server/figma/compactTree";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const fixturesDir = path.resolve(__dirname, "../../fixtures/figma");
@@ -77,15 +77,42 @@ describe("compactTree (edge cases)", () => {
     expect(tree.name).toBeUndefined();
   });
 
-  it("caps depth and emits a warning", async () => {
-    const fs = await import("node:fs");
-    const path = await import("node:path");
-    const { fileURLToPath } = await import("node:url");
-    const __dirname = path.dirname(fileURLToPath(import.meta.url));
-    const fx = JSON.parse(fs.readFileSync(
-      path.resolve(__dirname, "../../fixtures/figma/oversized.json"), "utf-8"));
-    const { warnings } = compactTree(fx.root.document);
-    expect(warnings.some((w) => /depth cap|node cap/.test(w))).toBe(true);
+  it("caps depth and emits a warning when a tree exceeds DEPTH_CAP", () => {
+    // Build a nested chain deeper than the current DEPTH_CAP so the guard is
+    // pinned to the ACTUAL cap value, not a fixture that silently falls under
+    // the limit when the cap is raised (the caps were raised to 16/1200 after
+    // the precisely-4 gate showed 12/500 truncated a real full-screen frame).
+    let node: any = {
+      id: "leaf", type: "TEXT", characters: "deep",
+      absoluteBoundingBox: { x: 0, y: 0, width: 10, height: 10 },
+      style: { fontSize: 12, lineHeightPx: 16 },
+    };
+    for (let i = 0; i < DEPTH_CAP + 3; i++) {
+      node = {
+        id: `wrap-${i}`, type: "FRAME",
+        absoluteBoundingBox: { x: 0, y: 0, width: 100, height: 100 },
+        fills: [{ type: "SOLID", color: { r: 1, g: 1, b: 1 } }],
+        children: [node],
+      };
+    }
+    const { warnings } = compactTree(node);
+    expect(warnings.some((w) => /depth cap/.test(w))).toBe(true);
+  });
+
+  it("caps node count and emits a warning when a tree exceeds MAX_NODES", () => {
+    // Same rationale for the node-count backstop: pin to the real MAX_NODES.
+    const children = Array.from({ length: MAX_NODES + 50 }, (_, i) => ({
+      id: `row-${i}`, type: "TEXT", characters: `row ${i}`,
+      absoluteBoundingBox: { x: 0, y: i * 10, width: 100, height: 10 },
+      style: { fontSize: 12, lineHeightPx: 16 },
+    }));
+    const { warnings } = compactTree({
+      id: "root", type: "FRAME",
+      absoluteBoundingBox: { x: 0, y: 0, width: 240, height: 99999 },
+      fills: [{ type: "SOLID", color: { r: 1, g: 1, b: 1 } }],
+      children,
+    });
+    expect(warnings.some((w) => /node cap/.test(w))).toBe(true);
   });
 
   it("does not truncate a realistic full-screen frame of ~300 nodes", () => {

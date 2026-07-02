@@ -445,22 +445,45 @@ async function enrichPromptWithFigmaContext(
   const parsed = parseFigmaUrl(url);
   if (!parsed) return { prompt, images };
 
+  // Directive decision is CONTEXT-FREE: it depends only on the prompt + URL,
+  // both of which we have even when the digest missed. This is the fix for the
+  // "agent gets a naked prompt with no faithfulness directive on a slow/failed
+  // Figma fetch" bug (review S3.1). Do NOT gate this on shouldUseHiFi — that
+  // needs digest-derived {classified, hasHighConfidenceComposite} which is
+  // absent on a miss. shouldUseHiFi stays only as a digest-SUCCESS upgrade.
+  // Computed up front because it also picks the digest-race budget below.
+  const explicitHiFi = detectHiFiIntent(prompt);
+
   const ingest = await getFigmaIngest();
   let result = ingest.getCached(parsed.fileId, parsed.nodeId);
   if (!result) {
-    // This fetch blocks turn start (3–15s on a cold Figma file). Tell the
-    // user immediately so the chat pane shows progress instead of a frozen
-    // "Working…" while figmanage + token resolve + PNG export run. Cheapest
-    // possible perceived-latency win on the worst dead-air path.
-    onNarration?.("Loading Figma design context…");
-    // Wait for phase 1 (tree + tokens + PNG) only — typically 3–8s. Phase 2
-    // (classifier) runs in the background and upgrades the cache in place
-    // once done; the next turn on this URL will pick up composites for free.
+    // Digest-race budget. A plain "sketch me X from this figma" prompt keeps
+    // the fast 15s cap — if the digest is slow, the fast path still starts
+    // quickly. But a PRECISE build ("implement exactly", "modify ComputerScene
+    // precisely") NEEDS the digest itself — the geometry map, component
+    // identities, and the ground-truth PNG — to be faithful. The live gate
+    // (implement-this-design-precisely-4) proved 15s is too tight even on a
+    // CLEAN small file: phase-1 finished at 15.69s and missed the 15.0s race
+    // by 0.69s, so the agent got NO <figma_context> and NO reference PNG and
+    // freelanced. Wait longer on hi-fi turns; phase-1 caches on completion, so
+    // this only bites the FIRST precise turn on a URL.
+    const digestBudgetMs = explicitHiFi ? 45_000 : 15_000;
+    // This fetch blocks turn start. Tell the user immediately so the chat pane
+    // shows progress instead of a frozen "Working…" while figmanage + token
+    // resolve + PNG export run.
+    onNarration?.(
+      explicitHiFi
+        ? "Loading Figma design context (precise mode — waiting for the full design)…"
+        : "Loading Figma design context…",
+    );
+    // Wait for phase 1 (tree + tokens + PNG) only. Phase 2 (classifier) runs in
+    // the background and upgrades the cache in place once done; the next turn
+    // on this URL will pick up composites for free.
     const pending = ingest.getPhase1Pending(parsed.fileId, parsed.nodeId)
       ?? ingest.ingestPhase1(parsed.fileId, parsed.nodeId, url);
     const raced = await Promise.race([
       pending,
-      new Promise<null>((r) => setTimeout(() => r(null), 15_000)),
+      new Promise<null>((r) => setTimeout(() => r(null), digestBudgetMs)),
     ]);
     if (raced && "ok" in raced && raced.ok) {
       const { ok, ...rest } = raced as any;
@@ -468,13 +491,6 @@ async function enrichPromptWithFigmaContext(
       result = rest;
     }
   }
-  // Directive decision is CONTEXT-FREE: it depends only on the prompt + URL,
-  // both of which we have even when the digest missed. This is the fix for the
-  // "agent gets a naked prompt with no faithfulness directive on a slow/failed
-  // Figma fetch" bug (review S3.1). Do NOT gate this on shouldUseHiFi — that
-  // needs digest-derived {classified, hasHighConfidenceComposite} which is
-  // absent on a miss. shouldUseHiFi stays only as a digest-SUCCESS upgrade.
-  const explicitHiFi = detectHiFiIntent(prompt);
 
   if (!result) {
     console.warn("[studio] figma ingest miss; proceeding without structured context");
