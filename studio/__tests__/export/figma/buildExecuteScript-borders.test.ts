@@ -35,6 +35,15 @@ function makeFigmaMock() {
       appendChild(n: any) { this.children.push(n); },
       resizeWithoutConstraints(w: number, h: number) { this.width = w; this.height = h; },
       resize(w: number, h: number) { this.width = w; this.height = h; },
+      // Model Figma's relativeTransform: [[cos, sin, e],[-sin, cos, f]] where the
+      // node's rotation (CCW-positive degrees) = atan2(sin, cos) and (e,f) is the
+      // top-left origin. Assigning it overrides x/y/rotation, exactly as Figma does.
+      set relativeTransform(m: number[][]) {
+        (this as any)._rt = m;
+        this.x = m[0][2]; this.y = m[1][2];
+        this.rotation = (Math.atan2(m[0][1], m[0][0]) * 180) / Math.PI;
+      },
+      get relativeTransform() { return (this as any)._rt; },
     };
     return f;
   }
@@ -226,6 +235,18 @@ describe("buildExecuteScript — rotation", () => {
     const child = mock.pageRoot.children[0];
     // Figma rotation is CCW-positive; CSS clockwise-positive → runtime negates.
     expect(child.rotation).toBeCloseTo(-6, 0);
+    // The bug: Figma pivots about the top-left, CSS about the center. The fix
+    // builds a relativeTransform that pivots about the center, so the node's
+    // CENTER must stay at the CSS-measured center (160, 140), NOT drift.
+    const rt = child.relativeTransform;
+    expect(rt).toBeDefined();
+    const w = 120, h = 80;
+    const ca = rt[0][0], sa = rt[0][1], e = rt[0][2], f = rt[1][2];
+    // center = origin + R * (w/2, h/2)
+    const cx = e + (ca * (w / 2) + sa * (h / 2));
+    const cy = f + (-sa * (w / 2) + ca * (h / 2));
+    expect(cx).toBeCloseTo(160, 1);
+    expect(cy).toBeCloseTo(140, 1);
   });
 
   it("leaves rotation at 0 for un-rotated nodes", async () => {

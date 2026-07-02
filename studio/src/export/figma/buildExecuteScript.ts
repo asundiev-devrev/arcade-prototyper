@@ -354,9 +354,26 @@ async function build(node, parent, ox, oy) {
   parent.appendChild(f);
   try { f.resizeWithoutConstraints(Math.max(node.box.width, 1), Math.max(node.box.height, 1)); } catch (e) {}
   f.x = node.box.x - ox; f.y = node.box.y - oy;
-  // CSS rotate() is clockwise-positive; Figma rotation is counterclockwise-positive.
-  // Apply after positioning; small illustration cards read as layered/rotated.
-  if (node.rotation) { try { f.rotation = -node.rotation; } catch (e) {} }
+  // Rotation. CSS rotate() is clockwise-positive and (by default) pivots about
+  // the element CENTER; Figma rotation is counterclockwise-positive and pivots
+  // about the node's TOP-LEFT origin. Setting f.rotation alone would spin about
+  // the top-left, drifting the card away from where CSS drew it. Instead build
+  // the relativeTransform directly so the frame rotates about its own center:
+  //   origin translation (e,f) = center - R * (w/2, h/2)
+  // which keeps the center fixed at the CSS-measured center.
+  if (node.rotation) {
+    try {
+      var deg = -node.rotation;
+      var rad = deg * Math.PI / 180;
+      var ca = Math.cos(rad), sa = Math.sin(rad);
+      var rw = Math.max(node.box.width, 1), rh = Math.max(node.box.height, 1);
+      var rtlx = node.box.x - ox, rtly = node.box.y - oy;
+      var rcx = rtlx + rw / 2, rcy = rtly + rh / 2;
+      var re = rcx - (ca * (rw / 2) + sa * (rh / 2));
+      var rf = rcy - (-sa * (rw / 2) + ca * (rh / 2));
+      f.relativeTransform = [[ca, sa, re], [-sa, ca, rf]];
+    } catch (e) {}
+  }
   if (node.fillVariableKey || node.fillColor) { await bindFill(f, node.fillVariableKey, node.fillColor); }
   made.frames++;
   var childOx = node.layout ? ox : node.box.x;

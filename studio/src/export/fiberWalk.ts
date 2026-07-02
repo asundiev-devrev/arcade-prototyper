@@ -43,17 +43,53 @@ function parseBoxShadow(raw: string): ElementStyle["shadow"] | undefined {
 const HIDDEN_BORDER_STYLES = new Set(["none", "hidden"]);
 
 /** rotation degrees (clockwise) decoded from a computed `transform` matrix, or
- *  undefined when there's no meaningful rotation. */
-function rotationDegrees(transform: string): number | undefined {
-  if (!transform || transform === "none") return undefined;
+ *  0 when there's no rotation (pure translate/scale/none). */
+function transformRotationDegrees(transform: string): number {
+  if (!transform || transform === "none") return 0;
   // 2D form: matrix(a, b, c, d, e, f). rotation = atan2(b, a).
   const m = transform.match(/^matrix\(\s*([-\d.eE]+)\s*,\s*([-\d.eE]+)\s*,/);
-  if (!m) return undefined;
+  if (!m) return 0;
   const a = parseFloat(m[1]);
   const b = parseFloat(m[2]);
-  if (!Number.isFinite(a) || !Number.isFinite(b)) return undefined;
-  const deg = (Math.atan2(b, a) * 180) / Math.PI;
-  return Math.abs(deg) > 0.1 ? deg : undefined;
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
+  return (Math.atan2(b, a) * 180) / Math.PI;
+}
+
+/** rotation degrees (clockwise) from the standalone CSS `rotate` property.
+ *  Tailwind v4's `rotate-[Ndeg]` emits this (NOT a `transform` matrix), so a
+ *  serializer that only reads `transform` sees a flat card — this is exactly why
+ *  the stacked doc-card illustration lost its fan. Returns 0 for `none`, a
+ *  missing angle, or a 3D (x/y-axis) rotation, which is not an in-plane spin. */
+function cssRotatePropertyDegrees(rotate: string): number {
+  if (!rotate || rotate === "none") return 0;
+  const tokens = rotate.trim().split(/\s+/);
+  // The angle is always the last token; anything before it names the axis.
+  const angleTok = tokens[tokens.length - 1];
+  const m = angleTok.match(/^(-?[\d.eE]+)(deg|rad|grad|turn)$/);
+  if (!m) return 0;
+  let deg = parseFloat(m[1]);
+  if (!Number.isFinite(deg)) return 0;
+  const unit = m[2];
+  if (unit === "rad") deg = (deg * 180) / Math.PI;
+  else if (unit === "grad") deg = deg * 0.9;
+  else if (unit === "turn") deg = deg * 360;
+  const axis = tokens.slice(0, tokens.length - 1);
+  if (axis.length === 1 && /^[xyz]$/i.test(axis[0])) {
+    if (axis[0].toLowerCase() !== "z") return 0; // x/y tilt = 3D, not in-plane
+  } else if (axis.length === 3) {
+    const ax = parseFloat(axis[0]);
+    const ay = parseFloat(axis[1]);
+    if (Math.abs(ax) > 1e-6 || Math.abs(ay) > 1e-6) return 0; // vector not on z
+  }
+  return deg;
+}
+
+/** Total in-plane rotation (clockwise degrees) a node carries, combining the
+ *  `transform` matrix and the standalone `rotate` property (CSS applies both).
+ *  Undefined below a 0.1deg threshold so noise never rotates a node. */
+function rotationDegrees(transform: string, rotate: string): number | undefined {
+  const total = transformRotationDegrees(transform) + cssRotatePropertyDegrees(rotate);
+  return Math.abs(total) > 0.1 ? total : undefined;
 }
 
 function elementStyle(s: { getPropertyValue(p: string): string }, resolveColor: (v: string) => string): ElementStyle {
@@ -82,8 +118,9 @@ function elementStyle(s: { getPropertyValue(p: string): string }, resolveColor: 
     }
   }
   if (anyBorder) out.borders = borders;
-  // CSS rotation (skew/scale ignored for v1).
-  const rot = rotationDegrees(s.getPropertyValue("transform"));
+  // CSS rotation (skew/scale ignored for v1). Reads BOTH the transform matrix
+  // and the standalone `rotate` property — Tailwind v4 fans cards via `rotate`.
+  const rot = rotationDegrees(s.getPropertyValue("transform"), s.getPropertyValue("rotate"));
   if (rot !== undefined) out.rotation = rot;
   // Clipping: overflow/overflow-x/overflow-y
   const ov = s.getPropertyValue("overflow");
@@ -282,14 +319,20 @@ export function walkFiber(rootFiber: MinimalFiber, ctx: WalkCtx): SljNode {
       }
     }
 
-    // For a rotated element, box() is the axis-aligned bbox of the rotated
-    // shape — the wrong SIZE for a rotated Figma frame. Substitute the intrinsic
-    // (un-rotated) size when available so the runtime can place + rotate it.
+    // For a rotated element, box() is the axis-aligned bbox of the ROTATED
+    // shape — both the wrong SIZE and (its top-left) the wrong POSITION for a
+    // Figma frame we intend to rotate ourselves. Recover the un-rotated frame:
+    // its center equals the rotated bbox center (rotation about center — the CSS
+    // default origin — is center-preserving), and its top-left is that center
+    // minus half the intrinsic (un-rotated) size. The runtime then rotates this
+    // frame about its own center to reproduce the CSS result.
     let outBox = box;
     if (elStyle.rotation !== undefined) {
       const size = ctx.reader.unrotatedSize?.(f) ?? null;
       if (size && size.width > 0 && size.height > 0) {
-        outBox = { x: box.x, y: box.y, width: size.width, height: size.height };
+        const cx = box.x + box.width / 2;
+        const cy = box.y + box.height / 2;
+        outBox = { x: cx - size.width / 2, y: cy - size.height / 2, width: size.width, height: size.height };
       } else {
         // No reliable intrinsic size → drop rotation, keep the bbox flat. Still
         // renders the fill/shadow/border so a stacked illustration reads.

@@ -121,4 +121,72 @@ describe("fiberWalk — CSS rotation capture", () => {
       expect(node.box.height).toBe(80);
     }
   });
+
+  // The doc-card regression: Tailwind v4 fans stacked pages via the STANDALONE
+  // `rotate` property (rotate-[4deg]), which leaves transform:none. A serializer
+  // that only reads `transform` captured zero rotation → pages stacked flat →
+  // white front page covered the pink layers → flat-gray illustration.
+  it("captures rotation from the standalone CSS `rotate` property (transform:none)", () => {
+    const div = host("div");
+    const styles = new Map<MinimalFiber, StyleMap>([[div, {
+      transform: "none",
+      rotate: "4deg",
+    }]]);
+    const unrotated = new Map([[div, { width: 100, height: 60 }]]);
+    const node = walkFiber(div, baseCtx(makeReader(styles, unrotated)));
+    if (isElementNode(node)) {
+      expect(node.style.rotation).toBeCloseTo(4, 0);
+    }
+  });
+
+  it("captures a negative `rotate` property angle", () => {
+    const div = host("div");
+    const styles = new Map<MinimalFiber, StyleMap>([[div, {
+      transform: "none",
+      rotate: "-6deg",
+    }]]);
+    const unrotated = new Map([[div, { width: 100, height: 60 }]]);
+    const node = walkFiber(div, baseCtx(makeReader(styles, unrotated)));
+    if (isElementNode(node)) {
+      expect(node.style.rotation).toBeCloseTo(-6, 0);
+    }
+  });
+
+  it("sums the `rotate` property and the transform matrix", () => {
+    const div = host("div");
+    const styles = new Map<MinimalFiber, StyleMap>([[div, {
+      // matrix ≈ +6deg, plus a standalone rotate of -3deg → net ~3deg.
+      transform: "matrix(0.9945, 0.1045, -0.1045, 0.9945, 0, 0)",
+      rotate: "-3deg",
+    }]]);
+    const unrotated = new Map([[div, { width: 100, height: 60 }]]);
+    const node = walkFiber(div, baseCtx(makeReader(styles, unrotated)));
+    if (isElementNode(node)) {
+      expect(node.style.rotation).toBeCloseTo(3, 0);
+    }
+  });
+
+  it("ignores a 3D (x-axis) `rotate` — not an in-plane spin", () => {
+    const div = host("div");
+    const styles = new Map<MinimalFiber, StyleMap>([[div, {
+      transform: "none",
+      rotate: "x 45deg",
+    }]]);
+    const node = walkFiber(div, baseCtx(makeReader(styles)));
+    if (isElementNode(node)) {
+      expect(node.style.rotation).toBeUndefined();
+    }
+  });
+
+  it("does NOT emit rotation for `rotate: none` (default computed value)", () => {
+    const div = host("div");
+    const styles = new Map<MinimalFiber, StyleMap>([[div, {
+      transform: "none",
+      rotate: "none",
+    }]]);
+    const node = walkFiber(div, baseCtx(makeReader(styles)));
+    if (isElementNode(node)) {
+      expect(node.style.rotation).toBeUndefined();
+    }
+  });
 });
