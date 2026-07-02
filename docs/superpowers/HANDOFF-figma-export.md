@@ -1,10 +1,21 @@
 # Handoff — Figma Export (pixel-fidelity)
 
-**Last updated:** 2026-07-02 (session 2)
-**Branch:** `feat/figma-export-v1` (pushed; 30 commits ahead of `main`; latest `39f009c`)
-**Status:** Working end-to-end. NOT merged. **Step-1 pixel fidelity NOT yet achieved
-— this is the whole remaining job.** Full suite: 1832 passed / 2 skipped
-(`pnpm run studio:test`).
+**Last updated:** 2026-07-02 (session 3)
+**Branch:** `feat/figma-export-v1` (pushed; latest `7651141`)
+**Status:** Working end-to-end. NOT merged. **Step-1 pixel fidelity IN PROGRESS —
+first real pixel win landed this session (doc-card fan restored), but the
+center-pivot render is not yet re-diffed against the clone.** Export suite: 195
+passed (`pnpm run studio:test studio/__tests__/export/`).
+
+> **SESSION 3 TL;DR (2026-07-02):** Fixed the headline gap #1 (flat-gray
+> doc-card). Root cause: the stacked-pages illustration fans via the standalone
+> CSS `rotate` property (Tailwind v4 `rotate-[Ndeg]`), which the serializer never
+> read (it only parsed `transform: matrix()`). Zero rotation captured → pages
+> stacked flat → white front page covered the pink layers → flat gray. Fixed
+> capture + the center-vs-top-left pivot mismatch (Figma pivot verified live).
+> A real export brought the fan back with pink peeking through. **Next agent:
+> restart Studio (server change!), re-export, pixel-diff the center-pivot result
+> vs clone `35:3435`.** Full detail in the SESSION 3 section below.
 
 > **READ THIS FIRST — the mandate (do not drift from it):**
 >
@@ -20,8 +31,92 @@
 > - html.to.design clone (THE BAR): node `35:3435`
 > - Real Arcade frame render (ground truth): screenshot the live frame at
 >   `http://localhost:5556/api/frames/computer-chat/01-computer`
-> - Our latest export (session 2): node `51:6808`
+> - Session-2 export (pre-fix baseline): node `51:6808`
+> - Session-3 export (rotation-capture fix, fan restored, BUT built with the OLD
+>   top-left pivot — center-pivot fix landed after this render): node `53:8757`
 > - Test project: `~/Library/Application Support/arcade-studio/projects/computer-chat`
+
+---
+
+## SESSION 3 (2026-07-02) — first step-1 pixel win: doc-card fan restored
+
+**Outcome: gap #1 (the flat-gray doc-card illustration) root-caused and fixed.**
+This is the first genuine step-1 pixel improvement across all three sessions.
+Committed as `7651141`, pushed. NOT yet re-diffed against the clone with the
+final pivot math — that's the next agent's first move.
+
+### What was actually wrong (root cause, evidence-first)
+
+Session 3 did what sessions 1–2 skipped: **inspected the live doc-card DOM** with
+Playwright `browser_evaluate` before touching code, and screenshotted all three
+references (clone `35:3435`, session-2 export `51:6808`, real frame) side by side.
+
+The stacked-pages illustration is 3 "paper" cards fanned at slight angles
+(`4deg / -3deg / -6deg`). The fan is the WHOLE illustration — it's what lets the
+pink alpha layers (`rgba(255,52,45,0.16 / 0.12)`) peek out from behind the wide
+white front page. The DOM proved those angles come from the **standalone CSS
+`rotate` property** (Tailwind v4's `rotate-[Ndeg]`), with `transform: none`.
+
+The serializer's `rotationDegrees()` only parsed `transform: matrix(...)`. It
+never read the `rotate` property → captured **zero** rotation → pages stacked
+axis-aligned → the wide white front page fully covered the pink layers → flat
+gray. **This was a capture bug, and the SLJ confirmed it: all the layers were
+present, just un-rotated.** (Contrast session 2, which wrongly concluded "stale
+screenshot / non-bug" from a pixel-blind probe.)
+
+A second, coupled bug surfaced once rotation was captured: **pivot mismatch.**
+CSS rotates about the element CENTER (the default `transform-origin`); Figma
+rotates about the node's TOP-LEFT origin. Verified empirically via the live
+bridge (`figma_execute`: rotate a rect, read `relativeTransform` → translation
+stays at the top-left, `[e,f]` = origin). Left uncorrected, the fan scatters.
+
+### The fix (committed `7651141`)
+
+- **`studio/src/export/fiberWalk.ts`**
+  - `rotationDegrees(transform, rotate)` now sums BOTH the `transform` matrix and
+    the standalone `rotate` property. New `cssRotatePropertyDegrees()` parses
+    deg/rad/grad/turn and ignores 3D (x/y-axis) rotations (not in-plane spins).
+  - For a rotated node, emit the **un-rotated frame's true top-left**
+    (`center − halfSize`, center taken from the rotated bbox) instead of the
+    rotated bbox top-left, so the runtime can place + center-rotate it.
+- **`studio/src/export/figma/buildExecuteScript.ts`**
+  - Rotated frames are now placed via **`relativeTransform`** built to pivot about
+    the frame's CENTER: `origin (e,f) = center − R·(w/2, h/2)`. Replaces the old
+    `f.rotation = -deg` (which spun about the top-left and drifted the card).
+- **Tests** (`fiberWalk-transform.test.ts`, `buildExecuteScript-borders.test.ts`):
+  `rotate`-property path, matrix+property summing, 3D-axis skip, `rotate:none`
+  default, and center-preservation of the rotated frame. Mock now decodes
+  rotation from `relativeTransform` like real Figma. All 195 export tests pass.
+
+### What is PROVEN vs NOT (be honest, per the mandate)
+
+- **PROVEN on pixels:** the `rotate`-property capture. After the serializer fix,
+  a fresh UI re-export regenerated the SLJ with `rotation: 4/-3/-6` on the pages
+  and correct un-rotated sizes, and a real Figma export (`53:8757`) **brought the
+  fan back — the pink layers now peek through.** No longer flat gray.
+- **NOT yet proven:** the center-pivot math. The `53:8757` render was built with
+  the OLD top-left pivot (the pivot fix + relativeTransform landed AFTER that
+  export), so its fan is too wide / scatters. The center-pivot version has NOT
+  been rendered in real Figma or diffed against the clone yet.
+
+### NEXT AGENT — do this first (exact steps)
+
+1. **Restart Studio** — `buildExecuteScript.ts` is server-side middleware and
+   does NOT hot-reload (gotcha #2). `kill $(lsof -ti :5556)` then `pnpm run
+   studio`. Confirm the PID started AFTER commit `7651141`.
+2. **Re-export** through the UI (Share → pick "Computer: Chat" → Export to Figma).
+   The `fiberWalk.ts` change already rewrote the SLJ this session, but re-export
+   anyway to be safe (gotcha #1). Bridge must be running in Figma Desktop.
+3. **Screenshot the new export node + pixel-diff vs clone `35:3435`.** Confirm the
+   fan is now TIGHT (matches the clone) rather than scattered. That closes gap #1.
+4. Then move to the next capturable-primitive gap (icon "+" placeholders, text
+   overflow at the right edge) — same evidence-first loop.
+
+### Minor known issue found (not blocking, not fixed)
+
+The SLJ duplicates each page node (each pink layer appears twice, nested, same
+box/fill). Harmless for pixels — both copies rotate identically — but it's a
+serializer wrapper-collapse edge case worth cleaning up eventually.
 
 ---
 
@@ -89,23 +184,24 @@ bug), but they are **not the mandate** and did not move the pixel bar.
 
 ## THE ACTUAL OPEN PROBLEM (start here) — step-1 pixel fidelity
 
-Compare our export (`51:6808`) to the clone (`35:3435`) and the real frame. Known
-gaps where we are BELOW the clone:
+Compare our export to the clone (`35:3435`) and the real frame. Known gaps where
+we are BELOW the clone:
 
-1. **Doc-card "Q3 launch brief" illustration renders flat gray.** THE headline gap.
-   The stacked-pages illustration is **plain divs** (verified in the live DOM):
-   alpha fills `rgba(255,52,45,0.16 / 0.12)`, `border-radius`, `overflow:hidden`
-   clip, absolute nesting, a subtle CSS-var transform. **No gradients, no
-   pseudo-elements, no SVG paths, no bg-images.** The Figma metadata for `51:6808`
-   confirms the PageLayer frames + skeleton bars ARE built (nodes 51:7681–7693) —
-   so this is a **pixel-RENDERING bug, not a capture bug**. Suspects (verify with a
-   real Figma render, not the probe): alpha-fill application, clip on the 152px
-   card vs 400px-tall children, z-order/stacking, or the CSS-var transform. This is
-   a *capturable-primitive* that renders wrong — exactly the step-1 class to fix.
+1. ~~**Doc-card "Q3 launch brief" illustration renders flat gray.**~~ **FIXED in
+   session 3 (commit `7651141`).** Root cause was NOT a render bug — it was a
+   capture bug: the fan comes from the standalone CSS `rotate` property (Tailwind
+   `rotate-[Ndeg]`), which the serializer never read, so all pages captured with
+   zero rotation and stacked flat. Capture + center-pivot both fixed. Fan proven
+   restored in a real export; the final center-pivot render still needs a
+   pixel-diff vs the clone (see the SESSION 3 section — next agent's first step).
 2. **Icons in reaction rows / some buttons show as "+" placeholders** vs the clone's
-   real glyphs (on files where icon swap doesn't resolve).
-3. **Rotation pivot drift** (Figma rotates top-left, CSS center) on small rotated cards.
+   real glyphs (on files where icon swap doesn't resolve). **← now the top open gap.**
+3. ~~**Rotation pivot drift**~~ **FIXED session 3.** Rotated frames now placed via
+   `relativeTransform` that pivots about the center (Figma's top-left pivot verified
+   live). Pending the same pixel-diff confirmation as gap #1.
 4. Stray spinner glyph near the frame title; top-right control cluster slightly off.
+5. **Text overflows the right edge** on the assistant messages (no wrap at the
+   narrower frame width) — observed in the session-3 side-by-side. Investigate next.
 
 **Where we already MATCH or BEAT the clone:** real avatar photos (clone shows gray
 circles), the composer bar + "Ask me anything" placeholder (a genuine session-1
@@ -230,15 +326,22 @@ hardening — see the honesty section above.*
 
 ## Known gaps (honest, priority order for the mandate)
 
-1. **Doc-card illustration flat gray — THE step-1 gap.** Plain divs, nodes build,
-   pixels wrong. Rendering bug (alpha/clip/z-order/transform). Fix FIRST, in real Figma.
-2. **Icon "+" placeholders** on files without icon-set resolution.
-3. **Rotation pivot drift** (top-left vs center); needs `relativeTransform`.
-4. Multi-color-per-side borders keep all widths but only the first side's color.
-5. Stray spinner glyph near title; top-right control cluster slightly off.
-6. Typography style LINKING not done (raw font/size/weight applied; not linked to
+0. **VERIFY the session-3 fix** — re-export with the center-pivot code (server
+   restart!) and pixel-diff vs the clone. Until that's done, gaps #1/#3 below are
+   "fixed pending confirmation," not closed.
+1. ~~Doc-card illustration flat gray~~ **FIXED session 3** (`rotate`-property capture
+   + center-pivot). Fan proven restored; center-pivot render pending pixel-diff (#0).
+2. **Icon "+" placeholders** on files without icon-set resolution. **← top open gap.**
+3. ~~Rotation pivot drift~~ **FIXED session 3** (`relativeTransform` center-pivot).
+4. **Text overflows the right edge** on assistant messages at the narrower frame
+   width (no wrap). New gap spotted session 3.
+5. Multi-color-per-side borders keep all widths but only the first side's color.
+6. Stray spinner glyph near title; top-right control cluster slightly off.
+7. SLJ duplicates each rotated page node (harmless — identical rotation — but a
+   serializer wrapper-collapse edge case).
+8. Typography style LINKING not done (raw font/size/weight applied; not linked to
    Figma text styles). Blocked by the same cold-import wall. **Step 2.**
-7. Component mapping stuck at ~17 + cold-import wall. **Step 2 — do not touch until
+9. Component mapping stuck at ~17 + cold-import wall. **Step 2 — do not touch until
    pixels match the clone.**
 
 ---
