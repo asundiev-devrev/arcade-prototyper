@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createServer } from "vite";
-import { frameMountPlugin } from "../../../server/plugins/frameMountPlugin";
+import { frameMountPlugin, buildFrameBootstrapSource } from "../../../server/plugins/frameMountPlugin";
 
 let tmp: string;
 
@@ -37,6 +37,29 @@ describe("frameMountPlugin", () => {
     expect(html).toContain("theme-overrides.css");
     expect(html).toContain("virtual:arcade-studio-frame.tsx");
     await server.close();
+  });
+
+  it("imports theme-overrides.css AFTER the kit styles.css in the bootstrap (cascade order)", () => {
+    // The kit's styles.css and the override both define theme tokens under
+    // ':root, :root.light' (equal specificity), so the tie breaks on SOURCE
+    // ORDER. The static <head> link loaded BEFORE the JS-injected kit CSS and
+    // lost (live gate: purple --surface-* defeated by the kit's #fff). The
+    // override must be imported LAST of the CSS in the bootstrap so it wins.
+    const src = buildFrameBootstrapSource({
+      absFrame: "/proj/frames/welcome/index.tsx",
+      absOverrides: "/proj/theme-overrides.css",
+      mode: "light",
+      slug: "p",
+      frame: "welcome",
+    });
+    const kitIdx = src.indexOf("@xorkavi/arcade-gen/styles.css");
+    const overrideIdx = src.indexOf("theme-overrides.css");
+    expect(kitIdx).toBeGreaterThan(-1);
+    expect(overrideIdx).toBeGreaterThan(-1);
+    // Override import must come AFTER the kit styles import so it wins the tie.
+    expect(overrideIdx).toBeGreaterThan(kitIdx);
+    // And after tailwind + patches too (it's the LAST css import).
+    expect(overrideIdx).toBeGreaterThan(src.indexOf("arcade-gen-patches.css"));
   });
 
   it("returns 404 for an unknown frame", async () => {
