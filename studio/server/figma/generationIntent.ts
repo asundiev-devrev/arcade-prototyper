@@ -76,9 +76,12 @@ export const EJECTABLE_COMPOSITES = [
 ] as const;
 
 /**
- * The ejectable composite the prompt names as a base, or null. Requires the
- * name to appear near base-language (modify / use … as base / based on) so a
- * passing mention ("looks like ComputerScene") doesn't trigger an eject.
+ * The ejectable composite the prompt names, or null. Matches the name anywhere
+ * in the prompt (whole-word, case-insensitive) — it does NOT check for
+ * base-language intent. Callers that use this to trigger an eject MUST also
+ * verify build intent separately (that gate lives in detectComposeBaseIntent,
+ * via detectBuildIntent). When multiple ejectable composites are named, returns
+ * the first in EJECTABLE_COMPOSITES order.
  */
 export function extractComposeBaseComposite(prompt: string): string | null {
   if (typeof prompt !== "string" || !prompt) return null;
