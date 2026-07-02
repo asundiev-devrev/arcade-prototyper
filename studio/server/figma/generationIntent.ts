@@ -64,6 +64,44 @@ export function detectBuildIntent(prompt: string): boolean {
 }
 
 /**
+ * Kit composites/templates a prompt may name as a "base" to eject and edit.
+ * Kept to the whole-scene/page shapes designers actually reference by name;
+ * extend as needed. Case-insensitive match, whole-word.
+ */
+export const EJECTABLE_COMPOSITES = [
+  "ComputerScene",
+  "ComputerPage",
+  "SettingsPage",
+  "VistaPage",
+] as const;
+
+/**
+ * The ejectable composite the prompt names as a base, or null. Requires the
+ * name to appear near base-language (modify / use … as base / based on) so a
+ * passing mention ("looks like ComputerScene") doesn't trigger an eject.
+ */
+export function extractComposeBaseComposite(prompt: string): string | null {
+  if (typeof prompt !== "string" || !prompt) return null;
+  for (const name of EJECTABLE_COMPOSITES) {
+    // whole-word, case-insensitive
+    const named = new RegExp(`\\b${name}\\b`, "i");
+    if (named.test(prompt)) return name;
+  }
+  return null;
+}
+
+/**
+ * True when the prompt carries build intent AND names a known ejectable
+ * composite as a base. This is a strict subset of detectBuildIntent (and
+ * therefore of shouldGenerateFromFigma), so an eject can never happen on a
+ * turn that routed to the deterministic importer (review M5).
+ */
+export function detectComposeBaseIntent(prompt: string): boolean {
+  if (typeof prompt !== "string" || !prompt) return false;
+  return detectBuildIntent(prompt) && extractComposeBaseComposite(prompt) !== null;
+}
+
+/**
  * Decide whether a Figma-URL prompt should go to the LLM generator (design as
  * reference) instead of the deterministic importer.
  *

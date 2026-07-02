@@ -3,6 +3,8 @@ import { describe, it, expect } from "vitest";
 import {
   detectBuildIntent,
   shouldGenerateFromFigma,
+  detectComposeBaseIntent,
+  extractComposeBaseComposite,
 } from "../../../server/figma/generationIntent";
 
 describe("shouldGenerateFromFigma", () => {
@@ -59,5 +61,36 @@ describe("shouldGenerateFromFigma", () => {
   it("is robust to non-string input", () => {
     expect(detectBuildIntent(undefined as unknown as string)).toBe(false);
     expect(shouldGenerateFromFigma(null as unknown as string)).toBe(false);
+  });
+});
+
+describe("extractComposeBaseComposite", () => {
+  it("extracts a named ejectable composite used as a base", () => {
+    expect(extractComposeBaseComposite("modify the ComputerScene composite")).toBe("ComputerScene");
+    expect(extractComposeBaseComposite("use ComputerScene as a base")).toBe("ComputerScene");
+    expect(extractComposeBaseComposite("based on the empty state of ComputerScene")).toBe("ComputerScene");
+  });
+  it("returns null when no known composite is named", () => {
+    expect(extractComposeBaseComposite("modify the composite")).toBeNull();
+    expect(extractComposeBaseComposite("build a settings page")).toBeNull();
+    expect(extractComposeBaseComposite("use FooBarScene as a base")).toBeNull();
+  });
+  it("is robust to non-string input", () => {
+    expect(extractComposeBaseComposite(undefined as unknown as string)).toBeNull();
+  });
+});
+
+describe("detectComposeBaseIntent", () => {
+  it("fires on the motivating prompt (build intent + named composite)", () => {
+    const p =
+      "Implement this design precisely. Use the empty state of ComputerScene as a base. " +
+      "Modify the ComputerScene composite instead of building from scratch.";
+    expect(detectComposeBaseIntent(p)).toBe(true);
+    // Must be a SUBSET of generation intent — never eject on an importer turn.
+    expect(shouldGenerateFromFigma(p)).toBe(true);
+  });
+  it("does NOT fire without a named ejectable composite", () => {
+    expect(detectComposeBaseIntent("implement this precisely")).toBe(false);
+    expect(detectComposeBaseIntent("modify the composite")).toBe(false);
   });
 });
