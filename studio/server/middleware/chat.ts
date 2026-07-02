@@ -20,6 +20,7 @@ import { frameDir } from "../paths";
 import { getFigmaIngest } from "../figmaIngest";
 import { buildFigmaContextBlock } from "../figma/promptBlock";
 import { shouldUseHiFi, buildHiFiDirective } from "../figma/fidelityDirective";
+import { shouldGenerateFromFigma } from "../figma/generationIntent";
 import { runFigmaKitEmitBranch } from "../figma/kitEmitBranch";
 import { getFigmaSystemIngest, type FigmaSystemIngest } from "../figmaSystemIngest";
 import { renderDesignMd } from "../figma/systemRender";
@@ -206,16 +207,26 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
 
   const isComputerTurn = COMPUTER_MENTION.test(prompt);
 
-  // Figma kit-emit turn: ANY prompt with a Figma URL (that isn't a @Computer
-  // turn) imports the design deterministically — exact geometry from Figma's
-  // REST data, real arcade-gen components where the curated mapping matches.
-  // NO LLM, so it needs neither Bedrock auth nor the Claude subprocess. The
-  // designer iterates on the imported frame with normal follow-up prompts
-  // (which carry no URL and so take the Claude branch). See
-  // server/figma/kitEmitBranch.ts.
+  // Figma kit-emit turn: a BARE-IMPORT prompt with a Figma URL (that isn't a
+  // @Computer turn) imports the design deterministically — exact geometry from
+  // Figma's REST data, real arcade-gen components where the curated mapping
+  // matches. NO LLM, so it needs neither Bedrock auth nor the Claude
+  // subprocess. The designer iterates on the imported frame with normal
+  // follow-up prompts. See server/figma/kitEmitBranch.ts.
+  //
+  // A prompt that ALSO carries build intent — "implement precisely", "modify
+  // the ComputerScene composite", "make the input functional", "apply the
+  // purple theme to all the UI", or an interaction ("click opens a modal") —
+  // is NOT a bare import. The deterministic importer has no LLM, so it would
+  // silently drop every one of those instructions and ship a pixel trace (the
+  // "figma-import-debug" session: composite ignored, dead input, colours
+  // hardcoded not themed). Those prompts take the Claude branch instead, which
+  // pulls the same design in as REFERENCE (geometry + component identities +
+  // ground-truth PNG + hi-fi directive) and builds to the brief.
   const figmaUrl = isComputerTurn ? null : extractFigmaUrl(prompt);
   const figmaParsed = figmaUrl ? parseFigmaUrl(figmaUrl) : null;
-  const isKitEmitTurn = Boolean(figmaParsed);
+  const wantsGeneration = figmaParsed ? shouldGenerateFromFigma(prompt) : false;
+  const isKitEmitTurn = Boolean(figmaParsed) && !wantsGeneration;
 
   // Wire-an-interaction turn: a Figma-import prompt that ALSO asks for behavior
   // ("when you click X this modal appears <2nd url>"). The deterministic
@@ -226,7 +237,7 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
   // Needs the LLM, so it's gated on Bedrock auth like a Claude turn.
   const figmaUrls = isComputerTurn ? [] : extractFigmaUrls(prompt);
   const isWireTurn =
-    isKitEmitTurn && detectInteractionIntent(prompt) && figmaUrls.length >= 2;
+    Boolean(figmaParsed) && detectInteractionIntent(prompt) && figmaUrls.length >= 2;
 
   // Bedrock-auth pre-check applies only to Claude (Bedrock) turns; the
   // Computer agent uses the DevRev PAT, and kit-emit turns use no LLM at all.
