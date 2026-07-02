@@ -84,13 +84,22 @@ can't be edited, it's useless as a base.
 In `enrichPromptWithFigmaContext` (chat.ts), restructure so the directive is appended
 based on **prompt intent + URL alone** (no digest required):
 
-- Compute `wantsHiFi = shouldUseHiFi(prompt, …)` and the parsed `{fileKey, nodeId}`
-  up front — these need no network.
+- Compute the always-append decision from **`detectHiFiIntent(prompt)` directly**, and
+  parse `{fileKey, nodeId}` up front — both need no network.
+  - **Gate-signature note (review S3.1):** do NOT call `shouldUseHiFi(prompt, ctx)` for
+    the always-append decision. `shouldUseHiFi` needs a `HiFiGateContext {classified,
+    hasHighConfidenceComposite}` that only exists when the digest succeeded; its
+    novel-design branch (`classified && !hasHighConfidenceComposite`) is a digest-derived
+    *upgrade*. On a digest miss there is no context, so the base decision must be the
+    context-free `detectHiFiIntent`. When the digest DID succeed, still run the
+    `shouldUseHiFi` upgrade so a novel design with no explicit "precisely" also gets the
+    directive. Net: `appendDirective = detectHiFiIntent(prompt) || (digestOk &&
+    shouldUseHiFi(prompt, ctxFromDigest))`.
 - Attempt the digest as today (15s race), but treat its result as **enhancement only**.
 - Assemble the enriched prompt in layers:
   1. Original prompt.
   2. If digest succeeded: `<figma_context>` block + attach the PNG to `images`.
-  3. If `wantsHiFi`: **always** append `buildHiFiDirective({ fileKey, nodeId,
+  3. If `appendDirective`: **always** append `buildHiFiDirective({ fileKey, nodeId,
      hasReferencePng })`, where `hasReferencePng` reflects whether step 2 actually
      attached one.
 
@@ -108,7 +117,13 @@ Edit `buildHiFiDirective` (studio/server/figma/fidelityDirective.ts):
   - Drill deeper only into one named subtree at a time.
 - Replace the `--scale 2` PNG export with **`--scale 1`** (smaller, avoids the 30s
   export timeout on large frames) and keep the "fetch the URL with curl, then Read the
-  PNG" steps. Note scale-1 is sufficient for visual ground truth.
+  PNG" steps.
+- **Split the roles of PNG vs node-tree (review S3.2).** The PNG at scale 1 is legible
+  for *layout and color* but NOT for reading small body copy verbatim. So the directive
+  must state: **exact text content comes from the node tree's `characters` fields (read
+  via the cap-safe recipe), NOT from OCR'ing the PNG; the PNG is ground truth for
+  layout, structure, and color.** This removes the "is scale-1 legible enough?" risk —
+  the agent never needs to read text off the image.
 - Add an explicit line: **"If a fetch fails (timeout / too large), do NOT give up and
   invent the UI — retry shallower, and build from whatever portion of the PNG you did
   read. A faithful partial beats a confident fabrication."**
@@ -150,7 +165,42 @@ variables in `theme-overrides.css`**, reading the target colors from the Figma P
 This reskins every composite — including ones never ejected — in one place. Inline
 per-surface gradients are called out as the wrong approach (what all 3 attempts did).
 
-No new server machinery; `theme-overrides.css` and its injection already exist.
+No new server machinery; `theme-overrides.css` and its injection already exist. BUT two
+things must be fixed for the override to actually take effect (review B1 — verified
+against `node_modules/@xorkavi/arcade-gen/dist/tokens.css`):
+
+**(a) Selector specificity.** The base tokens are defined under `:root, :root.light {`
+(line 99; `--surface-shallow` at 294) — specificity (0,2,0). The frame shell renders
+`<html class="light">` and `DevRevThemeProvider` adds `.light`, so that selector is
+live. A naive override written as `:root { --surface-shallow: … }` is specificity
+(0,1,0) and **loses on specificity regardless of source order** — the purple silently
+never applies (this is precisely the failure mode all 3 attempts showed). The template
+guidance MUST instruct writing overrides at matching-or-higher specificity covering both
+modes, e.g.:
+
+```css
+:root, :root.light, :root.dark { --surface-shallow: <purple>; … }
+```
+
+or `html.light, html.dark { … }`. A unit test should assert the generated/authored
+override selector is not a bare `:root`.
+
+**(b) Which tokens, and the indirection.** `--surface-shallow: var(--core-neutrals-200)`
+— surfaces are indirected through the core palette. The agent must override the
+**semantic** tokens (`--surface-*`, `--fg-*`), NOT the `--core-neutrals-*` primitives
+(overriding a core primitive corrupts everything neutral). Because the Variables API is
+Enterprise-gated (§ non-goals) the agent cannot enumerate tokens from Figma, so
+CLAUDE.md.tpl must ship an **explicit short target list** for "recolor the whole UI":
+`--surface-backdrop` (window), `--surface-shallow` (sidebar), `--surface-overlay`
+(body/header), `--fg-neutral-prominent` / `--fg-neutral-subtle` (text), and the
+info/accent ramp used for active states. Without this list, "read the colors and write
+them" is the same open-ended guess that failed 3× — the agent knows the purple but not
+which of ~40 tokens carries it. Sample the colors from the PNG (layout/color is what the
+scale-1 PNG is FOR, per §1.2).
+
+**Coverage:** §2.1 is NOT unit-testable end-to-end (real cascade only resolves in a
+browser). The selector-shape check is unit-testable; the actual purple result is a
+**manual render-and-screenshot gate** (see acceptance).
 
 ### 2.2 Eject-to-source for structural change (on demand, named + agent-extendable)
 
@@ -158,6 +208,19 @@ No new server machinery; `theme-overrides.css` and its injection already exist.
 names a composite as a base to *modify/restructure* — "modify the ComputerScene
 composite", "use that composite as a base". Recolor-only asks do NOT trigger eject
 (they take 2.1).
+
+**Trigger must be a subset of `detectBuildIntent`, not a new detector (review M5).**
+There are already two keyword detectors that fire on this prompt (`shouldGenerateFromFigma`
+for routing, `detectHiFiIntent` for the directive). Adding a third, independent eject
+detector risks the three disagreeing on the same prompt — e.g. the frame gets the
+directive but no ejected file, or an eject with no directive. The eject trigger MUST be
+computed as a **narrowed subset of `detectBuildIntent`** — specifically its
+composite-naming patterns (the `modify/use…as base/based on…composite` rows) — plus the
+extracted composite name. One source of truth; the eject fires only on the composite-
+naming subset of build-intent, and it cannot diverge from the routing decision that sent
+the turn to the Claude branch in the first place. It also needs a **name extractor**:
+map the named composite ("ComputerScene") to a real kit file; if no known composite is
+named, do NOT eject (fall back to normal generation).
 
 **Eject helper (new, server-side — `server/figma/ejectComposite.ts` or similar):**
 Given a composite name and a target frame dir:
@@ -169,6 +232,18 @@ Given a composite name and a target frame dir:
      ArtefactCard, ComputerSidebar, ComputerHeader, ChatInput, ChatEmptyState,
      ChatMessages, CanvasPanel, CanvasTabs, ComputerPage — exist in the barrel).
    - `"@xorkavi/arcade-gen"` → `"arcade/components"`.
+   - **Rewrite must preserve import qualifiers (review M4):** carry through
+     `import { Foo as Bar }` aliases (ComputerScene uses `Document as DocumentIcon`,
+     line 60) and `import type { … }` / inline `type` specifiers (so a value-rewrite
+     doesn't trip `verbatimModuleSyntax`). The regex/transform operates per-specifier,
+     not by naive source-substring replace.
+   - **`arcade/components` is NOT a verbatim passthrough (review M4):**
+     `prototype-kit/arcade-components.tsx` re-exports arcade-gen but **overrides
+     `Button`, `IconButton`, `ChatBubble`** with size-narrowed wrappers. ComputerScene
+     imports `IconButton` from raw arcade-gen and uses `size="lg"`. After the rewrite it
+     resolves to the wrapper — this is the intended behavior for frames (frames always
+     use the narrowed versions), but it is a semantic change, not a pure 1:1 move. The
+     test must assert the ejected file **renders** (not merely parses).
 3. Leave the frame's `index.tsx` to import the **local copy** (`./ComputerScene`)
    instead of the barrel.
 
@@ -176,12 +251,28 @@ The ejected copy carries all populated content (rosters, seed transcript, canvas
 so the agent keeps the "batteries included" scene while being free to edit every line:
 swap the bottom `ChatInput` for a full-canvas field, restructure the body, etc.
 
+**Where the full-canvas input actually goes (review S2 — verified against
+`templates/ComputerPage.tsx:99-106`).** The reviewer worried the input's placement is
+owned by the un-ejected `ComputerPage` and therefore a one-level eject can't produce a
+full-canvas input. I checked: `ComputerPage` renders
+`<div class="flex-1 min-h-0 overflow-y-auto">{children}</div>` then `{chatInput}` as its
+sibling. The **body region IS the `children` slot** — which `ComputerScene` fills. So the
+one-level eject IS sufficient for the motivating case: in the ejected `ComputerScene`,
+the agent puts the full-canvas editable text field in the **`children` (body) slot** and
+passes an **empty/omitted `chatInput`** — the input then occupies the whole canvas,
+matching the PNG's flat text-canvas layout. It does NOT require ejecting `ComputerPage`.
+The template guidance (§2.3) MUST state this explicitly, because the naive move — editing
+the `chatInput` slot — yields a bottom bar (the reviewer's predicted "modal-hack in a new
+disguise"). Ejecting `ComputerPage` is only needed if the sidebar/header/panel *frame
+relationship* itself must change, which the motivating design does not require.
+
 **Depth = one level, agent-extendable (NOT blanket deep-copy):**
 - Default: eject only the **named** composite. Its children stay as `arcade-prototypes`
   barrel imports. This covers "replace the input / restructure the scene body / swap
   which children are used" — the common case.
 - If, while editing, the agent finds a **specific child whose own *shape* must change**
-  (not just its color — color is 2.1), it ejects **that child too, on demand**, via the
+  (not just its color — color is 2.1, and not the body/input relationship — that's the
+  `children`-slot technique above), it ejects **that child too, on demand**, via the
   same helper. This is the "eject a bunch of parts" case, reached only when genuinely
   needed, one file at a time — never an automatic 8–10-file copy.
 
@@ -194,10 +285,20 @@ normally — a good guardrail that the rewrite produced real export names.
 
 Add a focused section, "Modifying a composite (eject-to-source)":
 - Recolor → `theme-overrides.css` token overrides (2.1). Never inline per-surface hex.
+  Include the **exact override selector** (`:root, :root.light, :root.dark { … }`, NOT
+  bare `:root` — review B1) and the **target-token list** (`--surface-backdrop`,
+  `--surface-shallow`, `--surface-overlay`, `--fg-neutral-prominent`,
+  `--fg-neutral-subtle`, active-state accent). Override semantic tokens, never
+  `--core-neutrals-*`.
 - Restructure → the ejected local copy is the surface to edit; editing/reading ITS
   source is allowed (a scoped exception to the "never read composite source" default,
   which still holds for un-ejected kit composites).
-- Eject more children only when a child's shape (not color) must change.
+- **Full-canvas input** → put the input in the ejected scene's **body (`children`) slot**
+  and omit `chatInput`; do NOT just edit the `chatInput` slot (that yields a bottom bar —
+  review S2).
+- **Text content** comes from the node tree's `characters`, not the PNG (review S3.2).
+- Eject more children only when a child's shape (not color, not the body/input
+  relationship) must change.
 - The eject is performed by Studio before the turn when the trigger fires; the prompt
   will name the local path. If the agent decides it needs another composite ejected, it
   says so / uses the helper path convention.
@@ -206,7 +307,16 @@ Add a focused section, "Modifying a composite (eject-to-source)":
 
 - Unit (ejectComposite): rewrites all 9 ComputerScene relative imports to
   `arcade-prototypes`; rewrites `@xorkavi/arcade-gen` → `arcade/components`; output
-  contains no `./*.js` or `../templates/*.js` specifiers; the copied file still parses.
+  contains no `./*.js` or `../templates/*.js` specifiers; **preserves the
+  `Document as DocumentIcon` alias and any `type` qualifier** (review M4); the copied
+  file **renders** under the frame aliases, not merely parses (catches the
+  `arcade/components` wrapper-swap — review M4).
+- Unit (theme override shape — review B1): the recolor guidance/helper produces an
+  override selector that is NOT a bare `:root` (must include `.light`/`.dark` or `html`).
+- Unit (trigger consistency — review M5): the eject trigger is the composite-naming
+  subset of `detectBuildIntent`; a prompt that ejects also passes
+  `shouldGenerateFromFigma` (never eject on a turn routed to the importer); a build-intent
+  prompt that names NO known composite does not eject.
 - Integration: a build-intent + "modify ComputerScene" prompt causes an
   eject (frame folder contains `ComputerScene.tsx`) and the injected prompt names the
   local path. A recolor-only prompt does NOT eject.
@@ -215,13 +325,18 @@ Add a focused section, "Modifying a composite (eject-to-source)":
 
 ### Manual acceptance (the real gate — live app, real Figma)
 
-Re-run the attempt-3 prompt against the clean file in the running app:
+§2.1 (recolor) and the final visual match are **not unit-testable** — the CSS cascade
+only resolves in a browser. This manual gate is REQUIRED before claiming Part 2 closes
+the motivating case. Re-run the attempt-3 prompt against the clean file in the running
+app:
 - Frame folder has an editable `ComputerScene.tsx`; `index.tsx` imports it locally.
-- `theme-overrides.css` carries purple token overrides; sidebar + header + canvas +
-  nav all render purple (not just an inline orb).
-- The bottom chat input is replaced by a full-canvas editable text field pre-filled
-  with the daily-brief text, matching the PNG's flat text-canvas layout (not a floating
-  modal).
+- `theme-overrides.css` carries purple token overrides on a `:root, :root.light,
+  :root.dark` (or `html.light, html.dark`) selector; sidebar + header + canvas + nav
+  all render purple (not just an inline orb, and not neutral because the override lost
+  the cascade — review B1).
+- The bottom chat input is replaced by a full-canvas editable text field (in the body
+  slot, not a bottom bar) pre-filled with the daily-brief text from the node tree,
+  matching the PNG's flat text-canvas layout (not a floating modal).
 - Screenshot the result and compare side-by-side with the Figma PNG.
 
 ---
@@ -243,3 +358,20 @@ Re-run the attempt-3 prompt against the clean file in the running app:
 Part 1 first (pure win, no new concepts, unblocks fidelity on every precise turn),
 then Part 2 (eject helper + token guidance). Each part is independently shippable and
 independently testable. Manual acceptance runs after both land.
+
+## Adversarial review — findings incorporated (2026-07-02)
+
+Reviewed by the adversarial-document-reviewer; each finding verified against real files
+before folding in:
+- **B1 (blocking, verified):** flat `:root` token override loses the cascade to
+  `:root, :root.light` (tokens.css:99/294) → §2.1 now mandates a `.light/.dark` selector
+  + explicit target-token list. Was the true cause the 3 attempts couldn't recolor.
+- **S2 (serious → resolved, verified):** full-canvas input does NOT need ejecting
+  ComputerPage — the body is the `children` slot (ComputerPage.tsx:104). §2.2/§2.3 now
+  say: put the input in the body slot, omit `chatInput`. One-level eject suffices.
+- **S3 (serious, verified):** §1.1 now uses `detectHiFiIntent` (not `shouldUseHiFi`) for
+  the context-free always-append decision; §1.2 splits PNG (layout/color) from node-tree
+  (`characters` = text) so scale-1 legibility is a non-issue.
+- **M4/M5 (minor, verified):** rewrite preserves alias/`type` qualifiers + notes the
+  `arcade/components` wrapper-swap (test must render, not just parse); eject trigger is a
+  subset of `detectBuildIntent`, never a divergent detector.
