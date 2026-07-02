@@ -14,8 +14,11 @@ describe("CLAUDE.md.tpl recolor + eject guidance", () => {
     // a bare :root override (0,1,0) loses. Pin the correct selector shape.
     expect(tpl).toMatch(/:root\.light/);
     expect(tpl).toMatch(/theme-overrides\.css/);
-    // Warns explicitly that a bare :root override is defeated by the cascade.
-    expect(tpl).toMatch(/bare `?:root`?|:root alone|loses the cascade|specificity/i);
+    // Must mention the bare :root anti-pattern AND warn against it (not endorse
+    // it). Two assertions so the test can't pass on flipped guidance like
+    // "a bare :root is fine" — this is the B1 regression guard.
+    expect(tpl).toMatch(/bare\s+`?:root`?/i);
+    expect(tpl).toMatch(/loses the cascade/i);
   });
 
   it("lists the semantic surface + fg tokens to override, and warns off core primitives", () => {
@@ -23,6 +26,7 @@ describe("CLAUDE.md.tpl recolor + eject guidance", () => {
     expect(tpl).toMatch(/--surface-shallow/);
     expect(tpl).toMatch(/--surface-overlay/);
     expect(tpl).toMatch(/--fg-neutral-prominent/);
+    expect(tpl).toMatch(/--fg-neutral-subtle/);
     expect(tpl).toMatch(/--core-neutrals/);   // mentioned as "do NOT override"
   });
 
