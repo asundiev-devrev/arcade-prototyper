@@ -299,6 +299,50 @@ This is faster, more accurate, and harder to under-populate than re-deriving the
 
 **Don't create a duplicate of the reference frame.** The seeded `00-computer-reference/index.tsx` already renders zero-prop `<ComputerScene />`. If the prompt is a generic Computer / Agent Studio request with **no override** ("build me a Computer chat screen", "Agent Studio screen", "Maple chat", etc.), do NOT create a second frame that is also bare `<ComputerScene />` — that ships the user two identical frames. Instead, in the chat reply, point them at `00-computer-reference` and ask what variant they want next (e.g. empty state, with the artefacts panel, a custom title). Only create a new frame when the prompt names a *deviation* the reference frame does not show — a different state, the panel toggled, a renamed thread, a custom roster, etc. The new frame should differ from `00-computer-reference` by at least one prop override.
 
+### Modifying a composite as a base (eject-to-source)
+
+When the prompt asks to **modify / restructure / recolor** a composite (beyond the
+handful of props it exposes) — e.g. "use ComputerScene as a base and modify it" — Studio
+ejects an editable copy of that composite's real source to `.eject/<Name>.tsx` in the
+project root before your turn, and names it in an `<eject_to_source>` block. When you see
+that block:
+
+1. **Copy `.eject/<Name>.tsx` into your new frame folder** and import it LOCALLY:
+   `import { <Name> } from "./<Name>";` — NOT from `arcade-prototypes`. Edit that local
+   copy directly. Reading/editing THIS copy is allowed; the "never read composite source"
+   rule applies only to the sealed kit versions.
+2. **Full-canvas / full-screen input:** put your input in the scene's **body (children) slot**
+   and OMIT the `chatInput` slot. Editing the `chatInput` slot only gives you a bottom bar
+   — the children slot is what fills the canvas.
+3. **Eject a child too** only if that child's *shape* must change (not its color — that's
+   tokens below; not the input's position — that's the body slot above).
+
+### Recoloring the whole UI (theme tokens, not inline hex)
+
+To apply a new color theme across the app (sidebar, header, canvas, nav), DO NOT hand-roll
+inline gradients or per-surface hex — that only tints the surfaces you touch and leaves the
+rest default (the #1 recolor failure). Instead, override the design-token variables in the
+project's **`theme-overrides.css`** (already loaded by every frame).
+
+**Selector MUST be mode-scoped — a bare `:root` is silently defeated.** The kit defines
+its tokens under `:root, :root.light { … }` (higher specificity than `:root` alone), and
+the frame renders with `class="light"`. A bare `:root { --surface-shallow: … }` override
+LOSES the cascade and never applies. Write:
+
+```css
+:root, :root.light, :root.dark {
+  --surface-backdrop: <color>;   /* window */
+  --surface-shallow: <color>;    /* sidebar / rail */
+  --surface-overlay: <color>;    /* body + header */
+  --fg-neutral-prominent: <color>;  /* primary text */
+  --fg-neutral-subtle: <color>;     /* muted text */
+}
+```
+
+Override these **semantic** tokens. Do NOT override `--core-neutrals-*` primitives — they
+back many tokens and changing one corrupts everything neutral. Sample the target colors
+from the Figma PNG (the PNG is your source for color + layout).
+
 ### `ComputerPage` — for custom Computer page shapes
 
 For Computer / Agent Studio chat screens whose **shape** differs from the canonical scene (a different sidebar, a custom transcript, a non-default header). `ComputerPage` is the slot graph: caller provides `sidebar`, `header`, `chatInput`, `children`, optional `panel`. Composes `ComputerSidebar` (which OWNS its own window chrome) + `ComputerHeader` + a body slot + `ChatInput`. Full prop signature + slot docs are in `KIT-MANIFEST.md`.
