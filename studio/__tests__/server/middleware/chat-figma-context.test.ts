@@ -184,3 +184,33 @@ describe("hi-fi directive survives a Figma digest miss", () => {
     expect(sent).toContain("<high_fidelity_mode>");
   });
 });
+
+describe("eject-to-source on a compose-base turn", () => {
+  it("ejects the named composite and tells the agent where it is", async () => {
+    const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
+    const prompt =
+      "Implement this precisely. Modify the ComputerScene composite as a base. " +
+      "https://www.figma.com/design/k/x?node-id=1-2";
+    const res = await post(p.slug, prompt);
+    expect(res.status).toBe(202);
+    await drainStream(p.slug);
+
+    // Ejected copy written to the project's .eject staging dir.
+    const ejected = path.join(
+      process.env.ARCADE_STUDIO_ROOT!, "projects", p.slug, ".eject", "ComputerScene.tsx",
+    );
+    expect(fs.existsSync(ejected)).toBe(true);
+
+    // Prompt handed to the agent names the ejected path + the local-import rule.
+    const sent = fs.readFileSync(process.env.ARCADE_TEST_PROMPT_OUT!, "utf8");
+    expect(sent).toContain(".eject/ComputerScene.tsx");
+  });
+
+  it("does NOT eject on a plain precise prompt with no named composite", async () => {
+    const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
+    await post(p.slug, "Implement this precisely https://www.figma.com/design/k/x?node-id=1-2");
+    await drainStream(p.slug);
+    const ejectDir = path.join(process.env.ARCADE_STUDIO_ROOT!, "projects", p.slug, ".eject");
+    expect(fs.existsSync(ejectDir)).toBe(false);
+  });
+});

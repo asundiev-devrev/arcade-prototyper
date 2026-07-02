@@ -20,8 +20,9 @@ import { frameDir } from "../paths";
 import { getFigmaIngest } from "../figmaIngest";
 import { buildFigmaContextBlock } from "../figma/promptBlock";
 import { shouldUseHiFi, detectHiFiIntent, buildHiFiDirective } from "../figma/fidelityDirective";
-import { shouldGenerateFromFigma } from "../figma/generationIntent";
+import { shouldGenerateFromFigma, detectComposeBaseIntent, extractComposeBaseComposite } from "../figma/generationIntent";
 import { runFigmaKitEmitBranch } from "../figma/kitEmitBranch";
+import { ejectComposite } from "../figma/ejectComposite";
 import { getFigmaSystemIngest, type FigmaSystemIngest } from "../figmaSystemIngest";
 import { renderDesignMd } from "../figma/systemRender";
 import { designMdPath } from "../paths";
@@ -632,7 +633,42 @@ async function runClaudeBranch(ctx: {
   // block that (a) names the frames and (b) restates the two hard edit rules.
   // No-op on the first build and on right-click edits — see editContext.ts.
   const frameSlugs = (project.frames ?? []).map((f) => f.slug);
-  const prompt = prependEditContext(enriched.prompt, frameSlugs);
+
+  // Eject-to-source: when the prompt asks to modify a named kit composite as a
+  // base, copy its editable source into the project's .eject staging dir and
+  // tell the agent to use it. The agent picks its frame slug mid-turn, so we
+  // can't write into frames/<slug>/ up front — staging + instruction mirrors
+  // the 00-computer-reference seed pattern. See spec §2.2/§2.3.
+  let ejectSuffix = "";
+  if (detectComposeBaseIntent(ctx.prompt)) {
+    const composite = extractComposeBaseComposite(ctx.prompt);
+    if (composite) {
+      try {
+        const ejectDir = path.join(projectDir(slug), ".eject");
+        await ejectComposite(composite, ejectDir);
+        ejectSuffix =
+          `\n\n<eject_to_source>\n` +
+          `An EDITABLE copy of ${composite}'s real source has been written to ` +
+          `\`.eject/${composite}.tsx\` (relative to the project root). To modify ` +
+          `${composite} beyond its props (replace the input, restructure the body, ` +
+          `recolor), COPY that file into your new frame folder and import it LOCALLY ` +
+          `(\`import { ${composite} } from "./${composite}"\`) instead of from ` +
+          `"arcade-prototypes". Edit the local copy directly. Reading/editing THIS ` +
+          `copy's source is allowed (the no-composite-source rule applies only to the ` +
+          `sealed kit versions).\n` +
+          `- For a FULL-CANVAS input: put your input in the scene's body (children) ` +
+          `slot and omit the chatInput slot — do NOT just edit the chatInput slot ` +
+          `(that yields a bottom bar).\n` +
+          `- To RECOLOR the whole UI: override design tokens in theme-overrides.css ` +
+          `(see CLAUDE.md), not inline per-surface hex.\n` +
+          `</eject_to_source>`;
+      } catch (err) {
+        console.warn(`[studio] eject failed for ${composite}:`, err);
+      }
+    }
+  }
+
+  const prompt = prependEditContext(enriched.prompt + ejectSuffix, frameSlugs);
   let capturedSessionId: string | undefined;
   const narrationTexts: string[] = [];
   const toolLabels: string[] = [];
