@@ -435,6 +435,35 @@ export function classifyGenerationError(info: { error?: string; timedOut: boolea
   return "other";
 }
 
+/**
+ * How long `enrichPromptWithFigmaContext` waits for the Figma digest (phase-1:
+ * tree + tokens + PNG) before starting the turn without it.
+ *
+ * A plain "sketch me X from this figma" turn keeps the fast 15s cap: if the
+ * digest is slow, the fast path still starts quickly and the agent iterates.
+ *
+ * A PRECISE turn ("implement exactly", "modify ComputerScene precisely") NEEDS
+ * the digest itself — the geometry map, component identities, and ground-truth
+ * PNG — to be faithful, so it waits out the real phase-1 CEILING rather than a
+ * guessed margin. Phase-1 runs getNode then getVariables+exportPng concurrently
+ * (server/figmaIngest.ts:runPhase1); each figmanage call is capped at 30s
+ * (server/figmaCli.ts DEFAULT_FIGMANAGE_TIMEOUT_MS), so the worst case is
+ * ~30s (getNode) + ~30s (concurrent vars+png) ≈ 60s. We wait 65s on hi-fi turns
+ * so a cold/large file clears the ceiling instead of missing the race the way a
+ * 15s — or even a 45s — budget did (the implement-this-design-precisely-4 gate
+ * missed at 15.69s; a bigger file lands well past 45s). Phase-1 caches on
+ * completion, so only the FIRST precise turn on a URL ever waits.
+ *
+ * Pure + exported for unit testing — the timing behaviour is otherwise
+ * unreachable in the middleware suite (mocks resolve instantly), which is how
+ * the earlier narration-only test silently passed with the fix reverted.
+ */
+export const FAST_DIGEST_BUDGET_MS = 15_000;
+export const HIFI_DIGEST_BUDGET_MS = 65_000;
+export function digestRaceBudgetMs(isHiFi: boolean): number {
+  return isHiFi ? HIFI_DIGEST_BUDGET_MS : FAST_DIGEST_BUDGET_MS;
+}
+
 async function enrichPromptWithFigmaContext(
   prompt: string,
   images: string[],
@@ -457,17 +486,10 @@ async function enrichPromptWithFigmaContext(
   const ingest = await getFigmaIngest();
   let result = ingest.getCached(parsed.fileId, parsed.nodeId);
   if (!result) {
-    // Digest-race budget. A plain "sketch me X from this figma" prompt keeps
-    // the fast 15s cap — if the digest is slow, the fast path still starts
-    // quickly. But a PRECISE build ("implement exactly", "modify ComputerScene
-    // precisely") NEEDS the digest itself — the geometry map, component
-    // identities, and the ground-truth PNG — to be faithful. The live gate
-    // (implement-this-design-precisely-4) proved 15s is too tight even on a
-    // CLEAN small file: phase-1 finished at 15.69s and missed the 15.0s race
-    // by 0.69s, so the agent got NO <figma_context> and NO reference PNG and
-    // freelanced. Wait longer on hi-fi turns; phase-1 caches on completion, so
-    // this only bites the FIRST precise turn on a URL.
-    const digestBudgetMs = explicitHiFi ? 45_000 : 15_000;
+    // Digest-race budget: fast (15s) for ordinary turns, phase-1-ceiling (65s)
+    // for precise turns that need the design context to be faithful. See
+    // digestRaceBudgetMs above for the derivation and the live-gate history.
+    const digestBudgetMs = digestRaceBudgetMs(explicitHiFi);
     // This fetch blocks turn start. Tell the user immediately so the chat pane
     // shows progress instead of a frozen "Working…" while figmanage + token
     // resolve + PNG export run.

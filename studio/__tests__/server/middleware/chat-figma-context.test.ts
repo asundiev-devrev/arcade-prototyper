@@ -184,11 +184,12 @@ describe("hi-fi directive survives a Figma digest miss", () => {
     expect(sent).toContain("<high_fidelity_mode>");
   });
 
-  it("uses the wider precise-mode digest-race budget on a hi-fi turn", async () => {
-    // The precisely-4 live gate showed phase-1 finishing at 15.69s and missing
-    // the flat 15s race by 0.69s, so a precise turn got NO design context and
-    // freelanced. Hi-fi turns now wait longer; the distinct "precise mode"
-    // narration is the observable proxy that the wider-budget branch was taken.
+  it("emits the precise-mode narration on a hi-fi turn (the wider-budget branch)", async () => {
+    // This proves the hi-fi BRANCH is taken end-to-end through the middleware.
+    // It does NOT prove the budget VALUE — narration + budget both key off
+    // `explicitHiFi` but are independent statements, so a reverted budget would
+    // still emit this string. The budget value is pinned separately + directly
+    // in digest-race-budget.test.ts (digestRaceBudgetMs). Both are needed.
     const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
     const stream = await (async () => {
       await post(p.slug, "Implement this precisely https://www.figma.com/design/k/x?node-id=1-2");
