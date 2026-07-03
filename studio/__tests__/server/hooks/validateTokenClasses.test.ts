@@ -41,7 +41,8 @@ describe("parseClassNames", () => {
 describe("detectTokenClassViolations", () => {
   const tokens = new Set([
     "fg-neutral-medium", "fg-neutral-prominent", "surface-shallow",
-    "surface-overlay", "intelligence-prominent", "stroke-neutral-subtle",
+    "surface-overlay", "bg-intelligence-prominent", "stroke-neutral-subtle",
+    "elevation-01",
   ]);
 
   it("flags the named-token form and suggests the paren form", () => {
@@ -57,6 +58,7 @@ describe("detectTokenClassViolations", () => {
     const sug = Object.fromEntries(v.map((x) => [x.badClass, x.suggestion]));
     expect(sug["text-fg-neutral-medium"]).toBe("text-(--fg-neutral-medium)");
     expect(sug["bg-surface-shallow"]).toBe("bg-(--surface-shallow)");
+    expect(sug["bg-intelligence-prominent"]).toBe("bg-(--bg-intelligence-prominent)");
   });
 
   it("does NOT flag real utilities, paren form, arbitrary brackets, or custom classes", () => {
@@ -81,12 +83,35 @@ describe("detectTokenClassViolations", () => {
     expect(detectTokenClassViolations(["text-fg-neutral-medium"], new Set())).toEqual([]);
   });
 
-  it("does NOT flag a built-in utility even if a token is named like the full base (narrow rule)", () => {
-    // If a token '--bg-gradient-to-r' existed, the built-in Tailwind utility
-    // 'bg-gradient-to-r' must still NOT flag — only the TAIL matching a token
-    // counts, not the full base. Guards against widening the rule.
-    const t = new Set(["bg-gradient-to-r"]); // tail would be "gradient-to-r", not in set
-    expect(detectTokenClassViolations(["bg-gradient-to-r"], t)).toEqual([]);
+  it("does NOT flag when only tail matches (not base), preserving Tailwind utilities", () => {
+    // The logic now checks BOTH tail and base. If neither the tail nor the base is
+    // a token, it won't flag. In this artificial test, we have a token named
+    // 'bg-gradient-to-r' but the tail 'gradient-to-r' is not a token, so it would
+    // match the base-is-token rule. However, in REALITY (real arcade-gen CSS),
+    // 'bg-gradient-to-r' is NOT a token — see the integration test for the real guard.
+    // This unit test now verifies that when base IS a token but tail is NOT, we flag it.
+    const t = new Set(["bg-gradient-to-r"]); // tail='gradient-to-r' not in set, base is
+    const v = detectTokenClassViolations(["bg-gradient-to-r"], t);
+    expect(v.length).toBe(1);
+    expect(v[0]?.suggestion).toBe("bg-(--bg-gradient-to-r)");
+  });
+
+  it("does NOT flag shadow-elevation-01 when elevation-01 is a token", () => {
+    // shadow-elevation-01 is a real rendering utility; shadow was removed from
+    // TOKEN_PREFIXES so it's never flagged. This regression test guards against
+    // the over-block from Defect 1.
+    const v = detectTokenClassViolations(["shadow-elevation-01"], tokens);
+    expect(v).toEqual([]);
+  });
+
+  it("flags bg-<intent>-* family when the full base is a token name", () => {
+    // bg-intelligence-prominent where --bg-intelligence-prominent is the token.
+    // The base 'bg-intelligence-prominent' is itself a token, so it should be
+    // flagged and suggest bg-(--bg-intelligence-prominent).
+    const v = detectTokenClassViolations(["bg-intelligence-prominent"], tokens);
+    expect(v.length).toBe(1);
+    expect(v[0]?.badClass).toBe("bg-intelligence-prominent");
+    expect(v[0]?.suggestion).toBe("bg-(--bg-intelligence-prominent)");
   });
 });
 

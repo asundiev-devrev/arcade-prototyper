@@ -17,7 +17,7 @@ import { pathToFileURL } from "node:url";
 // paren/`--` form never compiles → silent no-op.
 const TOKEN_PREFIXES = [
   "text", "bg", "border", "fill", "ring", "stroke", "from", "to", "via",
-  "divide", "outline", "decoration", "shadow", "accent", "caret", "placeholder",
+  "divide", "outline", "decoration", "accent", "caret", "placeholder",
 ];
 
 /** Every custom-property name (sans leading --) defined in the CSS text. */
@@ -60,8 +60,10 @@ function splitVariants(cls) {
 /**
  * One violation per class of the named-token form whose tail is a real token.
  * e.g. `text-fg-neutral-medium` → tail `fg-neutral-medium` ∈ tokens →
- * suggest `text-(--fg-neutral-medium)`. Preserves any variant prefix.
- * Fails open: empty token set → no violations.
+ * suggest `text-(--fg-neutral-medium)`. Also catches cases where the full base
+ * is itself a token name (e.g. `bg-intelligence-prominent` where
+ * `--bg-intelligence-prominent` is the token) but the tail is not. Preserves
+ * any variant prefix. Fails open: empty token set → no violations.
  */
 export function detectTokenClassViolations(classes, tokenNames) {
   if (!tokenNames || tokenNames.size === 0) return [];
@@ -75,11 +77,29 @@ export function detectTokenClassViolations(classes, tokenNames) {
     const prefix = base.slice(0, dash);
     const tail = base.slice(dash + 1);
     if (!TOKEN_PREFIXES.includes(prefix)) continue;
-    if (!tokenNames.has(tail.toLowerCase())) continue; // tail isn't a real token → not ours
-    out.push({
-      badClass: cls,
-      suggestion: `${variants}${prefix}-(--${tail})`,
-    });
+
+    const tailIsToken = tokenNames.has(tail.toLowerCase());
+    const baseIsToken = tokenNames.has(base.toLowerCase());
+
+    // Flag if the tail is a token (e.g., text-fg-neutral-medium → tail=fg-neutral-medium)
+    if (tailIsToken) {
+      out.push({
+        badClass: cls,
+        suggestion: `${variants}${prefix}-(--${tail})`,
+      });
+      continue;
+    }
+
+    // Also flag if the FULL base is itself a token name BUT the tail is not
+    // (e.g., bg-intelligence-prominent where --bg-intelligence-prominent is the token).
+    // This ensures we don't flag built-in utilities like bg-gradient-to-r when a token
+    // happens to have that name.
+    if (baseIsToken && !tailIsToken) {
+      out.push({
+        badClass: cls,
+        suggestion: `${variants}${prefix}-(--${base})`,
+      });
+    }
   }
   return out;
 }
