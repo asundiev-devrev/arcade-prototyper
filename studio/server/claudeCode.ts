@@ -77,6 +77,12 @@ const BLOCK_IMAGE_RESHAPE_HOOK = path.resolve(MODULE_DIR, "hooks", "blockImageRe
 // exist in the real barrels. Emits Did-you-mean suggestions on block so
 // the model self-corrects in the same turn.
 const VALIDATE_ARCADE_IMPORTS_HOOK = path.resolve(MODULE_DIR, "hooks", "validateArcadeImports.mjs");
+// PostToolUse hook that blocks Write/Edit introducing design-token utility
+// classes in the un-compilable named form (text-fg-neutral-medium) instead of
+// the paren form (text-(--fg-neutral-medium)). Tailwind v4 silently drops the
+// named form → unstyled frame. Emits a paren-form did-you-mean so the model
+// self-corrects in the same turn.
+const VALIDATE_TOKEN_CLASSES_HOOK = path.resolve(MODULE_DIR, "hooks", "validateTokenClasses.mjs");
 // Arcade-gen clone: contains src/components (stories, icons barrel) the agent
 // consults for component APIs. Overridable via env for non-default checkouts;
 // falls back to ~/arcade-gen when HOME is set, and to an unresolvable sentinel
@@ -271,6 +277,10 @@ export async function runClaudeTurn(opts: RunTurnOptions): Promise<void> {
         {
           matcher: "Write|Edit",
           hooks: [{ type: "command", command: hookCommand(VALIDATE_ARCADE_IMPORTS_HOOK) }],
+        },
+        {
+          matcher: "Write|Edit",
+          hooks: [{ type: "command", command: hookCommand(VALIDATE_TOKEN_CLASSES_HOOK) }],
         },
       ],
     },

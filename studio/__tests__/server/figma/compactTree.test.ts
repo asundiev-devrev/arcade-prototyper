@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { compactTree } from "../../../server/figma/compactTree";
+import { compactTree, DEPTH_CAP, MAX_NODES } from "../../../server/figma/compactTree";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const fixturesDir = path.resolve(__dirname, "../../fixtures/figma");
@@ -77,15 +77,103 @@ describe("compactTree (edge cases)", () => {
     expect(tree.name).toBeUndefined();
   });
 
-  it("caps depth and emits a warning", async () => {
-    const fs = await import("node:fs");
-    const path = await import("node:path");
-    const { fileURLToPath } = await import("node:url");
-    const __dirname = path.dirname(fileURLToPath(import.meta.url));
-    const fx = JSON.parse(fs.readFileSync(
-      path.resolve(__dirname, "../../fixtures/figma/oversized.json"), "utf-8"));
-    const { warnings } = compactTree(fx.root.document);
-    expect(warnings.some((w) => /depth cap|node cap/.test(w))).toBe(true);
+  // ── Caps must be big enough for a real full-screen frame ──────────────────
+  //
+  // These pin the ABSOLUTE cap values, not "cap + N". A relative-to-cap test is
+  // a tautology (it passes at 12/500 AND 16/1200) — the adversarial review
+  // proved the old versions shipped green with the caps reverted. The numbers
+  // below (depth 15, ~700 nodes) are measured from the real precisely-4 frame:
+  // its raw tree was 900 nodes / depth-15 and the old 12/500 caps truncated it
+  // to 487 nodes, dropping 46 of 107 text leaves so the agent hallucinated the
+  // brief text from the PNG. Any regression below depth-15 / 700-node capacity
+  // reintroduces that exact failure, and these tests must catch it.
+
+  /** Build a text leaf nested `depth` frames deep, carrying `label`. */
+  function buriedText(depth: number, label: string) {
+    let node: any = {
+      id: `text-${label}`, type: "TEXT", characters: label,
+      absoluteBoundingBox: { x: 0, y: 0, width: 200, height: 20 },
+      style: { fontSize: 16, lineHeightPx: 24 },
+    };
+    for (let i = 0; i < depth; i++) {
+      node = {
+        // Non-passthrough (own fill) so the wrapper is NOT collapsed — this is a
+        // genuine nesting depth, matching the real frame's mixed-weight text runs.
+        id: `w-${label}-${i}`, type: "FRAME",
+        absoluteBoundingBox: { x: 0, y: 0, width: 300, height: 300 },
+        fills: [{ type: "SOLID", color: { r: 0.5, g: 0, b: 0.7 } }],
+        children: [node],
+      };
+    }
+    return node;
+  }
+
+  it("keeps text nested at depth 15 (real frame depth) — DEPTH_CAP must clear it", () => {
+    // Fails at DEPTH_CAP=12 (text at depth 15 is dropped), passes at 16.
+    const { tree } = compactTree({
+      id: "root", type: "FRAME",
+      absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 400 },
+      fills: [{ type: "SOLID", color: { r: 1, g: 1, b: 1 } }],
+      children: [buriedText(15, "Present the Service Blueprint")],
+    });
+    const json = JSON.stringify(tree);
+    expect(json).toContain("Present the Service Blueprint");
+    expect(DEPTH_CAP).toBeGreaterThanOrEqual(15);
+  });
+
+  it("keeps all text in a ~700-node full-screen frame — MAX_NODES must clear it", () => {
+    // The real precisely-4 frame was 900 raw nodes; 12/500 dropped 46/107 text
+    // leaves. This 700-node frame with 120 text leaves fails at MAX_NODES=500
+    // (later text leaves truncated → cap warning) and passes at 1200 (no
+    // truncation, every leaf survives).
+    const children: any[] = [];
+    // 580 non-text filler frames (chrome/layout) BEFORE the text so the text
+    // leaves sit past the old 500 budget and get truncated first.
+    for (let i = 0; i < 580; i++) {
+      children.push({
+        id: `filler-${i}`, type: "FRAME",
+        absoluteBoundingBox: { x: 0, y: i, width: 10, height: 10 },
+        fills: [{ type: "SOLID", color: { r: 0.5, g: 0, b: 0.7 } }],
+      });
+    }
+    for (let i = 0; i < 120; i++) {
+      children.push({
+        id: `brief-${i}`, type: "TEXT", characters: `brief line ${i}`,
+        absoluteBoundingBox: { x: 0, y: 1000 + i, width: 200, height: 20 },
+        style: { fontSize: 16, lineHeightPx: 24 },
+      });
+    }
+    const { tree, warnings } = compactTree({
+      id: "root", type: "FRAME",
+      absoluteBoundingBox: { x: 0, y: 0, width: 1440, height: 99999 },
+      fills: [{ type: "SOLID", color: { r: 1, g: 1, b: 1 } }],
+      children,
+    });
+    // No truncation at the current cap.
+    expect(warnings.some((w) => /node cap/.test(w))).toBe(false);
+    // Every one of the 120 brief lines survived (the first AND the last — the
+    // last is what old 500 dropped).
+    const json = JSON.stringify(tree);
+    expect(json).toContain("brief line 0");
+    expect(json).toContain("brief line 119");
+    expect(MAX_NODES).toBeGreaterThanOrEqual(700);
+  });
+
+  it("still emits a cap warning on a genuinely pathological tree (backstop intact)", () => {
+    // The caps are a backstop, not removed. A tree well past MAX_NODES must
+    // still truncate + warn (pins that we didn't disable the guard entirely).
+    const children = Array.from({ length: MAX_NODES + 400 }, (_, i) => ({
+      id: `row-${i}`, type: "TEXT", characters: `row ${i}`,
+      absoluteBoundingBox: { x: 0, y: i * 10, width: 100, height: 10 },
+      style: { fontSize: 12, lineHeightPx: 16 },
+    }));
+    const { warnings } = compactTree({
+      id: "root", type: "FRAME",
+      absoluteBoundingBox: { x: 0, y: 0, width: 240, height: 999999 },
+      fills: [{ type: "SOLID", color: { r: 1, g: 1, b: 1 } }],
+      children,
+    });
+    expect(warnings.some((w) => /node cap/.test(w))).toBe(true);
   });
 
   it("does not truncate a realistic full-screen frame of ~300 nodes", () => {

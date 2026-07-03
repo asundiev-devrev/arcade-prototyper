@@ -3,15 +3,19 @@ import type { CompactComponent, CompactLayout, CompactNode, CompactStyle, Compac
 // Real Figma frames are routinely 9–11 deep (nested auto-layout frames + groups
 // that survive compactTree's passthrough-collapse pass). 8 was too aggressive
 // — the live smoke showed the sidebar hitting cap at depth 10 and dropping
-// content the classifier then couldn't see.
-export const DEPTH_CAP = 12;
-// A full-screen precise-repro frame (e.g. the SoR nav: chrome + several
-// sections + footer) runs 250–400 renderable nodes. The old 200 cap silently
-// truncated those — the live SoR-nav failure warned "node cap reached" 4–5×,
-// starving the sidebar because a sibling section consumed the global budget
-// first. 500 fits a real full screen with headroom; it is still a backstop
+// content the classifier then couldn't see. 12 STILL truncated: the
+// implement-this-design-precisely-4 gate hit "depth cap 12 reached" 30+ times
+// on the full-screen daily-brief frame (deeply-nested mixed-weight text runs),
+// so the agent never saw the real brief text and transcribed it wrong from the
+// PNG. 16 clears that frame with headroom.
+export const DEPTH_CAP = 16;
+// A full-screen precise-repro frame (e.g. the SoR nav, or the daily-brief home
+// screen) runs 250–600 renderable nodes. 200 then 500 both truncated real
+// frames — the precisely-4 gate hit "node cap 500 reached" 13× on a 487-node
+// clean file (the raw tree pre-prune is larger), cutting off the text nodes the
+// agent needed. 1200 fits a dense full screen with headroom; still a backstop
 // against a pathological tree blowing out the prompt, not a target.
-export const MAX_NODES = 500;
+export const MAX_NODES = 1200;
 
 interface CompactResult {
   tree: CompactNode;

@@ -198,11 +198,13 @@ export function frameMountPlugin(): Plugin {
         const slug = q.get("project")!;
         const frame = q.get("frame")!;
         const absFrame = path.join(frameDir(slug, frame), "index.tsx");
+        const absOverrides = path.join(projectDir(slug), "theme-overrides.css");
         const queryMode = q.get("mode");
         const mode = queryMode === "dark" || queryMode === "light" ? queryMode : readProjectMode(slug);
         return await compileFrameBootstrap({
           virtualId: id,
           absFrame,
+          absOverrides,
           mode,
           slug,
           frame,
@@ -220,18 +222,51 @@ export function frameMountPlugin(): Plugin {
 async function compileFrameBootstrap(opts: {
   virtualId: string;
   absFrame: string;
+  absOverrides: string;
   mode: "light" | "dark";
   slug: string;
   frame: string;
 }): Promise<{ code: string; map: any }> {
-  const { virtualId, absFrame, mode, slug, frame } = opts;
-  const source = `
+  const { virtualId, absFrame, absOverrides, mode, slug, frame } = opts;
+  const source = buildFrameBootstrapSource({ absFrame, absOverrides, mode, slug, frame });
+  const result = await transformWithEsbuild(source, virtualId.replace(/^\0/, ""), {
+    loader: "tsx",
+    jsx: "automatic",
+    keepNames: true,
+  });
+  return { code: result.code, map: result.map };
+}
+
+/**
+ * Pure builder for the frame bootstrap TSX source. Extracted + exported so the
+ * CSS import ORDER (which decides the theme-token cascade) is unit-testable
+ * without running the esbuild transform, which isn't available in the test env.
+ */
+export function buildFrameBootstrapSource(opts: {
+  absFrame: string;
+  absOverrides: string;
+  mode: "light" | "dark";
+  slug: string;
+  frame: string;
+}): string {
+  const { absFrame, absOverrides, mode, slug, frame } = opts;
+  return `
     import React from "react";
     import ReactDOM from "react-dom/client";
     import { DevRevThemeProvider } from "@xorkavi/arcade-gen";
     import "@xorkavi/arcade-gen/styles.css";
     import "arcade-studio/styles/tailwind.css";
     import "arcade-studio/styles/arcade-gen-patches.css";
+    // Per-project theme token overrides — imported LAST of the CSS so it wins
+    // the cascade. The kit's styles.css defines the same tokens under
+    // ':root, :root.light' (specificity 0,2,0); the override selector matches
+    // that specificity, so the tie breaks on SOURCE ORDER. The static <link> in
+    // the HTML head loads BEFORE this JS-injected kit CSS and thus LOSES — the
+    // live gate (implement-this-design-precisely-2) showed the purple
+    // --surface-backdrop:#5800E6 defeated by the kit's #fff. Importing it here,
+    // after styles.css, makes it the later sheet so the override actually
+    // applies. Vite injects an empty stylesheet when the file is only comments.
+    import "${absOverrides}";
     import { FrameErrorBoundary } from "arcade-studio/frame/FrameErrorBoundary";
     import { FrameFontProxy } from "arcade-studio/frame/FrameFontProxy";
     import "arcade-studio/frame/picker";
@@ -250,10 +285,4 @@ async function compileFrameBootstrap(opts: {
       </React.StrictMode>
     );
   `;
-  const result = await transformWithEsbuild(source, virtualId.replace(/^\0/, ""), {
-    loader: "tsx",
-    jsx: "automatic",
-    keepNames: true,
-  });
-  return { code: result.code, map: result.map };
 }

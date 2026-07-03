@@ -77,8 +77,30 @@ function setupServerStub() {
   return { server, sent };
 }
 
+/**
+ * Server stub with a minimal Vite moduleGraph that records which files were
+ * invalidated. Each file maps to one module node; an `importedBy` map lets a
+ * test assert importers are invalidated too (the index.tsx → ./sibling case).
+ */
+function setupServerStubWithModuleGraph(importedBy: Record<string, string[]> = {}) {
+  const sent: Array<{ type: string; path: string }> = [];
+  const invalidated: string[] = [];
+  const nodeFor = (file: string): any => ({
+    file,
+    importers: new Set((importedBy[file] ?? []).map((f) => nodeFor(f))),
+  });
+  const server = {
+    ws: { send: (msg: { type: string; path: string }) => sent.push(msg) },
+    moduleGraph: {
+      getModulesByFile: (file: string) => new Set([nodeFor(file)]),
+      invalidateModule: (mod: { file: string }) => invalidated.push(mod.file),
+    },
+  };
+  return { server, sent, invalidated };
+}
+
 describe("projectWatchPlugin full-reload scope", () => {
-  it("broadcasts full-reload only for frames/<id>/index.tsx writes", async () => {
+  it("broadcasts full-reload for frame-dir source writes, not scaffold writes", async () => {
     const { server, sent } = setupServerStub();
     const plugin = projectWatchPlugin();
     plugin.configureServer!.call({} as never, server as never);
@@ -90,7 +112,8 @@ describe("projectWatchPlugin full-reload scope", () => {
       recursive: true,
     });
 
-    // Scaffold writes — must NOT trigger full-reload.
+    // Scaffold writes — must NOT trigger full-reload (they raced the chat POST
+    // in the 0.23.6 regression; theme-overrides.css HMRs on its own).
     const scaffoldPaths = [
       path.join(TMP_ROOT, slug, "theme-overrides.css"),
       path.join(TMP_ROOT, slug, "shared", "devrev.ts"),
@@ -109,6 +132,57 @@ describe("projectWatchPlugin full-reload scope", () => {
       path.join(TMP_ROOT, slug, "frames", "f1", "index.tsx"),
     );
     expect(sent).toEqual([{ type: "full-reload", path: "*" }]);
+  });
+
+  it("broadcasts full-reload when an ejected sibling module is written to a frame dir", async () => {
+    // Regression for the eject workflow: the agent writes index.tsx (with
+    // `import { ComputerScene } from "./ComputerScene"`) a beat BEFORE it copies
+    // ComputerScene.tsx next to it. index.tsx's resolution of ./ComputerScene
+    // failed and Vite cached the miss; reloading only on index.tsx left the
+    // "[vite:import-analysis] Failed to resolve ./ComputerScene" overlay stuck
+    // until a manual restart. A sibling .tsx write must also reload so the
+    // arrival re-runs resolution.
+    const { server, sent } = setupServerStub();
+    const plugin = projectWatchPlugin();
+    plugin.configureServer!.call({} as never, server as never);
+
+    const slug = "p-eject";
+    await fs.mkdir(path.join(TMP_ROOT, slug, "frames", "f1"), { recursive: true });
+
+    await fakeWatcher.handler!(
+      "add",
+      path.join(TMP_ROOT, slug, "frames", "f1", "ComputerScene.tsx"),
+    );
+    expect(sent).toEqual([{ type: "full-reload", path: "*" }]);
+  });
+
+  it("invalidates the written file AND its importer (index.tsx) in the module graph", async () => {
+    // The real bug behind the eject failure: `full-reload` only re-runs the
+    // CLIENT, but Vite caches import resolution on the SERVER — so index.tsx's
+    // failed `./ComputerScene` resolution replayed as a transform error even
+    // after the sibling landed on disk, until the module node was invalidated.
+    // A fresh module id / client reload was NOT enough (verified live). The
+    // watcher must evict the written file + its importers from the module graph
+    // so the next request re-resolves. This pins that server-side eviction.
+    const slug = "p-eject-mg";
+    const frameDir = path.join(TMP_ROOT, slug, "frames", "f1");
+    const siblingPath = path.join(frameDir, "ComputerScene.tsx");
+    const indexPath = path.join(frameDir, "index.tsx");
+    const { server, invalidated } = setupServerStubWithModuleGraph({
+      // The ejected sibling is imported by index.tsx (the holder of the stale
+      // negative resolution).
+      [siblingPath]: [indexPath],
+    });
+    const plugin = projectWatchPlugin();
+    plugin.configureServer!.call({} as never, server as never);
+    await fs.mkdir(frameDir, { recursive: true });
+
+    await fakeWatcher.handler!("add", siblingPath);
+
+    // The written sibling was invalidated…
+    expect(invalidated).toContain(siblingPath);
+    // …AND its importer index.tsx (where the cached `./ComputerScene` miss lived).
+    expect(invalidated).toContain(indexPath);
   });
 
   it("ignores writes outside a valid project slug directory", async () => {

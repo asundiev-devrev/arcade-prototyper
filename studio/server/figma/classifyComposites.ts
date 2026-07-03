@@ -30,11 +30,15 @@ export async function classifyComposites(
 ): Promise<ClassifyResult> {
   // Haiku takes 20–40s to digest a full sidebar-size tree end-to-end via
   // Bedrock (first-token latency + streaming 10–20 suggestions). 15s hit the
-  // SIGTERM path on nearly every real file. 60s lets the classifier actually
-  // finish without blocking the prefetch window — the overall ingest cap in
-  // chat.ts is still 10s, so a slow classifier just means the main generation
-  // starts without composite hints rather than waiting.
-  const spawner = opts.spawn ?? defaultSpawner(opts.model, opts.timeoutMs ?? 60_000);
+  // SIGTERM path on nearly every real file. 60s STILL hit it on a full-screen
+  // frame — the implement-this-design-precisely-4 gate logged "classifier
+  // failed with exit null" (SIGTERM) after 80s, so composites=0 and the
+  // novel-design upgrade never fired. Larger DEPTH_CAP/MAX_NODES trees (raised
+  // to fix text truncation) make the classifier prompt bigger and slower, so
+  // give it 120s. It's fully background — phase 2 upgrades the cache in place
+  // and never blocks the main generation, so a generous cap only means a later
+  // turn benefits, never a slower one.
+  const spawner = opts.spawn ?? defaultSpawner(opts.model, opts.timeoutMs ?? 120_000);
   const prompt = buildPrompt(tree, compositeNames);
   const warnings: string[] = [];
 

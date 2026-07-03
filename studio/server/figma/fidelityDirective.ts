@@ -107,8 +107,8 @@ export interface HiFiDirectiveContext {
 export function buildHiFiDirective(ctx: HiFiDirectiveContext): string {
   const pngLine = ctx.hasReferencePng
     ? "The attached high-resolution PNG of the frame — this is what the designer sees and what \"looks right\" means."
-    : "A high-resolution PNG render of the frame. Export it first: `figmanage export nodes --format png --scale 2 --json " +
-      ctx.fileKey + " " + ctx.nodeId + "`, then fetch the URL with curl and Read the PNG.";
+    : "A PNG render of the frame. Export it first: `figmanage export nodes --format png --scale 1 --json " +
+      ctx.fileKey + " " + ctx.nodeId + "`, then fetch the URL with curl and Read the PNG. Use scale 1 — a full-scale export can exceed the 30s export timeout on large frames.";
 
   return [
     "<high_fidelity_mode>",
@@ -121,8 +121,20 @@ export function buildHiFiDirective(ctx: HiFiDirectiveContext): string {
     "   When anything below disagrees with the PNG, the PNG wins.",
     "2. The REAL Figma node tree, which you MUST read this turn. Do NOT rely on the",
     "   <figma_context> summary above — it is LOSSY and is the #1 cause of wrong frames:",
-    `       figmanage reading get-nodes --depth 4 ${ctx.fileKey} ${ctx.nodeId}`,
-    "   Drill into one subtree with a single focused deeper read only where a section is unclear.",
+    `       figmanage reading get-nodes --depth 2 ${ctx.fileKey} ${ctx.nodeId}`,
+    "   Start shallow (depth 2). If figmanage output is large enough to be persisted to a",
+    "   file (the tool tells you), do NOT Read the whole file — it will exceed the 256KB /",
+    "   25K-token read cap and fail. Read it with offset/limit in chunks, or grep for the one",
+    "   subtree you need, then drill into that single subtree with a focused deeper read.",
+    "",
+    "TEXT vs PIXELS — the PNG is legible for LAYOUT, STRUCTURE, and COLOR, but NOT for reading",
+    "small body copy word-for-word. Take exact text content from the node tree's `characters`",
+    "fields (read via the recipe above). Do NOT OCR / read text off the PNG. The PNG decides",
+    "where things sit and what colour they are; the tree decides what they say.",
+    "",
+    "IF A FETCH FAILS (timeout, or output too large to read): do NOT give up and invent the UI.",
+    "Retry shallower, and build from whatever portion of the PNG + tree you did read. A faithful",
+    "partial beats a confident fabrication.",
     "",
     "USE THE STRUCTURED DATA in <figma_context>: each node carries @[x,y,w,h] geometry in DESIGN PX",
     "(the real coordinate map — use it for widths, positions, and spacing, not eyeballed guesses from the",

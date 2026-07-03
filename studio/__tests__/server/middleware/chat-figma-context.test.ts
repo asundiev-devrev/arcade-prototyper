@@ -4,10 +4,18 @@
 //
 // HISTORY: until 2026-06-12 a Figma URL routed to the Claude generator with
 // an injected <figma_context> block, and a separate hi-fi-intent gate picked
-// a transpile branch. Both are gone: ANY prompt with a Figma URL (that isn't
-// a @Computer turn) now routes to the deterministic kit-emit branch
-// (server/figma/kitEmitBranch.ts) — no LLM, no Bedrock auth, no claude
-// subprocess. These tests pin that routing.
+// a transpile branch. From then, ANY Figma URL routed to the deterministic
+// kit-emit branch — which has NO LLM and so silently dropped every
+// instruction in the prompt (the "figma-import-debug" session: "implement
+// precisely / modify the ComputerScene composite / make the input
+// functional / apply the purple theme" shipped as a dumb pixel trace).
+//
+// NOW (2026-07-02): a BARE import (URL only, or "import/bring this in") still
+// takes the fast deterministic kit-emit branch. A prompt that ALSO carries
+// build intent — hi-fi ("implement precisely"), interaction ("click opens a
+// modal"), or a build instruction (modify a composite, make it functional,
+// apply a theme) — routes to the Claude generator, which reads the design as
+// reference and builds to the brief. These tests pin that split.
 import { describe, it, expect, beforeEach, afterEach, beforeAll, vi } from "vitest";
 import http from "node:http";
 import fs from "node:fs";
@@ -25,6 +33,17 @@ const kitEmitSpy = vi.hoisted(() =>
 );
 vi.mock("../../../server/figma/kitEmitBranch", () => ({
   runFigmaKitEmitBranch: kitEmitSpy,
+}));
+
+// Force a deterministic Figma-digest MISS regardless of whether figmanage is
+// installed/logged-in on the runner. getCached → undefined, phase-1 → not-ok.
+vi.mock("../../../server/figmaIngest", () => ({
+  getFigmaIngest: async () => ({
+    getCached: () => undefined,
+    getPhase1Pending: () => undefined,
+    ingestPhase1: async () => ({ ok: false, reason: "test: forced miss", source: {} }),
+    ingest: async () => ({ ok: false, reason: "test: forced miss", source: {} }),
+  }),
 }));
 
 // Import AFTER the mock so chat.ts binds the stub.
@@ -76,7 +95,7 @@ async function post(slug: string, prompt: string) {
 }
 
 describe("/api/chat Figma-URL routing (kit-emit branch)", () => {
-  it("routes ANY prompt with a Figma URL to the kit-emit branch — no claude spawn", async () => {
+  it("routes a bare-import Figma prompt to the kit-emit branch — no claude spawn", async () => {
     const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
     const res = await post(p.slug, "build this https://www.figma.com/design/k/x?node-id=1-2");
     expect(res.status).toBe(202);
@@ -90,6 +109,25 @@ describe("/api/chat Figma-URL routing (kit-emit branch)", () => {
     // The claude subprocess never ran: the fake bin writes its argv to
     // ARCADE_TEST_PROMPT_OUT, which must not exist.
     expect(fs.existsSync(process.env.ARCADE_TEST_PROMPT_OUT!)).toBe(false);
+  });
+
+  it("routes a build-intent Figma brief to the claude generator, NOT the importer", async () => {
+    // The exact regression from the "figma-import-debug" session: a precise,
+    // instruction-heavy brief must reach the LLM (which reads the design as
+    // reference and honours the instructions), not the pixel-tracing importer.
+    const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
+    const brief =
+      "Implement this design precisely. Modify the ComputerScene composite " +
+      "instead of building from scratch. The full-screen input must be " +
+      "functional. Apply the purple theme to all of the UI, including canvas " +
+      "and side nav. https://www.figma.com/design/k/x?node-id=1-2";
+    const res = await post(p.slug, brief);
+    expect(res.status).toBe(202);
+    await drainStream(p.slug);
+
+    // Importer never ran; the claude subprocess did (wrote its argv out).
+    expect(kitEmitSpy).not.toHaveBeenCalled();
+    expect(fs.existsSync(process.env.ARCADE_TEST_PROMPT_OUT!)).toBe(true);
   });
 
   it("does NOT require hi-fi phrasing — a bare URL is enough", async () => {
@@ -127,5 +165,77 @@ describe("/api/chat Figma-URL routing (kit-emit branch)", () => {
     await post(p.slug, "https://www.figma.com/design/k/x?node-id=1-2");
     const stream = await drainStream(p.slug);
     expect(stream).toContain("Importing the Figma design (stub)");
+  });
+});
+
+describe("hi-fi directive survives a Figma digest miss", () => {
+  it("appends <high_fidelity_mode> even when no digest/PNG is available", async () => {
+    // Ingest is mocked to miss (above). A precise-intent prompt with a URL must
+    // STILL carry the directive — this is the defect-A regression guard.
+    const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
+    const prompt =
+      "Implement this precisely https://www.figma.com/design/k/x?node-id=1-2";
+    const res = await post(p.slug, prompt);
+    expect(res.status).toBe(202);
+    await drainStream(p.slug);
+
+    // Claude branch ran (not kit-emit — precise intent routes to generator).
+    const sent = fs.readFileSync(process.env.ARCADE_TEST_PROMPT_OUT!, "utf8");
+    expect(sent).toContain("<high_fidelity_mode>");
+  });
+
+  it("emits the precise-mode narration on a hi-fi turn (the wider-budget branch)", async () => {
+    // This proves the hi-fi BRANCH is taken end-to-end through the middleware.
+    // It does NOT prove the budget VALUE — narration + budget both key off
+    // `explicitHiFi` but are independent statements, so a reverted budget would
+    // still emit this string. The budget value is pinned separately + directly
+    // in digest-race-budget.test.ts (digestRaceBudgetMs). Both are needed.
+    const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
+    const stream = await (async () => {
+      await post(p.slug, "Implement this precisely https://www.figma.com/design/k/x?node-id=1-2");
+      return drainStream(p.slug);
+    })();
+    expect(stream).toContain("precise mode");
+  });
+
+  it("keeps the fast narration (no precise-mode wait) on a non-hi-fi Figma turn", async () => {
+    // A generation-intent-but-not-hi-fi prompt (build intent via "functional",
+    // no precise/exact phrasing) routes to the generator but must NOT pay the
+    // wider digest wait — it keeps the fast 15s budget.
+    const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
+    await post(p.slug, "make the input functional https://www.figma.com/design/k/x?node-id=1-2");
+    const stream = await drainStream(p.slug);
+    expect(stream).toContain("Loading Figma design context…");
+    expect(stream).not.toContain("precise mode");
+  });
+});
+
+describe("eject-to-source on a compose-base turn", () => {
+  it("ejects the named composite and tells the agent where it is", async () => {
+    const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
+    const prompt =
+      "Implement this precisely. Modify the ComputerScene composite as a base. " +
+      "https://www.figma.com/design/k/x?node-id=1-2";
+    const res = await post(p.slug, prompt);
+    expect(res.status).toBe(202);
+    await drainStream(p.slug);
+
+    // Ejected copy written to the project's .eject staging dir.
+    const ejected = path.join(
+      process.env.ARCADE_STUDIO_ROOT!, "projects", p.slug, ".eject", "ComputerScene.tsx",
+    );
+    expect(fs.existsSync(ejected)).toBe(true);
+
+    // Prompt handed to the agent names the ejected path + the local-import rule.
+    const sent = fs.readFileSync(process.env.ARCADE_TEST_PROMPT_OUT!, "utf8");
+    expect(sent).toContain(".eject/ComputerScene.tsx");
+  });
+
+  it("does NOT eject on a plain precise prompt with no named composite", async () => {
+    const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
+    await post(p.slug, "Implement this precisely https://www.figma.com/design/k/x?node-id=1-2");
+    await drainStream(p.slug);
+    const ejectDir = path.join(process.env.ARCADE_STUDIO_ROOT!, "projects", p.slug, ".eject");
+    expect(fs.existsSync(ejectDir)).toBe(false);
   });
 });

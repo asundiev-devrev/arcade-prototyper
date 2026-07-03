@@ -19,8 +19,10 @@ import { parseFigmaUrl } from "../figmaCli";
 import { frameDir } from "../paths";
 import { getFigmaIngest } from "../figmaIngest";
 import { buildFigmaContextBlock } from "../figma/promptBlock";
-import { shouldUseHiFi, buildHiFiDirective } from "../figma/fidelityDirective";
+import { shouldUseHiFi, detectHiFiIntent, buildHiFiDirective } from "../figma/fidelityDirective";
+import { shouldGenerateFromFigma, detectComposeBaseIntent, extractComposeBaseComposite } from "../figma/generationIntent";
 import { runFigmaKitEmitBranch } from "../figma/kitEmitBranch";
+import { ejectComposite } from "../figma/ejectComposite";
 import { getFigmaSystemIngest, type FigmaSystemIngest } from "../figmaSystemIngest";
 import { renderDesignMd } from "../figma/systemRender";
 import { designMdPath } from "../paths";
@@ -206,16 +208,26 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
 
   const isComputerTurn = COMPUTER_MENTION.test(prompt);
 
-  // Figma kit-emit turn: ANY prompt with a Figma URL (that isn't a @Computer
-  // turn) imports the design deterministically — exact geometry from Figma's
-  // REST data, real arcade-gen components where the curated mapping matches.
-  // NO LLM, so it needs neither Bedrock auth nor the Claude subprocess. The
-  // designer iterates on the imported frame with normal follow-up prompts
-  // (which carry no URL and so take the Claude branch). See
-  // server/figma/kitEmitBranch.ts.
+  // Figma kit-emit turn: a BARE-IMPORT prompt with a Figma URL (that isn't a
+  // @Computer turn) imports the design deterministically — exact geometry from
+  // Figma's REST data, real arcade-gen components where the curated mapping
+  // matches. NO LLM, so it needs neither Bedrock auth nor the Claude
+  // subprocess. The designer iterates on the imported frame with normal
+  // follow-up prompts. See server/figma/kitEmitBranch.ts.
+  //
+  // A prompt that ALSO carries build intent — "implement precisely", "modify
+  // the ComputerScene composite", "make the input functional", "apply the
+  // purple theme to all the UI", or an interaction ("click opens a modal") —
+  // is NOT a bare import. The deterministic importer has no LLM, so it would
+  // silently drop every one of those instructions and ship a pixel trace (the
+  // "figma-import-debug" session: composite ignored, dead input, colours
+  // hardcoded not themed). Those prompts take the Claude branch instead, which
+  // pulls the same design in as REFERENCE (geometry + component identities +
+  // ground-truth PNG + hi-fi directive) and builds to the brief.
   const figmaUrl = isComputerTurn ? null : extractFigmaUrl(prompt);
   const figmaParsed = figmaUrl ? parseFigmaUrl(figmaUrl) : null;
-  const isKitEmitTurn = Boolean(figmaParsed);
+  const wantsGeneration = figmaParsed ? shouldGenerateFromFigma(prompt) : false;
+  const isKitEmitTurn = Boolean(figmaParsed) && !wantsGeneration;
 
   // Wire-an-interaction turn: a Figma-import prompt that ALSO asks for behavior
   // ("when you click X this modal appears <2nd url>"). The deterministic
@@ -226,7 +238,7 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
   // Needs the LLM, so it's gated on Bedrock auth like a Claude turn.
   const figmaUrls = isComputerTurn ? [] : extractFigmaUrls(prompt);
   const isWireTurn =
-    isKitEmitTurn && detectInteractionIntent(prompt) && figmaUrls.length >= 2;
+    Boolean(figmaParsed) && detectInteractionIntent(prompt) && figmaUrls.length >= 2;
 
   // Bedrock-auth pre-check applies only to Claude (Bedrock) turns; the
   // Computer agent uses the DevRev PAT, and kit-emit turns use no LLM at all.
@@ -423,6 +435,35 @@ export function classifyGenerationError(info: { error?: string; timedOut: boolea
   return "other";
 }
 
+/**
+ * How long `enrichPromptWithFigmaContext` waits for the Figma digest (phase-1:
+ * tree + tokens + PNG) before starting the turn without it.
+ *
+ * A plain "sketch me X from this figma" turn keeps the fast 15s cap: if the
+ * digest is slow, the fast path still starts quickly and the agent iterates.
+ *
+ * A PRECISE turn ("implement exactly", "modify ComputerScene precisely") NEEDS
+ * the digest itself — the geometry map, component identities, and ground-truth
+ * PNG — to be faithful, so it waits out the real phase-1 CEILING rather than a
+ * guessed margin. Phase-1 runs getNode then getVariables+exportPng concurrently
+ * (server/figmaIngest.ts:runPhase1); each figmanage call is capped at 30s
+ * (server/figmaCli.ts DEFAULT_FIGMANAGE_TIMEOUT_MS), so the worst case is
+ * ~30s (getNode) + ~30s (concurrent vars+png) ≈ 60s. We wait 65s on hi-fi turns
+ * so a cold/large file clears the ceiling instead of missing the race the way a
+ * 15s — or even a 45s — budget did (the implement-this-design-precisely-4 gate
+ * missed at 15.69s; a bigger file lands well past 45s). Phase-1 caches on
+ * completion, so only the FIRST precise turn on a URL ever waits.
+ *
+ * Pure + exported for unit testing — the timing behaviour is otherwise
+ * unreachable in the middleware suite (mocks resolve instantly), which is how
+ * the earlier narration-only test silently passed with the fix reverted.
+ */
+export const FAST_DIGEST_BUDGET_MS = 15_000;
+export const HIFI_DIGEST_BUDGET_MS = 65_000;
+export function digestRaceBudgetMs(isHiFi: boolean): number {
+  return isHiFi ? HIFI_DIGEST_BUDGET_MS : FAST_DIGEST_BUDGET_MS;
+}
+
 async function enrichPromptWithFigmaContext(
   prompt: string,
   images: string[],
@@ -433,22 +474,38 @@ async function enrichPromptWithFigmaContext(
   const parsed = parseFigmaUrl(url);
   if (!parsed) return { prompt, images };
 
+  // Directive decision is CONTEXT-FREE: it depends only on the prompt + URL,
+  // both of which we have even when the digest missed. This is the fix for the
+  // "agent gets a naked prompt with no faithfulness directive on a slow/failed
+  // Figma fetch" bug (review S3.1). Do NOT gate this on shouldUseHiFi — that
+  // needs digest-derived {classified, hasHighConfidenceComposite} which is
+  // absent on a miss. shouldUseHiFi stays only as a digest-SUCCESS upgrade.
+  // Computed up front because it also picks the digest-race budget below.
+  const explicitHiFi = detectHiFiIntent(prompt);
+
   const ingest = await getFigmaIngest();
   let result = ingest.getCached(parsed.fileId, parsed.nodeId);
   if (!result) {
-    // This fetch blocks turn start (3–15s on a cold Figma file). Tell the
-    // user immediately so the chat pane shows progress instead of a frozen
-    // "Working…" while figmanage + token resolve + PNG export run. Cheapest
-    // possible perceived-latency win on the worst dead-air path.
-    onNarration?.("Loading Figma design context…");
-    // Wait for phase 1 (tree + tokens + PNG) only — typically 3–8s. Phase 2
-    // (classifier) runs in the background and upgrades the cache in place
-    // once done; the next turn on this URL will pick up composites for free.
+    // Digest-race budget: fast (15s) for ordinary turns, phase-1-ceiling (65s)
+    // for precise turns that need the design context to be faithful. See
+    // digestRaceBudgetMs above for the derivation and the live-gate history.
+    const digestBudgetMs = digestRaceBudgetMs(explicitHiFi);
+    // This fetch blocks turn start. Tell the user immediately so the chat pane
+    // shows progress instead of a frozen "Working…" while figmanage + token
+    // resolve + PNG export run.
+    onNarration?.(
+      explicitHiFi
+        ? "Loading Figma design context (precise mode — waiting for the full design)…"
+        : "Loading Figma design context…",
+    );
+    // Wait for phase 1 (tree + tokens + PNG) only. Phase 2 (classifier) runs in
+    // the background and upgrades the cache in place once done; the next turn
+    // on this URL will pick up composites for free.
     const pending = ingest.getPhase1Pending(parsed.fileId, parsed.nodeId)
       ?? ingest.ingestPhase1(parsed.fileId, parsed.nodeId, url);
     const raced = await Promise.race([
       pending,
-      new Promise<null>((r) => setTimeout(() => r(null), 15_000)),
+      new Promise<null>((r) => setTimeout(() => r(null), digestBudgetMs)),
     ]);
     if (raced && "ok" in raced && raced.ok) {
       const { ok, ...rest } = raced as any;
@@ -456,9 +513,20 @@ async function enrichPromptWithFigmaContext(
       result = rest;
     }
   }
+
   if (!result) {
     console.warn("[studio] figma ingest miss; proceeding without structured context");
-    return { prompt, images };
+    if (!explicitHiFi) return { prompt, images };
+    // No digest, but the designer asked for a precise build: append the
+    // directive with hasReferencePng:false so it tells the agent to export +
+    // read its own (cap-safe) PNG.
+    onNarration?.("high-fidelity mode (no cached design context — agent will fetch)");
+    const directive = buildHiFiDirective({
+      fileKey: parsed.fileId,
+      nodeId: parsed.nodeId,
+      hasReferencePng: false,
+    });
+    return { prompt: `${prompt}\n\n${directive}`, images };
   }
 
   const block = buildFigmaContextBlock(result);
@@ -469,15 +537,11 @@ async function enrichPromptWithFigmaContext(
     parts.push(`${result.diagnostics.warnings.length} diagnostic${result.diagnostics.warnings.length > 1 ? "s" : ""}`);
   }
 
-  // High-fidelity mode: append a directive that suspends the speed shortcuts
-  // and forces a real tree read + PNG-as-ground-truth + self-review. Fires on
-  // explicit precise-implementation intent OR on a novel design (classifier
-  // ran and found no high-confidence template to iterate on) — the latter is
-  // the "exploring a new direction" case that otherwise churns to Cursor.
-  // Ordinary "sketch me X" prompts that DO match a template keep the fast path.
+  // Digest succeeded. Append the directive when EITHER explicit intent OR the
+  // novel-design upgrade (classifier ran, no high-confidence template) fires.
   const hasHighConfidenceComposite = result.composites.some((c) => c.confidence === "high");
   let block2 = block;
-  if (shouldUseHiFi(prompt, { classified: result.classified, hasHighConfidenceComposite })) {
+  if (explicitHiFi || shouldUseHiFi(prompt, { classified: result.classified, hasHighConfidenceComposite })) {
     parts.push("high-fidelity mode");
     block2 = `${block}\n\n${buildHiFiDirective({
       fileKey: parsed.fileId,
@@ -607,7 +671,42 @@ async function runClaudeBranch(ctx: {
   // block that (a) names the frames and (b) restates the two hard edit rules.
   // No-op on the first build and on right-click edits — see editContext.ts.
   const frameSlugs = (project.frames ?? []).map((f) => f.slug);
-  const prompt = prependEditContext(enriched.prompt, frameSlugs);
+
+  // Eject-to-source: when the prompt asks to modify a named kit composite as a
+  // base, copy its editable source into the project's .eject staging dir and
+  // tell the agent to use it. The agent picks its frame slug mid-turn, so we
+  // can't write into frames/<slug>/ up front — staging + instruction mirrors
+  // the 00-computer-reference seed pattern. See spec §2.2/§2.3.
+  let ejectSuffix = "";
+  if (detectComposeBaseIntent(ctx.prompt)) {
+    const composite = extractComposeBaseComposite(ctx.prompt);
+    if (composite) {
+      try {
+        const ejectDir = path.join(projectDir(slug), ".eject");
+        await ejectComposite(composite, ejectDir);
+        ejectSuffix =
+          `\n\n<eject_to_source>\n` +
+          `An EDITABLE copy of ${composite}'s real source has been written to ` +
+          `\`.eject/${composite}.tsx\` (relative to the project root). To modify ` +
+          `${composite} beyond its props (replace the input, restructure the body, ` +
+          `recolor), COPY that file into your new frame folder and import it LOCALLY ` +
+          `(\`import { ${composite} } from "./${composite}"\`) instead of from ` +
+          `"arcade-prototypes". Edit the local copy directly. Reading/editing THIS ` +
+          `copy's source is allowed (the no-composite-source rule applies only to the ` +
+          `sealed kit versions).\n` +
+          `- For a FULL-CANVAS input: put your input in the scene's body (children) ` +
+          `slot and omit the chatInput slot — do NOT just edit the chatInput slot ` +
+          `(that yields a bottom bar).\n` +
+          `- To RECOLOR the whole UI: override design tokens in theme-overrides.css ` +
+          `(see CLAUDE.md), not inline per-surface hex.\n` +
+          `</eject_to_source>`;
+      } catch (err) {
+        console.warn(`[studio] eject failed for ${composite}:`, err);
+      }
+    }
+  }
+
+  const prompt = prependEditContext(enriched.prompt + ejectSuffix, frameSlugs);
   let capturedSessionId: string | undefined;
   const narrationTexts: string[] = [];
   const toolLabels: string[] = [];
