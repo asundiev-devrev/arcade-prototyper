@@ -664,6 +664,12 @@ If the user asks for a "mobile" or "desktop" design specifically, design for tha
 **These rules govern code you WRITE FROM SCRATCH. They are NOT a license to rewrite existing inline styles you find in a frame.** Frames imported from Figma are authored with exact inline `style={{…}}` props (positions, sizes, and `fontFamily: "'Chip Display Variable', …"` / `"'Chip Text Variable', …"`). When you edit such a frame, leave those inline styles intact (see "Preserve existing inline styles on edits" under Modifying existing frames) — do not "fix" them into utility classes.
 
 Additional rules:
+- **Colors / surfaces / strokes use the CSS-VARIABLE class form, NOT a named utility.** This is
+  the #1 silent-failure: the named form compiles to NOTHING in Tailwind v4 (renders no color).
+  A write-time hook blocks the wrong form, but write it right the first time:
+  - ✓ `text-(--fg-neutral-prominent)`  `bg-(--surface-shallow)`  `border-(--stroke-neutral-subtle)`  `bg-(--bg-intelligence-prominent)`
+  - ✗ `text-fg-neutral-prominent`  `bg-surface-shallow`  `border-stroke-neutral-subtle`  `bg-intelligence-prominent`  ← compile to nothing
+  - Typography STAYS a named utility (these DO exist): `text-body`, `text-body-small`, `text-title-2`, `text-caption`.
 - **Never hardcode hex, rgb, or hsl.** Colors come from tokens defined in `{{ARCADE}}/src/tokens/generated/light.css` and `dark.css`.
 - **Never invent a token name.** Common hallucinations: `--border-default`, `--surface-default`, `--text-primary`, `--expressive-intelligence`, `--expressive-success`. These don't exist; CSS silently resolves them to unset and you get black borders, black text, or unrendered violet/green fills. Canonical groups:
   - Text: `--fg-neutral-prominent` (primary), `--fg-neutral-subtle` (secondary/description), `--fg-neutral-medium`, `--fg-neutral-on-prominent` (text on dark fills).
