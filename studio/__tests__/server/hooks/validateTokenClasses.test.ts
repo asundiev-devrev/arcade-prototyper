@@ -41,7 +41,7 @@ describe("parseClassNames", () => {
 describe("detectTokenClassViolations", () => {
   const tokens = new Set([
     "fg-neutral-medium", "fg-neutral-prominent", "surface-shallow",
-    "surface-overlay", "bg-intelligence-prominent", "stroke-neutral-subtle",
+    "surface-overlay", "intelligence-prominent", "stroke-neutral-subtle",
   ]);
 
   it("flags the named-token form and suggests the paren form", () => {
@@ -79,5 +79,13 @@ describe("detectTokenClassViolations", () => {
 
   it("fails open: empty token set → no violations", () => {
     expect(detectTokenClassViolations(["text-fg-neutral-medium"], new Set())).toEqual([]);
+  });
+
+  it("does NOT flag a built-in utility even if a token is named like the full base (narrow rule)", () => {
+    // If a token '--bg-gradient-to-r' existed, the built-in Tailwind utility
+    // 'bg-gradient-to-r' must still NOT flag — only the TAIL matching a token
+    // counts, not the full base. Guards against widening the rule.
+    const t = new Set(["bg-gradient-to-r"]); // tail would be "gradient-to-r", not in set
+    expect(detectTokenClassViolations(["bg-gradient-to-r"], t)).toEqual([]);
   });
 });

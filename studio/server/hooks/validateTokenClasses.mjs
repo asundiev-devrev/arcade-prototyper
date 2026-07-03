@@ -75,14 +75,10 @@ export function detectTokenClassViolations(classes, tokenNames) {
     const prefix = base.slice(0, dash);
     const tail = base.slice(dash + 1);
     if (!TOKEN_PREFIXES.includes(prefix)) continue;
-    // Check if tail is a real token, OR if prefix-tail is a real token
-    let tokenMatch = tail.toLowerCase();
-    if (!tokenNames.has(tokenMatch) && !tokenNames.has(base.toLowerCase())) continue;
-    // Use the matched token form for the suggestion
-    const suggestion = tokenNames.has(tokenMatch) ? tokenMatch : base.toLowerCase();
+    if (!tokenNames.has(tail.toLowerCase())) continue; // tail isn't a real token → not ours
     out.push({
       badClass: cls,
-      suggestion: `${variants}${prefix}-(--${suggestion})`,
+      suggestion: `${variants}${prefix}-(--${tail})`,
     });
   }
   return out;
