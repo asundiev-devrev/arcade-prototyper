@@ -89,3 +89,28 @@ describe("detectTokenClassViolations", () => {
     expect(detectTokenClassViolations(["bg-gradient-to-r"], t)).toEqual([]);
   });
 });
+
+describe("loadTokenNames (real arcade-gen styles.css)", () => {
+  it("resolves the shipped token CSS and contains known tokens", async () => {
+    // @ts-expect-error — .mjs import of a pure-JS module with no types
+    const { loadTokenNames } = await import("../../../server/hooks/validateTokenClasses.mjs");
+    const names = loadTokenNames();
+    // arcade-gen dist/styles.css defines 1000+ custom props incl. these.
+    expect(names.has("fg-neutral-medium")).toBe(true);
+    expect(names.has("surface-shallow")).toBe(true);
+    expect(names.size).toBeGreaterThan(100);
+  });
+});
+
+describe("formatTokenClassError", () => {
+  it("names each bad class + its paren-form fix", async () => {
+    // @ts-expect-error — .mjs import of a pure-JS module with no types
+    const { formatTokenClassError } = await import("../../../server/hooks/validateTokenClasses.mjs");
+    const msg = formatTokenClassError([
+      { badClass: "text-fg-neutral-medium", suggestion: "text-(--fg-neutral-medium)" },
+    ]);
+    expect(msg).toContain("text-fg-neutral-medium");
+    expect(msg).toContain("text-(--fg-neutral-medium)");
+    expect(msg).toMatch(/compile to nothing|render/i);
+  });
+});

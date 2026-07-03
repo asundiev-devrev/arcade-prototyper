@@ -83,3 +83,91 @@ export function detectTokenClassViolations(classes, tokenNames) {
   }
   return out;
 }
+
+/**
+ * Resolve the shipped arcade-gen token CSS and return its token-name set.
+ * The runtime aliases `arcade/components` to a barrel that re-exports
+ * @xorkavi/arcade-gen; the compiled tokens live in that package's
+ * dist/styles.css — present on every machine incl. the packaged DMG.
+ * Fails open (empty set) if unresolvable — mirrors validateArcadeImports'
+ * empty-barrel guard.
+ */
+export function loadTokenNames() {
+  try {
+    const require = createRequire(import.meta.url);
+    const mainEntry = require.resolve("@xorkavi/arcade-gen"); // → dist/index.mjs
+    const cssPath = path.join(path.dirname(mainEntry), "styles.css");
+    const css = readFileSync(cssPath, "utf-8");
+    return extractTokenNames(css);
+  } catch {
+    return new Set(); // fail open
+  }
+}
+
+export function formatTokenClassError(violations) {
+  if (!violations.length) return "";
+  const lines = [];
+  lines.push("Blocked: these design-token classes compile to NOTHING in Tailwind v4");
+  lines.push("(they render no color/background). Use the CSS-variable paren form:");
+  lines.push("");
+  for (const v of violations) {
+    lines.push(`  - \`${v.badClass}\` → \`${v.suggestion}\``);
+  }
+  lines.push("");
+  lines.push("Colors/surfaces/strokes use the paren form: text-(--fg-neutral-prominent),");
+  lines.push("bg-(--surface-shallow), border-(--stroke-neutral-subtle). Typography stays a");
+  lines.push("named utility (text-body, text-body-small). This hook runs on every Write/Edit");
+  lines.push("and will block again until the classes are fixed.");
+  return lines.join("\n");
+}
+
+function isInScope(filePath) {
+  if (typeof filePath !== "string") return false;
+  return filePath.endsWith(".tsx") || filePath.endsWith(".ts");
+}
+
+function extractContent(toolName, toolInput) {
+  if (!toolInput || typeof toolInput !== "object") return "";
+  if (toolName === "Write") return typeof toolInput.content === "string" ? toolInput.content : "";
+  if (toolName === "Edit") return typeof toolInput.new_string === "string" ? toolInput.new_string : "";
+  return "";
+}
+
+async function readStdin() {
+  let buf = "";
+  for await (const chunk of process.stdin) buf += chunk;
+  return buf;
+}
+
+async function main() {
+  let payload;
+  try {
+    const raw = await readStdin();
+    payload = raw ? JSON.parse(raw) : null;
+  } catch {
+    process.exit(0);
+  }
+  const toolName = payload?.tool_name;
+  const toolInput = payload?.tool_input;
+  if (toolName !== "Write" && toolName !== "Edit") process.exit(0);
+  if (!isInScope(toolInput?.file_path)) process.exit(0);
+  const content = extractContent(toolName, toolInput);
+  if (!content) process.exit(0);
+
+  const tokenNames = loadTokenNames();
+  const classes = parseClassNames(content);
+  const violations = detectTokenClassViolations(classes, tokenNames);
+  if (violations.length === 0) process.exit(0);
+
+  process.stderr.write(formatTokenClassError(violations));
+  process.exit(2);
+}
+
+// Run main() only when invoked directly (not when imported by tests). Compare
+// resolved file URLs — a space in the packaged path (".../Arcade Studio.app/…")
+// is percent-encoded in import.meta.url, so a raw template literal never
+// matches. pathToFileURL encodes argv[1] the same way. (Same guard as
+// validateArcadeImports.mjs.)
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch(() => process.exit(0));
+}
