@@ -1,275 +1,201 @@
-# Structured fidelity diff — the measurement layer for Figma-precise generation
+# Fidelity checks + vision-judge diff — the measurement layer for Figma-precise generation
 
-Date: 2026-07-03
+Date: 2026-07-03 (rewritten after adversarial review killed the tree-alignment premise)
 Branch: `feat/figma-fidelity-eject` (or a fresh `feat/fidelity-metric`)
-Status: design — pending adversarial review, then user review
+Status: design — pending user review
 
 ## Problem
 
 Studio's "implement this Figma design precisely" turns are verified by a human eyeballing a
-screenshot. Every fix this session (routing, digest race, node caps, eject, module-graph, CSS
-load order, token-class syntax) was validated the same way: the user looked at the render and
-said "still broken." There is **no automated signal for fidelity** — so:
+screenshot. Every fix this session was validated that way: the user looked and said "still
+broken." There is **no automated fidelity signal** — so the agent can't reliably self-correct
+(it "checks its work" by eyeballing, which it does badly: hallucinated brief text, boxed an
+input that should be borderless, wrote token classes that compile to nothing), and we can't tell
+whether a change helped.
 
-- The agent can't reliably self-correct: it "checks its work" by eyeballing, which it does badly
-  (hallucinated brief text, boxed an input that should be borderless, wrote token classes that
-  compile to nothing).
-- We can't tell whether a change *helped*: "did the token-class hook improve fidelity?" is
-  currently unanswerable except by manually regenerating and squinting.
+## What the first draft got wrong (and why this is a rewrite)
 
-The June-10 `visual-verify-loop.md` plan (never built) adds a render→compare→fix loop, but its
-"compare" is **the agent looking at two PNGs and emitting `VERDICT: MATCH|DIFFERS`** — still
-subjective (its own Risk #3: "Sonnet must reliably spot real diffs without inventing them").
-That loop needs a **measurement** to be trustworthy. This spec is that measurement.
+The first version proposed a **structured tree-vs-DOM diff**: align the Figma `CompactNode` tree
+to the rendered DOM region-by-region (bbox-IoU + kind) and diff matched pairs. An adversarial
+review killed the premise, verified against the repo:
 
-## Key idea: structured tree-vs-DOM diff, NOT image pixel-diff
+- **The two trees do not structurally correspond — by design.** `fidelityDirective.ts:144-145`
+  MANDATES a faithful frame "build the novel macro layout yourself from a bare div + flex" and
+  swap leaves for kit components (whose internal DOM is arbitrary). A composite like
+  `ComputerScene` (23.7 KB) expands one JSX element into a sidebar+header+rows subtree with no
+  Figma-layer counterpart. So the metric would have **penalized exactly the frames the product
+  defines as good** — its signal was anti-correlated with the directive.
+- **Coordinate normalization was invalid.** Frames reflow responsively (widths 375/1024/1440/
+  1920, `server/types.ts:9`); a uniform root-bbox scale factor mis-predicts every non-sidebar
+  position → false diffs. The capture width wasn't even specified.
+- **Regression tracking was unsupported.** `frameSchema` (`server/types.ts:5-10`) has no
+  Figma-node field and the ingest cache is 1-hour TTL — nothing lets you recompute a historical
+  frame's fidelity.
 
-Naïve visual regression (pixel-diff two PNGs) is a trap here: fonts, anti-aliasing, and
-sub-pixel shifts produce false diffs everywhere, and a raw diff can't say *what* is wrong or
-*where*. We avoid it entirely because **we already have the structure on both sides**:
+The salvage the review pointed to, and this rewrite adopts: **drop tree-alignment entirely.**
+Keep the checks that need no correspondence (they're the ones that actually caught the real
+bugs), and make the genuinely-visual part an honest model judgment, not a fake measurement.
 
-- **Reference side (Figma):** the ingested `CompactNode` tree already carries, per region:
-  `name`, `bbox [x,y,w,h]` (real Figma px, relative to frame origin), `style.fill`,
-  `style.stroke`, `style.radius`, `text.content`, `component` identity, `children`. Cached
-  per-node by `figmaIngest`. (Verified in `server/figma/types.ts`.)
-- **Rendered side (the generated frame):** the frame is live DOM. Every element exposes
-  `getBoundingClientRect()` + `getComputedStyle()` — readable by driving the frame URL in a
-  headless browser (`browser_evaluate` already does this; used repeatedly this session).
-
-So the diff is **structured node-tree vs structured DOM**, matched region-by-region, comparing
-only things that are **exact and meaningful**: bounding box, fill/background color, text
-content, presence/absence, border/radius. This gives *located* results ("sidebar fill #FAF9F9
-vs ref #5800E6") and sidesteps pixel noise.
-
-The rendered PNG is still captured — but for the agent to *look at* and for the human, NOT as
-the diff basis. The diff basis is the two structured trees.
-
-## Goals
-
-1. Produce a **located, region-level diff report** for a generated frame vs its Figma
-   reference: a list of `{ region, property, expected, actual, severity }` rows.
-2. Roll the rows up into a single **fidelity score (0-1)** as a byproduct — for regression
-   tracking ("0.61 → 0.88 after the token-class fix"), not as the primary output.
-3. Feed the located report into the verify loop so the agent fixes **specific** differences,
-   replacing the subjective `VERDICT` vibe-check.
-4. Be honest about coverage: report what it could NOT align/compare (unmatched regions), never
-   silently score 1.0 on a region it skipped.
-
-## Non-goals
-
-- Pixel-perfect image comparison. We compare structure, not pixels.
-- Scoring text *rendering* (font hinting, kerning). We compare text *content* + gross box; the
-  agent's PNG view covers the rest.
-- Fixing generation quality directly — this is the *measurement*; the verify loop + hooks are
-  the actuators. This spec makes them measurable.
-- Optimizing prompts automatically (DSPy-style). Out of scope; the metric is a prerequisite for
-  any future optimization, not the optimization itself. See memory `studio-fidelity-metric-keystone`.
-
-## Architecture
-
-Four units, each independently testable.
+## The inverted design: three tiers, hardest-to-fake first
 
 ```
-Figma ingest (exists)         generated frame (DOM)
-  CompactNode tree               │ driven in headless browser
-        │                        ▼
-        │                 [1] DOM extractor → RenderNode tree
-        ▼                        │
-  [2] normalize both trees to a common ComparableRegion shape
-        │                        │
-        └──────────┬─────────────┘
-                   ▼
-        [3] region matcher  (align ref regions ↔ rendered regions
-                             by position + role; report unmatched)
-                   ▼
-        [4] differ  → DiffReport { rows[], score, coverage }
-                   ▼
-     consumed by: verify loop (located fixes) + metrics log (score)
+                                    needs render?   deterministic?
+Tier 1  static source checks         no             yes   ← cheapest, exact
+Tier 2  rendered DOM checks          yes (DOM read) yes   ← text/presence, no alignment
+Tier 3  vision-judge visual diff     yes (PNG)      no    ← color/layout, structured output
 ```
 
-### Unit 1 — DOM extractor (`server/verify/domExtract.ts`)
+The three compose into one `FidelityReport { checks[], visualRows[], score, coverageNote }`.
+Tiers 1-2 are exact and carry most of the value; Tier 3 is a judgment call, clearly labeled.
 
-A function serialized into the headless page (via the capture backend, below) that walks the
-rendered frame's DOM and returns a `RenderNode` tree:
+### Tier 1 — static source checks (no render, deterministic)
 
-```ts
-interface RenderNode {
-  role: string;          // tag + semantic hint: "aside", "button", "text", "img", "svg"
-  text?: string;         // trimmed textContent for leaf text nodes
-  bbox: [number, number, number, number]; // getBoundingClientRect, frame-relative
-  fill?: string;         // computed background-color (rgb→hex), or color for text
-  stroke?: string;       // computed border-color when border width > 0
-  radius?: number;       // computed border-radius px
-  children: RenderNode[];
-}
-```
+Run on the generated frame's source text. These are pure functions, fastest, most reliable:
 
-- Coordinates normalized to the frame's own origin (subtract the root element's rect), matching
-  the reference tree's frame-relative convention.
-- Skips zero-size + `display:none` nodes (mirrors `compactTree`'s zero-size prune) so both sides
-  agree on "visible".
-- Collapses styleless single-child wrappers (mirror compactTree's passthrough collapse) so the
-  two trees have comparable granularity — otherwise the DOM is far deeper than the Figma tree
-  and matching fails.
+- **Token classes compile** — the un-renderable `text-fg-*` / `bg-surface-*` named forms. THIS
+  IS ALREADY THE ENFORCEMENT HOOK (`2026-07-03-token-class-enforcement-hook-design.md`). The
+  report *reads its verdict*; it doesn't reimplement it.
+- **Composite used when expected** — on a compose-base turn (`detectComposeBaseIntent`), did the
+  frame actually import/use the named composite, or hand-roll it? (The precisely-3 navigation
+  frame hand-rolled a whole Computer screen instead of `ComputerScene` — this catches that.)
+- **Closed-world imports** — only `arcade` / `arcade/components` / `arcade-prototypes` / `react`
+  (the existing import validator already enforces; report reads it).
 
-### Unit 2 — normalize to `ComparableRegion`
+### Tier 2 — rendered DOM checks (needs render, deterministic, NO alignment)
 
-Both `CompactNode` (Figma) and `RenderNode` (DOM) map to one shape so the matcher/differ are
-source-agnostic:
+Drive the frame in a headless browser, read the DOM. These need the render but NOT tree-matching
+— they're position-independent set/substring facts. These are the two checks that caught the
+real session bugs:
 
-```ts
-interface ComparableRegion {
-  key: string;                 // stable id for reporting (name or role+index)
-  bbox: [number, number, number, number];
-  fill?: string;               // hex, lowercased, alpha-normalized
-  stroke?: string;
-  radius?: number;
-  text?: string;               // normalized whitespace
-  kind: "container" | "text" | "icon" | "image" | "control";
-  children: ComparableRegion[];
-}
-```
+- **Required text present / wrong text absent.** Collect the reference's text strings from the
+  Figma tree's `text.content` fields (we already have them). Assert each appears somewhere in
+  the frame's `document.body.textContent` (normalized). MISSING or SUBSTITUTED reference text →
+  a check row. This catches the hallucinated brief ("Service Desk" instead of "Service
+  Blueprint", "Kieran" instead of "Amrita") — position-independent, no matcher.
+- **No un-renderable / broken boxes.** Scan the DOM for zero-size visible elements, elements
+  overflowing the viewport, and elements whose computed background is `rgba(0,0,0,0)` where the
+  frame clearly intends a surface. Deterministic structural sanity, not design-matching.
+- **Reference region count sanity (coarse presence, not alignment).** Compare *counts* by kind
+  (how many text blocks / images / buttons the Figma tree has vs the DOM has) as a coarse
+  completeness signal — a frame with 2 text blocks where the design has 12 is obviously
+  incomplete. This is a set-cardinality check, NOT per-region matching.
 
-- **Color normalization is load-bearing:** Figma fills may be tokens-resolved-to-hex or raw;
-  DOM computed colors are `rgb()`/`rgba()`. Normalize both to lowercased `#rrggbb` (+ separate
-  alpha) so `#5800E6` == `rgb(88,0,230)`. A mismatch here = false diffs, so it gets its own
-  unit test with known pairs.
-- Figma px and CSS px are the same unit at scale 1 (the frame renders 1:1), so bboxes are
-  directly comparable — but the frame may render at a different *outer* size than the Figma
-  node. Normalize by the ratio of root bbox to Figma root bbox before comparing child positions.
+### Tier 3 — vision-judge visual diff (needs render, model judgment, structured output)
 
-### Unit 3 — region matcher (`server/verify/matchRegions.ts`)
+The genuinely-visual properties (color, spacing, "is the input borderless", overall layout) are
+NOT deterministically checkable without the false-correspondence trap. Instead of pretending to
+measure them, ask the model — but force **structured output**, not a free-text verdict:
 
-The hard part. Aligns reference regions ↔ rendered regions. Greedy, structural:
+- Capture the rendered frame PNG + attach the Figma reference PNG (already ingested).
+- Prompt: "Compare these two. Return a JSON array of concrete visual differences, each
+  `{ region, property, expected, actual, severity }`. Only report differences a designer would
+  call wrong — not rendering/anti-aliasing noise. If they match, return `[]`."
+- Parse into `visualRows: DiffRow[]`.
 
-- Walk both trees together depth-first. At each level, match children by **best overlap of
-  normalized bbox + compatible `kind`** (IoU over a threshold), tie-broken by text similarity
-  for text nodes and by order.
-- A ref region with no rendered match → `MISSING` row (design has it, frame doesn't).
-- A rendered region with no ref match → `EXTRA` row (frame invented it — e.g. the boxed input
-  the reference didn't have).
-- Matched pairs pass to the differ.
-- **Coverage is reported**: `matched / totalRef`. A frame that "matches" 4 of 20 ref regions
-  scores low on coverage even if those 4 are perfect — prevents a partial build from scoring
-  high. NEVER silently ignore unmatched regions.
+This is the June-10 verify-loop's compare step, upgraded from `VERDICT: MATCH|DIFFERS` (its own
+Risk #3: subjective, hallucination-prone) to a **structured, located** list the agent can act on
+row-by-row. It's still a model judgment — labeled as such — but structured beats a vibe, and it
+doesn't fabricate a tree correspondence that doesn't exist. Bounded: the loop acts only on
+`severity: structural` rows, and stop conditions cap damage.
 
-Matching is inherently imperfect; the spec accepts that and surfaces it (coverage %, unmatched
-lists) rather than pretending precision.
+## Score + regression tracking (honest this time)
 
-### Unit 4 — differ (`server/verify/fidelityDiff.ts`)
+- **Score is a byproduct, secondary.** `score` = weighted pass rate of Tier 1-2 checks (exact)
+  plus a discount for Tier 3 structural rows. Tier 1-2 dominate because they're reliable; Tier 3
+  nudges. NOT coverage-multiplied against a fake alignment (the killed design's inverted signal).
+- **Persistence for regression tracking (fixes S2):** add an optional `figmaNodeUrl` field to
+  `frameSchema` (`server/types.ts`), written when a frame is generated from a Figma URL. This is
+  the frame→node link the first draft lacked — it lets a later run re-ingest the reference and
+  recompute the score. Append `{ score, tier1Pass, tier2Pass, visualRowCount }` to the existing
+  generation-metrics log (`metricsLogPath`). Now "did change X help?" is answerable across runs.
 
-For each matched pair, emit rows for properties that differ beyond a tolerance:
+## Consumption
 
-```ts
-interface DiffRow {
-  region: string;         // "sidebar", "header/title", "input"
-  property: "bbox" | "fill" | "stroke" | "radius" | "text" | "presence";
-  expected: string;       // "#5800E6", "x=592", "Present the Service Blueprint…"
-  actual: string;         // "#FAF9F9", "x=657", "Present the Service Desk…"
-  severity: "structural" | "minor";
-}
-interface DiffReport {
-  rows: DiffRow[];
-  score: number;          // 0-1, weighted; byproduct
-  coverage: number;       // matched/totalRef
-  unmatchedRef: string[]; // MISSING
-  unmatchedRendered: string[]; // EXTRA
-}
-```
-
-- **Tolerances:** bbox off by ≤ ~4px = ignore; fill must match exactly (color is the #1 observed
-  failure — the purple bug); text compared normalized, flagged `structural` if content differs
-  (the hallucinated-brief bug), `minor` if only whitespace/truncation.
-- **Severity:** `structural` = wrong/missing/extra region, wrong color, wrong text content.
-  `minor` = small position/size/radius drift. The loop acts on `structural` first.
-- **Score:** weighted — `structural` misses cost more than `minor`; multiply by `coverage` so an
-  incomplete build can't score high. Exact formula pinned in a test with worked examples; the
-  score is deliberately secondary to the rows.
-
-### Render capture (reuse June-10 plan, `server/verify/captureFrame.ts`)
-
-The extractor + PNG both need the frame driven in a browser. Reuse the June-10 design verbatim:
-- **Packaged DMG:** Electron offscreen `BrowserWindow` (no new dep) → capturePage + evaluate the
-  extractor.
-- **Dev:** Playwright (already a devDependency) → same.
-- Fail-open with a narration if no backend (metric skipped, turn still completes).
-
-This is the one genuinely new infra piece; it's shared with the verify loop, so it's built once.
-
-## How it's consumed
-
-1. **Verify loop (replaces the vibe-verdict):** after a hi-fi turn writes a frame, capture +
-   diff. If `rows` has `structural` entries, feed them to a scoped fix turn: "these specific
-   regions differ from the design: [rows]. Fix them." Stop when no `structural` rows remain or
-   MAX attempts. The agent fixes *located* items, not vibes. (The June-10 loop shell + gating +
-   caps are reused; only the compare step changes from `VERDICT` to `DiffReport`.)
-2. **Regression signal:** append `score` + `coverage` to the generation-metrics log (existing
-   `metricsLogPath`). Now "did change X help?" is answerable across an eval set.
+1. **Verify loop:** after a hi-fi turn writes a frame, run Tiers 1-3. Feed the failed checks +
+   `structural` visual rows to a scoped fix turn ("these specific things differ: [rows]. Fix
+   them."). Stop when Tier 1-2 pass and no structural visual rows remain, or MAX attempts. This
+   is the June-10 loop with the compare step replaced by `FidelityReport`. Reuse its shell,
+   gating, wall-clock caps.
+2. **Regression signal:** score + tier pass-rates to the metrics log.
 3. **NOT a blocking gate on the main turn** — fire-after-turn like the drift check; a low score
-   drives the fix loop, it doesn't fail the generation.
+   drives the fix loop, doesn't fail generation.
 
-## Relationship to the enforcement hook (parallel track, ships together)
+## Render capture (the one new infra piece — reuse June-10, build early, de-risk first)
 
-The token-class enforcement hook (spec `2026-07-03-token-class-enforcement-hook-design.md`) is
-the **deterministic** half: it blocks un-compilable token classes at write time — a fact-check
-that needs no render. The structured diff is the **visual** half: it catches wrong colors,
-positions, missing/extra regions, wrong text — things only visible once rendered. They're
-complementary:
-
-- Hook: "this class won't render" — cheap, exact, pre-render, blocks.
-- Diff: "this rendered region is the wrong color / in the wrong place / says the wrong thing" —
-  post-render, drives the fix loop.
-
-Both feed the same goal (measured fidelity) from opposite ends. Build order: hook first (small,
-self-contained, already spec'd), then the diff (larger, needs the capture infra).
+Tiers 2-3 need the frame driven in a browser. Reuse the June-10 `captureFrame` design:
+- **Packaged DMG:** Electron offscreen `BrowserWindow` (no new dep) — capture PNG +
+  `executeJavaScript` for the DOM read. Requires the IPC channel June-10 specs
+  (`electron/viteRunner.ts` stdio + relay) — NOT yet built.
+- **Dev:** Playwright (`page.evaluate` + screenshot). NOTE: `playwright` is a listed
+  devDependency but **not currently installed** — `pnpm exec playwright install` is a
+  prerequisite; if absent, capture fails open with a narration and Tiers 2-3 are skipped (Tier 1
+  still runs, needs no render).
+- **De-risk BEFORE building the tiers:** June-10 Risk #2 (offscreen fonts 403 → computed
+  styles/colors differ from the designer's view → false diffs, and the ChipText-403 problem is
+  real per memory `figma-import-text-fidelity`). Task 0 of any plan: prove the offscreen/
+  Playwright capture loads the SAME fonts + token CSS as the visible viewport. If it doesn't,
+  Tier 3's color judgment and Tier 2's background checks are poisoned — fix capture parity first
+  or the whole layer is untrustworthy.
 
 ## Testing
 
-Pure units are the bulk; the capture backend is the only hard-to-test seam (fake it).
-
-- **Color normalize:** `#5800E6` == `rgb(88,0,230)`; alpha handled; token-hex == computed-rgb.
-- **DOM extractor:** given a fixture HTML string (jsdom), returns the expected `RenderNode` tree;
-  zero-size + `display:none` skipped; styleless wrapper collapsed.
-- **normalize:** a `CompactNode` and a `RenderNode` describing the same region → identical
-  `ComparableRegion` (proves source-agnostic).
-- **matcher:** ref+rendered trees that align → correct pairs; a missing region → `MISSING`; an
-  extra region → `EXTRA`; coverage math.
-- **differ:** the REAL precisely-3 failure — reference tree vs the extracted broken DOM → must
-  emit `fill` structural rows (white vs purple) for sidebar/surfaces and NOT flag the correct
-  typography. The REAL precisely-2 case → `text` structural row (Service Desk vs Blueprint) +
-  `EXTRA` row (boxed input). These two are the acceptance fixtures — the metric must catch
-  exactly what the human caught.
-- **score:** worked examples pin the formula; incomplete build (low coverage) can't score high.
-- **capture backend selection:** env-based (Electron vs Playwright vs skip), mocked.
+- **Tier 1** (pure): composite-used detector on the precisely-3 frame → flags hand-rolled; on a
+  composite frame → passes. Token-class + import checks: read from the existing hooks' logic
+  (don't duplicate).
+- **Tier 2** (jsdom, no browser needed for the logic): given a DOM fixture + a reference text
+  set, missing/substituted text → check rows; present text → pass. The REAL precisely-2 text
+  ("Service Desk" vs reference "Service Blueprint") → flagged. Zero-size / overflow scan on a
+  fixture. Count-sanity on a deliberately-incomplete fixture.
+- **Tier 3** (mocked model): given a stub judge returning known rows, the report parses + routes
+  `structural` vs `minor`. The prompt is pinned (asks for JSON, says ignore AA noise, `[]` on
+  match). No live model call in tests.
+- **Score:** worked examples; Tier 1-2 dominate; incomplete frame scores low via Tier-2 count
+  sanity, NOT via a fake alignment coverage.
+- **Persistence:** `figmaNodeUrl` round-trips through `frameSchema`; metrics row appends.
+- **Capture backend selection** (env-based), mocked. **Font-parity** is a manual gate, not a
+  unit test.
 - Full suite green.
 
 ## Manual acceptance
 
-Regenerate precisely-3 (navigation) and precisely-2 (purple). The DiffReport must:
-- flag the sidebar/surface fill mismatches on a broken run, and show them RESOLVED (score up,
-  rows gone) once the token-class hook + a fix pass land;
-- flag the hallucinated brief text as a `text` structural row;
-- flag a boxed input as `EXTRA` / the borderless region as `MISSING`.
-Then confirm the verify loop, fed these rows, drives the agent to fix them within its attempt
-cap — and the score rises measurably.
+Regenerate precisely-3 (navigation) and precisely-2 (purple):
+- Tier 1 flags the hand-rolled Computer screen (composite not used) on precisely-3.
+- Tier 2 flags the hallucinated brief text on precisely-2 and the missing reference lines.
+- Tier 3 returns structural rows for the white-instead-of-purple sidebar (pre token-hook) and
+  the boxed-vs-borderless input.
+- After the token-class hook + a fix pass, the report shows those resolved (Tier 1-2 pass, score
+  up). Confirm the verify loop, fed these, drives the fixes within its cap.
+Font-parity gate passes (offscreen render colors == visible-viewport colors).
+
+## Relationship to the enforcement hook
+
+Complementary, ship the hook first (smaller, self-contained, already spec'd):
+- **Hook** = Tier 1's token-class check as a *blocking write-time gate* — the frame can't even be
+  saved with un-compilable classes.
+- **This report** *reads* Tier 1 results (incl. the hook's domain) and adds Tiers 2-3. The hook
+  prevents; the report measures + drives the loop.
 
 ## Files
 
-- `server/verify/captureFrame.ts` — NEW (shared with verify loop; June-10 design).
-- `server/verify/domExtract.ts` — NEW (in-page DOM walker).
-- `server/verify/comparable.ts` — NEW (normalize both sides + color normalize).
-- `server/verify/matchRegions.ts` — NEW (alignment).
-- `server/verify/fidelityDiff.ts` — NEW (rows + score + coverage).
+- `server/verify/captureFrame.ts` — NEW (June-10 design; PNG + DOM read).
+- `server/verify/fidelityReport.ts` — NEW (orchestrates the 3 tiers → `FidelityReport`).
+- `server/verify/staticChecks.ts` — NEW (Tier 1: composite-used, reads hook/import verdicts).
+- `server/verify/domChecks.ts` — NEW (Tier 2: text-present, zero-size/overflow, count sanity).
+- `server/verify/visionJudge.ts` — NEW (Tier 3: prompt + parse structured rows).
+- `server/types.ts` — add `figmaNodeUrl?` to `frameSchema` (persistence).
 - `electron/main.ts` + `electron/viteRunner.ts` — IPC + offscreen capture (June-10).
-- `server/middleware/chat.ts` — wire diff into the hi-fi post-turn path + metrics log.
-- Tests under `__tests__/server/verify/*` incl. the two real-failure acceptance fixtures.
+- `server/middleware/chat.ts` — wire report into the hi-fi post-turn path + metrics log.
+- `server/metrics.ts` — extend `TurnMetric` with fidelity fields.
+- Tests under `__tests__/server/verify/*` incl. the real precisely-2/-3 fixtures.
 
 ## Open decisions (for review)
 
-1. **Score formula weights** (structural vs minor, coverage multiplier) — pin in review.
-2. **bbox tolerance** (~4px proposed).
-3. **Ship the diff standalone first** (report to metrics log, human reads it) **before** wiring
-   it into the verify-loop auto-fix? Lower risk: prove the metric is trustworthy before letting
-   it drive automated edits. Recommended.
-4. **Reuse vs rebuild** compactTree's collapse/prune logic for the DOM side — share the
-   heuristics or reimplement for DOM? (Shared constants, separate walkers, likely.)
+1. **Ship Tiers 1-2 first, add Tier 3 (vision judge) later?** Tiers 1-2 are deterministic + carry
+   the text/composite/structure signal with zero model risk. Tier 3 is the fuzzy part. Strong
+   case to prove 1-2 standalone (report to metrics log + verify loop) before adding the judge.
+   Recommended: 1-2 first.
+2. **Score formula weights** — pin in review.
+3. **Does the vision judge run the SAME model as generation, or a fixed one** for consistency of
+   the regression signal?
+4. **Font-parity de-risk (Task 0)** — acceptable to block the whole feature on proving offscreen
+   capture fidelity first?
