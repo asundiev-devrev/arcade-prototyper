@@ -2,7 +2,46 @@
 
 Date: 2026-07-03 (rewritten after adversarial review killed the tree-alignment premise)
 Branch: `feat/figma-fidelity-eject` (or a fresh `feat/fidelity-metric`)
-Status: design — pending user review
+Status: **SUPERSEDED / SHELVED (2026-07-03)** — do not implement as written.
+
+## Why superseded (two adversarial rounds)
+
+Two independent adversarial reviews killed this design across both drafts (v1 tree-alignment,
+v2 three-tier). The render-dependent layer does not earn its cost and would produce FALSE
+fidelity signals on the product's own composite-based designs. Verified findings:
+
+- **The one genuinely-new Tier-1 check (composite-used) misfires on both cited frames.**
+  precisely-3's prompt is bare ("Implement this design precisely: <url>") → `detectComposeBaseIntent`
+  is false → the check can't fire (the acceptance criterion was unsatisfiable). precisely-2 DOES
+  trigger, but eject rewrites the frame to import `./ComputerScene` LOCALLY, so a barrel-import
+  check false-flags a correctly-ejected frame. Confirmed against the real prompts + ejectComposite.
+- **Tier 2 "count sanity" reintroduces the v1 killer** — composites expand one element into ~100+
+  DOM nodes with no Figma-tree counterpart, so kind-count correspondence is false by design →
+  faithful composite frames flagged as "too many elements" → inverted score.
+- **Tier 2 "required text present" is direction-blind + truncatable** — false-flags intended
+  content changes and correctly-omitted hidden nodes; misses reordered/reworded text; and its
+  reference set comes from the CAPPED compact tree, which truncates on exactly the dense frames
+  that hallucinate (the root cause it exists to catch).
+- **Tier 3 vision judge is v1's killed subjectivity with a JSON hat** — structured output makes a
+  hallucinated diff more ACTIONABLE, not more true; no ground-truth check on the judge; it would
+  drive the verify loop to degrade good frames (June-10 Risk #3, unresolved).
+- **Tiers 2-3 ride on unbuilt capture infra + a font-parity problem** with a documented history
+  of biting (ChipText 403). Most of the spec is gated on an unproven risk.
+
+**Decision:** ship the DETERMINISTIC core only — the token-class enforcement hook (spec
+`2026-07-03-token-class-enforcement-hook-design.md`) + the existing import validator. Those are
+exact, already-proven, and fix the actual observed bug (unstyled frame). The render-based tiers,
+vision judge, and verify-loop wiring are SHELVED until there's evidence the deterministic layer
+is insufficient. This document is kept for the reasoning, not for implementation.
+
+Corrections the reviews surfaced (for whoever revisits this): Playwright + Chromium ARE installed
+(dev capture works today — the spec's "not installed" claim was stale); an optional `figmaNodeUrl`
+on `frameSchema` is safe to add (zod tolerates it, no migration) but does NOT enable full
+historical recompute (needs live PAT + unchanged node + compilable frame). If the composite-used
+check is ever revived, derive "expected composite" from the ejected-file presence or the
+classifier match — NOT `detectComposeBaseIntent` — and detect the LOCAL import, not the barrel.
+
+---
 
 ## Problem
 
