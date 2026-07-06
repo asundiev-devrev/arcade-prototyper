@@ -93,6 +93,28 @@ export async function saveComponentFile(args: {
   await writeManifest(next);
 }
 
+/**
+ * Write a component file + manifest row WITHOUT the compile gate. For bundle
+ * imports only: the components were compile-gated when the exporter saved them,
+ * and the whole dependency set is written together, so gating each file mid-
+ * install (before its arcade-user deps land) would spuriously fail. Still
+ * validates the name so a hostile bundle can't traverse out of the composites
+ * dir. Last-write-wins on the manifest row (matches saveComponentFile).
+ */
+export async function writeComponentRaw(args: {
+  name: string; description: string; tsx: string; origin: string; createdAt: string;
+}): Promise<void> {
+  if (!isValidComponentName(args.name)) {
+    throw new ComponentCompileError(`Invalid component name: ${args.name}`);
+  }
+  await fs.mkdir(userKitCompositesDir(), { recursive: true });
+  await fs.writeFile(path.join(userKitCompositesDir(), `${args.name}.tsx`), args.tsx, "utf-8");
+  const entries = await readManifest();
+  const next = entries.filter((e) => e.name !== args.name);
+  next.push({ name: args.name, description: args.description, createdAt: args.createdAt, origin: args.origin });
+  await writeManifest(next);
+}
+
 export async function deleteComponent(name: string): Promise<void> {
   if (!isValidComponentName(name)) return;
   await fs.rm(path.join(userKitCompositesDir(), `${name}.tsx`), { force: true });

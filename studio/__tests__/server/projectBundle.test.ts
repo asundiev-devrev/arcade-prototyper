@@ -147,7 +147,77 @@ describe("packProject", () => {
   });
 });
 
-import { assertNoLinks, extractBundle, probeBundle } from "../../server/projectBundle";
+import { assertNoLinks, extractBundle, probeBundle, installBundledComponents, uniqueComponentName, rewriteSpecifier } from "../../server/projectBundle";
+import { componentExists, writeComponentRaw } from "../../server/componentStore";
+
+describe("component install (specifier-only, order-independent)", () => {
+  it("installs a brand-new component", async () => {
+    const compDir = fs.mkdtempSync(path.join(os.tmpdir(), "comp-"));
+    fs.writeFileSync(path.join(compDir, "Fresh.tsx"), `export default function Fresh(){return null;}`);
+    const framesRoot = fs.mkdtempSync(path.join(os.tmpdir(), "frames-"));
+    await installBundledComponents(compDir, [{ name: "Fresh", description: "d", origin: "imported", createdAt: "t" }], framesRoot);
+    expect(await componentExists("Fresh")).toBe(true);
+  });
+
+  it("installs transitive deps regardless of alphabetical order (AppCard before PriceTag)", async () => {
+    const compDir = fs.mkdtempSync(path.join(os.tmpdir(), "comp-t-"));
+    fs.writeFileSync(path.join(compDir, "AppCard.tsx"), `import { PriceTag } from "arcade-user/PriceTag";\nexport default function AppCard(){return null;}`);
+    fs.writeFileSync(path.join(compDir, "PriceTag.tsx"), `export default function PriceTag(){return null;}`);
+    const framesRoot = fs.mkdtempSync(path.join(os.tmpdir(), "frames-t-"));
+    // rows sorted alphabetically, AppCard first — must NOT fail
+    await installBundledComponents(compDir, [
+      { name: "AppCard", description: "", origin: "imported", createdAt: "t" },
+      { name: "PriceTag", description: "", origin: "imported", createdAt: "t" },
+    ], framesRoot);
+    expect(await componentExists("AppCard")).toBe(true);
+    expect(await componentExists("PriceTag")).toBe(true);
+  });
+
+  it("renames on same-name-different-content via SPECIFIER ONLY; labels/comments untouched", async () => {
+    await writeComponentRaw({ name: "Button", description: "mine", tsx: `export default function Button(){return <div>MINE</div>;}`, origin: "saved", createdAt: "t" });
+    const compDir = fs.mkdtempSync(path.join(os.tmpdir(), "comp2-"));
+    fs.writeFileSync(path.join(compDir, "Button.tsx"), `export default function Button(){return <div>THEIRS</div>;}`);
+    const framesRoot = fs.mkdtempSync(path.join(os.tmpdir(), "frames2-"));
+    fs.mkdirSync(path.join(framesRoot, "01-home"), { recursive: true });
+    fs.writeFileSync(path.join(framesRoot, "01-home", "index.tsx"),
+      `import { Button } from "arcade-user/Button";\n// The Button below is primary\nexport default function F(){return <Button aria-label="Button">Button</Button>;}`);
+
+    await installBundledComponents(compDir, [{ name: "Button", description: "d", origin: "imported", createdAt: "t" }], framesRoot);
+
+    expect(await componentExists("ButtonImported")).toBe(true);
+    const frame = fs.readFileSync(path.join(framesRoot, "01-home", "index.tsx"), "utf-8");
+    // specifier rewritten:
+    expect(frame).toContain(`from "arcade-user/ButtonImported"`);
+    // binding + JSX + comment + label text UNCHANGED (no corruption):
+    expect(frame).toContain(`import { Button }`);
+    expect(frame).toContain(`<Button aria-label="Button">Button</Button>`);
+    expect(frame).toContain(`// The Button below is primary`);
+  });
+
+  it("skips identical same-name components", async () => {
+    const tsx = `export default function Same(){return null;}`;
+    await writeComponentRaw({ name: "Same", description: "d", tsx, origin: "saved", createdAt: "t" });
+    const compDir = fs.mkdtempSync(path.join(os.tmpdir(), "comp3-"));
+    fs.writeFileSync(path.join(compDir, "Same.tsx"), tsx);
+    const framesRoot = fs.mkdtempSync(path.join(os.tmpdir(), "frames3-"));
+    await installBundledComponents(compDir, [{ name: "Same", description: "d", origin: "imported", createdAt: "t" }], framesRoot);
+    expect(await componentExists("Same")).toBe(true);
+  });
+
+  it("uniqueComponentName truncates long bases to stay <=40 chars", async () => {
+    const long = "A".repeat(38);
+    const out = await uniqueComponentName(long, new Set());
+    expect(out.length).toBeLessThanOrEqual(40);
+    expect(/^[A-Z][A-Za-z0-9]{1,39}$/.test(out)).toBe(true);
+  });
+
+  it("rewriteSpecifier does not touch arcade-user/FooBar when renaming Foo", () => {
+    const src = `import { Foo } from "arcade-user/Foo";\nimport { FooBar } from "arcade-user/FooBar";`;
+    const out = rewriteSpecifier(src, "Foo", "FooImported");
+    expect(out).toContain(`"arcade-user/FooImported"`);
+    expect(out).toContain(`"arcade-user/FooBar"`);
+  });
+});
 
 describe("import safety", () => {
   it("assertNoLinks rejects a symlink entry", async () => {

@@ -9,7 +9,7 @@ import { promisify } from "node:util";
 import type { Project } from "./types";
 import { userKitCompositesDir, projectDir, studioRoot } from "./paths";
 import { getProject, COMPUTER_REFERENCE_SLUG, COMPUTER_REFERENCE_SOURCE } from "./projects";
-import { listComponents } from "./componentStore";
+import { listComponents, componentExists, isValidComponentName, writeComponentRaw } from "./componentStore";
 
 const execFileP = promisify(execFile);
 
@@ -274,5 +274,77 @@ export async function extractBundle(bytes: Buffer): Promise<string> {
   } catch (err) {
     await fs.rm(tmp, { recursive: true, force: true });
     throw err;
+  }
+}
+
+export async function uniqueComponentName(base: string, taken: Set<string>): Promise<string> {
+  const trimmed = (base.slice(0, 40 - "Imported".length - 3) || "X");
+  for (let n = 0; n < 1000; n++) {
+    const cand = n === 0 ? `${trimmed}Imported` : `${trimmed}Imported${n + 1}`;
+    if (isValidComponentName(cand) && !taken.has(cand) && !(await componentExists(cand))) return cand;
+  }
+  throw new Error(`Could not find a free name for imported component "${base}".`);
+}
+
+export function rewriteSpecifier(src: string, oldName: string, newName: string): string {
+  // Quoted module path only — never a bare-word identifier replace.
+  return src.replace(new RegExp(`(["'])arcade-user\\/${oldName}\\1`, "g"), `$1arcade-user/${newName}$1`);
+}
+
+async function rewriteFrameSpecifiers(oldName: string, newName: string, dir: string): Promise<void> {
+  const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => [] as import("node:fs").Dirent[]);
+  for (const e of entries) {
+    if (e.name.startsWith(".")) continue;
+    const full = path.join(dir, e.name);
+    if (e.isDirectory()) { await rewriteFrameSpecifiers(oldName, newName, full); continue; }
+    if (!(e.isFile() && (e.name.endsWith(".tsx") || e.name.endsWith(".ts")))) continue;
+    const src = await fs.readFile(full, "utf-8");
+    const next = rewriteSpecifier(src, oldName, newName);
+    if (next !== src) await fs.writeFile(full, next);
+  }
+}
+
+export async function installBundledComponents(
+  compDir: string, rows: ComponentManifestRow[], framesRoot: string,
+): Promise<void> {
+  // Phase A: decide the final name for every component (collision resolution),
+  // reading bundled sources but writing nothing yet.
+  const taken = new Set<string>();
+  const renames = new Map<string, string>();          // oldName -> newName
+  const plan: { name: string; tsx: string; row: ComponentManifestRow }[] = [];
+  for (const row of rows) {
+    if (row.missing || !isValidComponentName(row.name)) continue;
+    let tsx: string;
+    try { tsx = await fs.readFile(path.join(compDir, `${row.name}.tsx`), "utf-8"); } catch { continue; }
+    if (await componentExists(row.name)) {
+      const current = await fs.readFile(path.join(userKitCompositesDir(), `${row.name}.tsx`), "utf-8").catch(() => "");
+      if (current === tsx) continue;                  // identical — dedup skip
+      const newName = await uniqueComponentName(row.name, taken);
+      renames.set(row.name, newName);
+      taken.add(newName);
+      plan.push({ name: newName, tsx, row });
+    } else {
+      taken.add(row.name);
+      plan.push({ name: row.name, tsx, row });
+    }
+  }
+
+  // Phase B: apply every rename to specifiers INSIDE the bundled sources too,
+  // so a renamed dep stays wired to the renamed file (transitive correctness).
+  for (const [oldName, newName] of renames) {
+    for (const p of plan) p.tsx = rewriteSpecifier(p.tsx, oldName, newName);
+  }
+
+  // Phase C: write all files at once (deps now all resolvable), merge manifest.
+  for (const p of plan) {
+    await writeComponentRaw({
+      name: p.name, description: p.row.description, tsx: p.tsx,
+      origin: "imported", createdAt: p.row.createdAt,
+    });
+  }
+
+  // Phase D: rewrite frame specifiers for every renamed component.
+  for (const [oldName, newName] of renames) {
+    await rewriteFrameSpecifiers(oldName, newName, framesRoot);
   }
 }
