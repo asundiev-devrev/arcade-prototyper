@@ -20,6 +20,7 @@ import { capture } from "./inspector";
 import * as overlay from "./overlay";
 import { getFiberFromNode, componentNameFromType, type FiberLike } from "./fiber";
 import type { OwnerLink } from "./resolveInFrameComponent";
+import { toSourcePosition } from "./sourceLocate";
 
 interface PickerSelection {
   editId: number;
@@ -54,7 +55,9 @@ function removeCursorStyle() {
  * V8 frame format:  "    at Component (http://host/path/file.tsx?v=123:42:15)"
  * Anonymous frames: "    at http://host/path/file.tsx?v=123:42:15"
  */
-function parseFirstUserFrame(stack: string): { file: string; line: number; column: number } | null {
+function parseFirstUserFrame(
+  stack: string,
+): { file: string; moduleUrl: string; line: number; column: number } | null {
   const lines = stack.split("\n");
   for (const line of lines) {
     const m =
@@ -76,15 +79,17 @@ function parseFirstUserFrame(stack: string): { file: string; line: number; colum
     }
     const lineNo = Number(m[m.length - 2]);
     const colNo = Number(m[m.length - 1]);
-    // Strip origin + query string for a readable path.
+    // Keep the FULL url (origin + path + query) as `moduleUrl` — that is what
+    // we append `.map` to for source-map translation, and the query carries
+    // Vite's version token that keys the served map. `file` is the readable
+    // pathname used for display + frame-slug matching downstream.
     let file = url;
     try {
-      const u = new URL(url);
-      file = u.pathname;
+      file = new URL(url).pathname;
     } catch {
       // already a path-like string
     }
-    return { file, line: lineNo, column: colNo };
+    return { file, moduleUrl: url, line: lineNo, column: colNo };
   }
   return null;
 }
@@ -94,7 +99,7 @@ function parseFirstUserFrame(stack: string): { file: string; line: number; colum
  * a name and whose `_debugStack` parses to a user source file, emit an
  * OwnerLink. Order is innermost→outermost. Pure over the fiber shape (testable).
  */
-export function buildOwnerChain(start: FiberLike | null): OwnerLink[] {
+export async function buildOwnerChain(start: FiberLike | null): Promise<OwnerLink[]> {
   const out: OwnerLink[] = [];
   let node: FiberLike | null = start;
   while (node) {
@@ -105,7 +110,12 @@ export function buildOwnerChain(start: FiberLike | null): OwnerLink[] {
     const stack = node._debugStack?.stack;
     if (name && stack) {
       const parsed = parseFirstUserFrame(stack);
-      if (parsed) out.push({ componentName: name, file: parsed.file, line: parsed.line, column: parsed.column });
+      if (parsed) {
+        // Translate the transformed call-site back to source coords so the
+        // resolved in-frame component's line:column matches the on-disk file.
+        const src = await toSourcePosition(parsed.moduleUrl, parsed.line, parsed.column);
+        out.push({ componentName: name, file: parsed.file, line: src.line, column: src.column });
+      }
     }
     node = node.return ?? null;
   }
@@ -116,7 +126,7 @@ export function buildOwnerChain(start: FiberLike | null): OwnerLink[] {
  * Walk the fiber chain starting at the DOM node's fiber, finding the nearest
  * ancestor whose `_debugStack` parses cleanly to a user source file.
  */
-function resolveSelection(fiber: FiberLike, domNode: HTMLElement): PickerSelection | null {
+async function resolveSelection(fiber: FiberLike, domNode: HTMLElement): Promise<PickerSelection | null> {
   let node: FiberLike | null = fiber;
   while (node) {
     const stack = node._debugStack?.stack;
@@ -130,11 +140,17 @@ function resolveSelection(fiber: FiberLike, domNode: HTMLElement): PickerSelecti
           tagName ||
           "Element";
         const cap = capture(domNode);
+        // Translate the transformed click location back to the on-disk source
+        // line:column. Without this, `line`/`column` point into Vite's expanded
+        // module (e.g. line 2295 of a 2500-line served file) and never match
+        // the 262-line source that both `locateJsx` and the agent edit.
+        const src = await toSourcePosition(parsed.moduleUrl, parsed.line, parsed.column);
         return {
-          ...parsed, componentName, tagName,
+          file: parsed.file, line: src.line, column: src.column,
+          componentName, tagName,
           editId: cap.editId, textEditable: cap.textEditable, styles: cap.styles,
           iconCandidate: cap.iconCandidate,
-          ownerChain: buildOwnerChain(fiber),
+          ownerChain: await buildOwnerChain(fiber),
         };
       }
     }
@@ -190,15 +206,19 @@ function onClick(e: MouseEvent) {
     postCancel("no-fiber");
     return;
   }
-  const sel = resolveSelection(fiber, target as HTMLElement);
-  if (!sel) {
-    postCancel("no-source");
-    return;
-  }
+  // Show the selection outline immediately (sync), then resolve source coords
+  // (async: the first pick on a frame fetches its source map) and post. The
+  // picker stays live either way — bulk editing continues until the parent
+  // sends frame-pick-stop or the user hits Escape.
   overlay.showSelection(target as HTMLElement);
-  postPicked(sel);
-  // Do NOT deactivate — bulk editing keeps the picker live until the panel
-  // is closed/committed/discarded (parent sends frame-pick-stop) or Escape.
+  void (async () => {
+    const sel = await resolveSelection(fiber, target as HTMLElement);
+    if (!sel) {
+      postCancel("no-source");
+      return;
+    }
+    postPicked(sel);
+  })();
 }
 
 function onKeyDown(e: KeyboardEvent) {
