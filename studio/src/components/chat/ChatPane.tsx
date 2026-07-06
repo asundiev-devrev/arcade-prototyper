@@ -25,8 +25,6 @@ export function ChatPane({
   onApplyChimeIn,
   onDismissChimeIn,
   onUndoBlock,
-  onApplyBlock,
-  onDiscardBlock,
   framesWithAiApply,
 }: {
   projectSlug: string;
@@ -36,8 +34,6 @@ export function ChatPane({
   onApplyChimeIn?: (c: ChimeIn) => void;
   onDismissChimeIn?: (c: ChimeIn) => void;
   onUndoBlock?: (id: string) => void;
-  onApplyBlock?: (id: string) => void;
-  onDiscardBlock?: (id: string) => void;
   framesWithAiApply?: Set<string>;
 }) {
   const { state, send, retry, cancel } = useChatStreamContext();
@@ -89,8 +85,6 @@ export function ChatPane({
         onDismissChimeIn={onDismissChimeIn}
         editBlocks={blocks}
         onUndoBlock={onUndoBlock}
-        onApplyBlock={onApplyBlock}
-        onDiscardBlock={onDiscardBlock}
         framesWithAiApply={framesWithAiApply}
       />
       {state.error && state.errorKind === "auth" && <AuthExpiredNotice />}

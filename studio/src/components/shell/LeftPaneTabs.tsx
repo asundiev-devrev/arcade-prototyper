@@ -18,8 +18,6 @@ interface Props {
   onApplyChimeIn: (c: ChimeIn) => void;
   onDismissChimeIn: (c: ChimeIn) => void;
   onUndoBlock: (id: string) => void;
-  onApplyBlock: (id: string) => void;
-  onDiscardBlock: (id: string) => void;
   framesWithAiApply?: Set<string>;
 }
 
@@ -38,8 +36,6 @@ export function LeftPaneTabs(props: Props) {
           onApplyChimeIn={props.onApplyChimeIn}
           onDismissChimeIn={props.onDismissChimeIn}
           onUndoBlock={props.onUndoBlock}
-          onApplyBlock={props.onApplyBlock}
-          onDiscardBlock={props.onDiscardBlock}
           framesWithAiApply={props.framesWithAiApply}
         />
       </div>

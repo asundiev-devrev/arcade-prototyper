@@ -14,7 +14,6 @@ import { ChatStreamProvider } from "../hooks/chatStreamContext";
 import { EditSessionProvider, useEditSession } from "../hooks/editSessionContext";
 import { EditBlocksProvider, useEditBlocks } from "../hooks/editBlocksContext";
 import { postEditUndo } from "../lib/visualEditClient";
-import { takePendingBlockPreamble } from "../components/inspector/InspectorPanel";
 import { useProjectFromHost } from "../hooks/useProjectFromHost";
 import type { Project, ChimeIn } from "../../server/types";
 import { takePendingPrompt, peekPendingPrompt } from "../lib/pendingPrompt";
@@ -195,7 +194,7 @@ function ProjectDetailShell({
   );
 
   // Undo an instant block: revert the deterministic write on disk (LIFO at the
-  // server), then mark the block undone. Also evict any stashed preamble.
+  // server), then mark the block undone.
   const handleUndoBlock = useCallback(
     async (id: string) => {
       const block = blocks.find((b) => b.id === id);
@@ -205,38 +204,9 @@ function ProjectDetailShell({
         console.warn(`Undo failed for block ${id} (frame ${block.frameSlug})`);
         return;
       }
-      takePendingBlockPreamble(id);
       setStatus(id, "undone");
     },
     [routeKey, blocks, setStatus],
-  );
-
-  // Apply a pending AI block: send the stashed scoped preamble to the agent and
-  // remove the block (it becomes a normal chat turn). (The reading also evicts
-  // the side-map entry.) Also record this frame in the AI-applied set so instant
-  // Undo becomes gated.
-  const handleApplyBlock = useCallback(
-    (id: string) => {
-      const preamble = takePendingBlockPreamble(id);
-      if (!preamble) return;
-      // Mark this frame as having had an AI Apply so instant Undo is gated.
-      const block = blocks.find((b) => b.id === id);
-      if (block && block.kind === "ai") {
-        framesWithAiApplyRef.current.add(block.frameSlug);
-      }
-      source.send?.(preamble);
-      removeBlock(id);
-    },
-    [source, removeBlock, blocks],
-  );
-
-  // Discard a pending AI block: drop it from the stream and evict its preamble.
-  const handleDiscardBlock = useCallback(
-    (id: string) => {
-      takePendingBlockPreamble(id);
-      removeBlock(id);
-    },
-    [removeBlock],
   );
 
   const [devOpen, setDevOpen] = useState(false);
@@ -439,8 +409,6 @@ function ProjectDetailShell({
             onApplyChimeIn={handleApplyChimeIn}
             onDismissChimeIn={handleDismissChimeIn}
             onUndoBlock={handleUndoBlock}
-            onApplyBlock={handleApplyBlock}
-            onDiscardBlock={handleDiscardBlock}
             framesWithAiApply={framesWithAiApplyRef.current}
           />
           {chatOpen && (
@@ -487,7 +455,12 @@ function ProjectDetailShell({
           />
         </main>
         {devOpen && <DevModePanel slug={project.slug} />}
-        <InspectorPanel onSend={(p, imgs) => source.send(p, imgs)} busy={chatStream.state.phase === "running"} slug={project.slug} />
+        <InspectorPanel
+          onSend={(p, imgs) => source.send(p, imgs)}
+          onSentToAgent={(frameSlug) => framesWithAiApplyRef.current.add(frameSlug)}
+          busy={chatStream.state.phase === "running"}
+          slug={project.slug}
+        />
       </div>
     </div>
     </ChatStreamProvider>

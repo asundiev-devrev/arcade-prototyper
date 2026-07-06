@@ -245,8 +245,6 @@ export function MessageList({
   onDismissChimeIn,
   editBlocks = [],
   onUndoBlock,
-  onApplyBlock,
-  onDiscardBlock,
   framesWithAiApply,
 }: {
   history: ChatMessage[];
@@ -263,8 +261,6 @@ export function MessageList({
   onDismissChimeIn?: (c: ChimeIn) => void;
   editBlocks?: EditBlock[];
   onUndoBlock?: (id: string) => void;
-  onApplyBlock?: (id: string) => void;
-  onDiscardBlock?: (id: string) => void;
   framesWithAiApply?: Set<string>;
 }) {
   const hasActivity = !!currentItems && currentItems.length > 0;
@@ -361,8 +357,9 @@ export function MessageList({
 
       {pendingPrompt && <BubbleRow role="user">{pendingPrompt}</BubbleRow>}
 
-      {/* Edit-block stream: instant edits land applied (with Undo); edits the
-       *  deterministic writer can't map land pending (with Apply / Discard). */}
+      {/* Edit-block stream: each instant (no-LLM) edit lands applied, with Undo
+       *  on the newest one per frame. Edits the deterministic writer can't map
+       *  stay in the inspector batch and go to the agent via "Send changes". */}
       {editBlocks.length > 0 && (
         <div data-testid="edit-block-stream" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {editBlocks.map((block) => (
@@ -371,8 +368,6 @@ export function MessageList({
               block={block}
               undoable={isNewestAppliedInstantForFrame(block, editBlocks, framesWithAiApply)}
               onUndo={(id) => onUndoBlock?.(id)}
-              onApply={(id) => onApplyBlock?.(id)}
-              onDiscard={(id) => onDiscardBlock?.(id)}
             />
           ))}
         </div>
