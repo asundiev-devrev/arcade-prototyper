@@ -259,3 +259,59 @@ describe("import safety", () => {
     fs.rmSync(outDir, { recursive: true, force: true });
   });
 });
+
+import { unpackAndInstall } from "../../server/projectBundle";
+import { listProjects } from "../../server/projects";
+
+describe("unpackAndInstall (round-trip)", () => {
+  it("imports a packed bundle into a clean root with recipient paths + seed frame", async () => {
+    process.env.HOME = fs.mkdtempSync(path.join(os.tmpdir(), "home-a-"));
+    const proj = await createProject({ name: "Trip", theme: "devrev-app", mode: "dark" });
+    const pdir = path.join(root, "projects", proj.slug);
+    fs.mkdirSync(path.join(pdir, "frames", "01-home"), { recursive: true });
+    fs.writeFileSync(path.join(pdir, "frames", "01-home", "index.tsx"), `export default function F(){return null;}`);
+    fs.writeFileSync(path.join(pdir, "chat-history.json"), `[{"x":1}]`);
+    const { filePath } = await packProject(proj.slug);
+    const bytes = fs.readFileSync(filePath);
+
+    const rootB = fs.mkdtempSync(path.join(os.tmpdir(), "arcade-b-"));
+    process.env.ARCADE_STUDIO_ROOT = rootB;
+    process.env.HOME = fs.mkdtempSync(path.join(os.tmpdir(), "home-b-"));
+
+    const imported = await unpackAndInstall(bytes);
+    expect(imported.theme).toBe("devrev-app");
+    expect(imported.mode).toBe("dark");
+    const idir = path.join(rootB, "projects", imported.slug);
+    expect(fs.existsSync(path.join(idir, "project.json"))).toBe(true);        // folder===slug
+    expect(fs.existsSync(path.join(idir, "chat-history.json"))).toBe(false);  // excluded
+    expect(fs.existsSync(path.join(idir, "CLAUDE.md"))).toBe(true);           // regenerated
+    expect(fs.existsSync(path.join(idir, "frames", "01-home", "index.tsx"))).toBe(true);
+    expect(fs.existsSync(path.join(idir, "frames", "00-computer-reference", "index.tsx"))).toBe(true); // seed recreated
+
+    expect((await listProjects()).some((p) => p.slug === imported.slug)).toBe(true);
+
+    fs.rmSync(rootB, { recursive: true, force: true });
+  });
+
+  it("re-slugs and marks name on collision", async () => {
+    process.env.HOME = fs.mkdtempSync(path.join(os.tmpdir(), "home-c-"));
+    const proj = await createProject({ name: "Dup", theme: "arcade", mode: "light" });
+    const { filePath } = await packProject(proj.slug);
+    const bytes = fs.readFileSync(filePath);
+    const imported = await unpackAndInstall(bytes); // same root — collides
+    expect(imported.slug).not.toBe(proj.slug);
+    expect(imported.name).toMatch(/\(imported\)/);
+  });
+
+  it("rejects a bundle with a bad format", async () => {
+    const bogus = fs.mkdtempSync(path.join(os.tmpdir(), "bogus-"));
+    fs.writeFileSync(path.join(bogus, "manifest.json"), JSON.stringify({ format: 99 }));
+    fs.mkdirSync(path.join(bogus, "project"));
+    fs.writeFileSync(path.join(bogus, "project", "project.json"), "{}");
+    fs.mkdirSync(path.join(bogus, "components"));
+    execFileSync("/usr/bin/tar", ["czf", path.join(bogus, "b.arcade"), "-C", bogus, "manifest.json", "project", "components"]);
+    const bytes = fs.readFileSync(path.join(bogus, "b.arcade"));
+    await expect(unpackAndInstall(bytes)).rejects.toThrow(/newer version|format/i);
+    fs.rmSync(bogus, { recursive: true, force: true });
+  });
+});

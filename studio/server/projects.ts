@@ -172,10 +172,35 @@ export default function ComputerReference() {
 }
 `;
 
-async function scaffoldComputerReferenceFrame(dir: string): Promise<void> {
+export async function scaffoldComputerReferenceFrame(dir: string): Promise<void> {
   const frameDir = path.join(dir, "frames", COMPUTER_REFERENCE_SLUG);
   await fs.mkdir(frameDir, { recursive: true });
   await fs.writeFile(path.join(frameDir, "index.tsx"), COMPUTER_REFERENCE_SOURCE);
+}
+
+export async function importSlug(name: string): Promise<string> {
+  return uniqueSlug(slugify(name));
+}
+
+/**
+ * Recipient-side scaffolding for an already-on-disk imported project: write
+ * CLAUDE.md with THIS machine's paths (import ships none — it hardcodes the
+ * exporter's paths), backfill memory stubs + the DevRev API reference, and
+ * recreate the seeded Computer reference frame (dropped at export; CLAUDE.md
+ * instructs the generator to Read it). Mirrors createProject's scaffolding,
+ * minus the directory bootstrap.
+ */
+export async function scaffoldImportedProject(slug: string): Promise<void> {
+  const p = await getProject(slug);
+  if (!p) throw new Error(`Project not found: ${slug}`);
+  const tpl = await readTemplate();
+  await fs.writeFile(path.join(projectDir(slug), "CLAUDE.md"), renderTemplate(tpl, {
+    PROJECT_NAME: p.name, THEME: p.theme,
+    ARCADE: ARCADE_GEN_ROOT, PROTOTYPER: PROTOTYPER_ROOT, GLOBAL_MEMORY: globalMemoryDir(),
+  }));
+  await ensureMemoryStubs(projectMemoryDir(slug), "this project");
+  await scaffoldDevRevApiReference(slug);
+  await scaffoldComputerReferenceFrame(projectDir(slug)); // now exported
 }
 
 /**

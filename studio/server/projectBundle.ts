@@ -7,8 +7,9 @@ import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { Project } from "./types";
-import { userKitCompositesDir, projectDir, studioRoot } from "./paths";
-import { getProject, COMPUTER_REFERENCE_SLUG, COMPUTER_REFERENCE_SOURCE } from "./projects";
+import { projectSchema } from "./types";
+import { userKitCompositesDir, projectDir, studioRoot, projectsRoot } from "./paths";
+import { getProject, reconcileFrames, importSlug, scaffoldImportedProject, clearAllProjectSessions, COMPUTER_REFERENCE_SLUG, COMPUTER_REFERENCE_SOURCE } from "./projects";
 import { listComponents, componentExists, isValidComponentName, writeComponentRaw } from "./componentStore";
 
 const execFileP = promisify(execFile);
@@ -346,5 +347,42 @@ export async function installBundledComponents(
   // Phase D: rewrite frame specifiers for every renamed component.
   for (const [oldName, newName] of renames) {
     await rewriteFrameSpecifiers(oldName, newName, framesRoot);
+  }
+}
+
+export async function unpackAndInstall(bytes: Buffer): Promise<Project> {
+  const tmp = await extractBundle(bytes); // throws on link/cap/tar failure
+  try {
+    const manifest = JSON.parse(await fs.readFile(path.join(tmp, "manifest.json"), "utf-8")) as BundleManifest;
+    if (manifest?.format !== 1) {
+      throw new Error("This bundle was made by a newer version of Studio and can't be imported.");
+    }
+    const stagedProjectDir = path.join(tmp, "project");
+    const parsed = projectSchema.parse(JSON.parse(await fs.readFile(path.join(stagedProjectDir, "project.json"), "utf-8")));
+
+    const slug = await importSlug(parsed.name);
+    const collided = slug !== parsed.slug;
+    const name = collided ? `${parsed.name} (imported)` : parsed.name;
+
+    // install components (into the recipient's global kit) BEFORE promoting;
+    // rewrites staged frame specifiers in place for any renamed component.
+    await installBundledComponents(path.join(tmp, "components"), manifest.components, path.join(stagedProjectDir, "frames"));
+
+    await fs.writeFile(path.join(stagedProjectDir, "project.json"),
+      JSON.stringify({ ...parsed, slug, name, updatedAt: new Date().toISOString() }, null, 2));
+
+    // promote: same-volume move (tmp is under studioRoot, so is projectsRoot)
+    await fs.mkdir(projectsRoot(), { recursive: true });
+    await fs.rename(stagedProjectDir, path.join(projectsRoot(), slug));
+
+    await scaffoldImportedProject(slug);
+    await reconcileFrames(slug);
+    await clearAllProjectSessions().catch(() => {}); // new kit components → refresh cached prompts
+
+    const final = await getProject(slug);
+    if (!final) throw new Error("Import failed: project vanished after install.");
+    return final;
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
   }
 }
