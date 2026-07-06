@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useToast } from "@xorkavi/arcade-gen";
 import { useProjects } from "../hooks/useProjects";
 import { api } from "../lib/api";
@@ -16,6 +16,7 @@ export function HomePage({ onOpen }: { onOpen: (slug: string) => void }) {
   const { toast } = useToast();
   const { confirm, promptText } = useDialogs();
   const [submitting, setSubmitting] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   async function handleHeroSubmit(args: HeroPromptSubmitArgs) {
     if (submitting) return;
@@ -118,6 +119,28 @@ export function HomePage({ onOpen }: { onOpen: (slug: string) => void }) {
     }
   }
 
+  async function handleImportClick() {
+    const ok = await confirm({
+      title: "Import a project?",
+      description: "Only import .arcade files from people you trust. They contain code that runs on your machine.",
+      confirmLabel: "Choose file…",
+    });
+    if (ok) fileRef.current?.click();
+  }
+
+  async function handleFilePicked(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file
+    if (!file) return;
+    try {
+      const project = await api.importProject(file);
+      void refresh();
+      onOpen(project.slug);
+    } catch (err) {
+      toast({ title: "Import failed", description: err instanceof Error ? err.message : String(err), intent: "alert" });
+    }
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
       <StudioHeader title="Studio" right={<AppSettingsButton />} />
@@ -133,12 +156,14 @@ export function HomePage({ onOpen }: { onOpen: (slug: string) => void }) {
           }}
         >
           <HeroPromptInput onSubmit={handleHeroSubmit} disabled={submitting} />
+          <input ref={fileRef} type="file" accept=".arcade" style={{ display: "none" }} onChange={handleFilePicked} />
           <HomeShelf
             projects={projects}
             onOpen={onOpen}
             onRename={handleRename}
             onDelete={handleDelete}
             onStartTemplate={handleTemplateStart}
+            onImport={handleImportClick}
           />
         </div>
       </div>

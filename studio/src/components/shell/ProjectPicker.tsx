@@ -184,6 +184,31 @@ export function ProjectPicker({
           >
             Rename project…
           </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => { setOpen(false); api.exportProject(project.slug); }}
+            style={{
+              display: "block",
+              width: "100%",
+              textAlign: "left",
+              padding: "6px 10px",
+              fontSize: 13,
+              background: "transparent",
+              border: "none",
+              borderRadius: 4,
+              color: "var(--fg-neutral-prominent)",
+              cursor: "pointer",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = "var(--surface-shallow)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+            }}
+          >
+            Export project…
+          </button>
           <div
             style={{
               height: 1,
