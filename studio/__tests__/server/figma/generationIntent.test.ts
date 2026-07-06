@@ -95,6 +95,7 @@ describe("shouldGenerateFromFigma", () => {
       "the design is meant to replace the settings page",
       "implement the dark variant precisely",          // describes what to copy
       "a delete button in the toolbar",                // noun, not verb
+      "this design will make the whole thing dark",    // purpose clause, not instruction
     ];
     for (const p of copies) expect(shouldGenerateFromFigma(p), p).toBe(false);
   });
