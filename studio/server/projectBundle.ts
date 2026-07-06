@@ -4,10 +4,14 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import type { Project } from "./types";
 import { userKitCompositesDir, projectDir, studioRoot } from "./paths";
 import { getProject, COMPUTER_REFERENCE_SLUG, COMPUTER_REFERENCE_SOURCE } from "./projects";
 import { listComponents } from "./componentStore";
+
+const execFileP = promisify(execFile);
 
 export interface ComponentManifestRow {
   name: string;
@@ -213,6 +217,62 @@ export async function packProject(
     return { filePath, warnings };
   } catch (err) {
     await fs.rm(tmpRoot, { recursive: true, force: true }); // no leak on failure
+    throw err;
+  }
+}
+
+export const MAX_BUNDLE_BYTES = 200 * 1024 * 1024;
+export const MAX_BUNDLE_ENTRIES = 5000;
+
+/**
+ * List a gzipped tar WITHOUT extracting to disk, summing uncompressed sizes.
+ * This is the disk-fill-bomb guard: `tar -tzv` decompresses in memory only, so
+ * a 1 KB archive that would inflate to gigabytes is rejected before a single
+ * payload byte hits disk. bsdtar's verbose long-listing puts the byte size in
+ * column 5 (after mode, owner/group). We parse defensively: any line whose 5th
+ * whitespace field is an integer contributes; directories (size 0) count as
+ * entries but add no bytes.
+ */
+export async function probeBundle(archive: string): Promise<{ entries: number; bytes: number }> {
+  const { stdout } = await execFileP(TAR, ["-tzvf", archive], { maxBuffer: 64 * 1024 * 1024 });
+  let entries = 0, bytes = 0;
+  for (const line of stdout.split("\n")) {
+    if (!line.trim()) continue;
+    entries += 1;
+    const cols = line.trim().split(/\s+/);
+    const size = Number(cols[4]);
+    if (Number.isFinite(size)) bytes += size;
+  }
+  return { entries, bytes };
+}
+
+export async function assertNoLinks(dir: string): Promise<void> {
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+  for (const e of entries) {
+    const full = path.join(dir, e.name);
+    const st = await fs.lstat(full);
+    if (st.isSymbolicLink()) throw new Error("Bundle contains a symbolic or hard link; refusing to import.");
+    if (st.isFile() && st.nlink > 1) throw new Error("Bundle contains a symbolic or hard link; refusing to import.");
+    if (st.isDirectory()) await assertNoLinks(full);
+  }
+}
+
+export async function extractBundle(bytes: Buffer): Promise<string> {
+  await fs.mkdir(studioRoot(), { recursive: true });
+  const tmp = await fs.mkdtemp(path.join(studioRoot(), ".import-tmp-"));
+  try {
+    const archive = path.join(tmp, "bundle.arcade");
+    await fs.writeFile(archive, bytes);
+    // Bomb guard BEFORE extracting anything to disk.
+    const { entries, bytes: uncompressed } = await probeBundle(archive);
+    if (entries > MAX_BUNDLE_ENTRIES) throw new Error("Bundle has too many entries; refusing to import.");
+    if (uncompressed > MAX_BUNDLE_BYTES) throw new Error("Bundle is too large; refusing to import.");
+    await runTar(["xzf", archive, "-C", tmp], tmp);
+    await fs.rm(archive, { force: true });
+    await assertNoLinks(tmp);
+    return tmp;
+  } catch (err) {
+    await fs.rm(tmp, { recursive: true, force: true });
     throw err;
   }
 }

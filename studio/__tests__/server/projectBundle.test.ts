@@ -146,3 +146,46 @@ describe("packProject", () => {
     expect(warnings.join(" ")).toMatch(/Ghost/);
   });
 });
+
+import { assertNoLinks, extractBundle, probeBundle } from "../../server/projectBundle";
+
+describe("import safety", () => {
+  it("assertNoLinks rejects a symlink entry", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "links-"));
+    fs.writeFileSync(path.join(dir, "real.txt"), "ok");
+    fs.symlinkSync("/etc/hosts", path.join(dir, "escape"));
+    await expect(assertNoLinks(dir)).rejects.toThrow(/link/i);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("assertNoLinks passes a clean tree", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clean-"));
+    fs.mkdirSync(path.join(dir, "sub"));
+    fs.writeFileSync(path.join(dir, "sub", "a.txt"), "hi");
+    await expect(assertNoLinks(dir)).resolves.toBeUndefined();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("probeBundle sums entries + uncompressed bytes without extracting", async () => {
+    const src = fs.mkdtempSync(path.join(os.tmpdir(), "probe-src-"));
+    fs.writeFileSync(path.join(src, "a.txt"), "x".repeat(1000));
+    fs.writeFileSync(path.join(src, "b.txt"), "y".repeat(2000));
+    const arc = path.join(src, "p.arcade");
+    execFileSync("/usr/bin/tar", ["czf", arc, "-C", src, "a.txt", "b.txt"]);
+    const { entries, bytes } = await probeBundle(arc);
+    expect(entries).toBeGreaterThanOrEqual(2);
+    expect(bytes).toBeGreaterThanOrEqual(3000);
+    fs.rmSync(src, { recursive: true, force: true });
+  });
+
+  it("extractBundle unpacks a real packed bundle", async () => {
+    process.env.HOME = fs.mkdtempSync(path.join(os.tmpdir(), "arcade-home3-"));
+    const proj = await createProject({ name: "Extract Me", theme: "arcade", mode: "light" });
+    const { filePath } = await packProject(proj.slug);
+    const bytes = fs.readFileSync(filePath);
+    const outDir = await extractBundle(bytes);
+    expect(fs.existsSync(path.join(outDir, "manifest.json"))).toBe(true);
+    expect(fs.existsSync(path.join(outDir, "project", "project.json"))).toBe(true);
+    fs.rmSync(outDir, { recursive: true, force: true });
+  });
+});
