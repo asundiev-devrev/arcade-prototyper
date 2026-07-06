@@ -25,9 +25,8 @@
  * bare imports.
  *
  * Pure, keyword-based, and exported for unit testing — same shape as
- * detectHiFiIntent / detectInteractionIntent, which this composes with.
+ * detectInteractionIntent, which this composes with.
  */
-import { detectHiFiIntent } from "./fidelityDirective";
 import { detectInteractionIntent } from "../../src/lib/figmaUrl";
 
 /**
@@ -109,18 +108,21 @@ export function detectComposeBaseIntent(prompt: string): boolean {
  * reference) instead of the deterministic importer.
  *
  * Fires on ANY of:
- *  - hi-fi intent ("implement precisely", "pixel-perfect", "match exactly"),
  *  - interaction intent ("click opens a modal", "on hover show …"),
- *  - build intent (modify a composite, make it functional, apply a theme).
+ *  - build intent (modify a composite, make it functional, apply a theme,
+ *    remove/swap/replace an element).
  *
- * A bare import (URL only, or "import/bring this in") matches none of these and
- * stays on the fast deterministic path.
+ * A faithful-reproduction ask (bare import, or "implement precisely" with no
+ * build/interaction instruction) matches none of these and stays on the fast
+ * deterministic path.
  */
 export function shouldGenerateFromFigma(prompt: string): boolean {
   if (typeof prompt !== "string" || !prompt) return false;
-  return (
-    detectHiFiIntent(prompt) ||
-    detectInteractionIntent(prompt) ||
-    detectBuildIntent(prompt)
-  );
+  // Hi-fi wording ("precisely", "pixel-perfect") is deliberately NOT a routing
+  // trigger: a faithful-reproduction ask belongs on the deterministic kit-emit
+  // engine (fidelity by construction), not the LLM reconstructor. Only intent
+  // the importer cannot honour — interactivity or a build/edit instruction —
+  // routes to the generator. detectHiFiIntent still governs the LLM's directive
+  // inside runClaudeBranch; it just no longer decides the engine.
+  return detectInteractionIntent(prompt) || detectBuildIntent(prompt);
 }

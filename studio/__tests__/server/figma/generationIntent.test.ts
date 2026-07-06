@@ -22,9 +22,9 @@ describe("shouldGenerateFromFigma", () => {
     expect(shouldGenerateFromFigma(prompt)).toBe(true);
   });
 
-  it("fires on hi-fi intent alone (implement precisely / pixel-perfect)", () => {
-    expect(shouldGenerateFromFigma("implement this precisely")).toBe(true);
-    expect(shouldGenerateFromFigma("pixel-perfect build of this frame")).toBe(true);
+  it("does NOT fire on hi-fi intent alone — pure precise/pixel-perfect routes deterministic", () => {
+    expect(shouldGenerateFromFigma("implement this precisely")).toBe(false);
+    expect(shouldGenerateFromFigma("pixel-perfect build of this frame")).toBe(false);
   });
 
   it("fires on interaction intent alone (click opens a modal)", () => {
