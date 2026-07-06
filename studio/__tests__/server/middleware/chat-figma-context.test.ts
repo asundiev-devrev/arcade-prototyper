@@ -23,7 +23,7 @@ import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { createProject } from "../../../server/projects";
-import { __resetTurnRegistryForTests } from "../../../server/turnRegistry";
+import { __resetTurnRegistryForTests, getTurn } from "../../../server/turnRegistry";
 
 const kitEmitSpy = vi.hoisted(() =>
   vi.fn(async (input: any) => {
@@ -84,7 +84,29 @@ afterEach(() => {
 /** Drain the per-slug SSE stream so the turn completes before assertions. */
 async function drainStream(slug: string): Promise<string> {
   const r = await fetch(`http://localhost:${port}/api/chat/stream/${slug}`);
-  return r.text();
+  const text = await r.text();
+
+  // Wait deterministically for the turn to reach terminal status before returning.
+  // Under heavy parallel CPU load, the SSE stream can close before all turn writes
+  // have settled. Poll getTurn(slug) until status is not "running", with a bounded
+  // timeout so a hung turn still fails fast.
+  const maxWaitMs = 3000;
+  const tickMs = 10;
+  const start = Date.now();
+  while (Date.now() - start < maxWaitMs) {
+    const turn = getTurn(slug);
+    if (!turn || turn.status !== "running") {
+      // Yield additional time to allow any trailing fs writes to flush
+      // and subprocesses to fully exit before cleanup. Under heavy parallel
+      // CPU load, subprocess exit and file writes can lag behind the turn's
+      // terminal transition.
+      await new Promise(r => setTimeout(r, 100));
+      break;
+    }
+    await new Promise(r => setTimeout(r, tickMs));
+  }
+
+  return text;
 }
 
 async function post(slug: string, prompt: string) {
