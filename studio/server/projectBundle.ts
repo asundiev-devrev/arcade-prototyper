@@ -1,7 +1,13 @@
 import fs from "node:fs/promises";
+import { lstatSync } from "node:fs";
 import path from "node:path";
+import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import type { Project } from "./types";
-import { userKitCompositesDir } from "./paths";
+import { userKitCompositesDir, projectDir, studioRoot } from "./paths";
+import { getProject, COMPUTER_REFERENCE_SLUG, COMPUTER_REFERENCE_SOURCE } from "./projects";
+import { listComponents } from "./componentStore";
 
 export interface ComponentManifestRow {
   name: string;
@@ -90,4 +96,123 @@ export async function resolveComponentDeps(
     }
   }
   return { names: [...found].sort(), missing: [...missing].sort() };
+}
+
+const TAR = "/usr/bin/tar";
+
+const EXCLUDE_TOP = new Set([
+  "chat-history.json", "memory", "CLAUDE.md", "CLAUDE.md.bak",
+  "thumbnails", "_uploads", "last-error.log", "last-stdout.log",
+]);
+
+function studioVersion(): string {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const pkg = path.resolve(here, "..", "..", "package.json");
+  try { return JSON.parse(readFileSync(pkg, "utf-8")).version ?? "0.0.0"; }
+  catch { return "0.0.0"; }
+}
+
+export function runTar(args: string[], cwd: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const p = spawn(TAR, args, { cwd });
+    let err = "";
+    p.stderr.on("data", (d) => (err += d));
+    p.on("error", reject);
+    p.on("close", (code) =>
+      code === 0 ? resolve() : reject(new Error(`tar exited ${code}: ${err}`)));
+  });
+}
+
+async function copyProjectSubtree(srcProjectDir: string, destProjectDir: string): Promise<void> {
+  await fs.mkdir(destProjectDir, { recursive: true });
+  const entries = await fs.readdir(srcProjectDir, { withFileTypes: true });
+  for (const e of entries) {
+    if (e.name.startsWith(".") || EXCLUDE_TOP.has(e.name)) continue;
+    if (e.isSymbolicLink()) continue;               // never copy links out
+    const src = path.join(srcProjectDir, e.name);
+    const dest = path.join(destProjectDir, e.name);
+    if (e.isDirectory()) {
+      // Recursive copy that drops nested symlinks so export never produces a
+      // bundle its own importer would reject (importer refuses any link).
+      await fs.cp(src, dest, { recursive: true, filter: (s) => !isLink(s) });
+    } else if (e.isFile()) {
+      await fs.copyFile(src, dest);
+    }
+  }
+}
+
+function isLink(p: string): boolean {
+  try {
+    return lstatSync(p).isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
+async function isUnmodifiedSeedFrame(framesDir: string): Promise<boolean> {
+  try {
+    const src = await fs.readFile(
+      path.join(framesDir, COMPUTER_REFERENCE_SLUG, "index.tsx"), "utf-8");
+    return src === COMPUTER_REFERENCE_SOURCE;
+  } catch { return false; }
+}
+
+export async function packProject(
+  slug: string,
+): Promise<{ filePath: string; warnings: string[] }> {
+  const project = await getProject(slug);
+  if (!project) throw new Error(`Project not found: ${slug}`);
+  const warnings: string[] = [];
+
+  await fs.mkdir(studioRoot(), { recursive: true }); // mkdtemp needs the parent
+  const tmpRoot = await fs.mkdtemp(path.join(studioRoot(), ".bundle-tmp-"));
+  try {
+    const projOut = path.join(tmpRoot, "project");
+    const compOut = path.join(tmpRoot, "components");
+    await fs.mkdir(compOut, { recursive: true });
+
+    await copyProjectSubtree(projectDir(slug), projOut);
+    await fs.writeFile(
+      path.join(projOut, "project.json"),
+      JSON.stringify(cleanProjectJson(project), null, 2));
+
+    const framesOut = path.join(projOut, "frames");
+    if (await isUnmodifiedSeedFrame(framesOut)) {
+      await fs.rm(path.join(framesOut, COMPUTER_REFERENCE_SLUG), { recursive: true, force: true });
+    }
+
+    const { names, missing } = await resolveComponentDeps(framesOut);
+    for (const m of missing) warnings.push(`Component ${m} is referenced but no longer in your kit; it will be missing on import.`);
+    const allMeta = await listComponents();
+    const rows: ComponentManifestRow[] = [];
+    for (const name of names) {
+      await fs.copyFile(
+        path.join(userKitCompositesDir(), `${name}.tsx`),
+        path.join(compOut, `${name}.tsx`));
+      const meta = allMeta.find((c) => c.name === name);
+      if (meta?.thumb) {
+        await fs.copyFile(
+          path.join(userKitCompositesDir(), `${name}.png`),
+          path.join(compOut, `${name}.png`)).catch(() => {});
+      }
+      rows.push({
+        name, description: meta?.description ?? "", origin: meta?.origin ?? "imported",
+        createdAt: meta?.createdAt ?? new Date().toISOString(), thumb: meta?.thumb ?? false,
+      });
+    }
+    for (const m of missing) rows.push({ name: m, description: "", origin: "imported", createdAt: new Date().toISOString(), missing: true });
+
+    const manifest: BundleManifest = {
+      format: 1, exporterVersion: studioVersion(),
+      name: project.name, slug: project.slug, components: rows,
+    };
+    await fs.writeFile(path.join(tmpRoot, "manifest.json"), JSON.stringify(manifest, null, 2));
+
+    const filePath = path.join(tmpRoot, `${slug}.arcade`);
+    await runTar(["czf", filePath, "manifest.json", "project", "components"], tmpRoot);
+    return { filePath, warnings };
+  } catch (err) {
+    await fs.rm(tmpRoot, { recursive: true, force: true }); // no leak on failure
+    throw err;
+  }
 }

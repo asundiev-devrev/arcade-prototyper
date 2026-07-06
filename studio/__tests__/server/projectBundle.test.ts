@@ -101,3 +101,48 @@ describe("resolveComponentDeps", () => {
     expect(names).toEqual(["FooBar"]); // not "Foo"
   });
 });
+
+import { packProject } from "../../server/projectBundle";
+import { createProject } from "../../server/projects";
+import { execFileSync } from "node:child_process";
+
+describe("packProject", () => {
+  it("produces a .arcade tar with a clean project and used components, minus excluded files", async () => {
+    process.env.HOME = fs.mkdtempSync(path.join(os.tmpdir(), "arcade-home-"));
+    const proj = await createProject({ name: "Pack Me", theme: "arcade", mode: "light" });
+    const pdir = path.join(root, "projects", proj.slug);
+    fs.mkdirSync(path.join(pdir, "frames", "01-home"), { recursive: true });
+    fs.writeFileSync(path.join(pdir, "frames", "01-home", "index.tsx"),
+      `import { Badge } from "arcade-user/Badge";\nexport default function F(){return null;}`);
+    const cdir = path.join(root, "user-kit", "composites");
+    fs.mkdirSync(cdir, { recursive: true });
+    fs.writeFileSync(path.join(cdir, "Badge.tsx"), `export default function Badge(){return null;}`);
+    // stuff that must NOT ship
+    fs.writeFileSync(path.join(pdir, "chat-history.json"), `[{"secret":"nope"}]`);
+    fs.mkdirSync(path.join(pdir, "memory"), { recursive: true });
+    fs.writeFileSync(path.join(pdir, "memory", "LEARNED.md"), "private");
+
+    const { filePath, warnings } = await packProject(proj.slug);
+    expect(fs.existsSync(filePath)).toBe(true);
+    expect(warnings).toEqual([]);
+
+    const listing = execFileSync("/usr/bin/tar", ["tzf", filePath], { encoding: "utf-8" });
+    expect(listing).toMatch(/manifest\.json/);
+    expect(listing).toMatch(/project\/frames\/01-home\/index\.tsx/);
+    expect(listing).toMatch(/components\/Badge\.tsx/);
+    expect(listing).not.toMatch(/chat-history\.json/);
+    expect(listing).not.toMatch(/memory\//);
+    expect(listing).not.toMatch(/CLAUDE\.md/);
+  });
+
+  it("records missing components as a warning without failing", async () => {
+    process.env.HOME = fs.mkdtempSync(path.join(os.tmpdir(), "arcade-home2-"));
+    const proj = await createProject({ name: "Ghosty", theme: "arcade", mode: "light" });
+    const pdir = path.join(root, "projects", proj.slug);
+    fs.mkdirSync(path.join(pdir, "frames", "01-x"), { recursive: true });
+    fs.writeFileSync(path.join(pdir, "frames", "01-x", "index.tsx"),
+      `import { Ghost } from "arcade-user/Ghost";`);
+    const { warnings } = await packProject(proj.slug);
+    expect(warnings.join(" ")).toMatch(/Ghost/);
+  });
+});

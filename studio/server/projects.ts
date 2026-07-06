@@ -160,7 +160,7 @@ export const COMPUTER_REFERENCE_SLUG = "00-computer-reference";
  * scene is just noise. The file stays on disk either way, because the
  * generator reads/copies it as a reference (see CLAUDE.md.tpl).
  */
-const COMPUTER_REFERENCE_SOURCE = `import * as React from "react";
+export const COMPUTER_REFERENCE_SOURCE = `import * as React from "react";
 import { ComputerScene } from "arcade-prototypes";
 
 // Reference frame for Computer / Agent Studio chat screens.
