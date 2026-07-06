@@ -201,50 +201,59 @@ describe("PromptInput target chips", () => {
   });
 });
 
-describe("buildTargetPreamble (in-frame vs kit split)", () => {
+describe("buildTargetPreamble (precise-first targeting)", () => {
   const withStyles = { styles: STYLES } as unknown as EditedElement["selection"];
-  function pick(file: string, componentName: string, tagName: string, line: number): EditedElement {
+  function pick(
+    file: string, componentName: string, tagName: string, line: number,
+    ownerChain: { componentName: string; file: string; line: number; column: number }[] = [],
+  ): EditedElement {
     return {
       selection: {
         ...withStyles, editId: line, file, line, column: 12,
-        componentName, tagName, textEditable: false, ownerChain: [],
-      },
+        componentName, tagName, textEditable: false, ownerChain,
+      } as EditedElement["selection"],
       pending: {},
     };
   }
 
-  it("in-frame element → frames/<slug>/index.tsx:line:col with edit-here instructions", () => {
+  it("in-frame element → precise frames/<slug>/…:line:col", () => {
     const batch = [pick("/p/frames/home/index.tsx", "Button", "button", 40)];
     const out = buildTargetPreamble(batch, "home");
-    expect(out).toContain("authored in this frame's own source");
     expect(out).toContain("frames/home/index.tsx:40:12");
-    expect(out).not.toContain("frames//"); // no double slash
+    expect(out).toContain("do NOT edit a different element that merely looks similar");
+    expect(out).not.toContain("frames//");
   });
 
-  it("kit-composite element → inline-into-frame, NO line number, NO frames// path (the bug)", () => {
-    // The exact failing case: an <IconButton> from a shared kit file, whose path
-    // has no /frames/ segment. The old code emitted `frames//prototype-kit/...:83:12`.
+  it("kit element WITH an in-frame owner → points at the exact <Component/> usage (the bug)", () => {
+    // The real failing case: clicked node resolves into kit source, but the owner
+    // chain records the frame placement (ProjectsSidebar.tsx:76). We must address
+    // THAT precise location, not send the agent hunting by description.
+    const batch = [pick(
+      "/p/prototype-kit/arcade-components.tsx", "IconButton", "button", 83,
+      [
+        { componentName: "IconButton", file: "/p/prototype-kit/arcade-components.tsx", line: 83, column: 4 },
+        { componentName: "IconButton", file: "/p/projects/polina/frames/polina/ProjectsSidebar.tsx", line: 76, column: 12 },
+      ],
+    )];
+    const out = buildTargetPreamble(batch, "polina");
+    // Precise: names the in-frame placement, no fabricated frames// path, no kit line.
+    expect(out).toContain("ProjectsSidebar.tsx:76:12");
+    expect(out).not.toContain("frames//");
+    expect(out).not.toContain("arcade-components.tsx:83");
+    // Guards against the wrong-similar-element failure.
+    expect(out).toContain("do NOT edit a different element that merely looks similar");
+    // NOT routed to the vague baked/find-by-description path.
+    expect(out).not.toContain("Identify the element by what it is and its visible content");
+  });
+
+  it("truly baked kit element (no in-frame owner) → find-by-description fallback, still no frames//", () => {
     const batch = [pick("/p/studio/prototype-kit/arcade-components.tsx", "IconButton", "button", 83)];
     const out = buildTargetPreamble(batch, "polina");
-    // Never fabricate a frames/ path for kit source, and never leak the double slash.
     expect(out).not.toContain("frames//");
-    expect(out).not.toContain("prototype-kit/arcade-components.tsx:83");
-    // Tells the agent to inline into the frame and NOT trust kit line numbers.
+    expect(out).not.toContain("arcade-components.tsx:83");
     expect(out).toContain("SHARED prototype-kit component");
-    expect(out).toContain("inline a local copy");
     expect(out).toContain("frames/polina/index.tsx");
     expect(out).toContain("<IconButton>");
-  });
-
-  it("mixed batch produces both sections", () => {
-    const batch = [
-      pick("/p/frames/home/index.tsx", "Heading", "h1", 12),
-      pick("/p/studio/prototype-kit/arcade-components.tsx", "IconButton", "button", 83),
-    ];
-    const out = buildTargetPreamble(batch, "home");
-    expect(out).toContain("authored in this frame's own source");
-    expect(out).toContain("SHARED prototype-kit component");
-    expect(out).not.toContain("frames//");
   });
 
   it("empty batch or missing slug → empty string", () => {

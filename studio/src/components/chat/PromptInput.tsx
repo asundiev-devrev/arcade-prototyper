@@ -18,6 +18,7 @@ import {
 } from "./MentionPopover";
 import { useEditSession, type EditedElement } from "../../hooks/editSessionContext";
 import { isInFrame } from "../../lib/visualEditClient";
+import { resolveInFrameComponent } from "../../frame/resolveInFrameComponent";
 import type { SendResult } from "../../hooks/useChatStream";
 
 interface PromptInputProps {
@@ -52,60 +53,88 @@ function elementLabel(sel: EditedElement["selection"]): string {
     : `<${sel.componentName}>`;
 }
 
+/** One addressed line for a picked element, tagged with how precisely we can
+ *  locate it. Order of preference (most precise first):
+ *   - "in-frame": the element itself is authored in a frame file → real file:line.
+ *   - "owner":    the element is a kit-composite INSTANCE placed in a frame file
+ *                 → the placement's real file:line (from the owner chain). We can
+ *                 point the agent at the exact `<Component .../>` usage.
+ *   - "baked":    no in-frame ancestor at all — content lives inside sealed kit
+ *                 source. Only here do we fall back to find-by-description.
+ */
+interface TargetLine {
+  kind: "in-frame" | "owner" | "baked";
+  text: string;
+}
+
+function targetLineFor(e: EditedElement, frameSlug: string): TargetLine {
+  const s = e.selection;
+
+  // 1. The clicked element is authored directly in a frame file (index.tsx or a
+  //    frame sub-component). Its picker line:column is real for that file.
+  if (isInFrame(s.file, frameSlug)) {
+    const rel = s.file.split("/frames/").pop() ?? `${frameSlug}/index.tsx`;
+    return { kind: "in-frame", text: `- ${elementLabel(s)} — frames/${rel}:${s.line}:${s.column}` };
+  }
+
+  // 2. The clicked element renders from a shared kit component, but the picker's
+  //    owner chain records WHERE the frame placed that component — a real,
+  //    editable frame file:line (e.g. `<IconButton>` at ProjectsSidebar.tsx:76).
+  //    Address THAT usage; it's precise and unambiguous even with many similar
+  //    elements on screen. This is the case the old code threw away.
+  const owner = resolveInFrameComponent(s.ownerChain, frameSlug);
+  if (owner) {
+    const rel = owner.file.split("/frames/").pop() ?? `${frameSlug}/index.tsx`;
+    return {
+      kind: "owner",
+      text: `- ${elementLabel(s)} — the <${owner.componentName}> placed at frames/${rel}:${owner.line}:${owner.column}`,
+    };
+  }
+
+  // 3. Truly baked inside sealed kit source — no frame anchor exists.
+  return { kind: "baked", text: `- ${elementLabel(s)}` };
+}
+
 /**
  * Prepend a scoped element-context block to the typed prompt when the user has
  * one or more elements picked (chips in the input). The user's change lives in
  * their typed text; this block only tells the agent WHICH elements to touch.
  *
- * CRITICAL: a picked element is either authored in the frame's OWN index.tsx or
- * rendered from a shared prototype-kit composite — and these need DIFFERENT
- * instructions:
- *   - In-frame: address it by frames/<slug>/index.tsx:line:column (the picker's
- *     source-map translation makes those line numbers real for the frame file).
- *   - Kit composite: its file/line belong to the KIT source, which is shared by
- *     every prototype and must NOT be edited, and whose line number is
- *     meaningless against the frame. Tell the agent to inline the needed markup
- *     into the frame's index.tsx and edit the copy — by element identity, not
- *     line number.
- *
- * The old flat version blindly prepended `frames/` to every path, so a kit pick
- * produced a broken `frames//prototype-kit/arcade-components.tsx:83:12` and told
- * the agent to edit line 83 of the FRAME (a kit line in the wrong file). The
- * agent then edited the wrong element and nothing rendered.
+ * We always prefer a PRECISE frame file:line over a vague description. The
+ * picker captures both the clicked element AND its owner chain, so even when the
+ * clicked node resolves into shared kit source we can usually point at the exact
+ * `<Component/>` usage the frame authored (the owner chain's nearest in-frame
+ * link). Only genuinely baked-in kit content (no in-frame ancestor) falls back
+ * to find-by-description — the ambiguous path that made the agent edit the wrong
+ * button when several similar ones were on screen.
  */
 export function buildTargetPreamble(batch: EditedElement[], frameSlug: string): string {
   if (batch.length === 0 || !frameSlug) return "";
-  const inFrame = batch.filter((e) => isInFrame(e.selection.file, frameSlug));
-  const kit = batch.filter((e) => !isInFrame(e.selection.file, frameSlug));
+  const targets = batch.map((e) => targetLineFor(e, frameSlug));
+  const precise = targets.filter((t) => t.kind !== "baked");
+  const baked = targets.filter((t) => t.kind === "baked");
   const sections: string[] = [];
 
-  if (inFrame.length) {
-    const lines = inFrame.map((e) => {
-      const s = e.selection;
-      const rel = s.file.split("/frames/").pop() ?? `${frameSlug}/index.tsx`;
-      return `- ${elementLabel(s)} — frames/${rel}:${s.line}:${s.column}`;
-    });
-    const many = inFrame.length > 1;
+  if (precise.length) {
+    const many = precise.length > 1;
     sections.push(
       [
-        `Target element${many ? "s" : ""} (authored in this frame's own source):`,
-        ...lines,
+        `Target element${many ? "s" : ""}:`,
+        ...precise.map((t) => t.text),
         "",
-        `Read the file first — do not edit from memory. Each line:column identifies one targeted element. Apply the requested change ONLY to ${many ? "these elements" : "this element"} (or their direct children if the intent clearly requires it); do not modify other files or unrelated parts of the file.`,
+        `Read the file(s) first — do not edit from memory. Each location above points at the exact element (or the exact <Component/> usage that renders it) in the frame's own source. Apply the requested change ONLY to ${many ? "these elements" : "this element"} at ${many ? "those locations" : "that location"} — do NOT edit a different element that merely looks similar, and do NOT edit anything under prototype-kit/. If the change needs the component's internal markup (not just its props/className), inline a local copy of just that markup at the SAME location and edit the copy; keep everything else identical.`,
       ].join("\n"),
     );
   }
 
-  if (kit.length) {
-    const names = kit.map((e) => `- ${elementLabel(e.selection)}`);
-    const many = kit.length > 1;
+  if (baked.length) {
+    const many = baked.length > 1;
     sections.push(
       [
-        `Target element${many ? "s" : ""} that come from a SHARED prototype-kit component (rendered inside frames/${frameSlug}/index.tsx):`,
-        ...names,
+        `Target element${many ? "s" : ""} rendered from a SHARED prototype-kit component, with no editable usage in the frame source:`,
+        ...baked.map((t) => t.text),
         "",
-        "Do NOT edit anything under prototype-kit/ — that source is shared by every prototype. Do NOT trust any line:column for these; a kit line number does not map to the frame file.",
-        `Instead, in frames/${frameSlug}/index.tsx, inline a local copy of just the markup needed so the targeted element becomes part of THIS frame, then apply the requested change to that copy. Identify the element by what it is and its visible content — not by line number. Preserve all other props, children, and behavior of the surrounding composite.`,
+        "Do NOT edit anything under prototype-kit/ — that source is shared by every prototype. In frames/" + frameSlug + "/index.tsx, inline a local copy of just the markup needed so the targeted element becomes part of THIS frame, then apply the requested change to the copy. Identify the element by what it is and its visible content. Preserve all other props, children, and behavior of the surrounding composite.",
       ].join("\n"),
     );
   }
