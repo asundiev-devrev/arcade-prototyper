@@ -50,6 +50,21 @@ const BUILD_INTENT_PATTERNS: RegExp[] = [
   // Apply a theme / colour scheme across the UI.
   /\b(?:apply|applied|use)\b[^.]*\b(?:theme|colou?r\s+scheme|palette)\b/i,
   /\b(?:theme|colou?r\s+scheme|palette)\b[^.]*\b(?:applied|apply)\b[^.]*\b(?:all|entire|whole|every|nav|canvas|ui)\b/i,
+  // Destructive / substitution edits: the deterministic importer can only
+  // transcribe what the design contains — it cannot remove, swap, or rename a
+  // part. Anchored to VERB + determiner + object so the bare word inside a
+  // quoted label ("the CTA says 'Swap plan'") or a noun ("a delete button")
+  // does NOT fire. The negative lookbehind rejects description-of-purpose
+  // ("this design WILL replace the current page"). "drop" is deliberately
+  // EXCLUDED — remove/delete cover the real edit, and "drop shadow" is the most
+  // common faithful-copy phrase (this exact word over-blocked once before:
+  // commit 4b1aa4c).
+  /(?<!\b(?:will|would|to|can|could|should|may|might)\s)\b(?:remove|delete|swap|replace|rename)\s+(?:the|this|that|these|those|all|a|an|its|their)\b/i,
+  // A per-element dark/light recolor, imperative ("make the sidebar dark").
+  // Excludes "make sure/certain" (ensure, not transform) and "make … match …
+  // light/dark" (a comparison to the reference, not a recolor). Bounded,
+  // comma-free span so it can't bridge unrelated clauses.
+  /\bmake\b(?!\s+(?:sure|certain))(?![^.,]*\bmatch)[^.,]{0,24}\b(?:dark|light)\b/i,
 ];
 
 /**
