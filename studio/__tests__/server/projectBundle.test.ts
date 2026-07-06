@@ -194,6 +194,21 @@ describe("component install (specifier-only, order-independent)", () => {
     expect(frame).toContain(`// The Button below is primary`);
   });
 
+  it("renamed component exports both old and new names via re-export alias (Bug I2)", async () => {
+    await writeComponentRaw({ name: "Button", description: "mine", tsx: `export default function Button(){return <div>MINE</div>;}`, origin: "saved", createdAt: "t" });
+    const compDir = fs.mkdtempSync(path.join(os.tmpdir(), "comp-alias-"));
+    fs.writeFileSync(path.join(compDir, "Button.tsx"), `export default function Button(){return <div>THEIRS</div>;}`);
+    const framesRoot = fs.mkdtempSync(path.join(os.tmpdir(), "frames-alias-"));
+
+    await installBundledComponents(compDir, [{ name: "Button", description: "d", origin: "imported", createdAt: "t" }], framesRoot);
+
+    const renamedFile = path.join(root, "user-kit", "composites", "ButtonImported.tsx");
+    expect(fs.existsSync(renamedFile)).toBe(true);
+    const content = fs.readFileSync(renamedFile, "utf-8");
+    // Must contain the re-export alias so generator can import { ButtonImported }
+    expect(content).toContain("export { Button as ButtonImported }");
+  });
+
   it("skips identical same-name components", async () => {
     const tsx = `export default function Same(){return null;}`;
     await writeComponentRaw({ name: "Same", description: "d", tsx, origin: "saved", createdAt: "t" });

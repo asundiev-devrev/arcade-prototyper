@@ -327,6 +327,35 @@ describe("CLAUDE.md memory imports", () => {
   });
 });
 
+describe("scaffoldComputerReferenceFrame preservation (Bug C1)", () => {
+  it("does not overwrite an existing modified 00-computer-reference frame", async () => {
+    const p = await createProject({ name: "Modified", theme: "arcade", mode: "light" });
+    const seedPath = path.join(tmp, "projects", p.slug, "frames", "00-computer-reference", "index.tsx");
+    const modifiedContent = `import * as React from "react";\nexport default function Custom() { return <div>MODIFIED BY USER</div>; }`;
+    fs.writeFileSync(seedPath, modifiedContent);
+
+    // scaffoldComputerReferenceFrame should skip writing since file exists
+    const { scaffoldComputerReferenceFrame } = await import("../../server/projects");
+    await scaffoldComputerReferenceFrame(path.join(tmp, "projects", p.slug));
+
+    const afterContent = fs.readFileSync(seedPath, "utf-8");
+    expect(afterContent).toBe(modifiedContent);
+    expect(afterContent).toContain("MODIFIED BY USER");
+  });
+
+  it("writes the seed when 00-computer-reference does not exist", async () => {
+    const p = await createProject({ name: "Fresh", theme: "arcade", mode: "light" });
+    const seedPath = path.join(tmp, "projects", p.slug, "frames", "00-computer-reference", "index.tsx");
+    fs.rmSync(seedPath, { force: true });
+
+    const { scaffoldComputerReferenceFrame, COMPUTER_REFERENCE_SOURCE } = await import("../../server/projects");
+    await scaffoldComputerReferenceFrame(path.join(tmp, "projects", p.slug));
+
+    const content = fs.readFileSync(seedPath, "utf-8");
+    expect(content).toBe(COMPUTER_REFERENCE_SOURCE);
+  });
+});
+
 describe("refreshStaleClaudeMd backup behavior", () => {
   it("writes .bak with the prior contents before overwriting a stale CLAUDE.md", async () => {
     const p = await createProject({ name: "Backup", theme: "arcade", mode: "light" });

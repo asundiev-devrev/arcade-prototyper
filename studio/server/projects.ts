@@ -174,8 +174,20 @@ export default function ComputerReference() {
 
 export async function scaffoldComputerReferenceFrame(dir: string): Promise<void> {
   const frameDir = path.join(dir, "frames", COMPUTER_REFERENCE_SLUG);
-  await fs.mkdir(frameDir, { recursive: true });
-  await fs.writeFile(path.join(frameDir, "index.tsx"), COMPUTER_REFERENCE_SOURCE);
+  const indexPath = path.join(frameDir, "index.tsx");
+  // Only write the seed if it doesn't already exist. Both callers stay correct:
+  // createProject runs on a fresh dir (file absent → writes seed), import runs
+  // after promotion (file may exist with user edits → preserve, or absent if
+  // dropped → write canonical seed).
+  try {
+    await fs.access(indexPath);
+    // File exists — skip to preserve user's work
+    return;
+  } catch {
+    // File absent — write the seed
+    await fs.mkdir(frameDir, { recursive: true });
+    await fs.writeFile(indexPath, COMPUTER_REFERENCE_SOURCE);
+  }
 }
 
 export async function importSlug(name: string): Promise<string> {

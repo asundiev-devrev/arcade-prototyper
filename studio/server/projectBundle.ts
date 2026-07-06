@@ -336,7 +336,19 @@ export async function installBundledComponents(
     for (const p of plan) p.tsx = rewriteSpecifier(p.tsx, oldName, newName);
   }
 
-  // Phase C: write all files at once (deps now all resolvable), merge manifest.
+  // Phase C: append re-export aliases to renamed components so the generator
+  // catalog (which advertises the NEW name) can import them. Existing imported
+  // frames import { <Old> } which still works; newly-generated frames import
+  // { <New> } which now also works.
+  for (const p of plan) {
+    const oldName = [...renames.entries()].find(([_, nw]) => nw === p.name)?.[0];
+    if (oldName) {
+      // Additive: preserves original export + labels/comments
+      p.tsx += `\nexport { ${oldName} as ${p.name} };`;
+    }
+  }
+
+  // Phase D: write all files at once (deps now all resolvable), merge manifest.
   for (const p of plan) {
     await writeComponentRaw({
       name: p.name, description: p.row.description, tsx: p.tsx,
@@ -344,7 +356,7 @@ export async function installBundledComponents(
     });
   }
 
-  // Phase D: rewrite frame specifiers for every renamed component.
+  // Phase E: rewrite frame specifiers for every renamed component.
   for (const [oldName, newName] of renames) {
     await rewriteFrameSpecifiers(oldName, newName, framesRoot);
   }
