@@ -16,6 +16,8 @@ import {
   filterMentions,
   type MentionOption,
 } from "./MentionPopover";
+import { useEditSession, type EditedElement } from "../../hooks/editSessionContext";
+import { isInFrame } from "../../lib/visualEditClient";
 import type { SendResult } from "../../hooks/useChatStream";
 
 interface PromptInputProps {
@@ -43,6 +45,80 @@ function detectMentionAtCaret(value: string, caret: number): { query: string; at
   return { query, atIdx };
 }
 
+/** Short human label for a picked element: "<tag> inside <Component>" or "<Component>". */
+function elementLabel(sel: EditedElement["selection"]): string {
+  return sel.tagName && sel.tagName !== sel.componentName
+    ? `<${sel.tagName}> inside <${sel.componentName}>`
+    : `<${sel.componentName}>`;
+}
+
+/**
+ * Prepend a scoped element-context block to the typed prompt when the user has
+ * one or more elements picked (chips in the input). The user's change lives in
+ * their typed text; this block only tells the agent WHICH elements to touch.
+ *
+ * CRITICAL: a picked element is either authored in the frame's OWN index.tsx or
+ * rendered from a shared prototype-kit composite — and these need DIFFERENT
+ * instructions:
+ *   - In-frame: address it by frames/<slug>/index.tsx:line:column (the picker's
+ *     source-map translation makes those line numbers real for the frame file).
+ *   - Kit composite: its file/line belong to the KIT source, which is shared by
+ *     every prototype and must NOT be edited, and whose line number is
+ *     meaningless against the frame. Tell the agent to inline the needed markup
+ *     into the frame's index.tsx and edit the copy — by element identity, not
+ *     line number.
+ *
+ * The old flat version blindly prepended `frames/` to every path, so a kit pick
+ * produced a broken `frames//prototype-kit/arcade-components.tsx:83:12` and told
+ * the agent to edit line 83 of the FRAME (a kit line in the wrong file). The
+ * agent then edited the wrong element and nothing rendered.
+ */
+export function buildTargetPreamble(batch: EditedElement[], frameSlug: string): string {
+  if (batch.length === 0 || !frameSlug) return "";
+  const inFrame = batch.filter((e) => isInFrame(e.selection.file, frameSlug));
+  const kit = batch.filter((e) => !isInFrame(e.selection.file, frameSlug));
+  const sections: string[] = [];
+
+  if (inFrame.length) {
+    const lines = inFrame.map((e) => {
+      const s = e.selection;
+      const rel = s.file.split("/frames/").pop() ?? `${frameSlug}/index.tsx`;
+      return `- ${elementLabel(s)} — frames/${rel}:${s.line}:${s.column}`;
+    });
+    const many = inFrame.length > 1;
+    sections.push(
+      [
+        `Target element${many ? "s" : ""} (authored in this frame's own source):`,
+        ...lines,
+        "",
+        `Read the file first — do not edit from memory. Each line:column identifies one targeted element. Apply the requested change ONLY to ${many ? "these elements" : "this element"} (or their direct children if the intent clearly requires it); do not modify other files or unrelated parts of the file.`,
+      ].join("\n"),
+    );
+  }
+
+  if (kit.length) {
+    const names = kit.map((e) => `- ${elementLabel(e.selection)}`);
+    const many = kit.length > 1;
+    sections.push(
+      [
+        `Target element${many ? "s" : ""} that come from a SHARED prototype-kit component (rendered inside frames/${frameSlug}/index.tsx):`,
+        ...names,
+        "",
+        "Do NOT edit anything under prototype-kit/ — that source is shared by every prototype. Do NOT trust any line:column for these; a kit line number does not map to the frame file.",
+        `Instead, in frames/${frameSlug}/index.tsx, inline a local copy of just the markup needed so the targeted element becomes part of THIS frame, then apply the requested change to that copy. Identify the element by what it is and its visible content — not by line number. Preserve all other props, children, and behavior of the surrounding composite.`,
+      ].join("\n"),
+    );
+  }
+
+  if (sections.length === 0) return "";
+  return [
+    ...sections,
+    "",
+    "A reply without a corresponding Edit or Write tool call is a failed turn. If your Edit reports zero or multiple matches, widen the surrounding context and retry — or fall back to Write with the full new file contents. Do not paraphrase the change in narration as a substitute for editing.",
+    "",
+  ].join("\n\n");
+}
+
 export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef }: PromptInputProps) {
   const [text, setText] = useState("");
   const [images, setImages] = useState<string[]>([]);
@@ -50,6 +126,7 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef }: Prom
   const [fileNames, setFileNames] = useState<string[]>([]);
   const [detectedFigmaUrl, setDetectedFigmaUrl] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const { batch, frameSlug, frameWindow, removeElement, clear: clearSelection } = useEditSession();
   const { toast } = useToast();
   const [mention, setMention] = useState<{
     query: string;
@@ -194,11 +271,15 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef }: Prom
     if (!p) return;
     if (busy) return;
 
-    const finalPrompt = p;
+    // Prepend the scoped element-context block when elements are picked (chips
+    // present) so the agent edits exactly those targets.
+    const finalPrompt =
+      batch.length > 0 && frameSlug ? `${buildTargetPreamble(batch, frameSlug)}${p}` : p;
     const result = await onSend(finalPrompt, imagePaths);
     // When the stream rejects a NEW prompt because a turn is already running,
-    // keep the composer contents so the user can resend once it's idle —
-    // dropping the text silently was the worst failure mode here.
+    // keep the composer contents (and the picked elements) so the user can
+    // resend once it's idle — dropping either silently was the worst failure
+    // mode here.
     if (result && !result.ok && result.reason === "busy") {
       toast({
         title: "Still working on your last request — try again in a moment.",
@@ -212,6 +293,12 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef }: Prom
     setFileNames([]);
     setDetectedFigmaUrl(null);
     setMention(null);
+    // The picked elements were consumed by this turn — drop the selection and
+    // its live preview overlay (mirrors the inspector's post-send behavior).
+    if (batch.length > 0) {
+      frameWindow?.postMessage({ type: "arcade-studio:preview-reset", all: true }, "*");
+      clearSelection();
+    }
   };
 
   function updateMentionFromCaret(next: string, el: HTMLInputElement | HTMLTextAreaElement | null) {
@@ -326,8 +413,21 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef }: Prom
         }}
         placeholder="Ask me anything"
         attachments={
-          images.length > 0 || detectedFigmaUrl || hasComputerMention || hasFrameTrigger ? (
+          images.length > 0 || detectedFigmaUrl || hasComputerMention || hasFrameTrigger || batch.length > 0 ? (
             <>
+              {batch.map((e) => (
+                <TargetChip
+                  key={e.selection.editId}
+                  selection={e.selection}
+                  onClear={() => {
+                    frameWindow?.postMessage(
+                      { type: "arcade-studio:preview-reset", editId: e.selection.editId },
+                      "*",
+                    );
+                    removeElement(e.selection.editId);
+                  }}
+                />
+              ))}
               {hasComputerMention && (
                 <ChatInput.ContextAttachment
                   title="Computer"
@@ -379,6 +479,51 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef }: Prom
           onDismiss={() => setMention(null)}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * A removable chip for one picked element, shown in the chat input's attachment
+ * row. Sending a prompt while chips are present scopes the turn to these
+ * elements (see buildTargetPreamble). The × drops just this element from the
+ * selection. Mirrors the dashed-border ContextAttachment styling of the kit.
+ */
+function TargetChip({
+  selection, onClear,
+}: {
+  selection: EditedElement["selection"];
+  onClear: () => void;
+}) {
+  const file = selection.file.split("/").pop() ?? selection.file;
+  const name = selection.tagName || selection.componentName;
+  return (
+    <div
+      className="shrink-0 h-[66px] rounded-square-x2 border border-dashed border-(--stroke-neutral-subtle) bg-(--bg-neutral-soft) p-2 flex flex-col justify-between"
+      style={{ minWidth: 120, maxWidth: 200 }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-caption text-(--fg-neutral-subtle)">Target</span>
+        <button
+          type="button"
+          onClick={onClear}
+          aria-label={`Clear target ${name}`}
+          style={{
+            background: "transparent", border: "none", color: "var(--fg-neutral-subtle)",
+            cursor: "pointer", fontSize: 14, lineHeight: 1, padding: 0,
+          }}
+        >
+          ×
+        </button>
+      </div>
+      <div className="flex flex-col min-w-0">
+        <span className="text-caption text-(--fg-neutral-prominent) truncate" title={name}>
+          &lt;{name}&gt;
+        </span>
+        <span className="text-caption text-(--fg-neutral-subtle) truncate" title={selection.file}>
+          {file}:{selection.line}
+        </span>
+      </div>
     </div>
   );
 }

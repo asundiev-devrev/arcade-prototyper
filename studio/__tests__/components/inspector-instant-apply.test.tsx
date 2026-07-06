@@ -116,7 +116,7 @@ describe("inspector instant-apply model", () => {
     expect(instant!.frameSlug).toBe("home");
   });
 
-  it("a deterministic bail creates a pending ai block and does NOT onSend", async () => {
+  it("a deterministic bail keeps the edit pending (no block) and does NOT auto-send", async () => {
     vi.useFakeTimers();
     const fetchMock = vi.fn(() => Promise.resolve({
       ok: true,
@@ -134,11 +134,41 @@ describe("inspector instant-apply model", () => {
 
     await vi.advanceTimersByTimeAsync(400);
 
-    // The deterministic writer bailed → a pending AI block, NOT auto-sent.
-    const ai = capturedBlocks.find((b) => b.kind === "ai");
-    expect(ai).toBeTruthy();
-    expect(ai!.status).toBe("pending");
+    // The deterministic writer bailed → NO block is emitted (no per-edit
+    // approval stack) and nothing is auto-sent; the pending delta stays in the
+    // batch for the batch "Send changes" dispatch.
+    expect(capturedBlocks.length).toBe(0);
     expect(onSend).not.toHaveBeenCalled();
+    // The pending edit is still counted (the focused element shows " · 1").
+    expect(screen.getByTestId("focused").textContent).toBe("1");
+  });
+
+  it("'Send changes' dispatches the still-pending batch to the agent in ONE onSend", async () => {
+    vi.useFakeTimers();
+    // Deterministic writer bails so the edit stays pending → Send has work.
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({
+      ok: true, json: () => Promise.resolve({ ok: false, reason: "dynamic-classname" }),
+    })) as any);
+    const onSend = vi.fn();
+
+    renderHarness(onSend);
+    fireEvent.click(screen.getByText("open1"));
+
+    const widthInput = screen.getByLabelText("W") as HTMLInputElement;
+    fireEvent.change(widthInput, { target: { value: "100" } });
+    fireEvent.blur(widthInput);
+    await vi.advanceTimersByTimeAsync(400);
+
+    // The footer now offers a single "Send changes" control.
+    const sendBtn = screen.getByText(/Send changes/i);
+    fireEvent.click(sendBtn);
+
+    // One dispatch to the agent carrying the scoped preamble for the frame.
+    expect(onSend).toHaveBeenCalledTimes(1);
+    const [prompt] = onSend.mock.calls[0]!;
+    expect(prompt).toContain("frames/home/index.tsx");
+    // The batch cleared after Send (footer returns to Done).
+    expect(screen.getByTestId("focused").textContent).toBe("");
   });
 
   it("successful instant edit clears pending → move buttons re-enable", async () => {

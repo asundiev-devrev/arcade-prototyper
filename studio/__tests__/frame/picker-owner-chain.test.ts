@@ -14,11 +14,13 @@ const FRAME = "    at ComputerScene (http://localhost/projects/demo/frames/01-x/
 const KIT = "    at Agent (http://localhost/prototype-kit/dist/composites/ChatMessages.js:480:9)";
 
 describe("buildOwnerChain", () => {
-  it("collects each named owner with its call-site, innermost first", () => {
+  it("collects each named owner with its call-site, innermost first", async () => {
     const scene = f("ComputerScene", FRAME, null);
     const agent = f("Agent", KIT, scene);
     const leaf = f(null, null, agent);
-    const chain = buildOwnerChain(leaf);
+    // No fetch stub → toSourcePosition can't load a map and returns the input
+    // coords unchanged, so the parsed stack line:column pass through as-is.
+    const chain = await buildOwnerChain(leaf);
     expect(chain.map((l) => l.componentName)).toEqual(["Agent", "ComputerScene"]);
     expect(chain[1].file).toContain("/frames/01-x/index.tsx");
     expect(chain[1].line).toBe(6);

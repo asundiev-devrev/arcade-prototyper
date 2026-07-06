@@ -5,7 +5,7 @@ import {
   TOKEN_PREFIX, isTokenPending, tokenClass,
 } from "../../hooks/editSessionContext";
 import { buildVisualEditPreamble } from "../../lib/visualEditPreamble";
-import { postVisualEdit, isInFrame, buildSingleEdit } from "../../lib/visualEditClient";
+import { postVisualEdit, isInFrame, buildSingleEdit, buildComponentEditPreamble } from "../../lib/visualEditClient";
 import { useEditBlocks } from "../../hooks/editBlocksContext";
 import { resolveInFrameComponent } from "../../frame/resolveInFrameComponent";
 import { fieldValue, toNumberInput, fromNumberInput, Field, NumberField, INPUT_COMPACT, GRID_2, SegmentedToggle } from "./inspectorControls";
@@ -20,28 +20,6 @@ import { IconSwapSection } from "./IconSwapSection";
 
 const MIN_W = 280, MAX_W = 560;
 const RAW_LINE_INDENT = 22; // swatch 16 + gap 6
-
-/**
- * Side map: pending AI block id → the scoped chat preamble that applies it.
- * When a deterministic field write bails (dynamic className/text, etc.) we emit
- * an `ai`/`pending` block instead of auto-sending. We stash the ready-to-send
- * preamble here, keyed by the block id, so Task 8's "Apply" can call
- * `onSend(pendingBlockPreambles.get(id))` without re-deriving the edit.
- */
-export const pendingBlockPreambles = new Map<string, string>();
-
-/**
- * Read AND evict the stashed preamble for a block. ProjectDetail's Apply
- * handler calls this so it can `onSend(...)` the scoped chat instruction
- * without re-deriving the edit — and the one-shot read keeps the side map
- * from growing unbounded once a pending block is applied. Discard/Undo also
- * call this to drop the entry for blocks that never get sent.
- */
-export function takePendingBlockPreamble(id: string): string | undefined {
-  const preamble = pendingBlockPreambles.get(id);
-  pendingBlockPreambles.delete(id);
-  return preamble;
-}
 
 function countChanges(e: EditedElement): number {
   return Object.values(e.pending).filter((v) => v !== undefined).length;
@@ -117,9 +95,15 @@ function ColorRow({
 }
 
 export function InspectorPanel({
-  onSend, slug,
+  onSend, onSentToAgent, slug,
 }: {
   onSend: (prompt: string, images?: string[]) => void;
+  /** Called with the frame slug when a batch of edits is dispatched to the
+   *  agent via "Send changes". ProjectDetail uses this to gate instant Undo
+   *  for that frame — once the agent has edited it, the server's LIFO undo
+   *  snapshot no longer matches, so a stale instant Undo could revert the
+   *  agent's work. */
+  onSentToAgent?: (frameSlug: string) => void;
   /** Retained for API compatibility with callers; no longer used now that
    *  edits apply on settle (no Commit button to disable while busy). */
   busy?: boolean;
@@ -241,36 +225,30 @@ export function InspectorPanel({
     scheduleApply(elem.selection, key as string, `${TOKEN_PREFIX}${className}`);
   }
 
-  // Deterministic write-on-settle: each settled field edit writes to code and
-  // produces a block. {ok:true} → instant/applied block; {ok:false} → ai/pending
-  // block (NOT auto-sent — Task 8's Apply will send the stashed preamble).
+  // Deterministic write-on-settle: each settled field edit tries an instant,
+  // no-LLM write to code. {ok:true} → the edit is now on disk; emit an
+  // instant/applied block (with Undo) and clear the pending delta. {ok:false}
+  // → the deterministic writer can't map this edit (dynamic className/text,
+  // baked-in composite content, etc.); we LEAVE the pending delta in the batch
+  // so the designer can dispatch the whole remaining batch to the agent in one
+  // turn via the footer's "Send changes" button — no per-edit approval stack.
   async function applyFieldEdit(sel: EditedElement["selection"], field: string, value: string) {
     const targetFrame = frameSlug ?? "";
-    // Off-frame (shared kit) elements are the Customize path, not field edits.
+    // Off-frame (shared kit) elements are the component/Ask-AI path, not field edits.
     if (!targetFrame || !isInFrame(sel.file, targetFrame)) return;
     const det = await postVisualEdit(slug, buildSingleEdit(sel, field, value, targetFrame));
-    if (det.ok) {
-      // If the write changed the file's line count, refresh the held source
-      // coordinates of any selection below it so a SECOND edit targets the
-      // right JSX node instead of a now-stale line:column.
-      if (det.lineDelta && typeof det.editLine === "number") {
-        shiftSelectionsBelow(det.editLine, det.lineDelta);
-      }
-      addBlock({ label: humanLabel(field, value), kind: "instant", status: "applied", frameSlug: targetFrame });
-      // Deterministic write succeeded → the edit is now applied on disk, so clear
-      // the pending delta for this field. This drops it from totalChanges (which
-      // gates the move ↑/↓ buttons), so once all edits settle the buttons
-      // re-enable. Only clear on success; a bail (pending AI block) must keep
-      // the pending entry since the change isn't applied yet.
-      resetField(sel.editId, field as any);
-    } else {
-      // Can't map deterministically → pending AI block. Stash a ready-to-send
-      // preamble keyed by block id so Task 8's Apply can call onSend(...).
-      const id = addBlock({ label: humanLabel(field, value), kind: "ai", status: "pending", frameSlug: targetFrame });
-      const elementWithPending: EditedElement = { selection: sel, pending: { [field]: value } as any };
-      const preamble = buildVisualEditPreamble([elementWithPending], `${targetFrame}/index.tsx`);
-      if (preamble) pendingBlockPreambles.set(id, preamble);
+    if (!det.ok) return; // keep the pending delta; the batch Send handles it
+    // If the write changed the file's line count, refresh the held source
+    // coordinates of any selection below it so a SECOND edit targets the
+    // right JSX node instead of a now-stale line:column.
+    if (det.lineDelta && typeof det.editLine === "number") {
+      shiftSelectionsBelow(det.editLine, det.lineDelta);
     }
+    addBlock({ label: humanLabel(field, value), kind: "instant", status: "applied", frameSlug: targetFrame });
+    // Applied on disk → clear the pending delta for this field. This also drops
+    // it from totalChanges (which gates the move ↑/↓ buttons and whether Send
+    // has anything to dispatch), so once every edit settles the buttons re-enable.
+    resetField(sel.editId, field as any);
   }
   function scheduleApply(sel: EditedElement["selection"], field: string, value: string) {
     const k = `${sel.editId}:${field}`;
@@ -295,8 +273,9 @@ export function InspectorPanel({
   function changeProp(propName: string, value: string) {
     if (!inFrameComp || !focused) return;
     if (value === "") return; // "—" = no change
+    const editId = focused.selection.editId;
     const sel = { ...focused.selection, file: inFrameComp.file, line: inFrameComp.line, column: inFrameComp.column };
-    setField(focused.selection.editId, `prop:${propName}` as any, value);
+    setField(editId, `prop:${propName}` as any, value);
     void postVisualEdit(slug, buildSingleEdit(sel, `prop:${propName}`, value, frameSlug ?? ""))
       .then((det) => {
         if (det.ok) {
@@ -307,6 +286,10 @@ export function InspectorPanel({
         } else {
           askAi(`set its ${propName} to ${value}`);
         }
+        // Either way the prop edit is handled (applied on disk, or dispatched to
+        // the agent) — clear the pending delta so it doesn't linger and surface
+        // a stale "Send changes" for an already-resolved change.
+        resetField(editId, `prop:${propName}` as any);
       });
   }
   function askAi(change: string) {
@@ -316,6 +299,34 @@ export function InspectorPanel({
   function discard() {
     frameWindow?.postMessage({ type: "arcade-studio:preview-reset", all: true }, "*");
     clear();
+  }
+  // Send every still-pending edit to the agent in ONE scoped turn. Deterministic
+  // writes already applied on settle and cleared themselves from `pending`, so
+  // what remains here is exactly the edits the no-LLM writer couldn't map. We
+  // split them by whether the element lives in the frame's own source or in a
+  // shared kit composite, build the matching preamble for each group, and fire
+  // a single onSend — then drop the live preview and clear the batch.
+  function send() {
+    const targetFrame = frameSlug ?? "";
+    const pendingEls = batch.filter((e) => countChanges(e) > 0);
+    if (pendingEls.length === 0 || !targetFrame) { discard(); return; }
+    const inFrameEls = pendingEls.filter((e) => isInFrame(e.selection.file, targetFrame));
+    const kitEls = pendingEls.filter((e) => !isInFrame(e.selection.file, targetFrame));
+    const preambles: string[] = [];
+    if (inFrameEls.length) {
+      const p = buildVisualEditPreamble(inFrameEls, `${targetFrame}/index.tsx`);
+      if (p) preambles.push(p);
+    }
+    if (kitEls.length) {
+      const p = buildComponentEditPreamble(kitEls, targetFrame);
+      if (p) preambles.push(p);
+    }
+    if (preambles.length === 0) { discard(); return; }
+    onSend(preambles.join("\n\n"), []);
+    // Gate instant Undo for this frame — the agent is about to edit it, so the
+    // server's LIFO undo snapshot won't match a later instant Undo.
+    onSentToAgent?.(targetFrame);
+    discard();
   }
   async function move(el: EditedElement, dir: "up" | "down") {
     const frameSlug = el.selection.file.split("/frames/").pop()?.split("/")[0] ?? "";
@@ -552,10 +563,16 @@ export function InspectorPanel({
         )}
       </div>
 
-      {/* Edits apply to code as they settle — there is no Commit. This control
-          just clears the selection and drops the live preview overlay. */}
-      <div style={{ flex: "none", display: "flex", gap: 8, padding: 12, borderTop: "1px solid var(--stroke-neutral-subtle)" }}>
-        <Button variant="tertiary" onClick={discard}>Done</Button>
+      {/* Deterministic edits already applied to code as they settled. Anything
+          still pending here is an edit the no-LLM writer couldn't map — "Send
+          changes" dispatches ALL of it to the agent in one scoped turn (no
+          per-edit approval stack). With nothing pending, the footer is just a
+          Done control that drops the live preview and clears the selection. */}
+      <div style={{ flex: "none", display: "flex", gap: 8, justifyContent: "space-between", padding: 12, borderTop: "1px solid var(--stroke-neutral-subtle)" }}>
+        <Button variant="tertiary" onClick={discard}>{totalChanges > 0 ? "Discard" : "Done"}</Button>
+        {totalChanges > 0 && (
+          <Button variant="primary" onClick={send}>Send changes →</Button>
+        )}
       </div>
     </aside>
   );
