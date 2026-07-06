@@ -236,13 +236,25 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: `detectBuildIntent(prompt: string): boolean` and `shouldGenerateFromFigma` from Task 1.
-- Produces: `detectBuildIntent` now also returns `true` for remove/delete/drop/swap/replace/rename edits and imperative "make … dark/light". No signature change.
+- Produces: `detectBuildIntent` now also returns `true` for imperative remove/delete/swap/replace/rename-of-an-object edits and imperative "make … dark/light". No signature change.
 
 **Why:** Task 1 removed hi-fi from routing. A prompt like "recreate this exactly, **remove** the search bar" now routes deterministic and the edit is silently dropped, because those verbs aren't in `BUILD_INTENT_PATTERNS`. Widen the set so copy-but-tweak asks reach the LLM. Keep it tight — an over-broad set would re-route pure copies to the LLM, the exact defect Task 1 removes (spec Risk 2).
 
+**Tightness is load-bearing (adversarial finding).** A first draft used bare-verb
+alternations (`\b(remove|delete|drop|swap|replace|rename)\b` and a greedy
+`make[^.]*dark`). Ground-truth testing showed those misroute real faithful copies
+to the LLM: "keep the drop **shadow**", quoted labels ("the CTA says 'Swap plan'"),
+purpose clauses ("this will **replace** the current page"), and "make **sure** the
+dark header matches". The patterns in Step 3 are the tightened forms that pass the
+full false-positive/true-positive corpus (Step 1 tests). **Accepted residual
+false-negatives** (dark/light re-theme phrased without "make": "convert to dark
+mode", "in dark mode") route deterministic and drop the recolor — the kit-emit
+trailer's "tell me what to change next" is the backstop. Widening to catch them
+reintroduces the Tier-2 false positives, so we deliberately don't.
+
 - [ ] **Step 1: Write the failing tests**
 
-In `studio/__tests__/server/figma/generationIntent.test.ts`, add inside `describe("shouldGenerateFromFigma", …)`:
+In `studio/__tests__/server/figma/generationIntent.test.ts`, add inside `describe("shouldGenerateFromFigma", …)`. These positive/negative cases are the exact set an adversarial review used to tighten the patterns — keep them ALL, they pin the tight boundary:
 
 ```ts
   it("fires on destructive/substitution edit verbs (importer can't perform these)", () => {
@@ -252,6 +264,7 @@ In `studio/__tests__/server/figma/generationIntent.test.ts`, add inside `describ
     expect(detectBuildIntent("replace the avatars with initials")).toBe(true);
     expect(detectBuildIntent("rename the tabs")).toBe(true);
     expect(detectBuildIntent("make the sidebar dark")).toBe(true);
+    expect(detectBuildIntent("replace the header with a banner")).toBe(true);
   });
 
   it("routes a copy-but-tweak prompt (hi-fi + edit verb) to the generator", () => {
@@ -261,10 +274,23 @@ In `studio/__tests__/server/figma/generationIntent.test.ts`, add inside `describ
     expect(shouldGenerateFromFigma("implement precisely but make the sidebar dark")).toBe(true);
   });
 
-  it("does NOT fire on a faithful copy that merely mentions a dark design", () => {
-    // "the dark variant" is a description of what to copy, not an edit — must
-    // stay on the deterministic path. Guards against an over-broad verb set.
-    expect(shouldGenerateFromFigma("implement the dark variant precisely")).toBe(false);
+  it("does NOT misroute faithful-copy prompts that merely CONTAIN an edit word", () => {
+    // Every one of these is a pure photocopy — must stay deterministic. The
+    // words appear as style descriptions, quoted UI labels, purpose clauses, or
+    // "make sure/match" hedges, not as edit instructions. (Adversarial FP set.)
+    const copies = [
+      "keep the drop shadow on the card",              // "drop" NOT an edit verb
+      "copy this exactly including the drop-shadow",   // drop-shadow
+      "make sure the dark header matches the figma",   // make SURE = ensure
+      "copy this — make it match the light mockup",    // make…match = comparison
+      "the button label reads 'Delete account'",       // quoted label
+      "the modal is titled 'Rename workspace'",        // quoted label
+      "this design will replace the current home page",// purpose, not instruction
+      "the design is meant to replace the settings page",
+      "implement the dark variant precisely",          // describes what to copy
+      "a delete button in the toolbar",                // noun, not verb
+    ];
+    for (const p of copies) expect(shouldGenerateFromFigma(p), p).toBe(false);
   });
 ```
 
@@ -275,18 +301,24 @@ Expected: FAIL — the "destructive/substitution edit verbs" and "copy-but-tweak
 
 - [ ] **Step 3: Add the patterns**
 
-In `studio/server/figma/generationIntent.ts`, append to the `BUILD_INTENT_PATTERNS` array (after the theme patterns, before the closing `];` at line 54):
+In `studio/server/figma/generationIntent.ts`, append to the `BUILD_INTENT_PATTERNS` array (after the theme patterns, before the closing `];` at line 54). These are the TIGHTENED forms verified against the adversarial false-positive set — do NOT simplify them back to bare-verb alternations (that misroutes "drop shadow", quoted labels, and "make sure … dark", reintroducing the reconstruct-from-summary failure Task 1 removes). Lookbehind is safe: tsconfig target is ES2022, Node 22:
 
 ```ts
   // Destructive / substitution edits: the deterministic importer can only
   // transcribe what the design contains — it cannot remove, swap, or rename a
-  // part. Any of these means the designer wants the design BUILT/edited, not
-  // photocopied. Kept to unambiguous edit verbs so a faithful copy that merely
-  // describes content ("the dark variant") is not misrouted.
-  /\b(?:remove|delete|drop|swap|replace|rename)\b/i,
-  // A per-element dark/light change, but only as an imperative ("make X dark"),
-  // never a bare mention ("the dark variant").
-  /\bmake\b[^.]*\b(?:dark|light)\b/i,
+  // part. Anchored to VERB + determiner + object so the bare word inside a
+  // quoted label ("the CTA says 'Swap plan'") or a noun ("a delete button")
+  // does NOT fire. The negative lookbehind rejects description-of-purpose
+  // ("this design WILL replace the current page"). "drop" is deliberately
+  // EXCLUDED — remove/delete cover the real edit, and "drop shadow" is the most
+  // common faithful-copy phrase (this exact word over-blocked once before:
+  // commit 4b1aa4c).
+  /(?<!\b(?:will|would|to|can|could|should|may|might)\s)\b(?:remove|delete|swap|replace|rename)\s+(?:the|this|that|these|those|all|a|an|its|their)\b/i,
+  // A per-element dark/light recolor, imperative ("make the sidebar dark").
+  // Excludes "make sure/certain" (ensure, not transform) and "make … match …
+  // light/dark" (a comparison to the reference, not a recolor). Bounded,
+  // comma-free span so it can't bridge unrelated clauses.
+  /\bmake\b(?!\s+(?:sure|certain))(?![^.,]*\bmatch)[^.,]{0,24}\b(?:dark|light)\b/i,
 ```
 
 - [ ] **Step 4: Run the tests to verify they pass**
