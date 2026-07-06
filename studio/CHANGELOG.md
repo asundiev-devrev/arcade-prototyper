@@ -22,6 +22,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **The agent edits the element you picked — not a guess.** Picking an element now hands the agent the exact spot in your source, even for elements that come from shared building blocks — it points at where your prototype places that component, so with several similar buttons on screen it changes the right one. Previously it could be aimed at the wrong line (or a file that doesn't exist), edit a look-alike element, and change nothing on screen while claiming success.
 - **Shared links resolve.** Prototypes now publish to the right production address, so a shared URL opens the prototype instead of a dead page.
 - **Generated prototypes use valid design-token colours.** A new safeguard stops the generator from emitting malformed token class names that would silently drop the colour.
+- **Chat stays on the latest message.** The conversation used to jump to the very top on every refresh, hiding the most recent updates — it now stays pinned to the bottom where the latest turn is.
 
 ## [0.41.3] — 2026-06-29
 
