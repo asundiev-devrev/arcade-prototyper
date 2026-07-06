@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import { ChatBubble } from "@xorkavi/arcade-gen";
 import type { ChatMessage, ChimeIn } from "../../../server/types";
@@ -286,8 +286,30 @@ export function MessageList({
   // as a duplicate rendering of the previous turn.
   const suppressActivity = !busy;
 
+  // Keep the chat pinned to the newest message. On refresh the scroll container
+  // mounts at the top (scrollTop 0), which buried the latest turn — annoying,
+  // since the useful content is always at the bottom. We jump to the bottom on
+  // mount and whenever the content that affects height changes (history grows,
+  // a turn streams, live tools/prose arrive, edit blocks appear). useLayoutEffect
+  // runs before paint so there's no visible top→bottom jump.
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const liveToolCount = (currentItems ?? []).length;
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [
+    history.length,
+    pendingPrompt,
+    liveToolCount,
+    editBlocks.length,
+    chimeIns.length,
+    busy,
+    phase,
+  ]);
+
   return (
     <div
+      ref={scrollRef}
       style={{
         flex: 1,
         overflowY: "auto",
