@@ -25,9 +25,8 @@
  * bare imports.
  *
  * Pure, keyword-based, and exported for unit testing — same shape as
- * detectHiFiIntent / detectInteractionIntent, which this composes with.
+ * detectInteractionIntent, which this composes with.
  */
-import { detectHiFiIntent } from "./fidelityDirective";
 import { detectInteractionIntent } from "../../src/lib/figmaUrl";
 
 /**
@@ -51,6 +50,22 @@ const BUILD_INTENT_PATTERNS: RegExp[] = [
   // Apply a theme / colour scheme across the UI.
   /\b(?:apply|applied|use)\b[^.]*\b(?:theme|colou?r\s+scheme|palette)\b/i,
   /\b(?:theme|colou?r\s+scheme|palette)\b[^.]*\b(?:applied|apply)\b[^.]*\b(?:all|entire|whole|every|nav|canvas|ui)\b/i,
+  // Destructive / substitution edits: the deterministic importer can only
+  // transcribe what the design contains — it cannot remove, swap, or rename a
+  // part. Anchored to VERB + determiner so the bare word inside a quoted label
+  // ("the CTA says 'Swap plan'") or a noun ("a delete button") does NOT fire.
+  // The negative lookbehind rejects description-of-purpose ("this design WILL
+  // replace the current page"). "drop" is deliberately EXCLUDED — remove/delete
+  // cover the real edit, and "drop shadow" is the most common faithful-copy
+  // phrase (this exact word over-blocked once before: commit 4b1aa4c).
+  /(?<!\b(?:will|would|to|can|could|should|may|might)\s)\b(?:remove|delete|swap|replace|rename)\s+(?:the|this|that|these|those|all|a|an|its|their)\b/i,
+  // A per-element dark/light recolor, imperative ("make the sidebar dark").
+  // Excludes "make sure/certain" (ensure, not transform) and "make … match …
+  // light/dark" (a comparison to the reference, not a recolor). Bounded,
+  // comma-free span so it can't bridge unrelated clauses. Lookbehind rejects
+  // purpose clauses ("this design will make...") same as the destructive-verb
+  // pattern above.
+  /(?<!\b(?:will|would|to|can|could|should|may|might)\s)\bmake\b(?!\s+(?:sure|certain))(?![^.,]*\bmatch)[^.,]{0,24}\b(?:dark|light)\b/i,
 ];
 
 /**
@@ -109,18 +124,21 @@ export function detectComposeBaseIntent(prompt: string): boolean {
  * reference) instead of the deterministic importer.
  *
  * Fires on ANY of:
- *  - hi-fi intent ("implement precisely", "pixel-perfect", "match exactly"),
  *  - interaction intent ("click opens a modal", "on hover show …"),
- *  - build intent (modify a composite, make it functional, apply a theme).
+ *  - build intent (modify a composite, make it functional, apply a theme,
+ *    remove/swap/replace an element).
  *
- * A bare import (URL only, or "import/bring this in") matches none of these and
- * stays on the fast deterministic path.
+ * A faithful-reproduction ask (bare import, or "implement precisely" with no
+ * build/interaction instruction) matches none of these and stays on the fast
+ * deterministic path.
  */
 export function shouldGenerateFromFigma(prompt: string): boolean {
   if (typeof prompt !== "string" || !prompt) return false;
-  return (
-    detectHiFiIntent(prompt) ||
-    detectInteractionIntent(prompt) ||
-    detectBuildIntent(prompt)
-  );
+  // Hi-fi wording ("precisely", "pixel-perfect") is deliberately NOT a routing
+  // trigger: a faithful-reproduction ask belongs on the deterministic kit-emit
+  // engine (fidelity by construction), not the LLM reconstructor. Only intent
+  // the importer cannot honour — interactivity or a build/edit instruction —
+  // routes to the generator. detectHiFiIntent still governs the LLM's directive
+  // inside runClaudeBranch; it just no longer decides the engine.
+  return detectInteractionIntent(prompt) || detectBuildIntent(prompt);
 }

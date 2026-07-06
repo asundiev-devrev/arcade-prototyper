@@ -23,7 +23,7 @@ import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { createProject } from "../../../server/projects";
-import { __resetTurnRegistryForTests } from "../../../server/turnRegistry";
+import { __resetTurnRegistryForTests, getTurn } from "../../../server/turnRegistry";
 
 const kitEmitSpy = vi.hoisted(() =>
   vi.fn(async (input: any) => {
@@ -84,7 +84,29 @@ afterEach(() => {
 /** Drain the per-slug SSE stream so the turn completes before assertions. */
 async function drainStream(slug: string): Promise<string> {
   const r = await fetch(`http://localhost:${port}/api/chat/stream/${slug}`);
-  return r.text();
+  const text = await r.text();
+
+  // Wait deterministically for the turn to reach terminal status before returning.
+  // Under heavy parallel CPU load, the SSE stream can close before all turn writes
+  // have settled. Poll getTurn(slug) until status is not "running", with a bounded
+  // timeout so a hung turn still fails fast.
+  const maxWaitMs = 3000;
+  const tickMs = 10;
+  const start = Date.now();
+  while (Date.now() - start < maxWaitMs) {
+    const turn = getTurn(slug);
+    if (!turn || turn.status !== "running") {
+      // Yield additional time to allow any trailing fs writes to flush
+      // and subprocesses to fully exit before cleanup. Under heavy parallel
+      // CPU load, subprocess exit and file writes can lag behind the turn's
+      // terminal transition.
+      await new Promise(r => setTimeout(r, 100));
+      break;
+    }
+    await new Promise(r => setTimeout(r, tickMs));
+  }
+
+  return text;
 }
 
 async function post(slug: string, prompt: string) {
@@ -139,6 +161,24 @@ describe("/api/chat Figma-URL routing (kit-emit branch)", () => {
     expect(kitEmitSpy.mock.calls[0][0].nodeId).toBe("3:4");
   });
 
+  it("routes a PURE hi-fi prompt (no build/interaction verb) to the kit-emit branch", async () => {
+    // "implement precisely" with a URL and no build/interaction instruction is a
+    // faithful-reproduction ask — it must take the deterministic engine, not the
+    // LLM reconstructor. This is the core figma-import-v2 routing flip.
+    const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
+    const res = await post(
+      p.slug,
+      "Implement this precisely https://www.figma.com/design/k/x?node-id=1-2",
+    );
+    expect(res.status).toBe(202);
+    await drainStream(p.slug);
+
+    expect(kitEmitSpy).toHaveBeenCalledTimes(1);
+    expect(kitEmitSpy.mock.calls[0][0].nodeId).toBe("1:2");
+    // Claude never ran: the fake bin writes argv to ARCADE_TEST_PROMPT_OUT.
+    expect(fs.existsSync(process.env.ARCADE_TEST_PROMPT_OUT!)).toBe(false);
+  });
+
   it("skips Bedrock auth pre-check for kit-emit turns (no LLM involved)", async () => {
     // Without SKIP_SSO_CHECK the Claude path would fail fast on missing
     // Bedrock auth; the kit-emit branch must not be gated on it.
@@ -170,29 +210,33 @@ describe("/api/chat Figma-URL routing (kit-emit branch)", () => {
 
 describe("hi-fi directive survives a Figma digest miss", () => {
   it("appends <high_fidelity_mode> even when no digest/PNG is available", async () => {
-    // Ingest is mocked to miss (above). A precise-intent prompt with a URL must
-    // STILL carry the directive — this is the defect-A regression guard.
+    // Ingest is mocked to miss (above). A prompt that reaches the LLM (build
+    // intent) AND carries hi-fi wording must STILL carry the directive on a
+    // digest miss — the defect-A regression guard. NB: pure-hi-fi prompts now
+    // route to kit-emit (see the separate routing test below); the directive
+    // guarantee applies to prompts that legitimately reach the generator.
     const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
     const prompt =
-      "Implement this precisely https://www.figma.com/design/k/x?node-id=1-2";
+      "Implement this precisely and make the input functional " +
+      "https://www.figma.com/design/k/x?node-id=1-2";
     const res = await post(p.slug, prompt);
     expect(res.status).toBe(202);
     await drainStream(p.slug);
 
-    // Claude branch ran (not kit-emit — precise intent routes to generator).
     const sent = fs.readFileSync(process.env.ARCADE_TEST_PROMPT_OUT!, "utf8");
     expect(sent).toContain("<high_fidelity_mode>");
   });
 
   it("emits the precise-mode narration on a hi-fi turn (the wider-budget branch)", async () => {
-    // This proves the hi-fi BRANCH is taken end-to-end through the middleware.
-    // It does NOT prove the budget VALUE — narration + budget both key off
-    // `explicitHiFi` but are independent statements, so a reverted budget would
-    // still emit this string. The budget value is pinned separately + directly
-    // in digest-race-budget.test.ts (digestRaceBudgetMs). Both are needed.
+    // Proves the hi-fi BRANCH is taken end-to-end for a prompt that reaches the
+    // generator. Budget VALUE is pinned separately in digest-race-budget.test.ts.
     const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
     const stream = await (async () => {
-      await post(p.slug, "Implement this precisely https://www.figma.com/design/k/x?node-id=1-2");
+      await post(
+        p.slug,
+        "Implement this precisely and make the input functional " +
+          "https://www.figma.com/design/k/x?node-id=1-2",
+      );
       return drainStream(p.slug);
     })();
     expect(stream).toContain("precise mode");
@@ -232,6 +276,9 @@ describe("eject-to-source on a compose-base turn", () => {
   });
 
   it("does NOT eject on a plain precise prompt with no named composite", async () => {
+    // A pure precise prompt now routes to the deterministic kit-emit branch,
+    // which never ejects. (A build-intent prompt naming a composite ejects —
+    // see the test above.) Either way, no .eject dir here.
     const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
     await post(p.slug, "Implement this precisely https://www.figma.com/design/k/x?node-id=1-2");
     await drainStream(p.slug);

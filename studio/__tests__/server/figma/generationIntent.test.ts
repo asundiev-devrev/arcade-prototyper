@@ -22,9 +22,9 @@ describe("shouldGenerateFromFigma", () => {
     expect(shouldGenerateFromFigma(prompt)).toBe(true);
   });
 
-  it("fires on hi-fi intent alone (implement precisely / pixel-perfect)", () => {
-    expect(shouldGenerateFromFigma("implement this precisely")).toBe(true);
-    expect(shouldGenerateFromFigma("pixel-perfect build of this frame")).toBe(true);
+  it("does NOT fire on hi-fi intent alone — pure precise/pixel-perfect routes deterministic", () => {
+    expect(shouldGenerateFromFigma("implement this precisely")).toBe(false);
+    expect(shouldGenerateFromFigma("pixel-perfect build of this frame")).toBe(false);
   });
 
   it("fires on interaction intent alone (click opens a modal)", () => {
@@ -61,6 +61,43 @@ describe("shouldGenerateFromFigma", () => {
   it("is robust to non-string input", () => {
     expect(detectBuildIntent(undefined as unknown as string)).toBe(false);
     expect(shouldGenerateFromFigma(null as unknown as string)).toBe(false);
+  });
+
+  it("fires on destructive/substitution edit verbs (importer can't perform these)", () => {
+    expect(detectBuildIntent("remove the search bar")).toBe(true);
+    expect(detectBuildIntent("delete the top nav")).toBe(true);
+    expect(detectBuildIntent("swap the logo for ours")).toBe(true);
+    expect(detectBuildIntent("replace the avatars with initials")).toBe(true);
+    expect(detectBuildIntent("rename the tabs")).toBe(true);
+    expect(detectBuildIntent("make the sidebar dark")).toBe(true);
+    expect(detectBuildIntent("replace the header with a banner")).toBe(true);
+  });
+
+  it("routes a copy-but-tweak prompt (hi-fi + edit verb) to the generator", () => {
+    // The gap Task 1 opened: hi-fi wording no longer routes, so the edit verb
+    // must carry it to the LLM or the tweak is silently dropped.
+    expect(shouldGenerateFromFigma("recreate this exactly, remove the search bar")).toBe(true);
+    expect(shouldGenerateFromFigma("implement precisely but make the sidebar dark")).toBe(true);
+  });
+
+  it("does NOT misroute faithful-copy prompts that merely CONTAIN an edit word", () => {
+    // Every one of these is a pure photocopy — must stay deterministic. The
+    // words appear as style descriptions, quoted UI labels, purpose clauses, or
+    // "make sure/match" hedges, not as edit instructions. (Adversarial FP set.)
+    const copies = [
+      "keep the drop shadow on the card",              // "drop" NOT an edit verb
+      "copy this exactly including the drop-shadow",   // drop-shadow
+      "make sure the dark header matches the figma",   // make SURE = ensure
+      "copy this — make it match the light mockup",    // make…match = comparison
+      "the button label reads 'Delete account'",       // quoted label
+      "the modal is titled 'Rename workspace'",        // quoted label
+      "this design will replace the current home page",// purpose, not instruction
+      "the design is meant to replace the settings page",
+      "implement the dark variant precisely",          // describes what to copy
+      "a delete button in the toolbar",                // noun, not verb
+      "this design will make the whole thing dark",    // purpose clause, not instruction
+    ];
+    for (const p of copies) expect(shouldGenerateFromFigma(p), p).toBe(false);
   });
 });
 

@@ -12,9 +12,10 @@ export interface HomeShelfProps {
   onRename: (p: Project) => void | Promise<void>;
   onDelete: (p: Project) => void | Promise<void>;
   onStartTemplate: (templateId: string) => void;
+  onImport?: () => void;
 }
 
-export function HomeShelf({ projects, onOpen, onRename, onDelete, onStartTemplate }: HomeShelfProps) {
+export function HomeShelf({ projects, onOpen, onRename, onDelete, onStartTemplate, onImport }: HomeShelfProps) {
   const [tab, setTab] = useState<Tab>(projects.length === 0 ? "templates" : "projects");
   // useProjects starts as [] and populates async, so a returning user's
   // projects may not be present at mount. Resolve the smart-default tab once,
@@ -31,18 +32,17 @@ export function HomeShelf({ projects, onOpen, onRename, onDelete, onStartTemplat
 
   return (
     <section>
-      <div style={{ marginBottom: 24 }}>
-        {/* Each Item carries an explicit onClick AND the Root carries
-            onValueChange on purpose: onValueChange drives the real Radix
-            ToggleGroup in production, while onClick keeps the switch working
-            under the test mock. Don't "simplify" by dropping the onClick.
-            The inline font-size/padding scale the segmented control up — it
-            doubles as this section's heading now that the "Projects" h2 is
-            gone. */}
+      <div style={{ marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <ToggleGroup.Root type="single" value={tab} onValueChange={(v: string) => { if (v === "projects" || v === "templates") setTab(v); }} style={{ fontSize: 16 }}>
           <ToggleGroup.Item value="projects" onClick={() => setTab("projects")} style={{ padding: "8px 16px", fontSize: 16, lineHeight: "24px" }}>My projects</ToggleGroup.Item>
           <ToggleGroup.Item value="templates" onClick={() => setTab("templates")} style={{ padding: "8px 16px", fontSize: 16, lineHeight: "24px" }}>Templates</ToggleGroup.Item>
         </ToggleGroup.Root>
+        {onImport && (
+          <button type="button" onClick={onImport}
+            style={{ padding: "6px 12px", fontSize: 13, borderRadius: 6, border: "1px solid var(--stroke-neutral-subtle)", background: "transparent", color: "var(--fg-neutral-prominent)", cursor: "pointer" }}>
+            Import project…
+          </button>
+        )}
       </div>
       {tab === "projects" ? (
         <ProjectsSection projects={projects} onOpen={onOpen} onRename={onRename} onDelete={onDelete} />

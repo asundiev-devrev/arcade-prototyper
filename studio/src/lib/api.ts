@@ -65,4 +65,19 @@ export const api = {
     fetch(`/api/chat/cancel/${slug}`, { method: "POST" }).then(
       j<{ cancelled: true; slug: string }>,
     ),
+  exportProject: (slug: string): void => {
+    // Full-page navigation to the download URL — verified host-independent in
+    // the packaged app (Electron ignores the <a download> attribute; see the
+    // Assets panel export). The response's Content-Disposition drives the save.
+    window.location.href = `/api/projects/${slug}/export`;
+  },
+  importProject: (file: File): Promise<Project> =>
+    fetch("/api/projects/import", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "X-Upload-Filename": encodeURIComponent(file.name),
+      },
+      body: file,
+    }).then(j<Project>),
 };
