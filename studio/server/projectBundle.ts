@@ -35,7 +35,7 @@ export function cleanProjectJson(p: Project): Project {
 // Discovery: capture any PascalCase name imported from arcade-user/<Name>.
 // Anchored to the component-name shape so it can never bleed into a neighbour
 // specifier. Global — one source file may import several components.
-const ARCADE_USER_IMPORT = /from\s*["']arcade-user\/([A-Z][A-Za-z0-9]{0,39})["']/g;
+const ARCADE_USER_IMPORT = /from\s*["']arcade-user\/([A-Z][A-Za-z0-9]{1,39})["']/g;
 
 async function scanFileForDeps(file: string): Promise<string[]> {
   let src: string;

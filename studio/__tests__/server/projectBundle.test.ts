@@ -77,12 +77,12 @@ describe("resolveComponentDeps", () => {
   });
 
   it("terminates on a composite import cycle and collects both", async () => {
-    writeComposite("A", `import { B } from "arcade-user/B";\nexport default function A(){return null;}`);
-    writeComposite("B", `import { A } from "arcade-user/A";\nexport default function B(){return null;}`);
+    writeComposite("Aa", `import { Bb } from "arcade-user/Bb";\nexport default function Aa(){return null;}`);
+    writeComposite("Bb", `import { Aa } from "arcade-user/Aa";\nexport default function Bb(){return null;}`);
     const framesDir = path.join(root, "proj", "frames");
-    writeFrame(framesDir, "01-home", `import { A } from "arcade-user/A";`);
+    writeFrame(framesDir, "01-home", `import { Aa } from "arcade-user/Aa";`);
     const { names } = await resolveComponentDeps(framesDir);
-    expect(names).toEqual(["A", "B"]);
+    expect(names).toEqual(["Aa", "Bb"]);
   });
 
   it("reports referenced-but-absent components as missing, not found", async () => {
