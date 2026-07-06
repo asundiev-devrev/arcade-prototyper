@@ -1,8 +1,10 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import fs from "node:fs/promises";
+import path from "node:path";
 import { createProject, deleteProject, listProjects, renameProject, updateProject, getProject, readHistory, fileTree, readProjectFile, reconcileFrames, seedTemplateFrame } from "../projects";
 import { dismissChimeIn, applyChimeIn } from "../chimeIns";
 import { frameDir } from "../paths";
+import { packProject, unpackAndInstall, MAX_BUNDLE_BYTES } from "../projectBundle";
 
 // Self-heal wrapper for GET handlers: if chokidar in projectWatchPlugin missed
 // an fs event (startup race, unhandled error mid-reconcile), project.json can
@@ -156,6 +158,50 @@ export function projectsMiddleware() {
           frames: p.frames.filter((f) => f.slug !== frameMatch[2]),
         });
         return send(res, 200, next);
+      }
+
+      // Export a project as a downloadable .arcade bundle.
+      const exportMatch = url.match(/^\/api\/projects\/([a-z0-9-]+)\/export$/);
+      if (req.method === "GET" && exportMatch) {
+        const slug = exportMatch[1];
+        let filePath: string | undefined;
+        try {
+          const packed = await packProject(slug);
+          filePath = packed.filePath;
+          const buf = await fs.readFile(filePath);
+          res.writeHead(200, {
+            "Content-Type": "application/octet-stream",
+            "Content-Disposition": `attachment; filename="${slug}.arcade"`,
+          });
+          res.end(buf);
+        } catch (err: any) {
+          const notFound = /not found/i.test(err?.message ?? "");
+          return send(res, notFound ? 404 : 500, { error: { message: err?.message ?? "export failed" } });
+        } finally {
+          if (filePath) await fs.rm(path.dirname(filePath), { recursive: true, force: true });
+        }
+        return;
+      }
+
+      // Import a .arcade bundle (raw body upload; mirrors uploadsMiddleware).
+      if (req.method === "POST" && url === "/api/projects/import") {
+        const chunks: Buffer[] = [];
+        let total = 0, tooLarge = false;
+        for await (const c of req) {
+          total += c.length;
+          if (total > MAX_BUNDLE_BYTES) { tooLarge = true; break; }
+          chunks.push(Buffer.from(c));
+        }
+        if (tooLarge) {
+          req.on("error", () => {}); req.resume();
+          return send(res, 413, { error: { message: "Bundle too large." } });
+        }
+        try {
+          const project = await unpackAndInstall(Buffer.concat(chunks));
+          return send(res, 201, project);
+        } catch (err: any) {
+          return send(res, 422, { error: { message: err?.message ?? "Import failed." } });
+        }
       }
 
       // Root and slug-only routes. The earlier branches handle every
