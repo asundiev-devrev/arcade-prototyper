@@ -8,6 +8,21 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.42.0] — 2026-07-06
+
+### Added
+- **Share a whole prototype as a file.** Export any project to a single `.arcade` file from the project menu — it carries the frames and every saved component with them. Someone else drops it in with the new Import button (after a quick "do you trust this file?" prompt) and gets a working copy, components and all. No more "it only runs on my machine."
+- **Pick an element, then just tell the agent.** Selecting an element in a prototype now also drops it into the chat box as an attachment chip — so you can type a request ("make this a primary button") and the agent knows exactly which element you mean. Pick several and each shows as its own chip. This sits alongside the visual editor: same selection, two ways to change it.
+
+### Changed
+- **One "Send changes" for edits the sliders can't make.** When a visual tweak can be applied directly it lands instantly (with Undo). Anything that needs the agent no longer splits into a stack of one-by-one approvals — it collects into your selection and a single **Send changes** button hands the whole batch to the agent in one go.
+- **Faithful Figma reproductions are more faithful.** Prompts that ask to reproduce a Figma design precisely now go down the exact-reproduction path instead of the looser generate path, "precise" requests actually receive the design's real details, and starting from an existing component now opens up its real markup so edits stick. Purple/custom theme colours also win the cascade instead of being overridden by defaults.
+
+### Fixed
+- **The agent edits the element you picked — not a guess.** Picking an element now hands the agent the exact spot in your source, even for elements that come from shared building blocks — it points at where your prototype places that component, so with several similar buttons on screen it changes the right one. Previously it could be aimed at the wrong line (or a file that doesn't exist), edit a look-alike element, and change nothing on screen while claiming success.
+- **Shared links resolve.** Prototypes now publish to the right production address, so a shared URL opens the prototype instead of a dead page.
+- **Generated prototypes use valid design-token colours.** A new safeguard stops the generator from emitting malformed token class names that would silently drop the colour.
+
 ## [0.41.3] — 2026-06-29
 
 ### Added
