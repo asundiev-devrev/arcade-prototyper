@@ -36,3 +36,68 @@ describe("cleanProjectJson", () => {
     expect(input.sessionId).toBe("keep");
   });
 });
+
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { beforeEach, afterEach } from "vitest";
+import { resolveComponentDeps } from "../../server/projectBundle";
+
+let root: string;
+beforeEach(() => {
+  root = fs.mkdtempSync(path.join(os.tmpdir(), "arcade-bundle-"));
+  process.env.ARCADE_STUDIO_ROOT = root;
+});
+afterEach(() => {
+  delete process.env.ARCADE_STUDIO_ROOT;
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+function writeComposite(name: string, body: string) {
+  const dir = path.join(root, "user-kit", "composites");
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, `${name}.tsx`), body);
+}
+function writeFrame(framesDir: string, frameSlug: string, body: string) {
+  const dir = path.join(framesDir, frameSlug);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, "index.tsx"), body);
+}
+
+describe("resolveComponentDeps", () => {
+  it("follows frame -> composite -> composite transitively", async () => {
+    writeComposite("PriceTag", `export function PriceTag() { return null; }\nexport default PriceTag;`);
+    writeComposite("AppCard", `import { PriceTag } from "arcade-user/PriceTag";\nexport function AppCard() { return null; }\nexport default AppCard;`);
+    const framesDir = path.join(root, "proj", "frames");
+    writeFrame(framesDir, "01-home", `import { AppCard } from "arcade-user/AppCard";\nexport default function F() { return null; }`);
+
+    const { names, missing } = await resolveComponentDeps(framesDir);
+    expect(names).toEqual(["AppCard", "PriceTag"]);
+    expect(missing).toEqual([]);
+  });
+
+  it("terminates on a composite import cycle and collects both", async () => {
+    writeComposite("A", `import { B } from "arcade-user/B";\nexport default function A(){return null;}`);
+    writeComposite("B", `import { A } from "arcade-user/A";\nexport default function B(){return null;}`);
+    const framesDir = path.join(root, "proj", "frames");
+    writeFrame(framesDir, "01-home", `import { A } from "arcade-user/A";`);
+    const { names } = await resolveComponentDeps(framesDir);
+    expect(names).toEqual(["A", "B"]);
+  });
+
+  it("reports referenced-but-absent components as missing, not found", async () => {
+    const framesDir = path.join(root, "proj", "frames");
+    writeFrame(framesDir, "01-home", `import { Ghost } from "arcade-user/Ghost";`);
+    const { names, missing } = await resolveComponentDeps(framesDir);
+    expect(names).toEqual([]);
+    expect(missing).toEqual(["Ghost"]);
+  });
+
+  it("does not match substrings (arcade-user/Foo vs FooBar)", async () => {
+    writeComposite("FooBar", `export default function FooBar() { return null; }`);
+    const framesDir = path.join(root, "proj", "frames");
+    writeFrame(framesDir, "01-home", `import { FooBar } from "arcade-user/FooBar";`);
+    const { names } = await resolveComponentDeps(framesDir);
+    expect(names).toEqual(["FooBar"]); // not "Foo"
+  });
+});
