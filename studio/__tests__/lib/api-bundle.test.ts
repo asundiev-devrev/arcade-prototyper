@@ -6,14 +6,15 @@ afterEach(() => vi.restoreAllMocks());
 describe("api.importProject", () => {
   it("POSTs raw bytes to the import route and returns the project", async () => {
     const project = { slug: "x", name: "X (imported)" };
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify(project), { status: 201, headers: { "Content-Type": "application/json" } }));
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) =>
+      new Response(JSON.stringify(project), { status: 201, headers: { "Content-Type": "application/json" } }));
     vi.stubGlobal("fetch", fetchMock);
     const file = new File([new Uint8Array([1, 2, 3])], "x.arcade");
     const out = await api.importProject(file);
     expect(out.slug).toBe("x");
     const [urlArg, init] = fetchMock.mock.calls[0];
     expect(urlArg).toBe("/api/projects/import");
-    expect((init as RequestInit).method).toBe("POST");
+    expect(init?.method).toBe("POST");
   });
 });
 
