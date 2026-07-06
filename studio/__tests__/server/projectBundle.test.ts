@@ -232,6 +232,46 @@ describe("component install (specifier-only, order-independent)", () => {
     expect(out).toContain(`"arcade-user/FooImported"`);
     expect(out).toContain(`"arcade-user/FooBar"`);
   });
+
+  it("reserves all bundled names so a rename cannot collide with another bundled component (Bug 3B)", async () => {
+    // Setup: recipient owns Widget with content X
+    await writeComponentRaw({
+      name: "Widget", description: "mine", tsx: `export default function Widget(){return <div>X</div>;}`,
+      origin: "saved", createdAt: "t",
+    });
+    // Bundle ships Widget (content Y, different) AND WidgetImported (content Z)
+    const compDir = fs.mkdtempSync(path.join(os.tmpdir(), "comp-3b-"));
+    fs.writeFileSync(path.join(compDir, "Widget.tsx"), `export default function Widget(){return <div>Y</div>;}`);
+    fs.writeFileSync(path.join(compDir, "WidgetImported.tsx"), `export default function WidgetImported(){return <div>Z</div>;}`);
+    const framesRoot = fs.mkdtempSync(path.join(os.tmpdir(), "frames-3b-"));
+    fs.mkdirSync(path.join(framesRoot, "01-home"), { recursive: true });
+    fs.writeFileSync(path.join(framesRoot, "01-home", "index.tsx"), `import { Widget } from "arcade-user/Widget";\nexport default function F(){return null;}`);
+
+    await installBundledComponents(compDir, [
+      { name: "Widget", description: "d", origin: "imported", createdAt: "t" },
+      { name: "WidgetImported", description: "d", origin: "imported", createdAt: "t" },
+    ], framesRoot);
+
+    // Recipient's original Widget (content X) should be intact
+    const originalContent = fs.readFileSync(path.join(root, "user-kit", "composites", "Widget.tsx"), "utf-8");
+    expect(originalContent).toContain("<div>X</div>");
+
+    // BOTH bundled components must exist under DISTINCT names, not collide
+    expect(await componentExists("WidgetImported")).toBe(true);
+    const widgetImportedContent = fs.readFileSync(path.join(root, "user-kit", "composites", "WidgetImported.tsx"), "utf-8");
+    expect(widgetImportedContent).toContain("<div>Z</div>"); // bundle's WidgetImported content
+
+    // The renamed Widget should exist under a NEW distinct name (e.g. WidgetImported2)
+    expect(await componentExists("WidgetImported2")).toBe(true);
+    const renamedWidgetContent = fs.readFileSync(path.join(root, "user-kit", "composites", "WidgetImported2.tsx"), "utf-8");
+    expect(renamedWidgetContent).toContain("<div>Y</div>"); // bundle's Widget content
+    expect(renamedWidgetContent).toContain("export { Widget as WidgetImported2 }"); // alias so frame compiles
+
+    // Frame specifier should point at the renamed target
+    const frame = fs.readFileSync(path.join(framesRoot, "01-home", "index.tsx"), "utf-8");
+    expect(frame).toContain(`from "arcade-user/WidgetImported2"`);
+    expect(frame).toContain(`import { Widget }`); // binding unchanged
+  });
 });
 
 describe("import safety", () => {

@@ -310,7 +310,24 @@ export async function installBundledComponents(
 ): Promise<void> {
   // Phase A: decide the final name for every component (collision resolution),
   // reading bundled sources but writing nothing yet.
-  const taken = new Set<string>();
+
+  // Build the set of names that will be occupied by ALL bundled rows (the ones
+  // we'll install as-is plus the ones we'll rename). This ensures a rename target
+  // cannot collide with another bundled row's install name.
+  const reserved = new Set<string>();
+  for (const row of rows) {
+    if (row.missing || !isValidComponentName(row.name)) continue;
+    let tsx: string;
+    try { tsx = await fs.readFile(path.join(compDir, `${row.name}.tsx`), "utf-8"); } catch { continue; }
+    if (await componentExists(row.name)) {
+      const current = await fs.readFile(path.join(userKitCompositesDir(), `${row.name}.tsx`), "utf-8").catch(() => "");
+      if (current === tsx) continue; // identical — dedup skip, no slot occupied
+    }
+    // This bundled row will occupy a slot (either its own name or a rename target).
+    // Reserve its literal name to start; renames will add their target below.
+    reserved.add(row.name);
+  }
+
   const renames = new Map<string, string>();          // oldName -> newName
   const plan: { name: string; tsx: string; row: ComponentManifestRow }[] = [];
   for (const row of rows) {
@@ -320,12 +337,11 @@ export async function installBundledComponents(
     if (await componentExists(row.name)) {
       const current = await fs.readFile(path.join(userKitCompositesDir(), `${row.name}.tsx`), "utf-8").catch(() => "");
       if (current === tsx) continue;                  // identical — dedup skip
-      const newName = await uniqueComponentName(row.name, taken);
+      const newName = await uniqueComponentName(row.name, reserved);
       renames.set(row.name, newName);
-      taken.add(newName);
+      reserved.add(newName); // occupy the rename target
       plan.push({ name: newName, tsx, row });
     } else {
-      taken.add(row.name);
       plan.push({ name: row.name, tsx, row });
     }
   }
