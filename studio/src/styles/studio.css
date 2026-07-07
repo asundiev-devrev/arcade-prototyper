@@ -52,7 +52,7 @@ html, body, #root { height: 100%; margin: 0; }
  * hatch. Content sits above via its own stacking context. */
 .studio-canvas-bg {
   position: relative;
-  background: var(--bg-neutral-prominent, #211e20);
+  background: var(--surface-backdrop, #211e20);
 }
 .studio-canvas-bg::before,
 .studio-canvas-bg::after {
@@ -154,7 +154,7 @@ summary { list-style: none; }
  * on top inside their own iframe documents, so this never touches frame
  * theming. */
 .studio-dot-grid {
-  background-color: var(--bg-neutral-prominent, #211e20);
+  background-color: var(--surface-backdrop, #211e20);
   background-image: radial-gradient(
     circle,
     rgba(255, 255, 255, 0.08) 1px,
