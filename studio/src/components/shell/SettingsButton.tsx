@@ -21,17 +21,52 @@ function GearIcon() {
   );
 }
 
-export function AppSettingsButton() {
+export function AppSettingsButton({ withLabel = false }: { withLabel?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <IconButton
-        aria-label="Settings"
-        variant="tertiary"
-        onClick={() => setOpen(true)}
-      >
-        <GearIcon />
-      </IconButton>
+      {withLabel ? (
+        <button
+          type="button"
+          aria-label="Settings"
+          onClick={() => setOpen(true)}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "6px 8px",
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            color: "var(--fg-neutral-prominent)",
+            fontSize: 16,
+            fontWeight: 500,
+          }}
+        >
+          <span>Settings</span>
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 28,
+              height: 28,
+              borderRadius: 999,
+              background: "var(--bg-neutral-subtle)",
+            }}
+          >
+            <GearIcon />
+          </span>
+        </button>
+      ) : (
+        <IconButton
+          aria-label="Settings"
+          variant="tertiary"
+          onClick={() => setOpen(true)}
+        >
+          <GearIcon />
+        </IconButton>
+      )}
       <AppSettingsModal open={open} onClose={() => setOpen(false)} />
     </>
   );

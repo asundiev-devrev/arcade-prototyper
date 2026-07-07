@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Modal, Button, Input, Badge, Switch, Select } from "@xorkavi/arcade-gen";
+import { Modal, Button, Input, Badge, Select } from "@xorkavi/arcade-gen";
 import ReactMarkdown from "react-markdown";
 import { savePat, getPatStatus, clearPat, type DevRevPatStatus } from "../../lib/devrev";
 import { track } from "../../lib/telemetry/renderer";
@@ -66,7 +66,6 @@ export function AppSettingsModal({
   // secret checks against.
   const [cfShareKey, setCfShareKey] = useState("");
   const [hasCfToken, setHasCfToken] = useState(false);
-  const [studioMode, setStudioMode] = useState<"light" | "dark">("light");
   // studioModel is the Select's current value — a sentinel when the user
   // has picked "Default (Sonnet)", otherwise one of the alias strings.
   // NEVER let this be "" — Radix Select throws on empty-string items.
@@ -80,9 +79,6 @@ export function AppSettingsModal({
       if (res.ok) {
         const data: AppSettings = await res.json();
         setHasCfToken(!!data.cloudflare?.shareKey);
-        if (data.studio?.mode === "dark" || data.studio?.mode === "light") {
-          setStudioMode(data.studio.mode);
-        }
         // Missing/empty in settings → show the Default row (sentinel).
         setStudioModel(data.studio?.model || MODEL_DEFAULT_SENTINEL);
       }
@@ -246,52 +242,8 @@ export function AppSettingsModal({
         </Modal.Header>
         <Modal.Body>
           <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-            {/* Appearance */}
-            <section style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 540 }}>Appearance</h3>
-                <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--fg-neutral-subtle)" }}>
-                  Applies to the Studio shell. Each project's preview theme is
-                  controlled by the toggle in the project header.
-                </p>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <Switch
-                  checked={studioMode === "dark"}
-                  onCheckedChange={async (next) => {
-                    const mode: "light" | "dark" = next ? "dark" : "light";
-                    setStudioMode(mode);
-                    try {
-                      await fetch("/api/settings", {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ studio: { mode } }),
-                      });
-                      window.dispatchEvent(
-                        new CustomEvent("arcade-studio:mode-changed", { detail: mode }),
-                      );
-                    } catch {
-                      // revert on failure
-                      setStudioMode(next ? "light" : "dark");
-                    }
-                  }}
-                />
-                <span style={{ fontSize: 13, color: "var(--fg-neutral-prominent)" }}>
-                  Dark mode
-                </span>
-              </div>
-            </section>
-
             {/* Generation model */}
-            <section
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 12,
-                paddingTop: 16,
-                borderTop: "1px solid var(--stroke-neutral-subtle)",
-              }}
-            >
+            <section style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: 14, fontWeight: 540 }}>Generation model</h3>
                 <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--fg-neutral-subtle)" }}>

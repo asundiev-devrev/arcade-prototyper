@@ -301,6 +301,7 @@ export function ViewportPreview({
       ref={scrollRef}
       role="region"
       aria-label="Design viewport"
+      className="studio-dot-grid"
       onMouseDown={(e) => {
         if (e.button === 1 || (e.button === 0 && spaceHeld)) {
           startPan(e);
@@ -310,7 +311,6 @@ export function ViewportPreview({
         display: "block",
         height: "100%",
         position: "relative",
-        background: "var(--bg-neutral-soft)",
         overflow: "auto",
         cursor: panning ? "grabbing" : spaceHeld ? "grab" : undefined,
       }}

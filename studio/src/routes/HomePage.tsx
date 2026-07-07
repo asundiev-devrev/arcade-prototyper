@@ -6,7 +6,9 @@ import { deriveProjectName } from "../lib/deriveProjectName";
 import { setPendingPrompt } from "../lib/pendingPrompt";
 import { StudioHeader } from "../components/shell/StudioHeader";
 import { AppSettingsButton } from "../components/shell/SettingsButton";
+import { StudioBrand } from "../components/shell/StudioBrand";
 import { HeroPromptInput, type HeroPromptSubmitArgs } from "../components/home/HeroPromptInput";
+import landingBgUrl from "../assets/brand/landing-bg.svg";
 import { HomeShelf } from "../components/home/HomeShelf";
 import { useDialogs } from "../components/feedback/Dialogs";
 import type { Project } from "../../server/types";
@@ -142,8 +144,20 @@ export function HomePage({ onOpen }: { onOpen: (slug: string) => void }) {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
-      <StudioHeader title="Studio" right={<AppSettingsButton />} />
+    <div
+      className="studio-canvas-bg"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100vh",
+        ["--studio-landing-bg" as any]: `url(${landingBgUrl})`,
+      }}
+    >
+      <StudioHeader
+        variant="home"
+        title={<StudioBrand />}
+        right={<AppSettingsButton withLabel />}
+      />
       <div style={{ flex: 1, overflowY: "auto" }}>
         <div
           style={{

@@ -1,5 +1,8 @@
 /* Studio-only overrides. Frames do NOT load this file. */
-:root { color-scheme: light dark; }
+/* Shell chrome is pinned dark (see App.tsx). Advertise dark so native
+ * scrollbars, form controls, and default backgrounds paint dark too.
+ * Frames are separate iframe documents and set their own color-scheme. */
+:root { color-scheme: dark; }
 
 html, body, #root { height: 100%; margin: 0; }
 
@@ -41,6 +44,27 @@ html, body, #root { height: 100%; margin: 0; }
   .arcade-studio-loading-scene { animation: none !important; }
   .arcade-studio-loading-frame { animation: none !important; }
   .arcade-studio-loading-glyph { animation: none !important; }
+}
+
+/* Landing background: charcoal fill + two diagonal-pinstripe wedges in
+ * the full branded artwork exported straight from Figma (node 498:2911):
+ * a charcoal field with a fine dot grid + diagonal pinstripe wedges + corner
+ * registration marks. Using the exported SVG verbatim keeps the geometry
+ * faithful instead of re-deriving wedges in CSS. It's a fixed 1512×1530
+ * composition, so we anchor it top-center and cover — the charcoal base
+ * fills any area the artwork doesn't reach on very large windows. */
+.studio-canvas-bg {
+  position: relative;
+  background-color: var(--surface-backdrop, #211e20);
+  background-image: var(--studio-landing-bg);
+  background-repeat: no-repeat;
+  background-position: top center;
+  background-size: cover;
+}
+/* Content layer sits above the artwork. */
+.studio-canvas-bg > * {
+  position: relative;
+  z-index: 1;
 }
 
 /* Expandable tool-call rows use <details>; hide the default disclosure
@@ -104,4 +128,55 @@ summary { list-style: none; }
 }
 .arcade-studio-nav-pulse[data-kind="missing"] {
   animation: arcade-studio-nav-pulse-missing 600ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Editor canvas backdrop: #211E20 base + the fine dark dot grid from the
+ * Figma design (node 500:4747 — an 8px tile with a small black dot, muted by
+ * the 91% charcoal overlay so the dots read a touch darker than the base).
+ * Frames render on top inside their own iframe documents, so this never
+ * touches frame theming. */
+.studio-dot-grid {
+  background-color: #353234;
+  background-image: radial-gradient(#000000 1px, transparent 1.4px);
+  background-size: 8px 8px;
+}
+
+/* ─── Editor chat pane (spec: dark theme) ───
+ * Scope the ChatBubble color tokens to the chat pane so the shell bubbles
+ * match the design without touching the DS globally or the generated frames.
+ *  - user (sender → self-*): solid black bubble, white text
+ *  - agent (receiver → user-*): #f4f4f4 @ 8% on the dark pane, white text */
+.studio-chat-pane {
+  --component-bubble-self-bg: #000000;
+  --component-bubble-self-fg: #ffffff;
+  --component-bubble-user-bg: rgba(244, 244, 244, 0.08);
+  --component-bubble-user-fg: #ffffff;
+}
+/* 1.4: the PromptInput uses the shared ChatInput composite, which paints
+ * bg-(--surface-overlay) with a border-t of (--stroke-neutral-subtle). Retint
+ * those tokens within the chat pane so the input bar matches the pane
+ * (#211E20) with a subtle top border, instead of the default lighter surface. */
+.studio-chat-pane {
+  --surface-overlay: #211e20;
+}
+
+/* ─── Editor header (spec: dark theme controls) ───
+ * Scoped to the project header so it doesn't affect other IconButtons. */
+/* 2.2: Chat/Assets toggle active item bg = navigation-bg-active
+ *      (#ECEAEB @ 12%), and its LABEL is white. Radix ToggleGroup marks the
+ *      active item with data-state="on". */
+.studio-project-header [data-state="on"] {
+  background: rgba(236, 234, 235, 0.12);
+  color: #ffffff;
+}
+/* 2.3: expand/collapse (chat + canvas) toggle active bg = black with a WHITE
+ *      icon. These render as IconButton variant="primary" when active;
+ *      override the primary bg + fg tokens within the header scope. */
+.studio-project-header {
+  --component-button-primary-bg-idle: #000000;
+  --component-button-primary-bg-hover: #000000;
+  --component-button-primary-bg-active: #000000;
+  --component-button-primary-fg-idle: #ffffff;
+  --component-button-primary-fg-hover: #ffffff;
+  --component-button-primary-fg-active: #ffffff;
 }

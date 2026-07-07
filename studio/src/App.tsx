@@ -22,44 +22,16 @@ function writeSlugToHash(slug: string | null) {
 
 export function App() {
   const [openSlug, setOpenSlug] = useState<string | null>(() => readSlugFromHash());
-  const [studioMode, setStudioMode] = useState<"light" | "dark">("light");
-
-  useEffect(() => {
-    let cancelled = false;
-    async function hydrate() {
-      try {
-        const res = await fetch("/api/settings");
-        if (!res.ok) return;
-        const data = await res.json();
-        const mode = data?.studio?.mode;
-        if (!cancelled && (mode === "dark" || mode === "light")) {
-          setStudioMode(mode);
-        }
-      } catch {
-        // fall back to default
-      }
-    }
-    void hydrate();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     function onHashChange() {
       setOpenSlug(readSlugFromHash());
     }
-    function onModeChanged(e: Event) {
-      const detail = (e as CustomEvent<"light" | "dark">).detail;
-      if (detail === "light" || detail === "dark") setStudioMode(detail);
-    }
     window.addEventListener("hashchange", onHashChange);
     window.addEventListener("popstate", onHashChange);
-    window.addEventListener("arcade-studio:mode-changed", onModeChanged);
     return () => {
       window.removeEventListener("hashchange", onHashChange);
       window.removeEventListener("popstate", onHashChange);
-      window.removeEventListener("arcade-studio:mode-changed", onModeChanged);
     };
   }, []);
 
@@ -74,7 +46,7 @@ export function App() {
   }, []);
 
   return (
-    <DevRevThemeProvider mode={studioMode}>
+    <DevRevThemeProvider mode="dark">
       <FrameFontProxy />
       <DialogsProvider>
         <StartupAuthGate>
