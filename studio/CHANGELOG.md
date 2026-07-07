@@ -8,6 +8,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.42.1] — 2026-07-07
+
+### Fixed
+- **0.42.0 wouldn't open — fixed.** The 0.42.0 build was missing a code library it needed to start, so the app failed to launch and appeared to hang. This restores it. If you're stuck on 0.42.0, download this version's installer directly (auto-update may not reach a build that can't open). A new build-time check now blocks this whole class of "works on my machine, dead in the shipped app" packaging mistake before release.
+
 ## [0.42.0] — 2026-07-06
 
 ### Added
