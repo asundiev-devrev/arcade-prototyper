@@ -4,11 +4,17 @@ export function StudioHeader({
   title,
   center,
   right,
+  variant = "default",
 }: {
   title: ReactNode;
   center?: ReactNode;
   right?: ReactNode;
+  // "home" is the branded landing header: taller, transparent (lets the
+  // background artwork show through), no bottom border. "default" is the
+  // compact chrome bar used inside a project.
+  variant?: "default" | "home";
 }) {
+  const home = variant === "home";
   return (
     <header
       style={{
@@ -16,10 +22,10 @@ export function StudioHeader({
         gridTemplateColumns: "1fr auto 1fr",
         alignItems: "center",
         gap: 12,
-        height: 48,
-        padding: "0 16px",
-        background: "var(--surface-overlay)",
-        borderBottom: "1px solid var(--stroke-neutral-subtle)",
+        height: home ? 72 : 48,
+        padding: home ? "0 32px" : "0 16px",
+        background: home ? "transparent" : "var(--surface-overlay)",
+        borderBottom: home ? "none" : "1px solid var(--stroke-neutral-subtle)",
       }}
     >
       <div

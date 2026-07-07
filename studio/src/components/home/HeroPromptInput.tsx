@@ -241,12 +241,10 @@ export function HeroPromptInput({ onSubmit, disabled }: HeroPromptInputProps) {
       onDragOver={(e) => e.preventDefault()}
       style={{
         position: "relative",
-        background: "var(--surface-overlay, #2a2728)",
-        border: "1px solid var(--stroke-neutral-subtle)",
-        borderRadius: 24,
-        padding: "28px 28px 20px",
+        background: "var(--surface-backdrop, #211e20)",
+        borderRadius: 32,
+        padding: "36px 36px 20px",
         boxShadow: "0 12px 40px rgba(0,0,0,0.35)",
-        borderLeft: "3px solid var(--bg-expressive-yellow-prominent, #ffe000)",
       }}
     >
       <input
@@ -310,10 +308,38 @@ export function HeroPromptInput({ onSubmit, disabled }: HeroPromptInputProps) {
           opacity: 1,
           transition: "font-size 160ms ease-out",
         }}
-        // Placeholder styling relies on the global stylesheet; see
-        // studio/src/styles/tailwind.css for ::placeholder opacity:0.48.
+        // Native placeholder is transparent; the gradient overlay below is
+        // the visible placeholder. See studio/src/styles/tailwind.css.
         data-hero-input
       />
+      {/* Gradient placeholder (white → 40% white), matching the design's
+          bg-clip-text treatment which ::placeholder can't reproduce. Shown
+          only while empty; sits over the textarea's text origin and ignores
+          pointer events so the textarea stays focusable/clickable. */}
+      {!text && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            top: 36,
+            left: 36,
+            right: 36,
+            pointerEvents: "none",
+            fontFamily: "var(--core-font-display), 'Chip Display Variable', sans-serif",
+            fontWeight: 600,
+            fontSize,
+            lineHeight: LINE_HEIGHT,
+            backgroundImage:
+              "linear-gradient(90deg, #ffffff 0%, rgba(255,255,255,0.4) 78%)",
+            WebkitBackgroundClip: "text",
+            backgroundClip: "text",
+            color: "transparent",
+            transition: "font-size 160ms ease-out",
+          }}
+        >
+          {PLACEHOLDER}
+        </div>
+      )}
       {(images.length > 0 || figmaUrl || hasComputerMention) && (
         <div
           style={{
@@ -342,20 +368,30 @@ export function HeroPromptInput({ onSubmit, disabled }: HeroPromptInputProps) {
           )}
         </div>
       )}
+      {/* Full-bleed divider between the text area and the controls row,
+          matching the design (line 483:16834). Negative margins cancel the
+          card's horizontal padding so the rule spans edge to edge. */}
+      <div
+        style={{
+          height: 1,
+          background: "var(--stroke-neutral-subtle)",
+          margin: "20px -36px 0",
+        }}
+      />
       <div
         style={{
           display: "flex",
           justifyContent: "flex-end",
           alignItems: "center",
-          gap: 6,
-          marginTop: 24,
+          gap: 10,
+          marginTop: 16,
         }}
       >
         <HeroModelSelector />
         <IconButton
           aria-label="Add attachment"
           variant="secondary"
-          size="md"
+          size="lg"
           onClick={() => fileInputRef.current?.click()}
         >
           <PlusSmall />
@@ -366,7 +402,7 @@ export function HeroPromptInput({ onSubmit, disabled }: HeroPromptInputProps) {
           aria-label="Send"
           onClick={() => void submit()}
           disabled={sendDisabled}
-          className="shrink-0 w-9 h-9 p-0"
+          className="shrink-0 w-10 h-10 p-0 rounded-full"
         >
           <ArrowUpSmall size={18} />
         </Button>

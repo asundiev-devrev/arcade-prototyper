@@ -8,8 +8,7 @@ import { StudioHeader } from "../components/shell/StudioHeader";
 import { AppSettingsButton } from "../components/shell/SettingsButton";
 import { StudioBrand } from "../components/shell/StudioBrand";
 import { HeroPromptInput, type HeroPromptSubmitArgs } from "../components/home/HeroPromptInput";
-import wedgeTrUrl from "../assets/brand/wedge-tr.svg";
-import wedgeBlUrl from "../assets/brand/wedge-bl.svg";
+import landingBgUrl from "../assets/brand/landing-bg.svg";
 import { HomeShelf } from "../components/home/HomeShelf";
 import { useDialogs } from "../components/feedback/Dialogs";
 import type { Project } from "../../server/types";
@@ -151,11 +150,14 @@ export function HomePage({ onOpen }: { onOpen: (slug: string) => void }) {
         display: "flex",
         flexDirection: "column",
         height: "100vh",
-        ["--studio-wedge-tr" as any]: `url(${wedgeTrUrl})`,
-        ["--studio-wedge-bl" as any]: `url(${wedgeBlUrl})`,
+        ["--studio-landing-bg" as any]: `url(${landingBgUrl})`,
       }}
     >
-      <StudioHeader title={<StudioBrand />} right={<AppSettingsButton />} />
+      <StudioHeader
+        variant="home"
+        title={<StudioBrand />}
+        right={<AppSettingsButton withLabel />}
+      />
       <div style={{ flex: 1, overflowY: "auto" }}>
         <div
           style={{

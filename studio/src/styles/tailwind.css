@@ -191,10 +191,12 @@
   font-variation-settings: "wght" var(--font-weight-regular, 460);
 }
 
-/* Hero input placeholder: same text treatment as typed text, 48% opacity. */
+/* Hero input placeholder: hidden natively — the gradient-text overlay in
+   HeroPromptInput renders the visible placeholder (white → 40% white), which
+   ::placeholder cannot do (no background-clip:text on placeholders). The
+   attribute stays for accessibility; only its paint is suppressed. */
 textarea[data-hero-input]::placeholder {
-  color: var(--fg-neutral-prominent, #211e20);
-  opacity: 0.48;
+  color: transparent;
 }
 
 /* ─── Live cursor skeleton pulse animation ─── */
