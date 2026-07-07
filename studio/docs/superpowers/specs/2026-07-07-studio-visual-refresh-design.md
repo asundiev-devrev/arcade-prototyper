@@ -48,6 +48,24 @@ Rejected alternatives:
   existed only to drive the shell theme, which is now constant.
 - The per-project `ThemeToggle` and `project.mode` handling in
   `ProjectDetail.tsx` are **untouched** — they drive the frames, not the chrome.
+- Intended, left as-is: new projects still seed `mode: "light"` at creation
+  (`HomePage.tsx:29`/`:106`, `ProjectDetail.tsx:128`). That is the **frame**
+  default, so a fresh project opens with a light frame inside dark chrome — the
+  desired split, not a bug.
+- Confirmed by review: frames are separate iframe **documents** served by
+  `frameMountPlugin.ts` (each mounts its own
+  `DevRevThemeProvider mode="${project.mode}"` at line ~279), so shell CSS
+  variables and `color-scheme` physically cannot cross the iframe boundary.
+
+### 1b. `color-scheme` (`studio.css`) — REQUIRED alongside the flip
+
+`studio.css:2` declares `:root { color-scheme: light dark; }`. With the shell
+pinned dark, this still advertises the root as light-capable, so the browser
+paints native scrollbars, form controls, and default backgrounds using the
+**light** system scheme — light scrollbars on a dark shell. Change this to
+`color-scheme: dark;` as part of the theme flip. (Frames are separate documents
+and set their own `color-scheme` via their own provider, so this does not affect
+them.)
 
 ### 2a. Landing background (`studio.css` + assets)
 
@@ -93,8 +111,11 @@ pinstripes. Today `ViewportPreview` fills its scroll area with
 - Add the yellow cursor/accent bar on the left edge of the text area to match
   the design.
 - The controls row already has the model selector (`Opus ▾`), the `+` attach
-  button, and the send button. Restyle the send to the yellow circle from the
-  design. No new control behavior — visual only.
+  button, and the send button. The send button is **already** `variant="expressive"`
+  (the yellow accent) at `HeroPromptInput.tsx:355-364` — so the real work here is
+  the **card wrapper + left cursor bar**, not the send color. Confirm the send
+  reads as the yellow circle inside the new card; adjust radius/size only if
+  needed. No new control behavior — visual only.
 
 ### 5. Tabs + import (`HomeShelf.tsx`)
 
@@ -123,16 +144,23 @@ change expected here beyond 2b.
 
 - Remove the "Appearance" section (the light/dark shell toggle). With the shell
   pinned dark it is a no-op.
+- **Delete the whole handler, including the `arcade-studio:mode-changed`
+  dispatch** at `AppSettingsModal.tsx:270-272` and the `studioMode` state. That
+  dispatch's only consumer is the App-level listener removed in §1; leaving it
+  would fire an event nothing listens to. Grep confirms these two are the only
+  dispatch/listener pair.
 - Verified safe: the section only wrote `studio.mode` (shell theme) and its own
   copy states "each project's preview theme is controlled by the toggle in the
-  project header." It does not seed the generator's frame theme.
+  project header." It does not seed the generator's frame theme. Server-side,
+  only `studio.model` is read (`chat.ts:731`); nothing reads `studio.mode`, and a
+  stale `studio.mode` key left in existing `settings.json` is harmless dead data.
 
 ## Scope (files)
 
 | File | Change |
 |---|---|
 | `src/App.tsx` | Pin shell theme dark; remove shell mode state/hydrate/listener |
-| `src/styles/studio.css` | `.studio-canvas-bg` (charcoal + corner wedges + squares) |
+| `src/styles/studio.css` | `color-scheme: dark`; `.studio-canvas-bg` (charcoal + corner wedges + squares) |
 | `src/assets/wedge-tr.svg`, `wedge-bl.svg` | New — exported Figma wedge artwork |
 | `src/components/shell/StudioHeader.tsx` | Home title slot renders brand |
 | `src/components/shell/StudioBrand.tsx` | New — logo mark + wordmark |
@@ -144,14 +172,26 @@ change expected here beyond 2b.
 
 ## Tests
 
+New guards:
 - **Theme-pin guard** — `App.tsx` renders `DevRevThemeProvider` with a constant
   `mode="dark"` (no state-driven mode on the shell provider).
 - **Settings-toggle-removed guard** — `AppSettingsModal` no longer renders the
   Appearance / dark-mode switch.
 - **Tabs render** — `HomeShelf` shows "Projects" / "Templates" underlined tabs
   and still renders the "Import project…" affordance.
-- Existing `@xorkavi/arcade-gen`-mocked component tests must keep passing (mock
-  must cover any newly-imported DS components).
+
+Existing tests that WILL need edits (the restyle changes their surface — they do
+NOT pass unchanged):
+- `__tests__/components/home/home-shelf.test.tsx` — asserts the current
+  `"My projects"` label and mocks `ToggleGroup`. Renaming tabs to "Projects" and
+  replacing `ToggleGroup` with plain underlined buttons breaks these assertions.
+  Update labels; drop/repoint the `ToggleGroup` mock.
+- `__tests__/components/home-import.test.tsx` — mocks `ToggleGroup`. The
+  `/import project/i` click still works (button kept), but the mock shape must be
+  reconciled with the new tab markup.
+- Any other `@xorkavi/arcade-gen`-mocked test whose mock must cover newly-imported
+  DS components (StudioBrand's icon/logo, restyled card). Run the FULL suite —
+  `pnpm run studio:test` — not just the touched files.
 
 ## Out of scope / deferred
 
