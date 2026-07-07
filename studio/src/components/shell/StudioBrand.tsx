@@ -11,7 +11,6 @@ export function StudioBrand() {
       <img
         src={markUrl}
         alt=""
-        aria-hidden="true"
         style={{ width: 28, height: 28, display: "block" }}
       />
       <span
