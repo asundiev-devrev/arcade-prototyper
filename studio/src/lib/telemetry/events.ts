@@ -33,7 +33,11 @@ export type TelemetryEvent =
   // --- settings (renderer) ---
   | { name: "settings_opened"; props: { tab: string } }
   // --- updates (renderer): first launch after a silent auto-update ---
-  | { name: "whats_new_shown"; props: { version: string } };
+  | { name: "whats_new_shown"; props: { version: string } }
+  // --- updates (renderer): notify-first update prompt ---
+  | { name: "update_offered"; props: { version: string } }
+  | { name: "update_install_clicked"; props: { version: string } }
+  | { name: "update_dismissed"; props: { version: string } };
 
 export type TelemetryEventName = TelemetryEvent["name"];
 
@@ -45,4 +49,5 @@ export const EVENT_NAMES = [
   "figma_export_run",
   "settings_opened",
   "whats_new_shown",
+  "update_offered", "update_install_clicked", "update_dismissed",
 ] as const satisfies readonly TelemetryEventName[];

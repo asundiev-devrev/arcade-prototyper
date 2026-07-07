@@ -5,6 +5,7 @@ import { HomePage } from "./routes/HomePage";
 import { ProjectDetail } from "./routes/ProjectDetail";
 import { StartupAuthGate } from "./components/feedback/StartupAuthGate";
 import { WhatsNewModal } from "./components/feedback/WhatsNewModal";
+import { UpdateBanner } from "./components/feedback/UpdateBanner";
 import { DialogsProvider } from "./components/feedback/Dialogs";
 
 function readSlugFromHash(): string | null {
@@ -89,6 +90,7 @@ export function App() {
           )}
         </StartupAuthGate>
         <WhatsNewModal />
+        <UpdateBanner />
       </DialogsProvider>
       <Toaster />
     </DevRevThemeProvider>
