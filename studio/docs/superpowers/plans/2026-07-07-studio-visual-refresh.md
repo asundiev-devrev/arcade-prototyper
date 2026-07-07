@@ -214,7 +214,13 @@ Expected: FAIL — "Appearance" heading and "Dark mode" label still render.
 
 1. Delete the entire `{/* Appearance */}` `<section>…</section>` block (the one containing the `<h3>Appearance</h3>`, the `<Switch checked={studioMode === "dark"} …>`, and the `arcade-studio:mode-changed` dispatch — around lines 249–283).
 2. Delete the `studioMode` state declaration: `const [studioMode, setStudioMode] = useState<"light" | "dark">("light");`.
-3. Delete the hydrate line that sets it: `setStudioMode(data.studio.mode);` (inside the settings-load effect). Leave the rest of that effect (it also loads `studioModel`) intact.
+3. Delete the WHOLE hydrate `if` (real anchor `AppSettingsModal.tsx:83-85`), not just its body:
+   ```tsx
+   if (data.studio?.mode === "light" || data.studio?.mode === "dark") {
+     setStudioMode(data.studio.mode);
+   }
+   ```
+   Deleting only the inner `setStudioMode(...)` line would leave an empty `if (…) {}` (dead code / `no-empty` lint). Remove the entire `if` block. Leave the rest of that effect (it also loads `studioModel`) intact.
 4. If `Switch` is now unused, remove it from the `@xorkavi/arcade-gen` import.
 5. If the "Generation model" section had a top border that assumed a section above it, make it the first section (remove its `paddingTop`/`borderTop` if it now looks like a stray divider at the top — visual judgment; keep the model section functional).
 
@@ -631,19 +637,22 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 **Files:**
 - Modify: `studio/src/components/projects/ProjectCard.tsx`
-- Test: `studio/__tests__/components/projects-section.test.tsx` (exists — keep green)
+- Test: `studio/__tests__/components/home/projects-section.test.tsx` (exists — keep green)
 
 **Interfaces:**
 - Consumes: nothing new. Restyle only — no prop or behavior change; name, date, and the `⋯` menu stay. No live thumbnails (deferred).
 
 - [ ] **Step 1: Run the existing projects test to establish the baseline**
 
-Run: `pnpm run studio:test __tests__/components/projects-section.test.tsx`
+Run: `pnpm run studio:test __tests__/components/home/projects-section.test.tsx`
 Expected: PASS. It renders cards and checks name/menu behavior; the style-only change below must keep it green.
 
 - [ ] **Step 2: Restyle the card**
 
-In `ProjectCard.tsx`, update the `<article>` inline `style` for the dark treatment (darker fill, subtle stroke, rounded). Replace the `background` and `border` values:
+In `ProjectCard.tsx`, update the `<article>` inline `style`. Note the fill is
+ALREADY `var(--surface-shallow)` (`ProjectCard.tsx:23`) — the real visible change
+is the **border**: today it's `var(--control-stroke-neutral-medium-active)`
+(`:24`), too loud on dark. Replace both values (fill gains only a fallback):
 
 ```tsx
 background: "var(--surface-shallow, #2a2728)",
@@ -654,7 +663,7 @@ Keep `borderRadius: 12`, `minHeight: 180`, `padding: 16`, the flex column, and t
 
 - [ ] **Step 3: Run the test to verify it still passes**
 
-Run: `pnpm run studio:test __tests__/components/projects-section.test.tsx`
+Run: `pnpm run studio:test __tests__/components/home/projects-section.test.tsx`
 Expected: PASS.
 
 - [ ] **Step 4: Commit**
@@ -681,6 +690,9 @@ Expected: all green (~90s). If any `@xorkavi/arcade-gen`-mocked test now fails b
 
 Run: `pnpm run studio` (opens `:5556`). Compare the landing to Figma frame `483:16734`:
 - charcoal background with pinstripe wedges in top-right and bottom-left corners
+  (spec §2a also mentions small 13×13 registration-mark squares at the wedge tips
+  — the exported wedge SVGs likely already contain them; if they're visibly
+  absent vs Figma `483:16734`, add two small CSS squares near the wedge tips)
 - Arcade logo mark + "Arcade Studio" wordmark in the header
 - elevated dark hero card with yellow left accent and yellow circular send
 - underlined "Projects" / "Templates" tabs + "Import project…" affordance, no "New" badge
@@ -705,7 +717,9 @@ No commit needed if everything passed. If test-mock or contrast fixes were made 
 
 ## Self-Review Notes (author)
 
-- **Spec coverage:** theme flip §1 → Task 1; color-scheme §1b → Task 1; landing texture §2a → Tasks 3(assets)+4; editor texture §2b → Task 6; brand header §3 → Task 3; hero card §4 → Task 5; tabs+import §5 → Task 7; cards §6 → Task 8; editor chrome §7 → Task 9 step 4; settings removal §8 → Task 2. All covered.
+- **Spec coverage:** theme flip §1 → Task 1; color-scheme §1b → Task 1; landing texture §2a → Tasks 3(assets)+4; editor texture §2b → Task 6; brand header §3 → Task 3; hero card §4 → Task 5; tabs+import §5 → Task 7; cards §6 → Task 8; editor chrome §7 → Task 9 step 4; settings removal §8 → Task 2. All covered, except the §2a registration-mark
+squares are handled conditionally in Task 9 step 2 (the wedge SVGs may already
+include them).
 - **Deferred (out of scope):** live card thumbnails, starter chips — not in any task, by design.
 - **Type consistency:** `StudioBrand()` used identically in Task 3 test + HomePage; `.studio-canvas-bg` / `.studio-dot-grid` class names consistent between CSS-def task and usage task; `--studio-wedge-tr`/`-bl` vars defined in HomePage and consumed in CSS.
 - **Ordering:** Tasks 1–2 independent. Task 3 stages assets (needed by 4). 4 depends on 3's assets. 5–8 independent of each other. 9 last.
