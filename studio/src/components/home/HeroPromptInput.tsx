@@ -239,7 +239,15 @@ export function HeroPromptInput({ onSubmit, disabled }: HeroPromptInputProps) {
       ref={containerRef}
       onDrop={onDrop}
       onDragOver={(e) => e.preventDefault()}
-      style={{ position: "relative" }}
+      style={{
+        position: "relative",
+        background: "var(--surface-overlay, #2a2728)",
+        border: "1px solid var(--stroke-neutral-subtle)",
+        borderRadius: 24,
+        padding: "28px 28px 20px",
+        boxShadow: "0 12px 40px rgba(0,0,0,0.35)",
+        borderLeft: "3px solid var(--bg-expressive-yellow-prominent, #ffe000)",
+      }}
     >
       <input
         ref={fileInputRef}
