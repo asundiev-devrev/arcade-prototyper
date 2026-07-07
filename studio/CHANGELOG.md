@@ -8,6 +8,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.42.3] — 2026-07-07
+
+### Fixed
+- **Prototypes now look the same in the app as on localhost.** A prototype that rendered correctly in your browser could open in the desktop app with missing padding, wrong colors, and vanished icons. The app's own name ("Arcade Studio", with a space in it) was tripping up how the app located your prototype's styles, so those styles silently didn't get applied. Fixed — the app now scans and applies frame styles exactly like the browser preview does.
+
 ## [0.42.2] — 2026-07-07
 
 ### Changed
