@@ -6,6 +6,7 @@ import fs from "node:fs";
 import electronUpdaterPkg from "electron-updater";
 const { autoUpdater } = electronUpdaterPkg;
 import { decideApply, shouldApplyUpdate } from "./applyDecision.js";
+import { emitUpdateApplied } from "./telemetry.js";
 
 /**
  * Can quitAndInstall actually replace the app bundle on disk? It can't when:
@@ -57,7 +58,11 @@ export function initUpdater(): void {
   if (!app.isPackaged) return;
 
   autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
+  // Notify-first: NEVER auto-restart or auto-apply-on-quit. The update applies
+  // only when the tester clicks "Install & restart" (→ /api/update/install →
+  // the poll loop below → applyWhenIdle). Download stays eager so the click is
+  // instant.
+  autoUpdater.autoInstallOnAppQuit = false;
 
   autoUpdater.on("error", (err) => {
     console.error("[updater] error:", err);
@@ -70,22 +75,18 @@ export function initUpdater(): void {
   autoUpdater.on("update-downloaded", (info) => {
     if (applying) return;
 
-    // Loop guard: NEVER restart into a version we're already running (or older).
-    // If quitAndInstall couldn't swap the bundle last time, the relaunched
-    // process re-receives this same event — applying again would loop forever
-    // (endless restarts + AWS re-sign-in). Refusing a non-newer version means a
-    // failed swap is harmless: we just keep running the current version.
+    // Loop guard: never offer/apply a version that isn't strictly newer than
+    // what we're running (see applyDecision.shouldApplyUpdate).
     const current = app.getVersion();
     if (!shouldApplyUpdate(current, info.version)) {
-      console.warn(`[updater] downloaded ${info.version} is not newer than running ${current} — not applying (loop guard)`);
+      console.warn(`[updater] downloaded ${info.version} not newer than ${current} — ignoring (loop guard)`);
       return;
     }
 
-    // If the app can't be replaced in place (translocated / read-only path),
-    // quitAndInstall would relaunch the same copy and loop. Surface an
-    // actionable notice instead of restarting into the same version forever.
+    // If the app can't be replaced in place (translocated / read-only), applying
+    // would loop. Surface the actionable notice, don't offer an install.
     if (!appIsInstallable()) {
-      console.warn(`[updater] ${info.version} downloaded but app is not installable in place (translocated/read-only) — skipping auto-apply`);
+      console.warn(`[updater] ${info.version} downloaded but app is not installable in place — skipping`);
       if (!translocationNoticeShown && Notification.isSupported()) {
         translocationNoticeShown = true;
         new Notification({
@@ -96,8 +97,11 @@ export function initUpdater(): void {
       return;
     }
 
-    applying = true;
-    void applyWhenIdle(info.version, 0);
+    // Notify-first: publish the pending version to the shell (via the server
+    // blackboard) and wait for the tester to request the install. Do NOT apply.
+    console.log(`[updater] ${info.version} downloaded — offering to the shell`);
+    void postUpdateAvailable(info.version);
+    watchForInstallRequest(info.version);
   });
 
   // Kick off the check. electron-updater handles fetching the
@@ -145,6 +149,56 @@ async function isTurnActive(): Promise<boolean> {
   }
 }
 
+/** Base URL of the local Vite server (same host/port isTurnActive uses). */
+const SERVER = "http://127.0.0.1:5556";
+
+/** Tell the shell (via the server blackboard) that an update is ready. Best
+ *  effort with a short bounded retry so an early-boot POST that races Vite
+ *  still lands within seconds; otherwise the 30-min recheck re-emits
+ *  update-downloaded as a last resort. */
+async function postUpdateAvailable(version: string): Promise<void> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      const res = await fetch(`${SERVER}/api/update/available`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ version }),
+      });
+      if (res.ok) return;
+    } catch {
+      /* server not up yet */
+    }
+    await new Promise((r) => setTimeout(r, 5000)); // wait for Vite, then retry
+  }
+  // Gave up — the 30-min recheck re-emits update-downloaded as a last resort.
+}
+
+/** Poll the server for the tester's "Install & restart" click. Once seen, run
+ *  the turn-aware apply exactly once. */
+let installWatchTimer: ReturnType<typeof setInterval> | null = null;
+function watchForInstallRequest(version: string): void {
+  if (installWatchTimer) return; // already watching
+  installWatchTimer = setInterval(() => {
+    void (async () => {
+      try {
+        const res = await fetch(`${SERVER}/api/update/status`);
+        if (!res.ok) return;
+        const body = (await res.json()) as { installRequested?: boolean };
+        if (body.installRequested && !applying) {
+          applying = true;
+          if (installWatchTimer) { clearInterval(installWatchTimer); installWatchTimer = null; }
+          console.log(`[updater] install requested for ${version} — applying when idle`);
+          emitUpdateApplied(version);
+          void applyWhenIdle(version, 0);
+        }
+      } catch {
+        /* transient — keep polling */
+      }
+    })();
+  }, POLL_MS);
+  installWatchTimer.unref?.();
+}
+
 /** Apply the downloaded update, deferring the restart while a turn is running.
  *  Decision delegated to the pure decideApply(); this function is the Electron
  *  glue (notice + quitAndInstall + polling). */
@@ -158,9 +212,11 @@ async function applyWhenIdle(version: string, deferredMs: number): Promise<void>
   }
 
   if (decision === "force") {
-    // A turn outlasted the cap — stop waiting. autoInstallOnAppQuit (set in
-    // initUpdater) means the update still applies on the next quit.
-    console.log(`[updater] ${version} deferred past cap; will apply on quit`);
+    // A turn outlasted the cap — stop waiting and apply now anyway. The tester
+    // asked to install; a wedged turn shouldn't hold the update hostage forever.
+    // (autoInstallOnAppQuit is false, so we must apply explicitly.)
+    console.log(`[updater] ${version} deferred past cap; applying now`);
+    autoUpdater.quitAndInstall();
     return;
   }
 

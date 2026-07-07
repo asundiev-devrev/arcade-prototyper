@@ -139,3 +139,7 @@ export async function emitAppShutdown(): Promise<void> {
 export function emitBootError(): void {
   emit("boot_error_shown", {});
 }
+
+export function emitUpdateApplied(version: string): void {
+  emit("update_applied", { version });
+}
