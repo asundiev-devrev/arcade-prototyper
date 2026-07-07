@@ -20,8 +20,8 @@ export function ProjectCard({
         minHeight: 180,
         padding: 16,
         borderRadius: 12,
-        background: "var(--surface-shallow)",
-        border: "1px solid var(--control-stroke-neutral-medium-active)",
+        background: "var(--surface-shallow, #2a2728)",
+        border: "1px solid var(--stroke-neutral-subtle)",
         cursor: "pointer",
       }}
     >
