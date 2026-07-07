@@ -168,29 +168,25 @@ Expected: PASS (7 assertions).
 
 - [ ] **Step 5: Wire bounded retry + error page into main.ts**
 
-In `electron/main.ts`, add the import near the top (after the `initUpdater` import):
+⚠️ This rewrites `createWindow` and reorders it. The current function (`electron/main.ts:82-137`) runs `startVite` FIRST (throwing on failure), THEN constructs the window; its `webContents.on(...)` listeners sit BETWEEN the deep-link `finalUrl` block and `loadURL`. We invert that: construct the window first, attach listeners immediately after the constructor, then attempt Vite with bounded retries. Replace the WHOLE function body verbatim so ordering is unambiguous — do not apply this as scattered deltas.
+
+First, add the import near the top (after the `initUpdater` import, ~line 6):
 
 ```ts
 import { shouldRetryBoot, bootErrorHtml, BOOT_MAX_ATTEMPTS } from "./bootError.js";
 ```
 
-Replace the body of `createWindow()` (currently: `const url = await startVite(...).catch(...) ; throw err;`) so the window is created FIRST, then Vite is attempted with bounded retries, loading the error page on final failure. Change the top of `createWindow` from:
+Add a module-level flag next to the existing `mainWindow` / `pendingDeepLink` declarations (`main.ts:63-64`). It gates deep-link delivery so a link arriving during the (now longer, window-exists-but-blank) startup window is stashed, not fired at a blank page:
 
 ```ts
-async function createWindow(): Promise<void> {
-  console.log("[main] startVite begin", { appRoot: appRoot() });
-  const url = await startVite(appRoot()).catch((err) => {
-    console.error("[main] startVite FAILED", err?.message, err?.stack);
-    throw err;
-  });
-  console.log("[main] startVite ready", { url });
-
-  mainWindow = new BrowserWindow({
+let windowReady = false;
 ```
 
-to:
+Then replace the entire `async function createWindow(): Promise<void> { … }` (lines 82-137) with:
 
 ```ts
+/** Start Vite with bounded retries. Returns the URL, or null after BOOT_MAX_ATTEMPTS
+ *  failures (caller then shows the error page instead of hanging — the 0.42.0 fix). */
 async function tryStartVite(): Promise<string | null> {
   let attempt = 0;
   // eslint-disable-next-line no-constant-condition
@@ -202,40 +198,73 @@ async function tryStartVite(): Promise<string | null> {
       console.log("[main] startVite ready", { url, attempt });
       return url;
     } catch (err) {
-      const e = err as Error;
-      console.error("[main] startVite FAILED", { attempt, message: e?.message });
+      console.error("[main] startVite FAILED", { attempt, message: (err as Error)?.message });
       if (!shouldRetryBoot(attempt, BOOT_MAX_ATTEMPTS)) return null;
       await new Promise((r) => setTimeout(r, 1500));
     }
   }
 }
 
+/** Load the inline error page (data: URL, no Vite dependency). */
+async function showBootError(): Promise<void> {
+  if (!mainWindow) return;
+  await mainWindow.loadURL(
+    "data:text/html;charset=utf-8," + encodeURIComponent(bootErrorHtml(LOG_FILE)),
+  );
+}
+
 async function createWindow(): Promise<void> {
   mainWindow = new BrowserWindow({
-```
+    width: 1400,
+    height: 900,
+    minWidth: 1024,
+    minHeight: 700,
+    title: "Arcade Studio",
+    backgroundColor: "#0d0d0d",
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+  });
 
-Then, after the `BrowserWindow` is constructed and its `webContents` listeners are attached but BEFORE the existing `loadURL(finalUrl)`, replace the deep-link/loadURL block:
+  // Attach diagnostic listeners BEFORE any loadURL so early load failures and
+  // renderer console output are captured. If the real (http) page fails to load
+  // even though the port answered — Vite child crashed at/after the port check,
+  // strictPort reclaim race — fall back to the error page ONCE (guarded so the
+  // data: URL load, which does NOT fire did-fail-load, can't recurse).
+  let bootErrorShown = false;
+  mainWindow.webContents.on("did-fail-load", (_e, code, desc, validatedURL) => {
+    console.error("[main] did-fail-load", { code, desc, validatedURL });
+    if (!bootErrorShown && validatedURL?.startsWith("http")) {
+      bootErrorShown = true;
+      void showBootError();
+    }
+  });
+  mainWindow.webContents.on("render-process-gone", (_e, details) => {
+    console.error("[main] render-process-gone", details);
+  });
+  mainWindow.webContents.on("console-message", (_e, level, message, line, source) => {
+    console.log("[renderer]", { level, message, line, source });
+  });
 
-```ts
-  const finalUrl = pendingDeepLink
-    ? `${url}/#share=${encodeURIComponent(pendingDeepLink)}`
-    : url;
-  pendingDeepLink = null;
-```
-... and the later `await mainWindow.loadURL(finalUrl);` ...
+  mainWindow.webContents.setWindowOpenHandler(({ url: targetUrl }) => {
+    shell.openExternal(targetUrl);
+    return { action: "deny" };
+  });
 
-with a Vite-gated version. Concretely, remove the `const finalUrl = …` block and the `await mainWindow.loadURL(finalUrl)` line, and in their place (keeping the `webContents.on(...)` listeners above) do:
+  mainWindow.on("closed", () => {
+    mainWindow = null;
+    windowReady = false;
+  });
 
-```ts
   const url = await tryStartVite();
   if (!url) {
-    console.error("[main] Vite failed to start after retries — showing error page");
-    const logPath = LOG_FILE;
-    await mainWindow.loadURL(
-      "data:text/html;charset=utf-8," + encodeURIComponent(bootErrorHtml(logPath)),
-    );
+    console.error("[main] Vite failed after retries — showing error page");
+    emitBootError();
+    await showBootError();
     return;
   }
+
   const finalUrl = pendingDeepLink
     ? `${url}/#share=${encodeURIComponent(pendingDeepLink)}`
     : url;
@@ -243,19 +272,47 @@ with a Vite-gated version. Concretely, remove the `const finalUrl = …` block a
   console.log("[main] loadURL", { finalUrl });
   await mainWindow.loadURL(finalUrl);
   console.log("[main] loadURL completed");
+  windowReady = true;
+}
 ```
 
-Note: creating the window before Vite means the `webContents` listeners already exist; keep them where they are (before this block). Ensure `LOG_FILE` (already defined at module top) is in scope.
+Also update the `open-url` handler (`main.ts:142-154`) so a deep link only fires into the window once it has actually loaded the app; otherwise stash it. Change its guard from `if (mainWindow) {` to:
 
-- [ ] **Step 6: Compile the electron main to verify no type errors**
+```ts
+  if (mainWindow && windowReady) {
+```
+
+(The `else { pendingDeepLink = url; }` branch is unchanged — `createWindow` consumes `pendingDeepLink` after `tryStartVite` resolves.)
+
+- [ ] **Step 6: Add the `emitBootError` telemetry hook**
+
+`showBootError` above calls `emitBootError()`. Add a thin emitter in `electron/telemetry.ts` mirroring the existing `emitAppShutdown` (see `electron/telemetry.ts:112,125,134`), and import it in `main.ts` alongside `emitAppLaunched`/`emitAppShutdown` (`main.ts:7`):
+
+In `electron/telemetry.ts`, after `emitAppShutdown`:
+
+```ts
+export function emitBootError(): void {
+  emit({ name: "boot_error_shown", props: { version: appVersion() } });
+}
+```
+
+(Use the same `emit` + version-source pattern the neighboring emitters use — match their exact signatures; if `appVersion()` isn't the local helper name, use whatever `emitAppLaunched` uses.) In `main.ts`, extend the import:
+
+```ts
+import { initMainTelemetry, emitAppLaunched, emitAppShutdown, emitBootError } from "./telemetry.js";
+```
+
+If `boot_error_shown` isn't in the telemetry event union type, add it there too (grep `electron/telemetry.ts` for the event-name type).
+
+- [ ] **Step 7: Compile the electron main to verify no type errors**
 
 Run: `pnpm exec tsc -p electron/tsconfig.json`
-Expected: exits 0, no errors referencing `main.ts` or `bootError.ts`.
+Expected: exits 0, no errors referencing `main.ts`, `bootError.ts`, or `telemetry.ts`.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add electron/bootError.ts studio/__tests__/electron/bootError.test.ts electron/main.ts
+git add electron/bootError.ts studio/__tests__/electron/bootError.test.ts electron/main.ts electron/telemetry.ts
 git commit -m "feat(studio/electron): bounded boot retry + visible error page (Piece 1c)"
 ```
 
@@ -275,6 +332,7 @@ git commit -m "feat(studio/electron): bounded boot retry + visible error page (P
 - Produces (middleware): `updateMiddleware()` returning an `(req,res,next)` handler serving:
   - `POST /api/update/available` body `{version:string}` → `setPending` → `204`
   - `POST /api/update/install` → `requestInstall` → `204`
+  - `POST /api/update/clear` → `clearPending` → `204` (lets the shell reset a stuck/abandoned install — Finding 6)
   - `GET  /api/update/status` → `200 {pendingVersion, installRequested}`
 - Consumes: nothing.
 
@@ -368,14 +426,16 @@ Expected: PASS (4 assertions).
 
 - [ ] **Step 5: Write the failing middleware test**
 
-Create `studio/__tests__/server/update-middleware.test.ts`. This mirrors how other middleware tests drive a handler with fake req/res:
+Create `studio/__tests__/server/update-middleware.test.ts`.
+
+⚠️ `updateMiddleware` is **async** and the `/available` branch `await`s `readJson` BEFORE `writeHead`. So `invoke` MUST await the handler and every call site MUST await `invoke` — otherwise the status/state assertion reads before the handler's microtask runs and the test races (only the no-`await` branches would pass by accident). The req mock fires `data`/`end` synchronously, which is fine; the fix is awaiting the handler:
 
 ```ts
 import { describe, it, expect, beforeEach } from "vitest";
 import { updateMiddleware } from "../../server/middleware/update";
 import { __resetForTest, getUpdateState, setPending } from "../../server/updateRegistry";
 
-function invoke(method: string, url: string, body?: unknown) {
+async function invoke(method: string, url: string, body?: unknown) {
   const handler = updateMiddleware();
   const chunks: string[] = [];
   let statusCode = 0;
@@ -393,35 +453,35 @@ function invoke(method: string, url: string, body?: unknown) {
     end(s?: string) { if (s) chunks.push(s); },
   };
   let nextCalled = false;
-  handler(req, res, () => { nextCalled = true; });
+  await handler(req, res, () => { nextCalled = true; });
   return { statusCode, body: chunks.join(""), nextCalled };
 }
 
 describe("updateMiddleware", () => {
   beforeEach(() => __resetForTest());
 
-  it("GET /api/update/status returns the current state", () => {
+  it("GET /api/update/status returns the current state", async () => {
     setPending("0.43.0");
-    const r = invoke("GET", "/api/update/status");
+    const r = await invoke("GET", "/api/update/status");
     expect(r.statusCode).toBe(200);
     expect(JSON.parse(r.body)).toEqual({ pendingVersion: "0.43.0", installRequested: false });
   });
 
   it("POST /api/update/available records the version", async () => {
-    const r = invoke("POST", "/api/update/available", { version: "0.43.0" });
+    const r = await invoke("POST", "/api/update/available", { version: "0.43.0" });
     expect(r.statusCode).toBe(204);
     expect(getUpdateState().pendingVersion).toBe("0.43.0");
   });
 
-  it("POST /api/update/install sets installRequested", () => {
+  it("POST /api/update/install sets installRequested", async () => {
     setPending("0.43.0");
-    const r = invoke("POST", "/api/update/install");
+    const r = await invoke("POST", "/api/update/install");
     expect(r.statusCode).toBe(204);
     expect(getUpdateState().installRequested).toBe(true);
   });
 
-  it("passes through unrelated routes", () => {
-    const r = invoke("GET", "/api/something-else");
+  it("passes through unrelated routes", async () => {
+    const r = await invoke("GET", "/api/something-else");
     expect(r.nextCalled).toBe(true);
   });
 });
@@ -438,7 +498,7 @@ Create `studio/server/middleware/update.ts`:
 
 ```ts
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { setPending, requestInstall, getUpdateState } from "../updateRegistry";
+import { setPending, requestInstall, clearPending, getUpdateState } from "../updateRegistry";
 
 /** Read and JSON-parse a request body; {} on empty/invalid. */
 function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
@@ -480,15 +540,31 @@ export function updateMiddleware() {
       res.writeHead(204); res.end();
       return;
     }
+    if (req.method === "POST" && url === "/api/update/clear") {
+      clearPending();
+      res.writeHead(204); res.end();
+      return;
+    }
     return next?.();
   };
 }
 ```
 
+Add a fifth test to `update-middleware.test.ts` (inside the `describe`) for the clear route:
+
+```ts
+  it("POST /api/update/clear resets pending state", async () => {
+    setPending("0.43.0");
+    const r = await invoke("POST", "/api/update/clear");
+    expect(r.statusCode).toBe(204);
+    expect(getUpdateState()).toEqual({ pendingVersion: null, installRequested: false });
+  });
+```
+
 - [ ] **Step 8: Run to verify it passes**
 
 Run: `pnpm run studio:test __tests__/server/update-middleware.test.ts`
-Expected: PASS (4 assertions).
+Expected: PASS (5 assertions).
 
 - [ ] **Step 9: Register the middleware in vite.config.ts**
 
@@ -525,9 +601,9 @@ git commit -m "feat(studio/server): update-status blackboard endpoints (transpor
 
 **Behavior change:** on `update-downloaded`, DO NOT call `applyWhenIdle`. Instead POST the version to the server (`/api/update/available`) and start a poll loop watching `/api/update/status` for `installRequested`. When install is requested, run the existing turn-aware `applyWhenIdle` → `quitAndInstall`. Set `autoInstallOnAppQuit = false` so nothing installs without the tester's explicit click ("Notify, tester chooses"). Keep `autoDownload = true` (so install is instant), and keep the `shouldApplyUpdate` + `appIsInstallable` guards at the `update-downloaded` gate.
 
-- [ ] **Step 1: Rewrite `initUpdater` + apply path**
+- [ ] **Step 1: Make four surgical, non-contiguous edits to `electron/updater.ts`**
 
-Replace `electron/updater.ts` from the top of `initUpdater` through the end of `applyWhenIdle` with the version below. Keep the file's existing top (imports, `appIsInstallable`, the `export { decideApply, DEFER_CAP_MS }` / `export type ApplyContext` lines, and the `POLL_MS` / `applying` / `translocationNoticeShown` / `isTurnActive` declarations). The specific edits:
+⚠️ Do NOT delete any block wholesale. In particular, `POLL_MS` (line 121), `applying` (127), `translocationNoticeShown` (131), and `isTurnActive` (137-146) sit BETWEEN `initUpdater` and `applyWhenIdle` — they are NOT in the file's "top" — and the new code below references all of them. Leave them and the body of `applyWhenIdle` (151-186) in place. Apply only these four edits:
 
 (a) In `initUpdater`, change the two autoUpdater flags:
 
@@ -646,6 +722,33 @@ to:
   }
 ```
 
+⚠️ **Behavior change to flag (not a bug):** this ENDS any generation still running after `DEFER_CAP_MS` (30 min) once the tester has clicked Install. Previously the `force` branch returned and applied only on the next natural quit, so a long-but-healthy generation was never killed. Now it is. That is intentional — a wedged turn must not hold the update hostage — but `DEFER_CAP_MS` was tuned for the old apply-on-quit semantics. The 0.43.0 CHANGELOG entry (Task 5) must state: "if a generation runs longer than 30 minutes after you click Install & restart, Studio installs anyway and ends that generation."
+
+(c-retry) The `update-downloaded` event can fire before Vite is serving (main starts `createWindow` and `initUpdater` concurrently). A single failed `postUpdateAvailable` then relies on the periodic recheck — which is **30 min** (`RECHECK_MS`, updater.ts:111) — so the offer could be invisible for half an hour (Finding 11). Give `postUpdateAvailable` a short bounded retry so an early-boot POST that races Vite still lands within seconds. Replace its body with:
+
+```ts
+async function postUpdateAvailable(version: string): Promise<void> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      const res = await fetch(`${SERVER}/api/update/available`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ version }),
+      });
+      if (res.ok) return;
+    } catch {
+      /* server not up yet */
+    }
+    await new Promise((r) => setTimeout(r, 5000)); // wait for Vite, then retry
+  }
+  // Gave up — the 30-min recheck re-emits update-downloaded as a last resort.
+}
+```
+
+(f) Telemetry (Finding 8): just before `void applyWhenIdle(version, 0)` in `watchForInstallRequest`, emit an `update_applied` event via the same `emit` helper `electron/telemetry.ts` uses (import it into `updater.ts`). Add `update_applied` to the telemetry event union if it's a closed type. This mirrors how main already emits `emitAppLaunched`/`emitAppShutdown`.
+
+(e) Wire the dead `clearPending` so a failed/abandoned install can be reset (Finding 6). `applyWhenIdle`'s only non-quitting terminal exit is the `force` branch (now quits) and the `wait` reschedule; the real stuck case is `quitAndInstall()` failing to swap+relaunch (translocation slips the guard, ShipIt fails) — the app keeps running the OLD version with `installRequested` latched true, so the shell's "Updating…" modal (Task 4) would hang forever. The shell-side 60s escape in `UpdateBanner` (Task 4 Step 5, `INSTALL_TIMEOUT_MS`) is the user-facing fix; to also reset server state so the prompt can return, the escape POSTs `/api/update/clear`. That endpoint is added in Task 2 — it maps to the already-defined `clearPending`. No `updater.ts` change needed for (e); it's the wiring that makes `clearPending` reachable instead of dead code. Document the residual caveat: after a failed swap, main has latched `applying=true` and cleared its watch timer, so it won't re-offer THIS version until the server/app restarts or a newer version downloads — acceptable degradation given auto-rollback was cut.
+
 - [ ] **Step 2: Type-check the electron main**
 
 Run: `pnpm exec tsc -p electron/tsconfig.json`
@@ -742,22 +845,34 @@ Create `studio/src/components/feedback/UpdateBanner.tsx`:
 import { useEffect, useState } from "react";
 import { Modal, Button } from "@xorkavi/arcade-gen";
 import { shouldPrompt, type UpdateStatus } from "../../lib/updateNotice";
+import { track } from "../../lib/telemetry/renderer";
 
 /**
  * Notify-first update prompt. Electron main downloads an update in the
  * background and publishes it to the server blackboard (/api/update/status).
  * We poll that; when a new version is pending and not yet dismissed, we ask the
  * tester. "Install & restart" POSTs /api/update/install — main sees it, applies
- * when idle, and relaunches. "Later" dismisses just this version.
+ * when idle, and relaunches. "Later" dismisses just this version (persisted, so
+ * a reload doesn't re-nag; a NEWER version still prompts).
  *
  * Mounted once at the app root. No auto-restart ever happens without the click.
  */
 const POLL_MS = 15_000;
+/** If the install doesn't relaunch the app within this window, quitAndInstall
+ *  likely couldn't swap the bundle. Re-enable the UI + reset server state so the
+ *  tester isn't stuck behind a frozen "Updating…" (Finding 6 — no auto-rollback,
+ *  so degrade gracefully). */
+const INSTALL_TIMEOUT_MS = 60_000;
+/** Persist dismissal so a shell reload doesn't re-prompt the same version. */
+const DISMISSED_KEY = "arcade-studio:update-dismissed";
 
 export function UpdateBanner() {
   const [status, setStatus] = useState<UpdateStatus | null>(null);
-  const [dismissed, setDismissed] = useState<string | null>(null);
+  const [dismissed, setDismissed] = useState<string | null>(
+    () => window.localStorage.getItem(DISMISSED_KEY),
+  );
   const [installing, setInstalling] = useState(false);
+  const [installStalled, setInstallStalled] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -779,13 +894,36 @@ export function UpdateBanner() {
   const open = !installing && shouldPrompt(status, dismissed);
   const version = status?.pendingVersion ?? "";
 
+  // Telemetry: fire once when the prompt first becomes visible for a version.
+  useEffect(() => {
+    if (open && version) track({ name: "update_offered", props: { version } });
+  }, [open, version]);
+
+  const dismiss = () => {
+    if (version) {
+      window.localStorage.setItem(DISMISSED_KEY, version);
+      track({ name: "update_dismissed", props: { version } });
+    }
+    setDismissed(version);
+  };
+
   const install = async () => {
+    track({ name: "update_install_clicked", props: { version } });
     setInstalling(true);
     try {
       await fetch("/api/update/install", { method: "POST" });
     } catch {
       /* main also polls; the click is recorded server-side on retry */
     }
+    // If we're still here after the timeout, the swap+relaunch didn't happen.
+    window.setTimeout(() => setInstallStalled(true), INSTALL_TIMEOUT_MS);
+  };
+
+  const cancelStalledInstall = async () => {
+    try { await fetch("/api/update/clear", { method: "POST" }); } catch { /* best effort */ }
+    setInstalling(false);
+    setInstallStalled(false);
+    setDismissed(version); // don't immediately re-prompt this version
   };
 
   if (installing) {
@@ -793,9 +931,18 @@ export function UpdateBanner() {
       <Modal.Root open onOpenChange={() => { /* not dismissable mid-install */ }}>
         <Modal.Content>
           <Modal.Header>
-            <Modal.Title>Updating…</Modal.Title>
-            <Modal.Description>Installing version {version} and restarting.</Modal.Description>
+            <Modal.Title>{installStalled ? "Update didn't start" : "Updating…"}</Modal.Title>
+            <Modal.Description>
+              {installStalled
+                ? `Version ${version} couldn't install just now. You can keep using this version and try again later.`
+                : `Installing version ${version} and restarting.`}
+            </Modal.Description>
           </Modal.Header>
+          {installStalled && (
+            <Modal.Footer>
+              <Button variant="primary" onClick={cancelStalledInstall}>Keep using this version</Button>
+            </Modal.Footer>
+          )}
         </Modal.Content>
       </Modal.Root>
     );
@@ -804,14 +951,14 @@ export function UpdateBanner() {
   if (!open) return null;
 
   return (
-    <Modal.Root open onOpenChange={(v) => { if (!v) setDismissed(version); }}>
+    <Modal.Root open onOpenChange={(v) => { if (!v) dismiss(); }}>
       <Modal.Content>
         <Modal.Header>
           <Modal.Title>Update available — {version}</Modal.Title>
           <Modal.Description>A newer version of Arcade Studio is ready to install.</Modal.Description>
         </Modal.Header>
         <Modal.Footer>
-          <Button variant="tertiary" onClick={() => setDismissed(version)}>Later</Button>
+          <Button variant="tertiary" onClick={dismiss}>Later</Button>
           <Button variant="primary" onClick={install}>Install &amp; restart</Button>
         </Modal.Footer>
       </Modal.Content>
@@ -819,6 +966,8 @@ export function UpdateBanner() {
   );
 }
 ```
+
+⚠️ **Verify two imports against real code before finishing this step** (grep, don't assume): (1) `track` is imported from `../../lib/telemetry/renderer` with signature `track({ name, props })` — confirm the path and that the event names `update_offered` / `update_install_clicked` / `update_dismissed` are added to the telemetry event union (grep the events type in `studio/src/lib/telemetry/`); if the union is closed, add them. (2) `window.setTimeout` returns a number in the DOM lib — fine in the shell (unlike the Node `ReturnType<typeof setInterval>` used in electron code).
 
 - [ ] **Step 6: Mount it in App.tsx**
 
@@ -907,19 +1056,25 @@ git commit -m "docs(studio): 0.43.0 changelog + bad-build runbook; bump version"
 
 **No code.** This is the verification that matters — unit tests can't exercise the Electron glue. Do NOT skip; a screenshot of a working update proves nothing about the failure paths.
 
-- [ ] **Step 1: Notify-first happy path (real packaged app).**
-  Package (`pnpm run studio:pack`), launch the built `.app`. With a newer version published to the mirror, confirm: the app boots normally, then within ~30s an "Update available — vX" prompt appears (NOT an automatic restart). Click **Later** → prompt dismisses, app keeps running. Relaunch → prompt returns. Click **Install & restart** → "Updating…" shows, app relaunches on the new version. Verify via `~/Library/Logs/arcade-studio-electron.log`: `offering to the shell` → `install requested` → `applying`.
+- [ ] **Step 1: Notify-first happy path — must actually RELAUNCH on the new version (Finding 10).**
+  Package (`pnpm run studio:pack`), launch the built `.app`. With a newer version published to the mirror, confirm: the app boots normally, then within ~30s an "Update available — vX" prompt appears (NOT an automatic restart). Click **Later** → prompt dismisses, app keeps running. Reload the shell (Cmd-R) → prompt does NOT return for the same version (localStorage persistence, Finding 9). Relaunch the app fresh → prompt returns. Click **Install & restart** → "Updating…" shows, app quits AND **relaunches running the new version** (check the Settings footer / `/api/version` shows vX, not just that it quit — `before-quit` does `app.exit(0)`, and this gate confirms ShipIt still completes the swap; Finding 10). Verify via log: `offering to the shell` → `install requested` → `update_applied` → `applying`.
 
 - [ ] **Step 2: Turn-aware defer.**
-  Start a generation, then click **Install & restart** mid-turn. Confirm the app does NOT quit until the turn finishes (log: `applyWhenIdle` waits), then applies.
+  Start a generation, then click **Install & restart** mid-turn. Confirm the app does NOT quit until the turn finishes (log: `applyWhenIdle` waits), then applies and relaunches on the new version.
 
 - [ ] **Step 3: Visible boot failure (the 0.42.0 mode).**
-  Package a deliberately broken build (temporarily move `typescript` back to devDependencies, `pnpm run studio:pack`, then restore). Launch the `.app`. Confirm: main retries `startVite` at most 2 times (log: `attempt: 1`, `attempt: 2`), then the **error screen** renders (dark card, "Arcade Studio couldn't start", the log path, a Quit button) instead of a blank hang. Click **Quit** → app exits cleanly. Restore `typescript` to dependencies afterward.
+  Package a deliberately broken build (temporarily move `typescript` back to devDependencies, `pnpm run studio:pack`, then restore). Launch the `.app`. Confirm: main retries `startVite` at most 2 times (log: `attempt: 1`, `attempt: 2`), then the **error screen** renders (dark card, "Arcade Studio couldn't start", the log path, a Quit button) instead of a blank hang, and `boot_error_shown` is emitted. Click **Quit** → app exits cleanly. Restore `typescript` to dependencies afterward.
 
 - [ ] **Step 4: Slow-but-healthy boot does not false-fail.**
   Confirm a normal (sometimes slow, port-reclaiming) boot still reaches the app within the 2-attempt budget and does NOT show the error screen. (The per-attempt `startVite` already has a 30s timeout; the bound is on attempts, not a shorter deadline.)
 
-- [ ] **Step 5: Record the outcome** in the PR description with the log excerpts.
+- [ ] **Step 5: `loadURL`-failure fallback (Finding 7).**
+  Harder to force deterministically; if reproducible, confirm that a Vite process that answers the port check but then dies before the page loads triggers `did-fail-load` → the error page (not a blank window). If not reproducible in the session, note it as covered-by-code-review with the `bootErrorShown` guard.
+
+- [ ] **Step 6: Stalled-install escape (Finding 6).**
+  Simulate a non-relaunching install if feasible (e.g. run from a translocated/read-only path so `quitAndInstall` can't swap). Confirm the "Updating…" modal flips to "Update didn't start" after ~60s with a **Keep using this version** button, that clicking it dismisses and the app stays usable, and that `/api/update/clear` reset the server state (next `GET /api/update/status` shows `installRequested:false`).
+
+- [ ] **Step 7: Record the outcome** in the PR description with the log excerpts, explicitly noting the Step 1 relaunch-verified result and which of Steps 5–6 were reproduced vs code-review-covered.
 
 ---
 
@@ -929,3 +1084,20 @@ git commit -m "docs(studio): 0.43.0 changelog + bad-build runbook; bump version"
 - **Deviation from spec, noted:** the error page is an INLINE HTML string (`bootError.ts`) loaded via a `data:` URL, not a bundled `.html` asset. Rationale: a separate asset under `electron/` is not in the electron-builder `files` glob (`electron/dist/**/*` only) — shipping it would risk the exact "asset missing from the packaged app" bug we just fixed in 0.42.1. Inline is bundling-proof and unit-testable. Same visible behavior; Quit still via `window.close()`, no IPC.
 - **`autoInstallOnAppQuit` decision:** set to `false` (strict "tester chooses" — the user's selected option). Documented in Task 3.
 - **Type consistency:** `UpdateStatus`/`{pendingVersion, installRequested}` shape identical across registry, middleware, lib, and component. `setPending`/`requestInstall`/`getUpdateState`/`clearPending` names consistent.
+
+## Adversarial review (2026-07-07) — 11 findings, all folded in
+
+Reviewed against the real code before any implementation. Resolutions:
+- **F1 (test races the async handler):** `invoke()` + all call sites made `async`/`await` in Task 2's middleware test.
+- **F2 (destructive umbrella edit deletes the declarations it says to keep):** Task 3 Step 1 reworded to four surgical, non-contiguous edits with exact line anchors; nothing deleted wholesale.
+- **F3 (createWindow layout mismatch):** Task 1 Step 5 rewritten as a full verbatim `createWindow` body — window first, listeners right after the constructor, Vite gated after.
+- **F4 (deep link dropped during longer startup):** added `windowReady` flag; `open-url` guard is now `mainWindow && windowReady`.
+- **F5 (force-branch now kills a >30min turn):** kept the required code change; flagged the behavior shift in Task 3d and the 0.43.0 CHANGELOG.
+- **F6 (dead `clearPending` → stuck "Updating…"):** added `POST /api/update/clear` + a 60s `INSTALL_TIMEOUT_MS` escape ("Keep using this version") in `UpdateBanner`; residual caveat documented.
+- **F7 (`loadURL` failure → blank window):** `did-fail-load` now loads the error page once, guarded so the `data:` URL can't recurse.
+- **F8 (no telemetry):** `update_offered`/`update_install_clicked`/`update_dismissed` in the shell; `boot_error_shown` + `update_applied` in main.
+- **F9 ("Later" re-nags on reload):** dismissal persisted to `localStorage` (`arcade-studio:update-dismissed`), mirroring WhatsNewModal.
+- **F10 (must verify relaunch, not just quit):** Task 6 Step 1 now asserts the app relaunches on the new version (both idle + force paths), confirming `app.exit(0)` doesn't abort the ShipIt swap.
+- **F11 (30-min re-offer gap if early POST races Vite):** `postUpdateAvailable` given a 5×5s bounded retry.
+
+Verified-fine by the review (kept as-is): `127.0.0.1:5556` hardcode, `window.close()` quit path, `LOG_FILE` scope, version/changelog format, `Modal.*`/`Button` API, the `applying` guard, `installWatchTimer` needing no explicit cleanup (unref'd), and the pure-logic tests being real behavior tests.
