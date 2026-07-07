@@ -129,9 +129,9 @@ async function createWindow(): Promise<void> {
   // strictPort reclaim race — fall back to the error page ONCE (guarded so the
   // data: URL load, which does NOT fire did-fail-load, can't recurse).
   let bootErrorShown = false;
-  mainWindow.webContents.on("did-fail-load", (_e, code, desc, validatedURL) => {
-    console.error("[main] did-fail-load", { code, desc, validatedURL });
-    if (!bootErrorShown && validatedURL?.startsWith("http")) {
+  mainWindow.webContents.on("did-fail-load", (_e, code, desc, validatedURL, isMainFrame) => {
+    console.error("[main] did-fail-load", { code, desc, validatedURL, isMainFrame });
+    if (isMainFrame && code !== -3 && !bootErrorShown && validatedURL?.startsWith("http")) {
       bootErrorShown = true;
       void showBootError();
     }

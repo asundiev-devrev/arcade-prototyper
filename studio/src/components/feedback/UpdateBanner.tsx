@@ -29,6 +29,7 @@ export function UpdateBanner() {
   );
   const [installing, setInstalling] = useState(false);
   const [installStalled, setInstallStalled] = useState(false);
+  const [turnActive, setTurnActive] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,6 +39,23 @@ export function UpdateBanner() {
         if (!res.ok) return;
         const body = (await res.json()) as UpdateStatus;
         if (!cancelled) setStatus(body);
+      } catch {
+        /* server momentarily unavailable — try next tick */
+      }
+    };
+    void poll();
+    const t = setInterval(poll, POLL_MS);
+    return () => { cancelled = true; clearInterval(t); };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const res = await fetch("/api/turns/active");
+        if (!res.ok) return;
+        const body = (await res.json()) as { active: boolean };
+        if (!cancelled) setTurnActive(body.active);
       } catch {
         /* server momentarily unavailable — try next tick */
       }
@@ -71,9 +89,18 @@ export function UpdateBanner() {
     } catch {
       /* main also polls; the click is recorded server-side on retry */
     }
-    // If we're still here after the timeout, the swap+relaunch didn't happen.
-    window.setTimeout(() => setInstallStalled(true), INSTALL_TIMEOUT_MS);
   };
+
+  // Turn-aware idle timeout: only trigger "didn't start" after 60s of
+  // the app being idle (no active generation). While a turn is running,
+  // main is legitimately deferring the install.
+  useEffect(() => {
+    if (!installing || installStalled) return;
+    if (turnActive) return; // Active turn — don't start/reset the timer
+
+    const t = window.setTimeout(() => setInstallStalled(true), INSTALL_TIMEOUT_MS);
+    return () => window.clearTimeout(t);
+  }, [installing, installStalled, turnActive]);
 
   const cancelStalledInstall = async () => {
     try { await fetch("/api/update/clear", { method: "POST" }); } catch { /* best effort */ }
