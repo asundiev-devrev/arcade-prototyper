@@ -130,15 +130,53 @@ summary { list-style: none; }
   animation: arcade-studio-nav-pulse-missing 600ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
-/* Editor canvas backdrop: dark base + a subtle dotted grid. Frames render
- * on top inside their own iframe documents, so this never touches frame
- * theming. */
+/* Editor canvas backdrop: #211E20 base + the fine dark dot grid from the
+ * Figma design (node 500:4747 — an 8px tile with a small black dot, muted by
+ * the 91% charcoal overlay so the dots read a touch darker than the base).
+ * Frames render on top inside their own iframe documents, so this never
+ * touches frame theming. */
 .studio-dot-grid {
-  background-color: var(--surface-backdrop, #211e20);
-  background-image: radial-gradient(
-    circle,
-    rgba(255, 255, 255, 0.08) 1px,
-    transparent 1px
-  );
-  background-size: 22px 22px;
+  background-color: #353234;
+  background-image: radial-gradient(#000000 1px, transparent 1.4px);
+  background-size: 8px 8px;
+}
+
+/* ─── Editor chat pane (spec: dark theme) ───
+ * Scope the ChatBubble color tokens to the chat pane so the shell bubbles
+ * match the design without touching the DS globally or the generated frames.
+ *  - user (sender → self-*): solid black bubble, white text
+ *  - agent (receiver → user-*): #f4f4f4 @ 8% on the dark pane, white text */
+.studio-chat-pane {
+  --component-bubble-self-bg: #000000;
+  --component-bubble-self-fg: #ffffff;
+  --component-bubble-user-bg: rgba(244, 244, 244, 0.08);
+  --component-bubble-user-fg: #ffffff;
+}
+/* 1.4: the PromptInput uses the shared ChatInput composite, which paints
+ * bg-(--surface-overlay) with a border-t of (--stroke-neutral-subtle). Retint
+ * those tokens within the chat pane so the input bar matches the pane
+ * (#211E20) with a subtle top border, instead of the default lighter surface. */
+.studio-chat-pane {
+  --surface-overlay: #211e20;
+}
+
+/* ─── Editor header (spec: dark theme controls) ───
+ * Scoped to the project header so it doesn't affect other IconButtons. */
+/* 2.2: Chat/Assets toggle active item bg = navigation-bg-active
+ *      (#ECEAEB @ 12%), and its LABEL is white. Radix ToggleGroup marks the
+ *      active item with data-state="on". */
+.studio-project-header [data-state="on"] {
+  background: rgba(236, 234, 235, 0.12);
+  color: #ffffff;
+}
+/* 2.3: expand/collapse (chat + canvas) toggle active bg = black with a WHITE
+ *      icon. These render as IconButton variant="primary" when active;
+ *      override the primary bg + fg tokens within the header scope. */
+.studio-project-header {
+  --component-button-primary-bg-idle: #000000;
+  --component-button-primary-bg-hover: #000000;
+  --component-button-primary-bg-active: #000000;
+  --component-button-primary-fg-idle: #ffffff;
+  --component-button-primary-fg-hover: #ffffff;
+  --component-button-primary-fg-active: #ffffff;
 }

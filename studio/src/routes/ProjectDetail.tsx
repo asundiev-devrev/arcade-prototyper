@@ -344,6 +344,7 @@ function ProjectDetailShell({
     <ChatStreamProvider value={chatStream}>
     <div style={{ display: "grid", gridTemplateRows: "48px 1fr", height: "100vh" }}>
       <StudioHeader
+        variant="project"
         title={
           <div
             style={{
@@ -388,6 +389,7 @@ function ProjectDetailShell({
         }}
       >
         <aside
+          className="studio-chat-pane"
           aria-hidden={!chatOpen}
           style={{
             display: "flex",
@@ -395,7 +397,10 @@ function ProjectDetailShell({
             minHeight: 0,
             minWidth: 0,
             overflow: "hidden",
-            borderRight: chatOpen ? "1px solid var(--stroke-neutral-subtle)" : "none",
+            // Spec 1.1: chat pane bg = bg-neutral-prominent (#211E20), no
+            // outlines. --bg-neutral-prominent inverts to white in the
+            // dark-pinned shell, so use the literal.
+            background: "#211e20",
             position: "relative",
           }}
         >

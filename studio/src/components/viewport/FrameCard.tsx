@@ -214,6 +214,11 @@ export function FrameCard({
             display: "flex",
             alignItems: "center",
             gap: 4,
+            // Spec 3.2: frame controls sit on a black pill by default so
+            // they're legible over the dot-grid canvas.
+            background: "#000000",
+            borderRadius: 999,
+            padding: "2px 4px",
             opacity: picking || isTargetedFrame ? 1 : 0.5,
             transition: "opacity 0.15s ease",
           }}
