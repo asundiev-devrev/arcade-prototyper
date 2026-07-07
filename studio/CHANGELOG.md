@@ -8,6 +8,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.43.0] — 2026-07-07
+
+### Changed
+- **A fresh, branded look for Studio.** The whole app now wears a dark, branded theme. The home screen has a charcoal backdrop with the Arcade pattern, a bigger logo header, and a redesigned prompt box. The editor matches: a dark chat pane with clearer message bubbles, a dark header, and a dotted-grid canvas behind your prototypes. Your prototypes themselves are unaffected — they still follow the light/dark toggle in the project header.
+
 ## [0.42.3] — 2026-07-07
 
 ### Fixed
