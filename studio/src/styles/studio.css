@@ -46,6 +46,47 @@ html, body, #root { height: 100%; margin: 0; }
   .arcade-studio-loading-glyph { animation: none !important; }
 }
 
+/* Landing background: charcoal fill + two diagonal-pinstripe wedges in
+ * opposite corners (top-right, bottom-left) from the Figma branding. The
+ * wedges are absolutely positioned artwork behind content, not a full-bleed
+ * hatch. Content sits above via its own stacking context. */
+.studio-canvas-bg {
+  position: relative;
+  background: var(--bg-neutral-prominent, #211e20);
+}
+.studio-canvas-bg::before,
+.studio-canvas-bg::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+  width: 46%;
+  max-width: 620px;
+  aspect-ratio: 1 / 1.9;
+  background-repeat: no-repeat;
+  background-size: contain;
+  opacity: 0.9;
+}
+/* top-right wedge */
+.studio-canvas-bg::before {
+  top: 0;
+  right: 0;
+  background-image: var(--studio-wedge-tr);
+  background-position: top right;
+}
+/* bottom-left wedge */
+.studio-canvas-bg::after {
+  bottom: 0;
+  left: 0;
+  background-image: var(--studio-wedge-bl);
+  background-position: bottom left;
+}
+/* Content layer sits above the wedges. */
+.studio-canvas-bg > * {
+  position: relative;
+  z-index: 1;
+}
+
 /* Expandable tool-call rows use <details>; hide the default disclosure
  * triangle so our custom ▸ chevron is the only marker. */
 summary::-webkit-details-marker { display: none; }
