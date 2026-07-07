@@ -4,7 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import { startVite, stopVite } from "./viteRunner.js";
 import { initUpdater } from "./updater.js";
-import { initMainTelemetry, emitAppLaunched, emitAppShutdown } from "./telemetry.js";
+import { shouldRetryBoot, bootErrorHtml, BOOT_MAX_ATTEMPTS } from "./bootError.js";
+import { initMainTelemetry, emitAppLaunched, emitAppShutdown, emitBootError } from "./telemetry.js";
 import { bootstrapAwsProfile } from "./shared/awsBootstrap.js";
 
 /**
@@ -62,6 +63,7 @@ bootstrapAwsProfile();
 
 let mainWindow: BrowserWindow | null = null;
 let pendingDeepLink: string | null = null;
+let windowReady = false;
 
 /**
  * Resolves the app's repo root.
@@ -79,14 +81,35 @@ function appRoot(): string {
   return process.cwd();
 }
 
-async function createWindow(): Promise<void> {
-  console.log("[main] startVite begin", { appRoot: appRoot() });
-  const url = await startVite(appRoot()).catch((err) => {
-    console.error("[main] startVite FAILED", err?.message, err?.stack);
-    throw err;
-  });
-  console.log("[main] startVite ready", { url });
+/** Start Vite with bounded retries. Returns the URL, or null after BOOT_MAX_ATTEMPTS
+ *  failures (caller then shows the error page instead of hanging — the 0.42.0 fix). */
+async function tryStartVite(): Promise<string | null> {
+  let attempt = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    attempt += 1;
+    console.log("[main] startVite begin", { appRoot: appRoot(), attempt });
+    try {
+      const url = await startVite(appRoot());
+      console.log("[main] startVite ready", { url, attempt });
+      return url;
+    } catch (err) {
+      console.error("[main] startVite FAILED", { attempt, message: (err as Error)?.message });
+      if (!shouldRetryBoot(attempt, BOOT_MAX_ATTEMPTS)) return null;
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+  }
+}
 
+/** Load the inline error page (data: URL, no Vite dependency). */
+async function showBootError(): Promise<void> {
+  if (!mainWindow) return;
+  await mainWindow.loadURL(
+    "data:text/html;charset=utf-8," + encodeURIComponent(bootErrorHtml(LOG_FILE)),
+  );
+}
+
+async function createWindow(): Promise<void> {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -95,24 +118,23 @@ async function createWindow(): Promise<void> {
     title: "Arcade Studio",
     backgroundColor: "#0d0d0d",
     webPreferences: {
-      // No node integration in the renderer — the React shell is plain
-      // browser code that talks to Vite middleware via fetch. Same model
-      // as the current browser-tab UX.
       nodeIntegration: false,
       contextIsolation: true,
     },
   });
 
-  // Forward deep-link to the React shell as a hash fragment, the same
-  // way the old launcher.sh did it. The shell's useDeepLinkRoute hook
-  // reads the hash on boot.
-  const finalUrl = pendingDeepLink
-    ? `${url}/#share=${encodeURIComponent(pendingDeepLink)}`
-    : url;
-  pendingDeepLink = null;
-
+  // Attach diagnostic listeners BEFORE any loadURL so early load failures and
+  // renderer console output are captured. If the real (http) page fails to load
+  // even though the port answered — Vite child crashed at/after the port check,
+  // strictPort reclaim race — fall back to the error page ONCE (guarded so the
+  // data: URL load, which does NOT fire did-fail-load, can't recurse).
+  let bootErrorShown = false;
   mainWindow.webContents.on("did-fail-load", (_e, code, desc, validatedURL) => {
     console.error("[main] did-fail-load", { code, desc, validatedURL });
+    if (!bootErrorShown && validatedURL?.startsWith("http")) {
+      bootErrorShown = true;
+      void showBootError();
+    }
   });
   mainWindow.webContents.on("render-process-gone", (_e, details) => {
     console.error("[main] render-process-gone", details);
@@ -120,12 +142,7 @@ async function createWindow(): Promise<void> {
   mainWindow.webContents.on("console-message", (_e, level, message, line, source) => {
     console.log("[renderer]", { level, message, line, source });
   });
-  console.log("[main] loadURL", { finalUrl });
-  await mainWindow.loadURL(finalUrl);
-  console.log("[main] loadURL completed");
 
-  // Open external links (e.g., docs, share URLs to Cloudflare) in the
-  // user's default browser instead of the Electron window.
   mainWindow.webContents.setWindowOpenHandler(({ url: targetUrl }) => {
     shell.openExternal(targetUrl);
     return { action: "deny" };
@@ -133,7 +150,25 @@ async function createWindow(): Promise<void> {
 
   mainWindow.on("closed", () => {
     mainWindow = null;
+    windowReady = false;
   });
+
+  const url = await tryStartVite();
+  if (!url) {
+    console.error("[main] Vite failed after retries — showing error page");
+    emitBootError();
+    await showBootError();
+    return;
+  }
+
+  const finalUrl = pendingDeepLink
+    ? `${url}/#share=${encodeURIComponent(pendingDeepLink)}`
+    : url;
+  pendingDeepLink = null;
+  console.log("[main] loadURL", { finalUrl });
+  await mainWindow.loadURL(finalUrl);
+  console.log("[main] loadURL completed");
+  windowReady = true;
 }
 
 // macOS: register as the handler for arcade-studio:// URLs.
@@ -141,7 +176,7 @@ app.setAsDefaultProtocolClient("arcade-studio");
 
 app.on("open-url", (event, url) => {
   event.preventDefault();
-  if (mainWindow) {
+  if (mainWindow && windowReady) {
     // Window already exists — forward the deep link via hash navigation.
     mainWindow.webContents.executeJavaScript(
       `window.location.hash = "share=${encodeURIComponent(url)}";`,
