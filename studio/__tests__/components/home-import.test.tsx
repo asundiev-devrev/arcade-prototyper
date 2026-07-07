@@ -2,12 +2,10 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { HomeShelf } from "../../src/components/home/HomeShelf";
 
-vi.mock("@xorkavi/arcade-gen", () => ({
-  ToggleGroup: {
-    Root: ({ children }: any) => <div>{children}</div>,
-    Item: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
-  },
-}));
+// HomeShelf no longer imports from arcade-gen (uses plain buttons for tabs).
+// This mock returns an empty object since projects=[] means ProjectsSection
+// renders nothing and needs no mocks.
+vi.mock("@xorkavi/arcade-gen", () => ({}));
 
 afterEach(() => vi.restoreAllMocks());
 

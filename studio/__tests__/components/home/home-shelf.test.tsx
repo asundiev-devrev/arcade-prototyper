@@ -2,18 +2,16 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import type { Project } from "../../../server/types";
 
-// Mock arcade-gen: HomeShelf uses ToggleGroup; ProjectsSection (rendered as a
-// child) uses IconButton + Menu + ThreeDotsHorizontal. Mock all of them.
+// Mock arcade-gen: ProjectsSection (rendered as a child) uses IconButton +
+// Menu + ThreeDotsHorizontal. HomeShelf no longer imports from arcade-gen.
 vi.mock("@xorkavi/arcade-gen", async () => {
   const React = await import("react");
-  const ToggleGroup: any = { Root: ({ children }: any) => React.createElement("div", null, children), Item: ({ children, value, onClick }: any) => React.createElement("button", { onClick, "data-value": value }, children) };
   const Menu: any = ({ children }: any) => React.createElement("div", null, children);
   Menu.Root = ({ children }: any) => React.createElement("div", null, children);
   Menu.Trigger = ({ children }: any) => React.createElement("div", null, children);
   Menu.Content = ({ children }: any) => React.createElement("div", null, children);
   Menu.Item = ({ children, onSelect }: any) => React.createElement("button", { onClick: onSelect }, children);
   return {
-    ToggleGroup,
     Menu,
     IconButton: React.forwardRef((p: any, ref: any) => React.createElement("button", { ...p, ref })),
     ThreeDotsHorizontal: () => null,

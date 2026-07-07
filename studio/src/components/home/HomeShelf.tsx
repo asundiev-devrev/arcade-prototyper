@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { ToggleGroup } from "@xorkavi/arcade-gen";
 import type { Project } from "../../../server/types";
 import { ProjectsSection } from "./ProjectsSection";
 import { TemplatesSection } from "./TemplatesSection";
@@ -33,10 +32,35 @@ export function HomeShelf({ projects, onOpen, onRename, onDelete, onStartTemplat
   return (
     <section>
       <div style={{ marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <ToggleGroup.Root type="single" value={tab} onValueChange={(v: string) => { if (v === "projects" || v === "templates") setTab(v); }} style={{ fontSize: 16 }}>
-          <ToggleGroup.Item value="projects" onClick={() => setTab("projects")} style={{ padding: "8px 16px", fontSize: 16, lineHeight: "24px" }}>My projects</ToggleGroup.Item>
-          <ToggleGroup.Item value="templates" onClick={() => setTab("templates")} style={{ padding: "8px 16px", fontSize: 16, lineHeight: "24px" }}>Templates</ToggleGroup.Item>
-        </ToggleGroup.Root>
+        <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
+          {(["projects", "templates"] as const).map((t) => {
+            const label = t === "projects" ? "Projects" : "Templates";
+            const active = tab === t;
+            return (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTab(t)}
+                style={{
+                  appearance: "none",
+                  background: "transparent",
+                  border: "none",
+                  padding: "8px 2px",
+                  fontSize: 18,
+                  lineHeight: "24px",
+                  fontWeight: active ? 700 : 500,
+                  color: active ? "var(--fg-neutral-prominent)" : "var(--fg-neutral-medium)",
+                  borderBottom: active
+                    ? "2px solid var(--fg-neutral-prominent)"
+                    : "2px solid transparent",
+                  cursor: "pointer",
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
         {onImport && (
           <button type="button" onClick={onImport}
             style={{ padding: "6px 12px", fontSize: 13, borderRadius: 6, border: "1px solid var(--stroke-neutral-subtle)", background: "transparent", color: "var(--fg-neutral-prominent)", cursor: "pointer" }}>
