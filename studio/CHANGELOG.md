@@ -8,6 +8,14 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.43.0] — 2026-07-07
+
+### Changed
+- **Updates now ask before restarting.** When a new version is ready, Studio shows an "Update available" prompt and waits — it installs and restarts only when you click "Install & restart". No more surprise restarts mid-work. (It still downloads quietly in the background so the install is instant.) Note: if a generation runs longer than 30 minutes after you click Install & restart, Studio installs anyway and ends that generation.
+
+### Fixed
+- **No more silent freeze on a bad launch.** If Studio's local server can't start, the app now shows a clear "couldn't start" screen with the log location and a Quit button, instead of hanging invisibly and retrying forever.
+
 ## [0.42.1] — 2026-07-07
 
 ### Fixed

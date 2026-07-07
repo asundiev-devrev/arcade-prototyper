@@ -67,6 +67,13 @@ package.json#version     Single source of truth for the build version (read by m
 
 The version flows from `package.json#version` into the bundle's `Info.plist` (via electron-builder's `extendInfo`), the `/api/version` middleware response, and the Settings footer.
 
+### If a shipped build won't boot
+
+1. Confirm from a tester's `~/Library/Logs/arcade-studio-electron.log` (look for repeated `startVite FAILED` / `ERR_MODULE_NOT_FOUND`).
+2. Fix forward — there is no auto-roll-back (see `docs/superpowers/specs/2026-07-07-update-experience-and-hotfix-design.md` for why it's unsound on signed macOS apps).
+3. Cut the release with `release.sh` (the packaging guard `runtime-deps.test.ts` must pass).
+4. **Post the manual `.dmg` link to the tester channel**, not just the auto-update publish — an app that can't boot may never pull the auto-update (a tester force-quits the blank window before the background download finishes).
+
 ## Things that cost debugging time last session — be wary
 
 - **Vite middleware does NOT hot-reload.** Changes to anything under `server/middleware/*` or `vite.config.ts` require a full restart (quit the app or kill `pnpm run studio` and rerun). Under `pnpm run studio:electron` the Vite child still has the same restart-required constraint — quit Electron entirely, don't just close the window. Every "it's not working on my machine" that's actually "you didn't restart" traces to this.
