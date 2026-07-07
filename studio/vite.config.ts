@@ -37,6 +37,7 @@ import { versionMiddleware, logVersionOnBoot } from "./server/middleware/version
 import { telemetryIdentityMiddleware, setIdentitySnapshot } from "./server/middleware/telemetryIdentity";
 import { awsLoginMiddleware } from "./server/middleware/awsLogin";
 import { turnsMiddleware } from "./server/middleware/turns";
+import { updateMiddleware } from "./server/middleware/update";
 import { frameMountPlugin } from "./server/plugins/frameMountPlugin";
 import { projectWatchPlugin } from "./server/plugins/projectWatchPlugin";
 import { injectStudioSourcePlugin } from "./server/plugins/injectStudioSourcePlugin";
@@ -53,6 +54,7 @@ function apiPlugin(): import("vite").Plugin {
     configureServer(server) {
       server.middlewares.use(versionMiddleware());
       server.middlewares.use(turnsMiddleware());
+      server.middlewares.use(updateMiddleware());
       server.middlewares.use(telemetryIdentityMiddleware());
       server.middlewares.use(awsLoginMiddleware());
       server.middlewares.use(devrevMiddleware());

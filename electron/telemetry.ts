@@ -135,3 +135,11 @@ export async function emitAppShutdown(): Promise<void> {
   emit("app_shutdown", { session_duration_ms: Date.now() - sessionStart });
   try { await posthog?.shutdown?.(); } catch {}
 }
+
+export function emitBootError(): void {
+  emit("boot_error_shown", {});
+}
+
+export function emitUpdateApplied(version: string): void {
+  emit("update_applied", { version });
+}
