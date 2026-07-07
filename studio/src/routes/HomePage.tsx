@@ -6,6 +6,7 @@ import { deriveProjectName } from "../lib/deriveProjectName";
 import { setPendingPrompt } from "../lib/pendingPrompt";
 import { StudioHeader } from "../components/shell/StudioHeader";
 import { AppSettingsButton } from "../components/shell/SettingsButton";
+import { StudioBrand } from "../components/shell/StudioBrand";
 import { HeroPromptInput, type HeroPromptSubmitArgs } from "../components/home/HeroPromptInput";
 import { HomeShelf } from "../components/home/HomeShelf";
 import { useDialogs } from "../components/feedback/Dialogs";
@@ -143,7 +144,7 @@ export function HomePage({ onOpen }: { onOpen: (slug: string) => void }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
-      <StudioHeader title="Studio" right={<AppSettingsButton />} />
+      <StudioHeader title={<StudioBrand />} right={<AppSettingsButton />} />
       <div style={{ flex: 1, overflowY: "auto" }}>
         <div
           style={{
