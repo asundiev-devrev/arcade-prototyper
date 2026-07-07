@@ -1,5 +1,6 @@
 import type { Plugin } from "vite";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { projectsRoot, userKitDir } from "../paths";
 
 /**
@@ -10,15 +11,34 @@ import { projectsRoot, userKitDir } from "../paths";
  * the user-kit root so generated frame code and user-saved components are both
  * scanned for utility classes.
  */
-export function injectStudioSourcePlugin(): Plugin {
-  const target = path.resolve(
-    path.dirname(new URL(import.meta.url).pathname),
+/**
+ * Absolute path to `studio/src/styles/tailwind.css`, resolved from this
+ * module's URL. Exported so the packaged-path regression test can exercise it.
+ *
+ * MUST use fileURLToPath, NOT `new URL(moduleUrl).pathname`. The latter keeps
+ * percent-encoding, so in the packaged app (installed at
+ * "/Applications/Arcade Studio.app", a path WITH A SPACE) the result is
+ * ".../Arcade%20Studio.app/.../tailwind.css" while Vite hands `transform` the
+ * DECODED id — the `cleanId !== target` guard then always matches, the frames
+ * @source glob is never appended, and Tailwind stops scanning generated frames
+ * (padding + token colors silently drop). fileURLToPath decodes the space so
+ * both sides agree in dev AND in the .app. See sibling modules (projects.ts,
+ * templates.ts, claudeCode.ts) and the same warning in
+ * hooks/validateArcadeImports.mjs. Auto-memory tailwind-v4-source-scanning.
+ */
+export function resolveTailwindTarget(moduleUrl: string): string {
+  return path.resolve(
+    path.dirname(fileURLToPath(moduleUrl)),
     "..",
     "..",
     "src",
     "styles",
     "tailwind.css",
   );
+}
+
+export function injectStudioSourcePlugin(): Plugin {
+  const target = resolveTailwindTarget(import.meta.url);
   return {
     name: "arcade-studio-inject-source",
     enforce: "pre",
