@@ -138,9 +138,18 @@ let translocationNoticeShown = false;
  *  (server not up, fetch failed) we treat the app as idle — a dead server has
  *  no active turn, so restarting is safe. The Vite server always runs on 5556
  *  (see electron/viteRunner.ts VITE_PORT). */
+/** Base URL of the local Vite server. MUST use `localhost`, not a hardcoded
+ *  `127.0.0.1`: Vite binds to whatever `localhost` resolves to, which on
+ *  current macOS/Node is IPv6 `[::1]` ONLY (see viteRunner.ts, which also uses
+ *  `localhost`). A `127.0.0.1` (IPv4) fetch then gets connection-refused, so
+ *  the notify-first update POST silently failed and the shell never showed the
+ *  "Update available" banner — the app downloaded the update but never offered
+ *  it. Keep this in lockstep with viteRunner's `localhost:PORT`. */
+const SERVER = "http://localhost:5556";
+
 async function isTurnActive(): Promise<boolean> {
   try {
-    const res = await fetch("http://127.0.0.1:5556/api/turns/active");
+    const res = await fetch(`${SERVER}/api/turns/active`);
     if (!res.ok) return false;
     const body = (await res.json()) as { active?: boolean };
     return body.active === true;
@@ -148,9 +157,6 @@ async function isTurnActive(): Promise<boolean> {
     return false;
   }
 }
-
-/** Base URL of the local Vite server (same host/port isTurnActive uses). */
-const SERVER = "http://127.0.0.1:5556";
 
 /** Tell the shell (via the server blackboard) that an update is ready. Best
  *  effort with a short bounded retry so an early-boot POST that races Vite
