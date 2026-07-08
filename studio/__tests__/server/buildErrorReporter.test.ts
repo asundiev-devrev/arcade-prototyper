@@ -84,6 +84,50 @@ describe("parseBuildError", () => {
     expect(parseBuildError({ err: { loc: { file: 42 } } }, root)).toBeNull();
     expect(parseBuildError({ err: { loc: { file: undefined } } }, root)).toBeNull();
   });
+
+  // Regression: Vite 8 (rolldown-vite) uses the oxc transformer. A frame with a
+  // JS/JSX syntax error throws a `[plugin:vite:oxc]` error whose shape is
+  // { errors, plugin: "vite:oxc", id: "<abs file>", pluginCode } — `loc` is
+  // UNDEFINED and the file path lives in `err.id`, not `err.loc.file`.
+  // (Shape captured live from vite@8.0.13, not assumed.) Before the fix,
+  // parseBuildError read only loc.file, returned null → the auto-fix never
+  // fired for parse errors, so a syntax-broken frame stranded the user while
+  // the agent chased unrelated import false-positives.
+  it("extracts the frame from an oxc error that carries the path in err.id", () => {
+    const file = path.join(root, "topics", "frames", "01-topics-computer", "index.tsx");
+    const oxcPayload = {
+      err: {
+        plugin: "vite:oxc",
+        id: file,
+        message:
+          "Transform failed with 1 error:\n[PARSE_ERROR] Unterminated regular expression",
+      },
+    };
+    expect(parseBuildError(oxcPayload, root)).toEqual({
+      slug: "topics",
+      frameName: "01-topics-computer",
+      message:
+        "Transform failed with 1 error:\n[PARSE_ERROR] Unterminated regular expression",
+    });
+  });
+
+  it("strips ANSI color codes from the oxc message", () => {
+    const file = path.join(root, "topics", "frames", "welcome", "index.tsx");
+    const parsed = parseBuildError(
+      { err: { id: file, message: "[31m[PARSE_ERROR][0m boom" } },
+      root,
+    );
+    expect(parsed?.message).toBe("[PARSE_ERROR] boom");
+  });
+
+  it("prefers loc.file when both loc.file and id are present", () => {
+    const locFile = path.join(root, "topics", "frames", "welcome", "index.tsx");
+    const parsed = parseBuildError(
+      { err: { loc: { file: locFile }, id: "/somewhere/else.tsx", message: "x" } },
+      root,
+    );
+    expect(parsed?.frameName).toBe("welcome");
+  });
 });
 
 describe("handleViteError", () => {

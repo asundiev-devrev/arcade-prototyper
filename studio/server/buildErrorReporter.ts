@@ -25,8 +25,22 @@ export function parseBuildError(
   payload: unknown,
   projectsRootAbs: string,
 ): { slug: string; frameName: string; message: string } | null {
-  const err = (payload as { err?: { loc?: { file?: unknown }; message?: unknown } } | null | undefined)?.err;
-  const file = err?.loc?.file;
+  const err = (payload as {
+    err?: { loc?: { file?: unknown }; id?: unknown; message?: unknown };
+  } | null | undefined)?.err;
+
+  // The failing file path lives in different places depending on which
+  // transformer threw:
+  //  - esbuild / classic Rollup plugins: `err.loc.file`
+  //  - oxc (vite:oxc, the Vite 8 / rolldown-vite default): `loc` is UNDEFINED
+  //    and the absolute path is in `err.id`. (Shape captured live from
+  //    vite@8.0.13; a parse error like "Unterminated regular expression"
+  //    only populates `id`.)
+  // Prefer loc.file, fall back to id — otherwise every oxc syntax error in a
+  // generated frame slips past the auto-fix and strands the user.
+  const locFile = err?.loc?.file;
+  const idFile = err?.id;
+  const file = typeof locFile === "string" && locFile ? locFile : idFile;
   if (typeof file !== "string" || !file) return null;
 
   const rel = path.relative(projectsRootAbs, file);
@@ -40,7 +54,12 @@ export function parseBuildError(
   const [slug, framesSeg, frameName] = parts;
   if (!slug || framesSeg !== "frames" || !frameName) return null;
 
-  const message = typeof err?.message === "string" ? err.message : "unknown build error";
+  // oxc messages carry ANSI color escapes (they render a colored code frame in
+  // a TTY). Strip them so the agent prompt + the chat detail row read as plain
+  // text instead of `[31m…[0m` noise.
+  const raw = typeof err?.message === "string" ? err.message : "unknown build error";
+  // eslint-disable-next-line no-control-regex
+  const message = raw.replace(/\u001b?\[[0-9;]*m/g, "");
   return { slug, frameName, message };
 }
 
