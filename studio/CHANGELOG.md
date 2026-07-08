@@ -8,6 +8,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.43.2] — 2026-07-08
+
+### Fixed
+- **Home prompt title no longer wraps.** "What do you want to build today?" could break onto a second line and spill past the input's divider. It now sizes to fit on one line.
+
 ## [0.43.1] — 2026-07-08
 
 ### Added
