@@ -268,11 +268,18 @@ export function HeroPromptInput({ onSubmit, disabled }: HeroPromptInputProps) {
         aria-hidden="true"
         style={{
           position: "absolute",
-          top: 0,
-          left: 0,
+          top: 36,
+          // Match the textarea's content width EXACTLY: pin both edges to the
+          // 36px horizontal padding instead of width:100%. A width:100% here
+          // resolves against the padding box (72px wider than the textarea),
+          // so the mirror under-counted wrap lines — the placeholder measured
+          // as 1 line, the narrower textarea wrapped to 2, and the second line
+          // spilled past the divider. Left+right pinning makes mirror,
+          // textarea, and overlay wrap identically.
+          left: 36,
+          right: 36,
           visibility: "hidden",
           pointerEvents: "none",
-          width: "100%",
           whiteSpace: "pre-wrap",
           wordBreak: "break-word",
           fontFamily: "var(--core-font-display), 'Chip Display Variable', sans-serif",
