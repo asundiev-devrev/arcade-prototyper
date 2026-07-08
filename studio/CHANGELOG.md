@@ -8,6 +8,14 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.43.1] — 2026-07-08
+
+### Added
+- **New app icon.** Refreshed the Arcade Studio app + dock icon to the new branded mark.
+
+### Fixed
+- **Auto-update works again.** Studio could download a new version in the background but never show the "Update available" prompt, so it looked like nothing happened. The app's internal update channel was calling the local server on the wrong network address; it now uses the same address everything else does. (Because this fix ships inside the app, older builds still need a one-time manual install to pick it up.)
+
 ## [0.43.0] — 2026-07-07
 
 ### Changed
