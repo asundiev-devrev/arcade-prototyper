@@ -8,6 +8,12 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.43.3] — 2026-07-09
+
+### Fixed
+- **Broken frames now get auto-repaired for syntax errors too.** When a generated frame had a JavaScript syntax error, the app would show a red error but the assistant kept looking at the wrong thing (imports) and couldn't fix it. Now it gets the real error — the file and line of the syntax problem — and fixes that instead.
+- **Clearer message when your AWS session expires.** If generation kept failing because your AWS login quietly expired mid-session, Studio used to just show a generic timeout. Now it detects the expired session and tells you to run `aws sso login` (or reconnect AWS in Settings), so you're not left guessing.
+
 ## [0.43.2] — 2026-07-08
 
 ### Fixed
