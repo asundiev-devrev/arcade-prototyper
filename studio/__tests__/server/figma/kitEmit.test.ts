@@ -84,7 +84,7 @@ describe("matchKit", () => {
     expect(matchKit(CHECKBOX_SET_KEY, "anything")).toEqual({ kind: "component", kit: "Checkbox" });
   });
   it("falls back to set-name matching for detached copies", () => {
-    expect(matchKit("unknown-key", "Avatar")).toEqual({ kind: "component", kit: "Avatar" });
+    expect(matchKit("unknown-key", "Icon Button")).toEqual({ kind: "component", kit: "IconButton" });
   });
   it("returns null when nothing matches", () => {
     expect(matchKit("unknown", "Cell")).toBeNull();

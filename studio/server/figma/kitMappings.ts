@@ -51,14 +51,18 @@ export const SET_KEY_TO_KIT: Record<string, string> = {
  *    Avatar with src pointing at the exported PNG.
  */
 export const SET_NAME_TO_KIT: Record<string, string> = {
-  Avatar: "Avatar",
+  // NOTE: generic single-word names ("Button", "Avatar") are DELIBERATELY NOT
+  // here. Matching a bare "Button" set name maps ANY generation's Button
+  // (incl. deprecated/DLS) to arcade-gen — a cross-generation mislabel that
+  // ships wrong production code. Arcade Buttons/Avatars resolve by KEY
+  // (SET_KEY_TO_KIT), which is certain. Only keep names that are pseudo-kit
+  // routes or icon-adjacent and unlikely to collide.
   "Account Avatar": "AccountAvatar",
   Images: "ImageAvatar",
   "User avatars": "ImageAvatar",
   "Avatar Group": "AvatarGroup",
   "Ghost Button": "IconButton",
   "Icon Button": "IconButton",
-  Button: "Button",
 };
 
 /**
