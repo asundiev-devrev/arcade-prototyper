@@ -172,7 +172,7 @@ export function formatHandRollNotice(
   topN = 4,
 ): string {
   const { totalInstances, matchedInstances, unmatchedSets, kitImports } = result;
-  const unmatchedCount = totalInstances - matchedInstances;
+  const unmatchedCount = Object.values(unmatchedSets).reduce((a, b) => a + b, 0);
   if (totalInstances === 0) {
     return "No design-system components detected — this frame is custom layout and text.";
   }
@@ -445,7 +445,7 @@ export async function runFigmaKitEmitBranch(
   }
 
   // FIX 3: only append the "Unmatched elements…" sentence when there ARE unmatched instances.
-  const unmatchedCount = result.totalInstances - result.matchedInstances;
+  const unmatchedCount = Object.values(result.unmatchedSets).reduce((a, b) => a + b, 0);
   const staticMarkupLine = unmatchedCount > 0
     ? "Unmatched elements are faithful static markup with locally exported assets. "
     : "";

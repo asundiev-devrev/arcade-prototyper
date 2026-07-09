@@ -621,4 +621,34 @@ describe("formatHandRollNotice", () => {
     expect(line.toLowerCase()).not.toContain("unmatched");
     expect(line.toLowerCase()).not.toContain("static");
   });
+
+  it("reports ALL-MATCHED when unmatchedSets is empty (unmatched icons were already filtered)", () => {
+    // totalInstances=2, matchedInstances=1 → one unmatched, BUT unmatchedSets={} means
+    // the only unmatched was an icon (excluded from unmatchedSets). Should report all-matched.
+    const line = formatHandRollNotice({
+      totalInstances: 2,
+      matchedInstances: 1,
+      unmatchedSets: {},
+      kitImports: ["Button"],
+    });
+    expect(line.toLowerCase()).toContain("all");
+    expect(line).toContain("recognised");
+    expect(line.toLowerCase()).not.toContain("static");
+    expect(line.toLowerCase()).not.toContain("won't transfer");
+  });
+
+  it("counts unmatched from the sum of unmatchedSets values, not total-matched", () => {
+    // totalInstances=5, matchedInstances=2, unmatchedSets={Cell:2} → count must be 2
+    // (the sum of unmatchedSets), NOT 3 (total-matched).
+    const line = formatHandRollNotice({
+      totalInstances: 5,
+      matchedInstances: 2,
+      unmatchedSets: { Cell: 2 },
+      kitImports: ["Button", "Input"],
+    });
+    // Should say "2 elements rendered as static" not "3 elements".
+    expect(line).toContain("2 element");
+    expect(line).not.toContain("3 element");
+    expect(line).toContain("Cell");
+  });
 });
