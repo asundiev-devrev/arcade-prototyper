@@ -570,6 +570,7 @@ describe("formatHandRollNotice", () => {
       totalInstances: 20,
       matchedInstances: 8,
       unmatchedSets: { Card: 5, Reaction: 4, Toolbar: 3 },
+      kitImports: ["Button", "Input", "Checkbox"],
     });
     expect(line).toContain("8"); // recognised
     expect(line).toContain("static"); // transferability framing
@@ -578,13 +579,46 @@ describe("formatHandRollNotice", () => {
   });
 
   it("says everything transferred when nothing is unmatched", () => {
-    const line = formatHandRollNotice({ totalInstances: 5, matchedInstances: 5, unmatchedSets: {} });
+    const line = formatHandRollNotice({ totalInstances: 5, matchedInstances: 5, unmatchedSets: {}, kitImports: ["Button"] });
     expect(line.toLowerCase()).toContain("all");
     expect(line).not.toContain("static");
   });
 
   it("handles a zero-instance frame without dividing by zero", () => {
-    const line = formatHandRollNotice({ totalInstances: 0, matchedInstances: 0, unmatchedSets: {} });
+    const line = formatHandRollNotice({ totalInstances: 0, matchedInstances: 0, unmatchedSets: {}, kitImports: [] });
     expect(typeof line).toBe("string");
+  });
+
+  it("FIX 1: attaches recognised component names to the Recognised clause, not after Swap", () => {
+    const line = formatHandRollNotice({
+      totalInstances: 10,
+      matchedInstances: 3,
+      unmatchedSets: { Cell: 7 },
+      kitImports: ["Banner", "Button", "Bell"],
+    });
+    // The recognised names appear attached to "Recognised N" — check the name comes
+    // BEFORE the second sentence (the "static pixels" clause), not after "Swap".
+    const recognisedIdx = line.indexOf("Recognised 3");
+    const staticIdx = line.indexOf("static pixels");
+    const bannerIdx = line.indexOf("Banner");
+    expect(recognisedIdx).toBeGreaterThan(-1);
+    expect(staticIdx).toBeGreaterThan(-1);
+    expect(bannerIdx).toBeGreaterThan(-1);
+    expect(bannerIdx).toBeGreaterThan(recognisedIdx); // name after "Recognised"
+    expect(bannerIdx).toBeLessThan(staticIdx); // name BEFORE "static pixels"
+    expect(line).toContain("(Banner, Button, Bell)");
+  });
+
+  it("FIX 3: omits the trailing static-markup sentence when everything matched", () => {
+    const line = formatHandRollNotice({
+      totalInstances: 5,
+      matchedInstances: 5,
+      unmatchedSets: {},
+      kitImports: ["Button"],
+    });
+    expect(line.toLowerCase()).toContain("all");
+    // Should NOT say "Unmatched elements are faithful static markup" when nothing is unmatched.
+    expect(line.toLowerCase()).not.toContain("unmatched");
+    expect(line.toLowerCase()).not.toContain("static");
   });
 });

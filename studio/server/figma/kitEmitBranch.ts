@@ -168,10 +168,10 @@ export function formatCoverage(
  * so layout frames/text are excluded — this is about placed components, not layout.
  */
 export function formatHandRollNotice(
-  result: { totalInstances: number; matchedInstances: number; unmatchedSets: Record<string, number> },
+  result: { totalInstances: number; matchedInstances: number; unmatchedSets: Record<string, number>; kitImports: string[] },
   topN = 4,
 ): string {
-  const { totalInstances, matchedInstances, unmatchedSets } = result;
+  const { totalInstances, matchedInstances, unmatchedSets, kitImports } = result;
   const unmatchedCount = totalInstances - matchedInstances;
   if (totalInstances === 0) {
     return "No design-system components detected — this frame is custom layout and text.";
@@ -179,13 +179,16 @@ export function formatHandRollNotice(
   if (unmatchedCount <= 0) {
     return `All ${matchedInstances} design-system components were recognised and will transfer to production code.`;
   }
+  // FIX 1: Attach the recognised names to the "Recognised N" clause, not dangling
+  // after "Swap them".
+  const named = kitImports.length > 0 ? ` (${kitImports.join(", ")})` : "";
   const top = Object.entries(unmatchedSets)
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .slice(0, topN)
     .map(([name, count]) => `${name} ×${count}`);
   const list = top.length ? ` (${top.join(", ")})` : "";
   return (
-    `Recognised ${matchedInstances} design-system component${matchedInstances === 1 ? "" : "s"}. ` +
+    `Recognised ${matchedInstances} design-system component${matchedInstances === 1 ? "" : "s"}${named}. ` +
     `${unmatchedCount} element${unmatchedCount === 1 ? "" : "s"} rendered as static pixels that won't transfer to production${list}. ` +
     `Swap them to Arcade design-system components in Figma to make them real code.`
   );
@@ -441,12 +444,15 @@ export async function runFigmaKitEmitBranch(
     return { ok: true, frameSlug, entryPath: path.join(fdir, entryFileName), componentName };
   }
 
-  const compNames = result.kitImports.join(", ");
-  const named = compNames ? ` (${compNames})` : "";
+  // FIX 3: only append the "Unmatched elements…" sentence when there ARE unmatched instances.
+  const unmatchedCount = result.totalInstances - result.matchedInstances;
+  const staticMarkupLine = unmatchedCount > 0
+    ? "Unmatched elements are faithful static markup with locally exported assets. "
+    : "";
   const trailer =
     `Imported from Figma with exact geometry. ` +
-    `${formatHandRollNotice(result)}${named} ` +
-    "Unmatched elements are faithful static markup with locally exported assets. " +
+    `${formatHandRollNotice(result)} ` +
+    staticMarkupLine +
     "Tell me what to change or which interactions to wire next.";
   narrate(trailer);
 

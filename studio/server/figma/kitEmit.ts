@@ -948,7 +948,19 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
       if (!k) {
         const { setName } = resolveIdentity(n.componentId, ctx.components, ctx.componentSets);
         const name = setName ?? "(unknown)";
-        unmatchedSets[name] = (unmatchedSets[name] ?? 0) + 1;
+        // FIX 2: Exclude icon instances from the unmatched notice — an unmapped
+        // Arcade icon is still a real ADS component, and icons render fine as
+        // faithful SVG. Only non-icon unmatched instances are "static pixels that
+        // won't transfer". An icon set name is one that WOULD match ICON_SET_NAME_TO_KIT
+        // if it were mapped.
+        const isIconSet = name && (
+          ICON_SET_NAME_TO_KIT[name] !== undefined ||
+          /^Icons[/\s]/.test(name) ||
+          /\bIcon\b/.test(name)
+        );
+        if (!isIconSet) {
+          unmatchedSets[name] = (unmatchedSets[name] ?? 0) + 1;
+        }
       }
     }
 
@@ -1114,7 +1126,8 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
           // MUST split the combo into a keys array and pass it as a prop.
           usedKit.add("KeyboardShortcut");
           kitInstanceCount++;
-          const texts = visibleTexts(n).filter((t) => t.trim());
+          // FIX 4: Strip "Slot" placeholder to match Banner/TextArea/SplitButton.
+          const texts = visibleTexts(n).filter((t) => t.trim() && t.trim() !== "Slot");
           const combo = texts[0] ?? "⌘K";
           // Split on common separators (⌘K, "Cmd K", "Ctrl+Shift+P") into labels.
           const keys = combo.split(/[\s+]+/).flatMap((seg) =>

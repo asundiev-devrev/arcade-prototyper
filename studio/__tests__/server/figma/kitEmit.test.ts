@@ -998,6 +998,38 @@ describe("emit — Banner/TextArea (asset tests)", () => {
     expect(r.matchedInstances).toBe(1);
     expect(r.totalInstances).toBe(2);
   });
+
+  it("FIX 2: unmatched ICON instances are excluded from the unmatchedSets notice", () => {
+    // An unmapped icon instance is still a real ADS component (renders as faithful
+    // SVG) and shouldn't appear in the "static pixels that won't transfer" list.
+    // Only non-icon unmatched instances go into unmatchedSets.
+    const iconInst = {
+      id: "icon1", type: "INSTANCE", componentId: "c:icon1",
+      absoluteBoundingBox: bbox(0, 0, 16, 16),
+      children: [{ id: "v", type: "VECTOR", absoluteBoundingBox: bbox(0, 0, 16, 16) }],
+    };
+    const cellInst = {
+      id: "cell1", type: "INSTANCE", componentId: "c:cell1",
+      absoluteBoundingBox: bbox(0, 20, 300, 40),
+      children: [],
+    };
+    const maps = {
+      components: {
+        "c:icon1": { key: "k", name: "x", componentSetId: "s:icon1" },
+        "c:cell1": { key: "k", name: "x", componentSetId: "s:cell1" },
+      },
+      componentSets: {
+        "s:icon1": { key: "no-match", name: "Icons/UnmappedGlyph" },
+        "s:cell1": { key: "no-match", name: "Cell" },
+      },
+    };
+    const r = emitKitFrame(frameNode("0", [iconInst, cellInst]), { ...maps, assetFiles: new Map() });
+    expect(r.totalInstances).toBe(2);
+    expect(r.matchedInstances).toBe(0);
+    // Only Cell appears in the unmatched notice; the icon does not.
+    expect(r.unmatchedSets).toEqual({ Cell: 1 });
+    expect(r.unmatchedSets["Icons/UnmappedGlyph"]).toBeUndefined();
+  });
 });
 
 // --- mapping hygiene (D2) ----------------------------------------------------
