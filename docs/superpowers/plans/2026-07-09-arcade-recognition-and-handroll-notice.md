@@ -35,7 +35,7 @@ The ADS file key is `a2uKnm88LxRXEWAL1kOqeQ`. Run:
 node node_modules/figmanage/dist/index.js components list-file-components a2uKnm88LxRXEWAL1kOqeQ --json > studio/tmp/ads-components.json
 ```
 
-Expected: exit 0, a JSON array of ~5000+ components, each with `key`, `node_id`, and `containing_frame.name` (the set name, e.g. `"Banners [0.3]"`) + `containing_frame.containingComponentSet.nodeId` (the SET node id, e.g. `"4361:9072"`).
+Expected: exit 0, a JSON array of ~5000+ components. Each component's set membership is under **`containing_frame.containingStateGroup`** (Figma's REST field name for the component-set; `.nodeId` is the SET node id, e.g. `"4361:9072"`, `.name` is the set name, e.g. `"Inline Banner"`). The `[0.3]` generation label lives on `containing_frame.pageName` (e.g. `"⁠Banners [DLS · 0.3]"`), not the set name — filter by page to find the `[0.3]` sets. (Verified 2026-07-09: this is the real shape; do NOT expect a `containingComponentSet` field.)
 
 - [ ] **Step 2: For each target `[0.3]` set, resolve its published SET key**
 
@@ -85,6 +85,8 @@ Expected: all six present. Confirm none are in `NON_RENDERABLE_KIT_EXPORTS` (`ki
 - Produces: unchanged signature; behavior change — a non-Arcade set named `"Button"` no longer resolves to a kit component by name.
 
 **Context:** `SET_NAME_TO_KIT["Button"] = "Button"` (`kitMappings.ts:61`) matches ANY set whose name is `"Button"` — including deprecated/DLS/product sets — and emits an arcade-gen `<Button>`. That is the exact cross-generation mislabel the whole design forbids. Key-tier matching (tier 1, the certain path) is unaffected; only this loose generic name entry is the risk. The generic entries `Button`, `Avatar` are removed; specific/safe icon-ish and pseudo entries (`Account Avatar`, `Images`, `User avatars`, `Avatar Group`, `Ghost Button`, `Icon Button`) stay — they are either pseudo-kit routes or icon-adjacent names unlikely to collide with a foreign generic frame.
+
+**Accepted trade-off (state it, don't hide it):** removing the `Avatar` name entry means a genuinely-detached Arcade Avatar copy (no key, named just "Avatar") now falls to the pixel-faithful floor instead of a kit `<Avatar>`. Correct precision call — a bare "Avatar" name can't be proven Arcade-generation — but a small recall loss for detached avatars, identical in kind to the Button case. Detached copies that keep a component link still resolve by key.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -144,15 +146,33 @@ export const SET_NAME_TO_KIT: Record<string, string> = {
 Run: `pnpm run studio:test studio/__tests__/server/figma/kitMappings.test.ts`
 Expected: PASS (all 3).
 
-- [ ] **Step 5: Run the full figma suite to catch fallout**
+- [ ] **Step 5: Fix the pre-existing name-tier test that this breaks**
+
+Removing `SET_NAME_TO_KIT["Avatar"]` breaks a real test — `kitEmit.test.ts:86-88`:
+
+```typescript
+  it("falls back to set-name matching for detached copies", () => {
+    expect(matchKit("unknown-key", "Avatar")).toEqual({ kind: "component", kit: "Avatar" });
+  });
+```
+
+This test exercises the name-tier fallback *mechanism* — do NOT delete it or convert it to a key match (that erases tier coverage). Instead repoint the example to a name we KEPT, so the mechanism is still tested:
+
+```typescript
+  it("falls back to set-name matching for detached copies", () => {
+    expect(matchKit("unknown-key", "Icon Button")).toEqual({ kind: "component", kit: "IconButton" });
+  });
+```
+
+- [ ] **Step 6: Run the full figma suite to catch remaining fallout**
 
 Run: `pnpm run studio:test studio/__tests__/server/figma`
-Expected: PASS. If a pre-existing test relied on name-matching a bare `"Button"`/`"Avatar"`, update it to use the set key (that test was asserting the buggy behavior).
+Expected: PASS. If any OTHER test relied on name-matching a bare `"Button"`/`"Avatar"`, repoint it to a kept name too (grep `matchKit(.*"Button"` / `"Avatar"` in the test dir).
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add studio/server/figma/kitMappings.ts studio/__tests__/server/figma/kitMappings.test.ts
+git add studio/server/figma/kitMappings.ts studio/__tests__/server/figma/kitMappings.test.ts studio/__tests__/server/figma/kitEmit.test.ts
 git commit -m "fix(studio/figma): drop generic name-tier Button/Avatar match (cross-generation mislabel)"
 ```
 
@@ -173,34 +193,51 @@ git commit -m "fix(studio/figma): drop generic name-tier Button/Avatar match (cr
 
 - [ ] **Step 1: Write the failing tests**
 
-Add to `studio/__tests__/server/figma/kitEmit.test.ts`. Use the existing test's fixture helpers (a synthetic node + `components`/`componentSets` maps — see the file's existing `emitKitFrame`/`planAssets` tests around line 40 for the exact factory shape). Skeleton:
+Add to `studio/__tests__/server/figma/kitEmit.test.ts`. There is **no** `emitFixtureInstance` helper — use the file's real idiom: build a `frameNode(...)` with an `INSTANCE` child + `components`/`componentSets` maps, call `emitKitFrame(doc, {components, componentSets, assetFiles: new Map()})`, read `r.source`. Copy the exact shape from the existing `checkboxInstance`/`checkboxMaps`/`emitKitFrame` tests (`kitEmit.test.ts:37-57, 168-179`). Add one small local factory to avoid repetition:
 
 ```typescript
+// A text INSTANCE whose set resolves (via componentSetId) to `setKey`/`setName`,
+// with `label` as a visible TEXT child. Mirrors checkboxInstance/checkboxMaps.
+function kitTextInstance(id: string, setKey: string, setName: string, label: string) {
+  const doc = frameNode("0", [{
+    id, type: "INSTANCE", componentId: `c:${id}`,
+    absoluteBoundingBox: bbox(10, 10, 200, 40),
+    children: [{ id: `${id}-t`, type: "TEXT", characters: label, absoluteBoundingBox: bbox(12, 12, 180, 20) }],
+  }]);
+  const maps = {
+    components: { [`c:${id}`]: { key: "v", name: `${setName} variant`, componentSetId: `s:${id}` } },
+    componentSets: { [`s:${id}`]: { key: setKey, name: setName } },
+    assetFiles: new Map(),
+  };
+  return emitKitFrame(doc, maps);
+}
+
 describe("emit — Banner/TextArea/Link", () => {
-  it("emits a Banner for an Arcade Banner instance", () => {
-    const { source } = emitFixtureInstance({
-      setKey: BANNER_SET_KEY,        // from Task 0, hard-coded in the test
-      setName: "Inline Banner",
-      texts: ["Heads up: SLA at risk"],
-    });
-    expect(source).toContain("<Banner");
-    expect(source).toContain("Heads up: SLA at risk");
+  it("emits a Banner with the text as CHILDREN (inline layout ignores title)", () => {
+    const r = kitTextInstance("b1", BANNER_SET_KEY, "Inline Banner", "Heads up: SLA at risk");
+    expect(r.source).toContain("<Banner");
+    // C2 guard: text must be the child, NOT in a title="" prop (inline drops title)
+    expect(r.source).toContain(">Heads up: SLA at risk</Banner>");
+    expect(r.source).not.toMatch(/title="Heads up/);
+    expect(r.kitImports).toContain("Banner");
   });
 
-  it("emits a TextArea for an Arcade Text Area instance", () => {
-    const { source } = emitFixtureInstance({ setKey: TEXTAREA_SET_KEY, setName: "Text Area", texts: ["Notes"] });
-    expect(source).toContain("<TextArea");
+  it("emits a TextArea with defaultValue", () => {
+    const r = kitTextInstance("t1", TEXTAREA_SET_KEY, "Text Area", "Notes");
+    expect(r.source).toContain("<TextArea");
+    expect(r.source).toContain('defaultValue="Notes"');
+    expect(r.kitImports).toContain("TextArea");
   });
 
-  it("emits a Link for an Arcade Links instance", () => {
-    const { source } = emitFixtureInstance({ setKey: LINK_SET_KEY, setName: "Links", texts: ["View ticket"] });
-    expect(source).toContain("<Link");
-    expect(source).toContain("View ticket");
+  it("emits a Link with href and label", () => {
+    const r = kitTextInstance("l1", LINK_SET_KEY, "Links", "View ticket");
+    expect(r.source).toContain('<Link href="#">View ticket</Link>');
+    expect(r.kitImports).toContain("Link");
   });
 });
 ```
 
-If a shared `emitFixtureInstance` helper doesn't exist, write a small local one mirroring the existing test's node/maps construction; do not restructure the existing tests.
+Replace `BANNER_SET_KEY`/`TEXTAREA_SET_KEY`/`LINK_SET_KEY` with the real keys harvested in Task 0 (declare them as `const` at the top of the describe block).
 
 - [ ] **Step 2: Run to verify fail**
 
@@ -223,14 +260,19 @@ In `kitEmit.ts`, after the `Breadcrumb` case (ends ~line 1081), add:
 
 ```typescript
         case "Banner": {
+          // REAL API (verified against index.d.mts:2092): `children: ReactNode` is
+          // REQUIRED; `title` is ONLY used for layout="section" (default is
+          // "inline", and the ADS set we map is literally "Inline Banner"). So ALL
+          // text goes into children — putting the primary text in `title` renders
+          // an EMPTY inline banner. `intent` ∈ BannerIntent; reuse the Tag intent
+          // map (neutral/alert/success/warning/info/intelligence) if present.
           usedKit.add("Banner");
           kitInstanceCount++;
           const texts = visibleTexts(n).filter((t) => t.trim() && t.trim() !== "Slot");
-          const title = texts[0] ?? "";
-          const body = texts.slice(1).join(" ");
-          const intent = TAG_INTENT_MAP[p.Type ?? p.Intent ?? ""]; // reuse intent axis if present
+          const body = texts.join(" ");
+          const intent = TAG_INTENT_MAP[p.Type ?? p.Intent ?? ""];
           const ia = intent ? ` intent="${intent}"` : "";
-          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><Banner${ia} title=${JSON.stringify(title)}>${escText(body)}</Banner></div>`);
+          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><Banner${ia}>${escText(body)}</Banner></div>`);
           return;
         }
         case "TextArea": {
@@ -254,7 +296,7 @@ In `kitEmit.ts`, after the `Breadcrumb` case (ends ~line 1081), add:
         }
 ```
 
-If `Banner`'s real prop is `children`-only (no `title`), collapse to `<Banner${ia}>${escText([title,body].filter(Boolean).join(" "))}</Banner>` — confirm against the barrel d.mts signature before finalizing.
+Signatures are already verified against `index.d.mts` (BannerProps:2092, KeyboardShortcutProps:2253, and TextArea/Link extend textarea/anchor attrs so `defaultValue`/`placeholder`/`href` are real). Do NOT re-invent props.
 
 - [ ] **Step 5: Run to verify pass**
 
@@ -285,18 +327,27 @@ git commit -m "feat(studio/figma): recognise Arcade Banner/TextArea/Link as kit 
 
 - [ ] **Step 1: Write the failing tests**
 
+Reuse the `kitTextInstance` factory from Task 2. Assert the REAL prop form, not just the tag (this is what catches the C1 white-screen — a bare `<KeyboardShortcut>` would pass a tag-only check but crash at render):
+
 ```typescript
 describe("emit — KeyboardShortcut/SplitButton", () => {
-  it("emits a KeyboardShortcut", () => {
-    const { source } = emitFixtureInstance({ setKey: SHORTCUT_SET_KEY, setName: "Shortcut", texts: ["⌘K"] });
-    expect(source).toContain("<KeyboardShortcut");
+  it("emits KeyboardShortcut with a keys={[]} prop (NEVER children — children crash it)", () => {
+    const r = kitTextInstance("k1", SHORTCUT_SET_KEY, "Shortcut", "⌘K");
+    expect(r.source).toContain("<KeyboardShortcut keys={");
+    // C1 guard: must NOT emit text as children (keys.map on undefined → white-screen)
+    expect(r.source).not.toMatch(/<KeyboardShortcut>[^<]/);
+    expect(r.kitImports).toContain("KeyboardShortcut");
   });
-  it("emits a SplitButton with a primary label", () => {
-    const { source } = emitFixtureInstance({ setKey: SPLITBUTTON_SET_KEY, setName: "Split Button", texts: ["Save"] });
-    expect(source).toContain("<SplitButton");
+  it("emits a SplitButton wrapping a SplitButtonItem label", () => {
+    const r = kitTextInstance("sb1", SPLITBUTTON_SET_KEY, "Split Button", "Save");
+    expect(r.source).toContain("<SplitButton>");
+    expect(r.source).toContain("<SplitButtonItem>Save</SplitButtonItem>");
+    expect(r.kitImports).toContain("SplitButton");
   });
 });
 ```
+
+Declare `SHORTCUT_SET_KEY`/`SPLITBUTTON_SET_KEY` from Task 0.
 
 - [ ] **Step 2: Run to verify fail**
 
@@ -314,11 +365,22 @@ Expected: FAIL.
 
 ```typescript
         case "KeyboardShortcut": {
+          // REAL API (verified against index.d.mts:2253): `keys: string[]` is
+          // REQUIRED and the body calls keys.map(); CHILDREN ARE IGNORED. Passing
+          // text as children (with no `keys`) → keys.map on undefined → runtime
+          // TypeError → WHITE-SCREEN (esbuild frames aren't type-checked). So we
+          // MUST split the combo into a keys array and pass it as a prop.
           usedKit.add("KeyboardShortcut");
           kitInstanceCount++;
           const texts = visibleTexts(n).filter((t) => t.trim());
           const combo = texts[0] ?? "⌘K";
-          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><KeyboardShortcut>${escText(combo)}</KeyboardShortcut></div>`);
+          // Split on common separators (⌘K, "Cmd K", "Ctrl+Shift+P") into labels.
+          const keys = combo.split(/[\s+]+/).flatMap((seg) =>
+            // keep multi-char words whole; split bare glyph runs like "⌘K" into ⌘,K
+            /^[\w-]+$/.test(seg) ? [seg] : Array.from(seg),
+          ).filter(Boolean);
+          const keysArr = keys.length ? keys : [combo];
+          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><KeyboardShortcut keys={${JSON.stringify(keysArr)}} /></div>`);
           return;
         }
         case "SplitButton": {
@@ -333,7 +395,7 @@ Expected: FAIL.
         }
 ```
 
-Confirm `SplitButton`/`SplitButtonItem`'s real child/prop shape against the barrel d.mts before finalizing; adjust the JSX to the actual API (the test only asserts the tag is present, so a signature tweak won't break it).
+Verified: `SplitButtonItem` renders `children` as its label and `SplitButton` provides the context it reads (index.d.mts SplitButtonProps/SplitButtonItemProps) — the JSX above is correct as written. `KeyboardShortcut` uses the `keys={[]}` prop form (see its case) — never children.
 
 - [ ] **Step 5: Run to verify pass**
 
@@ -509,15 +571,15 @@ export function formatHandRollNotice(
 
 - [ ] **Step 4: Weave into the trailer**
 
-Replace the trailer construction at `kitEmitBranch.ts:414-420` with one that appends the notice:
+Replace the trailer construction at `kitEmitBranch.ts:414-420`. **Do NOT keep the old "N elements are real kit components" sentence alongside the notice** — that sentence uses `kitInstanceCount` while the notice uses `matchedInstances`, and per the `EmitResult` docstring (`kitEmit.ts:844-846`) those two counts differ (kitInstanceCount also counts derived sub-instances + icons), so keeping both prints two different "real component" numbers in one paragraph. Let `formatHandRollNotice` own the count; keep the component-name list on the old line:
 
 ```typescript
   const compNames = result.kitImports.join(", ");
+  const named = compNames ? ` (${compNames})` : "";
   const trailer =
-    `Imported from Figma with exact geometry. ${result.kitInstanceCount} elements are real kit components` +
-    (compNames ? ` (${compNames})` : "") +
-    "; unmatched elements are faithful static markup with locally exported assets. " +
-    `${formatHandRollNotice(result)} ` +
+    `Imported from Figma with exact geometry. ` +
+    `${formatHandRollNotice(result)}${named} ` +
+    "Unmatched elements are faithful static markup with locally exported assets. " +
     "Tell me what to change or which interactions to wire next.";
   narrate(trailer);
 ```
