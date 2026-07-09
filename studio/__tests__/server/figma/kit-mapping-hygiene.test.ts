@@ -30,7 +30,7 @@ describe("kit mapping hygiene", () => {
   });
 
   it("no component-mapped kit name is a bare compound namespace object", () => {
-    for (const name of Object.values(SET_KEY_TO_KIT)) {
+    for (const name of new Set([...Object.values(SET_KEY_TO_KIT), ...Object.values(SET_NAME_TO_KIT)])) {
       // Compounds may only appear as dotted sub-components; a bare mapping to one
       // means the emit case must use <Name.Sub/>, never <Name/>. Enforce that any
       // such name is NOT emitted bare.
