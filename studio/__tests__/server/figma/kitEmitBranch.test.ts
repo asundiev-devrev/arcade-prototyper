@@ -9,6 +9,7 @@ import {
   assetCacheVersion,
   assetCacheDir,
   formatCoverage,
+  formatHandRollNotice,
 } from "../../../server/figma/kitEmitBranch";
 
 vi.mock("../../../server/paths", () => ({
@@ -560,5 +561,30 @@ describe("runFigmaKitEmitBranch — A2 asset cache", () => {
     // And the corrupt entry got overwritten with the real bytes.
     const fixed = await fs.readFile(path.join(verDir, "v1.svg"), "utf-8");
     expect(fixed).toBe("<svg>fresh</svg>");
+  });
+});
+
+describe("formatHandRollNotice", () => {
+  it("names recognised count and the static (non-transferable) unmatched sets", () => {
+    const line = formatHandRollNotice({
+      totalInstances: 20,
+      matchedInstances: 8,
+      unmatchedSets: { Card: 5, Reaction: 4, Toolbar: 3 },
+    });
+    expect(line).toContain("8"); // recognised
+    expect(line).toContain("static"); // transferability framing
+    expect(line).toContain("Card");
+    expect(line).toContain("Reaction");
+  });
+
+  it("says everything transferred when nothing is unmatched", () => {
+    const line = formatHandRollNotice({ totalInstances: 5, matchedInstances: 5, unmatchedSets: {} });
+    expect(line.toLowerCase()).toContain("all");
+    expect(line).not.toContain("static");
+  });
+
+  it("handles a zero-instance frame without dividing by zero", () => {
+    const line = formatHandRollNotice({ totalInstances: 0, matchedInstances: 0, unmatchedSets: {} });
+    expect(typeof line).toBe("string");
   });
 });

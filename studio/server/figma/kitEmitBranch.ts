@@ -161,6 +161,36 @@ export function formatCoverage(
   return `${matchedInstances}/${totalInstances} instances are real kit components (${pct}%)${backlog}`;
 }
 
+/**
+ * User-facing transferability notice. Recognised (real design-system) components
+ * translate to production code; unmatched INSTANCES are rendered as faithful but
+ * STATIC pixels that won't. Only INSTANCE nodes reach unmatchedSets (kitEmit.ts),
+ * so layout frames/text are excluded — this is about placed components, not layout.
+ */
+export function formatHandRollNotice(
+  result: { totalInstances: number; matchedInstances: number; unmatchedSets: Record<string, number> },
+  topN = 4,
+): string {
+  const { totalInstances, matchedInstances, unmatchedSets } = result;
+  const unmatchedCount = totalInstances - matchedInstances;
+  if (totalInstances === 0) {
+    return "No design-system components detected — this frame is custom layout and text.";
+  }
+  if (unmatchedCount <= 0) {
+    return `All ${matchedInstances} design-system components were recognised and will transfer to production code.`;
+  }
+  const top = Object.entries(unmatchedSets)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, topN)
+    .map(([name, count]) => `${name} ×${count}`);
+  const list = top.length ? ` (${top.join(", ")})` : "";
+  return (
+    `Recognised ${matchedInstances} design-system component${matchedInstances === 1 ? "" : "s"}. ` +
+    `${unmatchedCount} element${unmatchedCount === 1 ? "" : "s"} rendered as static pixels that won't transfer to production${list}. ` +
+    `Swap them to Arcade design-system components in Figma to make them real code.`
+  );
+}
+
 /** Pull the document for a node out of figmanage's get-nodes response. */
 export function pickNodeEntry(dict: any, nodeId: string): {
   document: any;
@@ -412,10 +442,11 @@ export async function runFigmaKitEmitBranch(
   }
 
   const compNames = result.kitImports.join(", ");
+  const named = compNames ? ` (${compNames})` : "";
   const trailer =
-    `Imported from Figma with exact geometry. ${result.kitInstanceCount} elements are real kit components` +
-    (compNames ? ` (${compNames})` : "") +
-    "; unmatched elements are faithful static markup with locally exported assets. " +
+    `Imported from Figma with exact geometry. ` +
+    `${formatHandRollNotice(result)}${named} ` +
+    "Unmatched elements are faithful static markup with locally exported assets. " +
     "Tell me what to change or which interactions to wire next.";
   narrate(trailer);
 
