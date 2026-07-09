@@ -244,8 +244,8 @@ describe("emit — KeyboardShortcut/SplitButton", () => {
   it("emits KeyboardShortcut with a keys={[]} prop (NEVER children — children crash it)", () => {
     const r = kitTextInstance("k1", SHORTCUT_SET_KEY, "Shortcut", "⌘K");
     expect(r.source).toContain("<KeyboardShortcut keys={");
-    // C1 guard: must NOT emit text as children (keys.map on undefined → white-screen)
-    expect(r.source).not.toMatch(/<KeyboardShortcut>[^<]/);
+    // C1 guard: bare opening tag must never appear (only self-closing or with keys prop)
+    expect(r.source).not.toContain("<KeyboardShortcut>");
     expect(r.kitImports).toContain("KeyboardShortcut");
   });
   it("emits a SplitButton wrapping a SplitButtonItem label", () => {
@@ -253,6 +253,7 @@ describe("emit — KeyboardShortcut/SplitButton", () => {
     expect(r.source).toContain("<SplitButton>");
     expect(r.source).toContain("<SplitButtonItem>Save</SplitButtonItem>");
     expect(r.kitImports).toContain("SplitButton");
+    expect(r.kitImports).toContain("SplitButtonItem");
   });
 });
 
