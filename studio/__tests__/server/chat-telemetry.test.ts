@@ -5,8 +5,38 @@ describe("classifyGenerationError", () => {
   it("bedrock auth from message", () => {
     expect(classifyGenerationError({ error: "Bedrock credentials expired", timedOut: false, exitCode: 0 })).toBe("bedrock_auth");
   });
-  it("timeout", () => {
+  it("timeout when it stalled AFTER streaming started (sawOutput true / default)", () => {
     expect(classifyGenerationError({ error: "timed out after 120s", timedOut: true, exitCode: null })).toBe("timeout");
+    expect(classifyGenerationError({ error: "stall", timedOut: true, exitCode: null, sawOutput: true })).toBe("timeout");
+  });
+  it("stalled_no_output when a stall produced ZERO tokens (Bedrock never answered)", () => {
+    expect(classifyGenerationError({ error: "stall", timedOut: true, exitCode: null, sawOutput: false })).toBe("stalled_no_output");
+  });
+  it("an auth/credential message wins over the timedOut flag (was buried under 'timeout')", () => {
+    // The self-heal rewrites a zero-output stall to an SSO message; even with
+    // timedOut still set, the message must classify as bedrock_auth so PostHog
+    // shows the real cause instead of a generic timeout.
+    expect(classifyGenerationError({
+      error: "Your AWS session appears to have expired mid-session — run `aws sso login`…",
+      timedOut: true, exitCode: null, sawOutput: false,
+    })).toBe("bedrock_auth");
+  });
+  it("auth message wins even when output DID stream (sawOutput true)", () => {
+    expect(classifyGenerationError({
+      error: "Bedrock credentials expired", timedOut: true, exitCode: null, sawOutput: true,
+    })).toBe("bedrock_auth");
+  });
+  it("a timeout message mentioning token COUNTS is not misread as auth", () => {
+    // Guard for the tightened regex: a bare "tokens" (output-count context)
+    // must NOT match the auth branch.
+    expect(classifyGenerationError({
+      error: "timed out after streaming 4000 tokens", timedOut: true, exitCode: null, sawOutput: true,
+    })).toBe("timeout");
+  });
+  it("an expired BEARER TOKEN message still classifies as auth", () => {
+    expect(classifyGenerationError({
+      error: "bearer token expired", timedOut: true, exitCode: null, sawOutput: false,
+    })).toBe("bedrock_auth");
   });
   it("cli crash on nonzero exit", () => {
     expect(classifyGenerationError({ error: "boom", timedOut: false, exitCode: 1 })).toBe("cli_crash");
