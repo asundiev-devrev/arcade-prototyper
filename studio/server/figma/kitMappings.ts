@@ -35,6 +35,8 @@ export const SET_KEY_TO_KIT: Record<string, string> = {
   c4ff2f34e04a5c0f5b0c94733b157e512a871ec7: "Input", // 0.3 "Input/Text field"
   "93bc12b8c36c35f775f3a71d4821f4541e32dc79": "Select", // 0.3 "Select" (trigger-only)
   "0ecf3d67728cfd4196e964bbfb3795f540a0c70b": "Breadcrumb", // 0.3 "Breadcrumbs" (plain HTML)
+  edf96535be2abc8d0b836f54d450d60683a896ab: "Banner", // 0.3 "Inline Banner"
+  d43e5c28c7a26c01ebdbb7123751565a8955b52e: "TextArea", // 0.3 "Input/Text Area"
   // DELIBERATELY OMITTED (kept as faithful static markup — a wrong component is
   // worse than the current default): Menu (0375c0ba…), Modal Content
   // (8122e871…), Popover (6a9dc99a…) are Radix-portal compounds whose VALUE is

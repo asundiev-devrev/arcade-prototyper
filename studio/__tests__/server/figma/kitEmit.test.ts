@@ -197,6 +197,44 @@ describe("emitKitFrame", () => {
     expect(r.source).toContain("<Bell size={16} />");
     expect(r.source).toContain('"#ff0000"');
   });
+});
+
+// --- Banner / TextArea coverage -----------------------------------------------
+
+/** Helper for text-containing kit components. */
+function kitTextInstance(id: string, setKey: string, setName: string, label: string) {
+  const doc = frameNode("0", [{
+    id, type: "INSTANCE", componentId: `c:${id}`,
+    absoluteBoundingBox: bbox(10, 10, 200, 40),
+    children: [{ id: `${id}-t`, type: "TEXT", characters: label, absoluteBoundingBox: bbox(12, 12, 180, 20) }],
+  }]);
+  const maps = {
+    components: { [`c:${id}`]: { key: "v", name: `${setName} variant`, componentSetId: `s:${id}` } },
+    componentSets: { [`s:${id}`]: { key: setKey, name: setName } },
+    assetFiles: new Map(),
+  };
+  return emitKitFrame(doc, maps);
+}
+
+describe("emit — Banner/TextArea", () => {
+  const BANNER_SET_KEY = "edf96535be2abc8d0b836f54d450d60683a896ab";
+  const TEXTAREA_SET_KEY = "d43e5c28c7a26c01ebdbb7123751565a8955b52e";
+
+  it("emits a Banner with the text as CHILDREN (inline layout ignores title)", () => {
+    const r = kitTextInstance("b1", BANNER_SET_KEY, "Inline Banner", "Heads up: SLA at risk");
+    expect(r.source).toContain("<Banner");
+    // C2 guard: text must be the child, NOT in a title="" prop (inline drops title)
+    expect(r.source).toContain(">Heads up: SLA at risk</Banner>");
+    expect(r.source).not.toMatch(/title="Heads up/);
+    expect(r.kitImports).toContain("Banner");
+  });
+
+  it("emits a TextArea with defaultValue", () => {
+    const r = kitTextInstance("t1", TEXTAREA_SET_KEY, "Text Area", "Notes");
+    expect(r.source).toContain("<TextArea");
+    expect(r.source).toContain('defaultValue="Notes"');
+    expect(r.kitImports).toContain("TextArea");
+  });
 
   it("references exported assets via local imports", () => {
     const doc = frameNode("0", [

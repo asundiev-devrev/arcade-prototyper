@@ -1079,6 +1079,33 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
           lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><Breadcrumb.Root>${parts.join("")}</Breadcrumb.Root></div>`);
           return;
         }
+        case "Banner": {
+          // REAL API (verified against index.d.mts:2092): `children: ReactNode` is
+          // REQUIRED; `title` is ONLY used for layout="section" (default is
+          // "inline", and the ADS set we map is literally "Inline Banner"). So ALL
+          // text goes into children — putting the primary text in `title` renders
+          // an EMPTY inline banner. `intent` ∈ BannerIntent; reuse the Tag intent
+          // map (neutral/alert/success/warning/info/intelligence) if present.
+          usedKit.add("Banner");
+          kitInstanceCount++;
+          const texts = visibleTexts(n).filter((t) => t.trim() && t.trim() !== "Slot");
+          const body = texts.join(" ");
+          const intent = TAG_INTENT_MAP[p.Type ?? p.Intent ?? ""];
+          const ia = intent ? ` intent="${intent}"` : "";
+          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><Banner${ia}>${escText(body)}</Banner></div>`);
+          return;
+        }
+        case "TextArea": {
+          usedKit.add("TextArea");
+          kitInstanceCount++;
+          const texts = visibleTexts(n).filter((t) => t.trim() && t.trim() !== "Slot");
+          const value = texts[0];
+          const attrs = value
+            ? `defaultValue=${JSON.stringify(value)}`
+            : `placeholder=${JSON.stringify("")}`;
+          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><TextArea ${attrs} /></div>`);
+          return;
+        }
         case "Badge": {
           usedKit.add("Badge");
           kitInstanceCount++;
