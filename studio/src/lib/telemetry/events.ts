@@ -7,7 +7,15 @@
  * project names, or secrets. See redact.ts.
  */
 
-export type GenerationErrorKind = "bedrock_auth" | "cli_crash" | "parser_error" | "timeout" | "throttled" | "other";
+// `stalled_no_output`: the CLI spawned but never emitted a first token before
+// the stall watchdog killed it — distinct from `timeout` (which now means a
+// stall/timeout AFTER streaming started). A zero-output stall is almost always
+// a Bedrock connectivity/credential hang, not slow generation; splitting them
+// makes "auth expired" diagnosable at a glance instead of hiding under
+// `timeout`. When a re-probe confirms creds are gone we upgrade it to
+// `bedrock_auth`; `stalled_no_output` is the residual (creds look fine but the
+// model still never answered — network/Bedrock-side hang).
+export type GenerationErrorKind = "bedrock_auth" | "cli_crash" | "parser_error" | "timeout" | "stalled_no_output" | "throttled" | "other";
 export type FrameErrorKind = "module_not_found" | "syntax_error" | "runtime_exception" | "hmr_failure";
 export type ShareErrorKind = "auth" | "worker_5xx" | "bundle_error" | "network" | "other";
 

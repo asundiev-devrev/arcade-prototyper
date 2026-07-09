@@ -3,7 +3,7 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { runClaudeTurnWithRetry } from "../claudeCode";
 import { resolveClaudeBin } from "../claudeBin";
-import { hasBedrockAuth } from "../awsPreflight";
+import { hasBedrockAuth, resetPreflightCache } from "../awsPreflight";
 import { getProject, updateProject, appendHistory, readHistory } from "../projects";
 import { readGlobalSettings } from "./settings";
 import { chatHistoryPath, lastErrorLogPath, lastStdoutLogPath, projectDir } from "../paths";
@@ -422,14 +422,37 @@ function handleCancel(res: ServerResponse, slug: string): void {
 }
 
 /** Map a finished/crashed turn to a telemetry error_kind. Pure + exported for test. */
-export function classifyGenerationError(info: { error?: string; timedOut: boolean; exitCode: number | null }): GenerationErrorKind {
-  if (info.timedOut) return "timeout";
+export function classifyGenerationError(info: {
+  error?: string;
+  timedOut: boolean;
+  exitCode: number | null;
+  /** Did the turn emit ANY streamed output (a first token) before it died?
+   *  A stall/timeout with NO output is a different failure than one that
+   *  stalled mid-stream: zero-output almost always means the model never
+   *  answered (Bedrock connectivity/credential hang), not slow generation.
+   *  Defaults to true so existing callers keep the old `timeout` behavior. */
+  sawOutput?: boolean;
+}): GenerationErrorKind {
+  // Inspect the message first: an explicit auth/throttle error is more
+  // specific than the coarse timeout/stall signal even when timedOut is set
+  // (the old code returned "timeout" before ever reading the message, which
+  // is exactly what buried expired-credential hangs under "timeout").
   const msg = (info.error ?? "").toLowerCase();
   // Throttle BEFORE bedrock_auth: the throttle message mentions "Bedrock" too,
   // and a rate limit is a distinct, transient cause (wait + retry) — not an
   // auth/credential failure.
   if (/rate-limit|rate limit|too many requests|throttl/.test(msg)) return "throttled";
-  if (/bedrock|credential|expired|auth|sso|token/.test(msg)) return "bedrock_auth";
+  // "token" only in an auth context (bearer/auth/access token) — a bare
+  // "token" is too broad (e.g. a timeout message that counts output tokens
+  // would wrongly read as an auth failure).
+  if (/bedrock|credential|expired|auth|sso|(bearer|auth|access|session|security)[\s-]*token/.test(msg))
+    return "bedrock_auth";
+  if (info.timedOut) {
+    // Split the stall: never streamed a token → likely a Bedrock/network hang
+    // (surfaced separately so it doesn't hide under generic "timeout"); died
+    // mid-stream → genuinely slow generation.
+    return info.sawOutput === false ? "stalled_no_output" : "timeout";
+  }
   if (typeof info.exitCode === "number" && info.exitCode !== 0) return "cli_crash";
   if (/parse|json|unexpected token/.test(msg)) return "parser_error";
   return "other";
@@ -798,7 +821,53 @@ async function runClaudeBranch(ctx: {
     } catch {}
   }
 
-  const endResult = pendingEnd ?? { ok: false, error: "Claude turn exited without reporting a result." };
+  let endResult = pendingEnd ?? { ok: false, error: "Claude turn exited without reporting a result." };
+
+  // Did the turn stream ANY output from the MODEL before it died? Only
+  // CLI-emitted signals count: turn_metrics ttft (first token) and tool_call
+  // labels. Do NOT use narrationTexts — it also collects SERVER-side
+  // narrations (the Figma/seeder progress lines and, critically, the soft-stall
+  // "the model has gone quiet…" watchdog message at ~60s). On the exact
+  // zero-output Bedrock hang this guards against, that soft-stall narration
+  // would make narrationTexts non-empty and wrongly mark the turn as having
+  // streamed — defeating the self-heal for the case it exists for.
+  const sawOutput = lastMetrics?.ttftMs != null || toolLabels.length > 0;
+
+  // Self-heal: when a turn STALLED with no output, the usual cause is expired
+  // AWS SSO credentials — they were valid at launch, lapsed mid-session, and
+  // now every Bedrock call hangs silently. Re-probe (bypassing the 30s cache,
+  // which the 251s stall already outlived). If auth is gone, rewrite the error
+  // to the actionable SSO message so the shell shows the AuthExpiredNotice (its
+  // classifier matches /sso|credential|expired|unauthorized/) instead of a
+  // silent generic timeout — and telemetry upgrades to bedrock_auth below.
+  // (This is the Claude/Bedrock branch — always an LLM turn, so no
+  // Computer-turn guard is needed here.)
+  if (!endResult.ok && didStall && !sawOutput) {
+    resetPreflightCache();
+    const authOk = await hasBedrockAuth();
+    if (!authOk) {
+      endResult = {
+        ok: false,
+        error:
+          "Your AWS session appears to have expired mid-session — Bedrock stopped responding. Run `aws sso login` in the shell that launched studio (or reconnect AWS in Settings), then try again.",
+      };
+    } else {
+      // Auth probe passed but the model still never streamed a token. The
+      // probe is cheap and imperfect — notably hasBedrockAuth only checks that
+      // AWS_BEARER_TOKEN_BEDROCK is *present*, not that it's still valid, so an
+      // expired bearer token slips through here. Whatever the cause (stale
+      // token, Bedrock outage, network), a zero-output stall is not "slow
+      // generation" — surface an actionable message that names the likely auth
+      // path and mentions "credentials"/"expired" so the shell still routes it
+      // to the AuthExpiredNotice rather than a silent timeout.
+      endResult = {
+        ok: false,
+        error:
+          "Bedrock stopped responding before streaming any output. Your AWS credentials may have expired — if you use a bearer token, refresh it; otherwise run `aws sso login` (or reconnect AWS in Settings). If credentials are fine, this may be a transient Bedrock/network issue — try again.",
+      };
+    }
+  }
+
   // Snapshot the project files ONCE for a successful turn and reuse the diff
   // for both the metrics classification (below) and the no-change contract
   // check (further down). Each snapshot is a full recursive directory walk, so
@@ -873,7 +942,7 @@ async function runClaudeBranch(ctx: {
         duration_ms: lastMetrics?.durationMs,
         ttft_ms: lastMetrics?.ttftMs,
         num_turns: lastMetrics?.numTurns,
-        error_kind: classifyGenerationError({ error: endResult.error, timedOut: didStall, exitCode: null }),
+        error_kind: classifyGenerationError({ error: endResult.error, timedOut: didStall, exitCode: null, sawOutput }),
         model: lastMetrics?.model,
       },
     });
