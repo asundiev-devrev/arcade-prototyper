@@ -1,154 +1,173 @@
-# Recognise the library designers actually draw in (ADS → arcade-gen)
+# Map what's mappable (Arcade → arcade-gen), pixel-faithful for the rest
 
-**Date:** 2026-07-09 (rewritten after live evidence + adversarial review)
-**Status:** draft for review
+**Date:** 2026-07-09 (third rewrite — after establishing the two-generation reality)
+**Status:** draft for adversarial review
 **Branch:** TBD (sibling of `feat/figma-fidelity-eject`)
 
-## The one finding that reframes everything
+## The problem, correctly framed
 
-Ran the deterministic kit-emit engine's matching against the real nav screen a
-designer flagged as "looks broken" (file `JztJjqt3i6uFwB6r4dfewz`, node `328-14859`).
-Result, verified live:
+Designers report Studio prototypes "look broken" (Paulina/Arthur, 2026-07-09). Live
+investigation of the flagged nav screen (file `JztJjqt3i6uFwB6r4dfewz`, node `328-14859`)
+found 1,121 component instances, only ~3% recognised by Studio's mapping table.
 
-- **1,121 real component instances** — the screen is cleanly built, almost nothing
-  detached or hand-drawn.
-- **Only 34 (3%) match by key. 78% unmatched.**
-- The unmatched instances are base primitives: `<Button>`, `<Chip>`, `<Badge>`,
-  `<Icon Button>`, `<Text>`, `<Input>`. Their published keys are **different keys** than
-  the curated ones (e.g. `<Button>` = `f2c7f80a7cca…`, curated `Button` = `0b87fe4f…`).
+But that 3% is **not** a straightforward bug, and earlier drafts of this spec were wrong
+to treat it as one. The real situation, established by inspecting the actual node tree
+and the source libraries:
 
-**Root cause:** the recognition table (`kitMappings.ts`) was built from the *"Arcade UI
-Kit v0.3"* Figma file. But designers draw from the **"Arcade Design System" (ADS)**
-file — a different file with different component keys. arcade-gen is a code-only
-prototyping library with **no Figma equivalent**, so it was never the right source; the
-0.3 kit was a stand-in with the wrong keys. So the components designers actually use go
-unrecognised → fall back to hand-rolled divs → "looks broken."
+- **DevRev has two LIVE production generations**, not one canonical library:
+  - **Arcade** → everything Computer-related. Mirrored in code by `arcade-gen` (a
+    code-only prototyping library; **no Figma equivalent** — the ADS file's `[0.3]`
+    sets are its design-side counterpart).
+  - **DLS** → Apps / SoR products. This is real production, not deprecated.
+- **Real screens are always a mixture** (owner: "designers never build screens
+  correctly; it's always a mixture"). The flagged screen is mostly **deprecated DLS**
+  (angle-bracket sets `<Button>`, `<Chip>` from files literally named "…Deprecated").
+- A designer using DLS may be **intentionally correct** — it's what their product ships.
 
-This kills two earlier framings (memories `figma-kit-emit-engine`,
-`figma-import-componentization-dial`): coverage was never a "add a row at a time" dial —
-it was **pointed at the wrong source file.** It is also NOT the shape-matching route (no
-guessing — these are clean instances with certain identity) and NOT a floor gap.
+**The consequence that fixes the design:** Studio can only honestly promise
+production-translatable code for the target it can emit — `arcade-gen` ≈ the **Arcade**
+generation. Mapping a DLS component to arcade-gen would emit code that Apps/SoR
+production **cannot use** — worse than a div, because it looks right but targets the
+wrong stack. So:
 
-## The reframe
+> **Map what we can map (Arcade → arcade-gen). Everything else is bespoke,
+> pixel-faithful floor.** Never cross generations.
 
-The engine's job — "the brain" — is a mapping between:
+Low coverage on a DLS-heavy screen is therefore the **correct** answer, not a failure.
+The "looks broken" symptom on those screens is a **floor-quality** problem, not a
+mapping-coverage problem — a different fix (see Piece 2).
 
-> **Arcade Design System (Figma, what designers draw)  →  arcade-gen (code, what
-> production translates to).**
+## Precision-first (unchanged, load-bearing)
 
-Today it's mapped from the wrong Figma file. Re-point it at ADS and recognition should
-jump across *every* screen any designer draws, because they all instantiate from that
-one shared library. This is the same work that satisfies both goals: it's the **visual
-fix** Paulina needs (recognised components render correctly, not as broken divs) AND the
-**"keep the brain" / production-handoff** value (mergeable code).
+A wrong component is worse than an honest div — a mislabel is confidently-wrong code that
+gets merged. So recognition stays **100%-certain key matching**; unmapped → faithful div,
+never a shape-guess and never a cross-generation guess. This is why "map only Arcade" is
+right: Arcade→arcade-gen is a true correspondence; DLS→arcade-gen is not.
 
-Precision-first is preserved: this stays 100%-certain **key** matching. A wrong
-component is worse than an honest div, so unmapped → div, never a guess.
+## What's verified (not assumed)
 
-## What's confirmed feasible
+- Recognition already works the right way: `matchKit(setKey, setName)` matches by
+  published key, falls back to faithful markup (`kitMappings.ts`); the emitter recurses
+  into unmapped containers so inner mappable leaves are still caught (`kitEmit.ts`).
+- `figmanage components list-file-components <fileKey>` enumerates a file's published
+  components + keys (verified: ADS returns 5,366 components).
+- **The ADS file contains 29 Arcade `[0.3]` component sets. Studio's table maps ~13 of
+  them.** The gap is concrete and finite — completing it is enumeration, not one-row-
+  at-a-time curation. Missing sets with real arcade-gen twins include: `Banners`→Banner,
+  `Split Button`→SplitButton, `Text Area`→TextArea, `Multi/Single Select Field`,
+  `Number Field`, `Selectors`(checkbox/radio), `Segmented Control`, `Accordion`,
+  `Links`→Link, `Shortcut`→KeyboardShortcut.
+- arcade-gen exports 177 components — every base primitive twin exists.
+- The engine already computes `matchedInstances` / `totalInstances` / `unmatchedSets`
+  and logs them via `formatCoverage` (`kitEmitBranch.ts`).
 
-- `figmanage components list-file-components <file-key>` exists (verified) → the ADS file
-  can be **enumerated programmatically**: every published component + its key. So the
-  mapping table can be *generated* from ADS, not hand-typed.
-- The matching path itself is unchanged and already correct (`matchKit` by key). We're
-  changing **what keys it holds**, not how it matches.
+## Design — three pieces
 
-## Design
+### Piece 1 — Complete the Arcade `[0.3]` → arcade-gen table (the coverage fix)
 
-### Piece 1 — Re-source the recognition table from ADS (the fix)
+1. Enumerate the ADS `[0.3]` generation (29 sets) via `list-file-components`.
+2. For each, add its published set key → arcade-gen twin to `SET_KEY_TO_KIT`. Where a set
+   is a Radix-portal compound already deliberately omitted (`Menu`, `Modal`, `Popover`,
+   `Select` shell — see the existing `NON_RENDERABLE_KIT_EXPORTS` note in kitMappings),
+   keep it omitted. Where there is **no** arcade-gen twin, explicitly record "no twin →
+   faithful floor" (honest gap).
+3. Keep the rename map (Counter≡Badge, Chip≡Tag, Toggle≡Switch) — ADS names ≠ arcade-gen
+   names.
+4. `scripts/sync-ads-mapping.ts` (**new**) re-runs enumeration and reports Arcade sets
+   present in ADS but missing from the table — so drift is caught, not hand-audited.
 
-1. Enumerate ADS published components (`list-file-components <ADS-key>`) → `{key, name}`
-   list.
-2. For each ADS base component, map its key → the arcade-gen primitive it corresponds to
-   (Button→Button, Chip→Tag, Counter→Badge, Toggle→Switch, User Avatar→Avatar,
-   Icon Button→IconButton, Text field→Input, …). arcade-gen was built to mirror the
-   design system, so the base primitives have twins; components with **no arcade-gen
-   equivalent are explicitly marked "→ faithful div"** (honest gap, not a guess).
-3. Regenerate `SET_KEY_TO_KIT` from this ADS mapping. Keep the rename map
-   (Counter≡Badge, Chip≡Tag, Toggle≡Switch) since ADS names ≠ arcade-gen names.
-4. Store the ADS file key as a constant; a small script (`scripts/sync-ads-mapping.ts`)
-   re-runs enumeration so the table stays current as ADS grows — one command, not manual
-   curation.
+This only ever adds **Arcade-generation** keys. DLS/deprecated keys are never added.
 
-**Validation gate (decides whether this works):** after re-sourcing, re-run the nav
-screen. Coverage of base primitives should jump from 3% toward near-total. If most ADS
-base components turn out to have **no** arcade-gen twin, the reframe relabels the gap
-instead of closing it — that's the risk to disprove first, cheaply, before building the
-sync tooling. Run the enumeration + a manual key-by-key twin check on ADS base
-components as **step 0**.
+### Piece 2 — Harden the pixel-faithful floor (the "looks broken" fix for DLS screens)
 
-### Piece 2 — Coverage report (deterministic, precision-safe) — TRIMMED
+For DLS/Apps screens the floor is the **majority** path, so its quality IS the fidelity.
+"Looks broken" on those screens lives here, not in mapping. Scope of this piece:
 
-The prior draft over-built this; adversarial review confirmed ~80% already ships
-(`formatCoverage` already counts recognised vs unmatched instances and logs it every
-import — `kitEmitBranch.ts`). So Piece 2 is only:
+- Confirm the floor reproduces the classes that make DLS components look wrong as divs:
+  corner radius, borders, fills, icon children, multi-run text. (Investigate against a
+  DLS-heavy screen; fix by class, per `feedback_scalable_accuracy` — not per screen.)
+- This is investigation-led: enumerate which unmapped-component visual properties the
+  floor currently drops, fix that class. Explicitly NOT pixel-diffing against Figma
+  (composite tree-expansion trap) and NOT a vision judge (subjectivity trap) — both
+  killed in prior reviews.
 
-- **Promote the existing `formatCoverage` line into the user-facing trailer**, with the
-  unmatched-set backlog: "Recognised 47 design-system components. 6 unmatched: [Card ×13,
-  Reaction ×13, …] — rendered as plain markup." Hand-composed into the kit-emit branch's
-  own trailer (it controls its trailer directly; this is NOT the LLM deviations
-  contract — that's a separate path, don't wire it).
-- **Add a per-kit count map** (small new counter; today only a total exists) so the
-  recognised line can name what it found.
+### Piece 3 — Honest TWO-BAR coverage report (not one misleading %)
 
-**Explicitly dropped** (per review — they reintroduce the subjectivity that killed prior
-metrics or duplicate existing data):
-- ❌ "Un-recognisable leaves" bucket — dominated by ordinary text/labels; it's the
-  "what *should* have been a component?" guess in disguise.
-- ❌ New "non-primitive setName denylist" — the export table already classifies
-  composites by key; reuse it if needed.
-- ❌ JSONL "regression signal" framing — the kit-emit path writes no metrics row today
-  and nothing reads coverage. Only add a row if we also add a reader; otherwise don't
-  call it a signal.
+A single coverage % is misleading: for a DLS screen, **low is correct**. So report two
+independent bars, both deterministic, precision-safe:
 
-### Piece 3 — Name-tier normalisation — ICON TIER ONLY
+- **Arcade recall** — of the Arcade-generation instances present, what fraction did we
+  map? Target ~100%. This is the number that must stay high; a drop = a table gap.
+- **Composition** — "N mapped to Arcade components · M rendered pixel-faithful (DLS/other/
+  deprecated)." Descriptive, not scored. Tells the designer *why* a screen is mostly
+  faithful divs (it's a DLS screen) without implying failure.
 
-Normalise separator/case drift ("Icons / Plus" ≡ "Icons/Plus") **only for the icon
-name-tier**, which is safe (icon names are specific). Do **not** loosen the non-icon
-`SET_NAME_TO_KIT` tier — it holds generic words (`Button`, `Avatar`, `Images`) where
-case-insensitive matching could mislabel an arbitrarily-named frame. (Correcting the
-prior draft's "pure win, no precision cost" — false for the generic tier.)
+Surface it by promoting the existing `formatCoverage` line into the kit-emit branch's
+user trailer, split into these two bars. **Dropped** (per prior adversarial review):
+the "un-recognisable leaves" bucket (noise/subjectivity), the invert-export-table idea
+(export table is a superset, not same keys), and any JSONL "regression signal" unless a
+reader is added.
 
-## Why this scales to infinite designs
+Distinguishing Arcade-generation from DLS/other for the two-bar split: by **source
+library** (which file/library key a set belongs to), enumerated once — NOT by name
+(generation is not readable from the set name; only the deprecated angle-bracket sets are
+name-obvious).
 
-Coverage becomes "how completely we mirror the one shared library designers draw from,"
-not "how many screens/components we pre-mapped." One ADS enumeration lifts recognition on
-*every* screen. The report makes the remaining gaps visible and honest, with zero
-mislabel risk.
+### Piece 3b — Icon-tier name normalisation (safe recall, unchanged from prior draft)
+
+Normalise separator/case drift for the **icon** name-tier only ("Icons / Plus" ≡
+"Icons/Plus"). Do NOT loosen the generic non-icon `SET_NAME_TO_KIT` tier (holds `Button`,
+`Avatar`, `Images` — case-insensitive there risks mislabelling an arbitrarily-named
+frame).
+
+## Why this scales
+
+Coverage on Arcade work becomes "how completely we mirror the Arcade generation" — a
+finite 29-set target, enumerable, kept current by the sync script. Coverage is *correctly*
+partial on DLS/Apps work, and those screens are served by a hardened faithful floor. No
+generation crossing, no shape-guessing, no mislabels — ever.
+
+## Explicit non-goals
+
+- **No DLS → arcade-gen mapping.** Gated on the arcade↔DLS token migration Konstantin is
+  building; a dual-target Studio is a fast-follow that rides that work, not this spec.
+- No shape-based classification (owner-rejected; mislabel risk).
+- No pixel-diff / vision-judge fidelity metric (killed by two prior adversarial rounds).
 
 ## Scope (files)
 
 | File | Change |
 |---|---|
-| `server/figma/kitMappings.ts` | regenerate `SET_KEY_TO_KIT` from ADS keys; keep rename map; icon-tier name normalisation |
-| `scripts/sync-ads-mapping.ts` | **new** — enumerate ADS, emit the key→primitive table + "no-twin" list |
-| `server/figma/kitEmit.ts` | per-kit count map (small) |
-| `server/figma/kitEmitBranch.ts` | promote `formatCoverage` + unmatched backlog into the trailer |
-| `__tests__/server/figma/*` | ADS-key fixtures match; icon-name normalisation; recognised/unmatched counts; trailer line |
+| `server/figma/kitMappings.ts` | add Arcade `[0.3]` keys to `SET_KEY_TO_KIT`; keep rename map; icon-tier name normalisation |
+| `scripts/sync-ads-mapping.ts` | **new** — enumerate ADS `[0.3]`, report present-but-unmapped Arcade sets + no-twin list |
+| `server/figma/kitEmit.ts` | per-kit count map; tag each unmatched instance's source-library bucket for the two-bar split |
+| `server/figma/kitEmitBranch.ts` | promote `formatCoverage` into a two-bar user trailer |
+| `__tests__/server/figma/*` | new Arcade keys match (fixture from live tree); two-bar split correct; icon normalisation; no cross-generation map |
 
 ## Tests
 
-- Re-sourced `SET_KEY_TO_KIT` recognises the real nav-screen `<Button>`/`<Chip>`/`<Badge>`
-  keys (fixture from the live tree).
-- Icon-name normalisation matches drift; generic non-icon names NOT loosened.
-- Per-kit counts correct; trailer line renders recognised + unmatched.
-- No instance emitted as the wrong primitive.
+- New Arcade `[0.3]` keys recognise their instances (live-tree fixtures).
+- A DLS/deprecated key is NOT mapped to an arcade-gen component (stays floor).
+- Two-bar report: Arcade recall vs composition computed correctly on a mixed fixture.
+- Icon-name normalisation matches drift; generic non-icon tier NOT loosened.
 - Full suite green (`pnpm run studio:test`).
 
 ## Manual acceptance
 
-Re-run nav (`JztJjqt3i6uFwB6r4dfewz` / `328-14859`):
-- Base-primitive recognition jumps from 3% toward near-total.
-- The previously-broken grey buttons / chips / badges render as real components.
-- Trailer honestly lists what stayed unmatched.
+- Re-run a mixed real screen: Arcade-generation components render as real arcade-gen
+  components; DLS/deprecated render pixel-faithful (not mislabelled, not broken-looking
+  after Piece 2).
+- Trailer shows both bars honestly ("mapped N Arcade · M pixel-faithful").
+- `sync-ads-mapping` lists any Arcade `[0.3]` set still unmapped.
 
 ## Open questions (for review)
 
-1. **The one risk to disprove first:** do ADS base components actually have arcade-gen
-   twins, or will many map to "no equivalent"? Step 0 enumeration answers it before any
-   build.
-2. ADS file key — obtain from the design team / a known ADS URL.
-3. Enterprise-only APIs? `list-file-components` is standard REST (not the
-   Enterprise-gated variables API), so enumeration should work on the current plan —
-   confirm.
+1. **Piece 2 scope.** "Harden the floor" is investigation-led and could balloon. Should
+   this spec ship Piece 1 + 3 (the deterministic, bounded coverage work) and spin Piece 2
+   into its own investigation once the two-bar report quantifies how much of a DLS screen
+   the floor actually mishandles? (Likely yes — measure before hardening.)
+2. **Source-library detection** for the two-bar split — is the library key reliably on
+   each componentSet in the REST payload, or does it need a second lookup?
+3. ADS `[0.3]` set keys — harvest via `list-file-components` (the 29 sets), confirm each
+   twin before adding.
 ```
