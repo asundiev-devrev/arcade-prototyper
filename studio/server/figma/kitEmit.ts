@@ -1106,6 +1106,35 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
           lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><TextArea ${attrs} /></div>`);
           return;
         }
+        case "KeyboardShortcut": {
+          // REAL API (verified against index.d.mts:2253): `keys: string[]` is
+          // REQUIRED and the body calls keys.map(); CHILDREN ARE IGNORED. Passing
+          // text as children (with no `keys`) → keys.map on undefined → runtime
+          // TypeError → WHITE-SCREEN (esbuild frames aren't type-checked). So we
+          // MUST split the combo into a keys array and pass it as a prop.
+          usedKit.add("KeyboardShortcut");
+          kitInstanceCount++;
+          const texts = visibleTexts(n).filter((t) => t.trim());
+          const combo = texts[0] ?? "⌘K";
+          // Split on common separators (⌘K, "Cmd K", "Ctrl+Shift+P") into labels.
+          const keys = combo.split(/[\s+]+/).flatMap((seg) =>
+            // keep multi-char words whole; split bare glyph runs like "⌘K" into ⌘,K
+            /^[\w-]+$/.test(seg) ? [seg] : Array.from(seg),
+          ).filter(Boolean);
+          const keysArr = keys.length ? keys : [combo];
+          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><KeyboardShortcut keys={${JSON.stringify(keysArr)}} /></div>`);
+          return;
+        }
+        case "SplitButton": {
+          usedKit.add("SplitButton");
+          usedKit.add("SplitButtonItem");
+          kitInstanceCount++;
+          const texts = visibleTexts(n).filter((t) => t.trim() && t.trim() !== "Slot");
+          const label = texts[0] ?? "Action";
+          // SplitButton composes SplitButtonItem children; emit the primary item.
+          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><SplitButton><SplitButtonItem>${escText(label)}</SplitButtonItem></SplitButton></div>`);
+          return;
+        }
         case "Badge": {
           usedKit.add("Badge");
           kitInstanceCount++;

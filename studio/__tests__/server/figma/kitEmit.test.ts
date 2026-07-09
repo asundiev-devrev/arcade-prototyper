@@ -235,7 +235,28 @@ describe("emit — Banner/TextArea", () => {
     expect(r.source).toContain('defaultValue="Notes"');
     expect(r.kitImports).toContain("TextArea");
   });
+});
 
+describe("emit — KeyboardShortcut/SplitButton", () => {
+  const SHORTCUT_SET_KEY = "4bd8ce6785fee3244a829595d70e612350b5ecbd";
+  const SPLITBUTTON_SET_KEY = "8ba9681b10fd5324ac7e381013e727ff8836e9d2";
+
+  it("emits KeyboardShortcut with a keys={[]} prop (NEVER children — children crash it)", () => {
+    const r = kitTextInstance("k1", SHORTCUT_SET_KEY, "Shortcut", "⌘K");
+    expect(r.source).toContain("<KeyboardShortcut keys={");
+    // C1 guard: must NOT emit text as children (keys.map on undefined → white-screen)
+    expect(r.source).not.toMatch(/<KeyboardShortcut>[^<]/);
+    expect(r.kitImports).toContain("KeyboardShortcut");
+  });
+  it("emits a SplitButton wrapping a SplitButtonItem label", () => {
+    const r = kitTextInstance("sb1", SPLITBUTTON_SET_KEY, "Split Button", "Save");
+    expect(r.source).toContain("<SplitButton>");
+    expect(r.source).toContain("<SplitButtonItem>Save</SplitButtonItem>");
+    expect(r.kitImports).toContain("SplitButton");
+  });
+});
+
+describe("emit — Banner/TextArea (asset tests)", () => {
   it("references exported assets via local imports", () => {
     const doc = frameNode("0", [
       { id: "v1", type: "VECTOR", absoluteBoundingBox: bbox(0, 0, 16, 16) },
