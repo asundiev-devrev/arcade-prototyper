@@ -144,12 +144,20 @@ function frameNameFromNode(nodeId: string): string {
  * Base design-system component families that a designer can swap. Structural
  * layer names (bg-opacity, Object ID, Cell, Slot) are filtered out — only these
  * base-component families are actionable in the transferability notice.
+ *
+ * Excludes Menu, Modal, Popover, Tooltip (portal compounds, NON_RENDERABLE_KIT_EXPORTS)
+ * — they're never emitted as kit components in Arcade either, so offering them as
+ * "swap to make real code" would overpromise.
+ *
+ * Includes plural/renamed forms ("Breadcrumbs", "Shortcut", "Bubble") to match
+ * actual Figma 0.3 component-set names — the whole-word matcher needs to see
+ * these exact strings.
  */
 export const BASE_COMPONENT_NAMES = new Set([
   "Button", "IconButton", "Checkbox", "Radio", "Switch", "Select", "Input",
-  "TextArea", "Tag", "Badge", "Banner", "Breadcrumb", "Tabs", "KeyboardShortcut",
-  "SplitButton", "Avatar", "AvatarGroup", "ChatBubble", "Tooltip", "Menu",
-  "Modal", "Popover", "Counter", "Chip", "Toggle", "Text Field", "Text Area",
+  "TextArea", "Tag", "Badge", "Banner", "Breadcrumb", "Breadcrumbs", "Tabs",
+  "KeyboardShortcut", "Shortcut", "SplitButton", "Avatar", "AvatarGroup",
+  "ChatBubble", "Bubble", "Counter", "Chip", "Toggle", "Text Field", "Text Area",
 ]);
 
 /**
@@ -230,10 +238,18 @@ export function formatHandRollNotice(
     for (const [name, count] of top) {
       notice += `- ${name} ×${count}\n`;
     }
+    // FIX 1: If there are more families than shown, append "…and N more" bullet.
+    if (baseComponentUnmatched.length > topN) {
+      const remaining = baseComponentUnmatched.length - topN;
+      notice += `- …and ${remaining} more\n`;
+    }
     notice += "\nSwap these to Arcade design-system components in Figma to make them real code.";
-  } else {
-    // All-matched (no base-component unmatched).
+  } else if (matchedInstances > 0) {
+    // FIX 3: Only say "everything transfers" when there ARE recognised components.
     notice += "Everything recognised will transfer to production.";
+  } else {
+    // FIX 3: When nothing recognised and nothing actionable unmatched.
+    notice += "No design-system components recognised in this frame.";
   }
 
   return notice;

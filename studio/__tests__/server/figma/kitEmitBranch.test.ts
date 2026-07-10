@@ -574,7 +574,7 @@ describe("formatHandRollNotice", () => {
       kitImports: ["Button", "Input"],
     });
     // Only Checkbox (a base component) appears; noise is filtered.
-    expect(line).toContain("Checkbox");
+    expect(line).toContain("- Checkbox ×5");
     expect(line).not.toContain("bg-opacity");
     expect(line).not.toContain("Object ID");
     expect(line).not.toContain("Cell");
@@ -678,5 +678,65 @@ describe("formatHandRollNotice", () => {
     expect(line).toContain("✅");
     expect(line.toLowerCase()).toContain("everything");
     expect(line).not.toContain("⚠️");
+  });
+
+  it("FIX 1: >topN families → header sum of ALL, bullets show topN + 'and N more'", () => {
+    const line = formatHandRollNotice({
+      totalInstances: 30,
+      matchedInstances: 5,
+      unmatchedSets: {
+        Button: 8, Checkbox: 7, Badge: 6, Select: 5, Input: 4, Toggle: 3,
+      },
+      kitImports: [],
+    }, 4);
+    // Header count = sum of all 6 families (8+7+6+5+4+3 = 33).
+    expect(line).toContain("33 off-system");
+    // Bullets show top 4 by count.
+    expect(line).toContain("- Button ×8");
+    expect(line).toContain("- Checkbox ×7");
+    expect(line).toContain("- Badge ×6");
+    expect(line).toContain("- Select ×5");
+    // "and 2 more" bullet (6 families - 4 shown).
+    expect(line).toContain("- …and 2 more");
+  });
+
+  it("FIX 2: plural set names (Breadcrumbs, Shortcut, Bubble) are listed", () => {
+    const line = formatHandRollNotice({
+      totalInstances: 10,
+      matchedInstances: 3,
+      unmatchedSets: { Breadcrumbs: 3, Shortcut: 2, Bubble: 1 },
+      kitImports: ["Button"],
+    });
+    expect(line).toContain("- Breadcrumbs ×3");
+    expect(line).toContain("- Shortcut ×2");
+    expect(line).toContain("- Bubble ×1");
+    expect(line).toContain("6 off-system");
+  });
+
+  it("FIX 3: matched=0 + nothing actionable → 'No design-system components recognised'", () => {
+    const line = formatHandRollNotice({
+      totalInstances: 5,
+      matchedInstances: 0,
+      unmatchedSets: { "bg-opacity": 10, Cell: 5 }, // all noise
+      kitImports: [],
+    });
+    expect(line.toLowerCase()).toContain("no design-system components recognised");
+    expect(line.toLowerCase()).not.toContain("everything");
+    expect(line).not.toContain("⚠️");
+  });
+});
+
+describe("BASE_COMPONENT_NAMES contract", () => {
+  it("FIX 4: includes Button, Checkbox, and plural forms; excludes portal compounds", () => {
+    expect(BASE_COMPONENT_NAMES.has("Button")).toBe(true);
+    expect(BASE_COMPONENT_NAMES.has("Checkbox")).toBe(true);
+    expect(BASE_COMPONENT_NAMES.has("Breadcrumbs")).toBe(true);
+    expect(BASE_COMPONENT_NAMES.has("Shortcut")).toBe(true);
+    expect(BASE_COMPONENT_NAMES.has("Bubble")).toBe(true);
+    // Portal compounds excluded.
+    expect(BASE_COMPONENT_NAMES.has("Menu")).toBe(false);
+    expect(BASE_COMPONENT_NAMES.has("Modal")).toBe(false);
+    expect(BASE_COMPONENT_NAMES.has("Popover")).toBe(false);
+    expect(BASE_COMPONENT_NAMES.has("Tooltip")).toBe(false);
   });
 });
