@@ -84,7 +84,7 @@ describe("matchKit", () => {
     expect(matchKit(CHECKBOX_SET_KEY, "anything")).toEqual({ kind: "component", kit: "Checkbox" });
   });
   it("falls back to set-name matching for detached copies", () => {
-    expect(matchKit("unknown-key", "Avatar")).toEqual({ kind: "component", kit: "Avatar" });
+    expect(matchKit("unknown-key", "Icon Button")).toEqual({ kind: "component", kit: "IconButton" });
   });
   it("returns null when nothing matches", () => {
     expect(matchKit("unknown", "Cell")).toBeNull();
@@ -197,7 +197,67 @@ describe("emitKitFrame", () => {
     expect(r.source).toContain("<Bell size={16} />");
     expect(r.source).toContain('"#ff0000"');
   });
+});
 
+// --- Banner / TextArea coverage -----------------------------------------------
+
+/** Helper for text-containing kit components. */
+function kitTextInstance(id: string, setKey: string, setName: string, label: string) {
+  const doc = frameNode("0", [{
+    id, type: "INSTANCE", componentId: `c:${id}`,
+    absoluteBoundingBox: bbox(10, 10, 200, 40),
+    children: [{ id: `${id}-t`, type: "TEXT", characters: label, absoluteBoundingBox: bbox(12, 12, 180, 20) }],
+  }]);
+  const maps = {
+    components: { [`c:${id}`]: { key: "v", name: `${setName} variant`, componentSetId: `s:${id}` } },
+    componentSets: { [`s:${id}`]: { key: setKey, name: setName } },
+    assetFiles: new Map(),
+  };
+  return emitKitFrame(doc, maps);
+}
+
+describe("emit — Banner/TextArea", () => {
+  const BANNER_SET_KEY = "edf96535be2abc8d0b836f54d450d60683a896ab";
+  const TEXTAREA_SET_KEY = "d43e5c28c7a26c01ebdbb7123751565a8955b52e";
+
+  it("emits a Banner with the text as CHILDREN (inline layout ignores title)", () => {
+    const r = kitTextInstance("b1", BANNER_SET_KEY, "Inline Banner", "Heads up: SLA at risk");
+    expect(r.source).toContain("<Banner");
+    // C2 guard: text must be the child, NOT in a title="" prop (inline drops title)
+    expect(r.source).toContain(">Heads up: SLA at risk</Banner>");
+    expect(r.source).not.toMatch(/title="Heads up/);
+    expect(r.kitImports).toContain("Banner");
+  });
+
+  it("emits a TextArea with defaultValue", () => {
+    const r = kitTextInstance("t1", TEXTAREA_SET_KEY, "Text Area", "Notes");
+    expect(r.source).toContain("<TextArea");
+    expect(r.source).toContain('defaultValue="Notes"');
+    expect(r.kitImports).toContain("TextArea");
+  });
+});
+
+describe("emit — KeyboardShortcut/SplitButton", () => {
+  const SHORTCUT_SET_KEY = "4bd8ce6785fee3244a829595d70e612350b5ecbd";
+  const SPLITBUTTON_SET_KEY = "8ba9681b10fd5324ac7e381013e727ff8836e9d2";
+
+  it("emits KeyboardShortcut with a keys={[]} prop (NEVER children — children crash it)", () => {
+    const r = kitTextInstance("k1", SHORTCUT_SET_KEY, "Shortcut", "⌘K");
+    expect(r.source).toContain("<KeyboardShortcut keys={");
+    // C1 guard: bare opening tag must never appear (only self-closing or with keys prop)
+    expect(r.source).not.toContain("<KeyboardShortcut>");
+    expect(r.kitImports).toContain("KeyboardShortcut");
+  });
+  it("emits a SplitButton wrapping a SplitButtonItem label", () => {
+    const r = kitTextInstance("sb1", SPLITBUTTON_SET_KEY, "Split Button", "Save");
+    expect(r.source).toContain("<SplitButton>");
+    expect(r.source).toContain("<SplitButtonItem>Save</SplitButtonItem>");
+    expect(r.kitImports).toContain("SplitButton");
+    expect(r.kitImports).toContain("SplitButtonItem");
+  });
+});
+
+describe("emit — Banner/TextArea (asset tests)", () => {
   it("references exported assets via local imports", () => {
     const doc = frameNode("0", [
       { id: "v1", type: "VECTOR", absoluteBoundingBox: bbox(0, 0, 16, 16) },
@@ -937,6 +997,38 @@ describe("emitKitFrame", () => {
     expect(r.matchedInstances).toBe(r.kitInstanceCount);
     expect(r.matchedInstances).toBe(1);
     expect(r.totalInstances).toBe(2);
+  });
+
+  it("FIX 2: unmatched ICON instances are excluded from the unmatchedSets notice", () => {
+    // An unmapped icon instance is still a real ADS component (renders as faithful
+    // SVG) and shouldn't appear in the "static pixels that won't transfer" list.
+    // Only non-icon unmatched instances go into unmatchedSets.
+    const iconInst = {
+      id: "icon1", type: "INSTANCE", componentId: "c:icon1",
+      absoluteBoundingBox: bbox(0, 0, 16, 16),
+      children: [{ id: "v", type: "VECTOR", absoluteBoundingBox: bbox(0, 0, 16, 16) }],
+    };
+    const cellInst = {
+      id: "cell1", type: "INSTANCE", componentId: "c:cell1",
+      absoluteBoundingBox: bbox(0, 20, 300, 40),
+      children: [],
+    };
+    const maps = {
+      components: {
+        "c:icon1": { key: "k", name: "x", componentSetId: "s:icon1" },
+        "c:cell1": { key: "k", name: "x", componentSetId: "s:cell1" },
+      },
+      componentSets: {
+        "s:icon1": { key: "no-match", name: "Icons/UnmappedGlyph" },
+        "s:cell1": { key: "no-match", name: "Cell" },
+      },
+    };
+    const r = emitKitFrame(frameNode("0", [iconInst, cellInst]), { ...maps, assetFiles: new Map() });
+    expect(r.totalInstances).toBe(2);
+    expect(r.matchedInstances).toBe(0);
+    // Only Cell appears in the unmatched notice; the icon does not.
+    expect(r.unmatchedSets).toEqual({ Cell: 1 });
+    expect(r.unmatchedSets["Icons/UnmappedGlyph"]).toBeUndefined();
   });
 });
 

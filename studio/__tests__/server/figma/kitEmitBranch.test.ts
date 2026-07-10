@@ -9,6 +9,8 @@ import {
   assetCacheVersion,
   assetCacheDir,
   formatCoverage,
+  formatHandRollNotice,
+  BASE_COMPONENT_NAMES,
 } from "../../../server/figma/kitEmitBranch";
 
 vi.mock("../../../server/paths", () => ({
@@ -560,5 +562,181 @@ describe("runFigmaKitEmitBranch — A2 asset cache", () => {
     // And the corrupt entry got overwritten with the real bytes.
     const fixed = await fs.readFile(path.join(verDir, "v1.svg"), "utf-8");
     expect(fixed).toBe("<svg>fresh</svg>");
+  });
+});
+
+describe("formatHandRollNotice", () => {
+  it("filters noise (bg-opacity, Object ID, Cell) and shows only base components", () => {
+    const line = formatHandRollNotice({
+      totalInstances: 20,
+      matchedInstances: 8,
+      unmatchedSets: { "bg-opacity": 10, "Object ID": 5, Checkbox: 5, Cell: 3 },
+      kitImports: ["Button", "Input"],
+    });
+    // Only Checkbox (a base component) appears; noise is filtered.
+    expect(line).toContain("- Checkbox ×5");
+    expect(line).not.toContain("bg-opacity");
+    expect(line).not.toContain("Object ID");
+    expect(line).not.toContain("Cell");
+    // Count is only the base-component sum (5), not all unmatched (23).
+    expect(line).toContain("5 off-system");
+  });
+
+  it("omits the won't-transfer section when all unmatched are noise", () => {
+    const line = formatHandRollNotice({
+      totalInstances: 10,
+      matchedInstances: 5,
+      unmatchedSets: { "bg-opacity": 10, "Object ID": 5, Cell: 3 },
+      kitImports: ["Button", "Input"],
+    });
+    // No base components unmatched → no "won't transfer" section, no "static".
+    expect(line.toLowerCase()).not.toContain("won't transfer");
+    expect(line.toLowerCase()).not.toContain("static");
+    expect(line.toLowerCase()).not.toContain("off-system");
+    // Still shows the recognised components.
+    expect(line).toContain("Button");
+    expect(line).toContain("Input");
+  });
+
+  it("uses markdown: ✅ for recognised, ⚠️ + bullets for unmatched", () => {
+    const line = formatHandRollNotice({
+      totalInstances: 10,
+      matchedInstances: 5,
+      unmatchedSets: { Button: 3, Checkbox: 2 },
+      kitImports: ["Input"],
+    });
+    expect(line).toContain("✅");
+    expect(line).toContain("⚠️");
+    expect(line).toContain("- Button ×3");
+    expect(line).toContain("- Checkbox ×2");
+  });
+
+  it("all-matched: shows only ✅ + 'everything recognised', no ⚠️", () => {
+    const line = formatHandRollNotice({
+      totalInstances: 5,
+      matchedInstances: 5,
+      unmatchedSets: {},
+      kitImports: ["Button", "Input"],
+    });
+    expect(line).toContain("✅");
+    expect(line.toLowerCase()).toContain("everything");
+    expect(line).not.toContain("⚠️");
+    expect(line.toLowerCase()).not.toContain("won't transfer");
+  });
+
+  it("zero-instance frame: custom layout and text", () => {
+    const line = formatHandRollNotice({
+      totalInstances: 0,
+      matchedInstances: 0,
+      unmatchedSets: {},
+      kitImports: [],
+    });
+    expect(line.toLowerCase()).toContain("custom layout");
+    expect(typeof line).toBe("string");
+  });
+
+  it("partial match: shows both ✅ and ⚠️ sections", () => {
+    const line = formatHandRollNotice({
+      totalInstances: 10,
+      matchedInstances: 3,
+      unmatchedSets: { Select: 5, Badge: 2 },
+      kitImports: ["Button", "Input", "Checkbox"],
+    });
+    expect(line).toContain("✅");
+    expect(line).toContain("⚠️");
+    expect(line).toContain("Button, Input, Checkbox");
+    expect(line).toContain("- Select ×5");
+    expect(line).toContain("- Badge ×2");
+    expect(line.toLowerCase()).toContain("swap these");
+  });
+
+  it("counts element/elements plural correctly", () => {
+    const singular = formatHandRollNotice({
+      totalInstances: 2,
+      matchedInstances: 1,
+      unmatchedSets: { Button: 1 },
+      kitImports: ["Input"],
+    });
+    expect(singular).toMatch(/1 off-system element\b/);
+
+    const plural = formatHandRollNotice({
+      totalInstances: 5,
+      matchedInstances: 2,
+      unmatchedSets: { Button: 2, Checkbox: 1 },
+      kitImports: ["Input"],
+    });
+    expect(plural).toMatch(/3 off-system elements\b/);
+  });
+
+  it("legacy: reports ALL-MATCHED when unmatchedSets is empty (icon-only unmatched)", () => {
+    const line = formatHandRollNotice({
+      totalInstances: 2,
+      matchedInstances: 1,
+      unmatchedSets: {},
+      kitImports: ["Button"],
+    });
+    expect(line).toContain("✅");
+    expect(line.toLowerCase()).toContain("everything");
+    expect(line).not.toContain("⚠️");
+  });
+
+  it("FIX 1: >topN families → header sum of ALL, bullets show topN + 'and N more'", () => {
+    const line = formatHandRollNotice({
+      totalInstances: 30,
+      matchedInstances: 5,
+      unmatchedSets: {
+        Button: 8, Checkbox: 7, Badge: 6, Select: 5, Input: 4, Toggle: 3,
+      },
+      kitImports: [],
+    }, 4);
+    // Header count = sum of all 6 families (8+7+6+5+4+3 = 33).
+    expect(line).toContain("33 off-system");
+    // Bullets show top 4 by count.
+    expect(line).toContain("- Button ×8");
+    expect(line).toContain("- Checkbox ×7");
+    expect(line).toContain("- Badge ×6");
+    expect(line).toContain("- Select ×5");
+    // "and 2 more" bullet (6 families - 4 shown).
+    expect(line).toContain("- …and 2 more");
+  });
+
+  it("FIX 2: plural set names (Breadcrumbs, Shortcut, Bubble) are listed", () => {
+    const line = formatHandRollNotice({
+      totalInstances: 10,
+      matchedInstances: 3,
+      unmatchedSets: { Breadcrumbs: 3, Shortcut: 2, Bubble: 1 },
+      kitImports: ["Button"],
+    });
+    expect(line).toContain("- Breadcrumbs ×3");
+    expect(line).toContain("- Shortcut ×2");
+    expect(line).toContain("- Bubble ×1");
+    expect(line).toContain("6 off-system");
+  });
+
+  it("FIX 3: matched=0 + nothing actionable → 'No design-system components recognised'", () => {
+    const line = formatHandRollNotice({
+      totalInstances: 5,
+      matchedInstances: 0,
+      unmatchedSets: { "bg-opacity": 10, Cell: 5 }, // all noise
+      kitImports: [],
+    });
+    expect(line.toLowerCase()).toContain("no design-system components recognised");
+    expect(line.toLowerCase()).not.toContain("everything");
+    expect(line).not.toContain("⚠️");
+  });
+});
+
+describe("BASE_COMPONENT_NAMES contract", () => {
+  it("FIX 4: includes Button, Checkbox, and plural forms; excludes portal compounds", () => {
+    expect(BASE_COMPONENT_NAMES.has("Button")).toBe(true);
+    expect(BASE_COMPONENT_NAMES.has("Checkbox")).toBe(true);
+    expect(BASE_COMPONENT_NAMES.has("Breadcrumbs")).toBe(true);
+    expect(BASE_COMPONENT_NAMES.has("Shortcut")).toBe(true);
+    expect(BASE_COMPONENT_NAMES.has("Bubble")).toBe(true);
+    // Portal compounds excluded.
+    expect(BASE_COMPONENT_NAMES.has("Menu")).toBe(false);
+    expect(BASE_COMPONENT_NAMES.has("Modal")).toBe(false);
+    expect(BASE_COMPONENT_NAMES.has("Popover")).toBe(false);
+    expect(BASE_COMPONENT_NAMES.has("Tooltip")).toBe(false);
   });
 });

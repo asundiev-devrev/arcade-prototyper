@@ -141,6 +141,42 @@ function frameNameFromNode(nodeId: string): string {
 }
 
 /**
+ * Base design-system component families that a designer can swap. Structural
+ * layer names (bg-opacity, Object ID, Cell, Slot) are filtered out — only these
+ * base-component families are actionable in the transferability notice.
+ *
+ * Excludes Menu, Modal, Popover, Tooltip (portal compounds, NON_RENDERABLE_KIT_EXPORTS)
+ * — they're never emitted as kit components in Arcade either, so offering them as
+ * "swap to make real code" would overpromise.
+ *
+ * Includes plural/renamed forms ("Breadcrumbs", "Shortcut", "Bubble") to match
+ * actual Figma 0.3 component-set names — the whole-word matcher needs to see
+ * these exact strings.
+ */
+export const BASE_COMPONENT_NAMES = new Set([
+  "Button", "IconButton", "Checkbox", "Radio", "Switch", "Select", "Input",
+  "TextArea", "Tag", "Badge", "Banner", "Breadcrumb", "Breadcrumbs", "Tabs",
+  "KeyboardShortcut", "Shortcut", "SplitButton", "Avatar", "AvatarGroup",
+  "ChatBubble", "Bubble", "Counter", "Chip", "Toggle", "Text Field", "Text Area",
+]);
+
+/**
+ * Returns true if the set name matches a base-component family (exact,
+ * case-insensitive, or as a whole-word substring).
+ */
+function isBaseComponent(setName: string): boolean {
+  const lower = setName.toLowerCase();
+  for (const family of BASE_COMPONENT_NAMES) {
+    const lowerFamily = family.toLowerCase();
+    if (lower === lowerFamily) return true;
+    // Match as a whole word (e.g. "Secondary Button" → Button).
+    const wordPattern = new RegExp(`\\b${lowerFamily}\\b`, "i");
+    if (wordPattern.test(setName)) return true;
+  }
+  return false;
+}
+
+/**
  * C3 — coverage telemetry line for the dev console. Turns the emitter's raw
  * counts into "N of M instances are real kit components (P%)" plus the top
  * unmatched set names — the curation backlog (the highest-count names are the
@@ -159,6 +195,64 @@ export function formatCoverage(
     .map(([name, count]) => `${name} ×${count}`);
   const backlog = top.length ? ` — top unmatched: ${top.join(", ")}` : "";
   return `${matchedInstances}/${totalInstances} instances are real kit components (${pct}%)${backlog}`;
+}
+
+/**
+ * User-facing transferability notice formatted as markdown. Recognised (real
+ * design-system) components translate to production code; unmatched base-component
+ * INSTANCES are rendered as faithful but STATIC pixels that won't transfer. Noise
+ * (utility/structural layer names like bg-opacity, Object ID, Cell) is filtered —
+ * only actionable base-component families are shown.
+ */
+export function formatHandRollNotice(
+  result: { totalInstances: number; matchedInstances: number; unmatchedSets: Record<string, number>; kitImports: string[] },
+  topN = 4,
+): string {
+  const { totalInstances, matchedInstances, unmatchedSets, kitImports } = result;
+
+  if (totalInstances === 0) {
+    return "No design-system components detected — this frame is custom layout and text.";
+  }
+
+  // Filter unmatchedSets to only base-component families (drop noise).
+  const baseComponentUnmatched = Object.entries(unmatchedSets)
+    .filter(([name]) => isBaseComponent(name))
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const baseComponentCount = baseComponentUnmatched.reduce((sum, [, count]) => sum + count, 0);
+
+  // Build the markdown notice.
+  let notice = "**Imported from Figma** — geometry is exact, styled with the design system.\n\n";
+
+  // ✅ Recognised components section (show when there are matched instances).
+  if (matchedInstances > 0) {
+    const componentsText = matchedInstances === 1 ? "component" : "components";
+    const imports = kitImports.length > 0 ? `: ${kitImports.join(", ")}` : "";
+    notice += `✅ **${matchedInstances} ${componentsText}** recognised — these transfer to production code${imports}.\n\n`;
+  }
+
+  // ⚠️ Unmatched base-components section (show only when there are base-component unmatched).
+  if (baseComponentCount > 0) {
+    const elementsText = baseComponentCount === 1 ? "element" : "elements";
+    notice += `⚠️ **${baseComponentCount} off-system ${elementsText}** rendered as static pixels (won't transfer):\n`;
+    const top = baseComponentUnmatched.slice(0, topN);
+    for (const [name, count] of top) {
+      notice += `- ${name} ×${count}\n`;
+    }
+    // FIX 1: If there are more families than shown, append "…and N more" bullet.
+    if (baseComponentUnmatched.length > topN) {
+      const remaining = baseComponentUnmatched.length - topN;
+      notice += `- …and ${remaining} more\n`;
+    }
+    notice += "\nSwap these to Arcade design-system components in Figma to make them real code.";
+  } else if (matchedInstances > 0) {
+    // FIX 3: Only say "everything transfers" when there ARE recognised components.
+    notice += "Everything recognised will transfer to production.";
+  } else {
+    // FIX 3: When nothing recognised and nothing actionable unmatched.
+    notice += "No design-system components recognised in this frame.";
+  }
+
+  return notice;
 }
 
 /** Pull the document for a node out of figmanage's get-nodes response. */
@@ -411,12 +505,9 @@ export async function runFigmaKitEmitBranch(
     return { ok: true, frameSlug, entryPath: path.join(fdir, entryFileName), componentName };
   }
 
-  const compNames = result.kitImports.join(", ");
-  const trailer =
-    `Imported from Figma with exact geometry. ${result.kitInstanceCount} elements are real kit components` +
-    (compNames ? ` (${compNames})` : "") +
-    "; unmatched elements are faithful static markup with locally exported assets. " +
-    "Tell me what to change or which interactions to wire next.";
+  // formatHandRollNotice now owns the full formatted message (including header,
+  // recognition status, and transferability framing). Append only the next-action CTA.
+  const trailer = `${formatHandRollNotice(result)}\n\nTell me what to change or which interactions to wire next.`;
   narrate(trailer);
 
   await appendHistory(slug, {

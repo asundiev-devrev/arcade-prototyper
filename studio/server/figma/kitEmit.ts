@@ -948,7 +948,19 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
       if (!k) {
         const { setName } = resolveIdentity(n.componentId, ctx.components, ctx.componentSets);
         const name = setName ?? "(unknown)";
-        unmatchedSets[name] = (unmatchedSets[name] ?? 0) + 1;
+        // FIX 2: Exclude icon instances from the unmatched notice — an unmapped
+        // Arcade icon is still a real ADS component, and icons render fine as
+        // faithful SVG. Only non-icon unmatched instances are "static pixels that
+        // won't transfer". An icon set name is one that WOULD match ICON_SET_NAME_TO_KIT
+        // if it were mapped.
+        const isIconSet = name && (
+          ICON_SET_NAME_TO_KIT[name] !== undefined ||
+          /^Icons[/\s]/.test(name) ||
+          /\bIcon\b/.test(name)
+        );
+        if (!isIconSet) {
+          unmatchedSets[name] = (unmatchedSets[name] ?? 0) + 1;
+        }
       }
     }
 
@@ -1077,6 +1089,63 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
             }
           });
           lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><Breadcrumb.Root>${parts.join("")}</Breadcrumb.Root></div>`);
+          return;
+        }
+        case "Banner": {
+          // REAL API (verified against index.d.mts:2092): `children: ReactNode` is
+          // REQUIRED; `title` is ONLY used for layout="section" (default is
+          // "inline", and the ADS set we map is literally "Inline Banner"). So ALL
+          // text goes into children — putting the primary text in `title` renders
+          // an EMPTY inline banner. `intent` ∈ BannerIntent; reuse the Tag intent
+          // map (neutral/alert/success/warning/info/intelligence) if present.
+          usedKit.add("Banner");
+          kitInstanceCount++;
+          const texts = visibleTexts(n).filter((t) => t.trim() && t.trim() !== "Slot");
+          const body = texts.join(" ");
+          const intent = TAG_INTENT_MAP[p.Type ?? p.Intent ?? ""];
+          const ia = intent ? ` intent="${intent}"` : "";
+          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><Banner${ia}>${escText(body)}</Banner></div>`);
+          return;
+        }
+        case "TextArea": {
+          usedKit.add("TextArea");
+          kitInstanceCount++;
+          const texts = visibleTexts(n).filter((t) => t.trim() && t.trim() !== "Slot");
+          const value = texts[0];
+          const attrs = value
+            ? `defaultValue=${JSON.stringify(value)}`
+            : `placeholder=${JSON.stringify("")}`;
+          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><TextArea ${attrs} /></div>`);
+          return;
+        }
+        case "KeyboardShortcut": {
+          // REAL API (verified against index.d.mts:2253): `keys: string[]` is
+          // REQUIRED and the body calls keys.map(); CHILDREN ARE IGNORED. Passing
+          // text as children (with no `keys`) → keys.map on undefined → runtime
+          // TypeError → WHITE-SCREEN (esbuild frames aren't type-checked). So we
+          // MUST split the combo into a keys array and pass it as a prop.
+          usedKit.add("KeyboardShortcut");
+          kitInstanceCount++;
+          // FIX 4: Strip "Slot" placeholder to match Banner/TextArea/SplitButton.
+          const texts = visibleTexts(n).filter((t) => t.trim() && t.trim() !== "Slot");
+          const combo = texts[0] ?? "⌘K";
+          // Split on common separators (⌘K, "Cmd K", "Ctrl+Shift+P") into labels.
+          const keys = combo.split(/[\s+]+/).flatMap((seg) =>
+            // keep multi-char words whole; split bare glyph runs like "⌘K" into ⌘,K
+            /^[\w-]+$/.test(seg) ? [seg] : Array.from(seg),
+          ).filter(Boolean);
+          const keysArr = keys.length ? keys : [combo];
+          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><KeyboardShortcut keys={${JSON.stringify(keysArr)}} /></div>`);
+          return;
+        }
+        case "SplitButton": {
+          usedKit.add("SplitButton");
+          usedKit.add("SplitButtonItem");
+          kitInstanceCount++;
+          const texts = visibleTexts(n).filter((t) => t.trim() && t.trim() !== "Slot");
+          const label = texts[0] ?? "Action";
+          // SplitButton composes SplitButtonItem children; emit the primary item.
+          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><SplitButton><SplitButtonItem>${escText(label)}</SplitButtonItem></SplitButton></div>`);
           return;
         }
         case "Badge": {
