@@ -10,6 +10,7 @@ import {
   assetCacheDir,
   formatCoverage,
   formatHandRollNotice,
+  BASE_COMPONENT_NAMES,
 } from "../../../server/figma/kitEmitBranch";
 
 vi.mock("../../../server/paths", () => ({
@@ -565,90 +566,117 @@ describe("runFigmaKitEmitBranch — A2 asset cache", () => {
 });
 
 describe("formatHandRollNotice", () => {
-  it("names recognised count and the static (non-transferable) unmatched sets", () => {
+  it("filters noise (bg-opacity, Object ID, Cell) and shows only base components", () => {
     const line = formatHandRollNotice({
       totalInstances: 20,
       matchedInstances: 8,
-      unmatchedSets: { Card: 5, Reaction: 4, Toolbar: 3 },
-      kitImports: ["Button", "Input", "Checkbox"],
+      unmatchedSets: { "bg-opacity": 10, "Object ID": 5, Checkbox: 5, Cell: 3 },
+      kitImports: ["Button", "Input"],
     });
-    expect(line).toContain("8"); // recognised
-    expect(line).toContain("static"); // transferability framing
-    expect(line).toContain("Card");
-    expect(line).toContain("Reaction");
+    // Only Checkbox (a base component) appears; noise is filtered.
+    expect(line).toContain("Checkbox");
+    expect(line).not.toContain("bg-opacity");
+    expect(line).not.toContain("Object ID");
+    expect(line).not.toContain("Cell");
+    // Count is only the base-component sum (5), not all unmatched (23).
+    expect(line).toContain("5 off-system");
   });
 
-  it("says everything transferred when nothing is unmatched", () => {
-    const line = formatHandRollNotice({ totalInstances: 5, matchedInstances: 5, unmatchedSets: {}, kitImports: ["Button"] });
-    expect(line.toLowerCase()).toContain("all");
-    expect(line).not.toContain("static");
-  });
-
-  it("handles a zero-instance frame without dividing by zero", () => {
-    const line = formatHandRollNotice({ totalInstances: 0, matchedInstances: 0, unmatchedSets: {}, kitImports: [] });
-    expect(typeof line).toBe("string");
-  });
-
-  it("FIX 1: attaches recognised component names to the Recognised clause, not after Swap", () => {
+  it("omits the won't-transfer section when all unmatched are noise", () => {
     const line = formatHandRollNotice({
       totalInstances: 10,
-      matchedInstances: 3,
-      unmatchedSets: { Cell: 7 },
-      kitImports: ["Banner", "Button", "Bell"],
+      matchedInstances: 5,
+      unmatchedSets: { "bg-opacity": 10, "Object ID": 5, Cell: 3 },
+      kitImports: ["Button", "Input"],
     });
-    // The recognised names appear attached to "Recognised N" — check the name comes
-    // BEFORE the second sentence (the "static pixels" clause), not after "Swap".
-    const recognisedIdx = line.indexOf("Recognised 3");
-    const staticIdx = line.indexOf("static pixels");
-    const bannerIdx = line.indexOf("Banner");
-    expect(recognisedIdx).toBeGreaterThan(-1);
-    expect(staticIdx).toBeGreaterThan(-1);
-    expect(bannerIdx).toBeGreaterThan(-1);
-    expect(bannerIdx).toBeGreaterThan(recognisedIdx); // name after "Recognised"
-    expect(bannerIdx).toBeLessThan(staticIdx); // name BEFORE "static pixels"
-    expect(line).toContain("(Banner, Button, Bell)");
+    // No base components unmatched → no "won't transfer" section, no "static".
+    expect(line.toLowerCase()).not.toContain("won't transfer");
+    expect(line.toLowerCase()).not.toContain("static");
+    expect(line.toLowerCase()).not.toContain("off-system");
+    // Still shows the recognised components.
+    expect(line).toContain("Button");
+    expect(line).toContain("Input");
   });
 
-  it("FIX 3: omits the trailing static-markup sentence when everything matched", () => {
+  it("uses markdown: ✅ for recognised, ⚠️ + bullets for unmatched", () => {
+    const line = formatHandRollNotice({
+      totalInstances: 10,
+      matchedInstances: 5,
+      unmatchedSets: { Button: 3, Checkbox: 2 },
+      kitImports: ["Input"],
+    });
+    expect(line).toContain("✅");
+    expect(line).toContain("⚠️");
+    expect(line).toContain("- Button ×3");
+    expect(line).toContain("- Checkbox ×2");
+  });
+
+  it("all-matched: shows only ✅ + 'everything recognised', no ⚠️", () => {
     const line = formatHandRollNotice({
       totalInstances: 5,
       matchedInstances: 5,
       unmatchedSets: {},
-      kitImports: ["Button"],
+      kitImports: ["Button", "Input"],
     });
-    expect(line.toLowerCase()).toContain("all");
-    // Should NOT say "Unmatched elements are faithful static markup" when nothing is unmatched.
-    expect(line.toLowerCase()).not.toContain("unmatched");
-    expect(line.toLowerCase()).not.toContain("static");
+    expect(line).toContain("✅");
+    expect(line.toLowerCase()).toContain("everything");
+    expect(line).not.toContain("⚠️");
+    expect(line.toLowerCase()).not.toContain("won't transfer");
   });
 
-  it("reports ALL-MATCHED when unmatchedSets is empty (unmatched icons were already filtered)", () => {
-    // totalInstances=2, matchedInstances=1 → one unmatched, BUT unmatchedSets={} means
-    // the only unmatched was an icon (excluded from unmatchedSets). Should report all-matched.
+  it("zero-instance frame: custom layout and text", () => {
+    const line = formatHandRollNotice({
+      totalInstances: 0,
+      matchedInstances: 0,
+      unmatchedSets: {},
+      kitImports: [],
+    });
+    expect(line.toLowerCase()).toContain("custom layout");
+    expect(typeof line).toBe("string");
+  });
+
+  it("partial match: shows both ✅ and ⚠️ sections", () => {
+    const line = formatHandRollNotice({
+      totalInstances: 10,
+      matchedInstances: 3,
+      unmatchedSets: { Select: 5, Badge: 2 },
+      kitImports: ["Button", "Input", "Checkbox"],
+    });
+    expect(line).toContain("✅");
+    expect(line).toContain("⚠️");
+    expect(line).toContain("Button, Input, Checkbox");
+    expect(line).toContain("- Select ×5");
+    expect(line).toContain("- Badge ×2");
+    expect(line.toLowerCase()).toContain("swap these");
+  });
+
+  it("counts element/elements plural correctly", () => {
+    const singular = formatHandRollNotice({
+      totalInstances: 2,
+      matchedInstances: 1,
+      unmatchedSets: { Button: 1 },
+      kitImports: ["Input"],
+    });
+    expect(singular).toMatch(/1 off-system element\b/);
+
+    const plural = formatHandRollNotice({
+      totalInstances: 5,
+      matchedInstances: 2,
+      unmatchedSets: { Button: 2, Checkbox: 1 },
+      kitImports: ["Input"],
+    });
+    expect(plural).toMatch(/3 off-system elements\b/);
+  });
+
+  it("legacy: reports ALL-MATCHED when unmatchedSets is empty (icon-only unmatched)", () => {
     const line = formatHandRollNotice({
       totalInstances: 2,
       matchedInstances: 1,
       unmatchedSets: {},
       kitImports: ["Button"],
     });
-    expect(line.toLowerCase()).toContain("all");
-    expect(line).toContain("recognised");
-    expect(line.toLowerCase()).not.toContain("static");
-    expect(line.toLowerCase()).not.toContain("won't transfer");
-  });
-
-  it("counts unmatched from the sum of unmatchedSets values, not total-matched", () => {
-    // totalInstances=5, matchedInstances=2, unmatchedSets={Cell:2} → count must be 2
-    // (the sum of unmatchedSets), NOT 3 (total-matched).
-    const line = formatHandRollNotice({
-      totalInstances: 5,
-      matchedInstances: 2,
-      unmatchedSets: { Cell: 2 },
-      kitImports: ["Button", "Input"],
-    });
-    // Should say "2 elements rendered as static" not "3 elements".
-    expect(line).toContain("2 element");
-    expect(line).not.toContain("3 element");
-    expect(line).toContain("Cell");
+    expect(line).toContain("✅");
+    expect(line.toLowerCase()).toContain("everything");
+    expect(line).not.toContain("⚠️");
   });
 });
