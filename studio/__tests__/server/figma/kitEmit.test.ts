@@ -267,7 +267,7 @@ describe("emit — Banner/TextArea (asset tests)", () => {
       assetFiles: new Map([["v1", "v1.svg"]]),
     });
     expect(r.source).toContain('import a_v1 from "./assets/v1.svg";');
-    expect(r.source).toContain("<img src={a_v1}");
+    expect(r.source).toMatch(/<img[^>]+src=\{a_v1\}/);
     expect(r.assetRefs).toEqual(["./assets/v1.svg"]);
   });
 
@@ -422,7 +422,7 @@ describe("emit — Banner/TextArea (asset tests)", () => {
 
     const r = emitKitFrame(doc, { ...ctxMaps, assetFiles: new Map([["glyph", "glyph.svg"]]) });
     expect(r.source).toContain("<IconButton");
-    expect(r.source).toContain("<img src={a_glyph}");
+    expect(r.source).toMatch(/<img[^>]+src=\{a_glyph\}/);
     expect(r.source).not.toContain("<span />");
   });
 
@@ -457,9 +457,9 @@ describe("emit — Banner/TextArea (asset tests)", () => {
     expect(plan.svgIds).toContain("ic-v");
 
     const r = emitKitFrame(doc, { ...maps, assetFiles: new Map([["ic-v", "ic-v.svg"]]) });
-    expect(r.source).toContain("<img src={a_ic_v}");
+    expect(r.source).toMatch(/<img[^>]+src=\{a_ic_v\}/);
     // The bare vector must NOT also be emitted as a separate plain box.
-    expect(r.source).not.toContain('<div style={{position: "absolute", left: "4px", top: "4px"');
+    expect(r.source).not.toContain('<div data-figma-id="ic-v" style={{position: "absolute", left: "4px", top: "4px"');
   });
 
   it("D1: degrades to a box (no crash) when the unmapped glyph's export is missing", () => {
@@ -1204,5 +1204,87 @@ describe("kit mappings hygiene", () => {
     }
     expect(noEmitCase, `Mapped components with no emit case (render static, inflate coverage): ${noEmitCase.join(", ")}`)
       .toEqual([]);
+  });
+});
+
+// --- data-figma-id traceability stamping -------------------------------------
+
+describe("data-figma-id stamping", () => {
+  it("emits data-figma-id on a mapped component's wrapper div", () => {
+    const { components, componentSets } = checkboxMaps();
+    const doc = frameNode("0", [checkboxInstance("cb-123", true)]);
+    const r = emitKitFrame(doc, { components, componentSets, assetFiles: new Map() });
+    // The checkbox's outer centering wrapper <div> carries the node id.
+    expect(r.source).toMatch(/data-figma-id="cb-123"/);
+    // It's on the outer div, NOT immediately before the <Checkbox tag.
+    expect(r.source).not.toMatch(/data-figma-id="[^"]*"\s*><Checkbox/);
+  });
+
+  it("emits data-figma-id on a hand-rolled div (unmapped element)", () => {
+    const doc = frameNode("panel-456", [{
+      id: "child-789", type: "FRAME",
+      absoluteBoundingBox: bbox(10, 10, 100, 50),
+      fills: [{ type: "SOLID", color: { r: 0.5, g: 0.5, b: 0.5, a: 1 } }],
+    }]);
+    const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map() });
+    expect(r.source).toMatch(/data-figma-id="child-789"/);
+  });
+
+  it("emits data-figma-id on an icon element", () => {
+    const doc = frameNode("0", [{
+      id: "icon-999", type: "INSTANCE", componentId: "c:bell",
+      absoluteBoundingBox: bbox(0, 0, 16, 16),
+      children: [{
+        id: "icon-v", type: "VECTOR", absoluteBoundingBox: bbox(2, 2, 12, 12),
+        fills: [{ type: "SOLID", color: { r: 0, g: 0, b: 0, a: 1 } }],
+      }],
+    }]);
+    const r = emitKitFrame(doc, {
+      components: { "c:bell": { key: "k", name: "x", componentSetId: "s:b" } },
+      componentSets: { "s:b": { key: "irrelevant", name: "Icons/Bell" } },
+      assetFiles: new Map(),
+    });
+    expect(r.source).toMatch(/data-figma-id="icon-999"/);
+  });
+
+  it("emits data-figma-id on an img element (exported asset)", () => {
+    const doc = frameNode("0", [
+      { id: "vec-111", type: "VECTOR", absoluteBoundingBox: bbox(0, 0, 16, 16) },
+    ]);
+    const r = emitKitFrame(doc, {
+      components: {}, componentSets: {},
+      assetFiles: new Map([["vec-111", "vec-111.svg"]]),
+    });
+    expect(r.source).toMatch(/<img data-figma-id="vec-111"/);
+  });
+
+  it("emits data-figma-id on a TEXT element", () => {
+    const doc = frameNode("0", [{
+      id: "text-222", type: "TEXT", characters: "Label",
+      absoluteBoundingBox: bbox(0, 0, 100, 20),
+      style: { fontFamily: "Inter", fontSize: 14 },
+    }]);
+    const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map() });
+    expect(r.source).toMatch(/data-figma-id="text-222"/);
+  });
+
+  it("omits data-figma-id when the node has no .id (defensive, no crash)", () => {
+    const doc = frameNode("0", [{
+      type: "FRAME", absoluteBoundingBox: bbox(0, 0, 100, 50),
+    }]);
+    const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map() });
+    expect(r.source).not.toMatch(/data-figma-id=""/);
+    expect(r.source).not.toMatch(/data-figma-id="undefined"/);
+  });
+
+  it("inertness: data-figma-id is on the outer positioned wrapper, NOT inside kit components", () => {
+    const { components, componentSets } = checkboxMaps();
+    const doc = frameNode("0", [checkboxInstance("cb-inert", true)]);
+    const r = emitKitFrame(doc, { components, componentSets, assetFiles: new Map() });
+    // The attribute must be on the outer <div>, not on the <Checkbox> tag itself.
+    // Assert the pattern: <div data-figma-id="..." ...><Checkbox ... /></div>
+    expect(r.source).toMatch(/<div data-figma-id="cb-inert"[^>]*><Checkbox/);
+    // The <Checkbox tag itself must NOT carry data-figma-id.
+    expect(r.source).not.toMatch(/<Checkbox[^>]*data-figma-id/);
   });
 });

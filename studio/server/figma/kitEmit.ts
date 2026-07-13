@@ -891,6 +891,12 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
     return v;
   };
 
+  /** Inert traceability attribute — the source Figma node id, for round-trip/
+   *  incremental re-import. Never affects rendering. */
+  const figmaIdAttr = (n: RawNode): string => {
+    return n.id ? ` data-figma-id=${JSON.stringify(n.id)}` : "";
+  };
+
   /** A node's box style for its current layout context: flowing (no position,
    *  flex-child props + size) when its parent is a flex container, else the
    *  classic absolute box. Both share paintStyle, so a node never loses its
@@ -914,7 +920,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
       opts2.type ? `type="${opts2.type}" shape="square"` : "",
       `size="${avatarSizeForPx(b.width ?? 24)}"`,
     ].filter(Boolean).join(" ");
-    lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><Avatar ${attrs} /></div>`);
+    lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><Avatar ${attrs} /></div>`);
   }
 
   /** The glyph a kit IconButton/Button should render: a kit icon if the
@@ -978,7 +984,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
         const s = centerBox(n, px, py, flex);
         const col = vectorColor(n, tok);
         if (col) s.color = col;
-        lines.push(`${pad}<div style=${sx(s)}><${k.kit} size={${Math.round(Math.min(w, b.height ?? 16))}} /></div>`);
+        lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(s)}><${k.kit} size={${Math.round(Math.min(w, b.height ?? 16))}} /></div>`);
         return;
       }
 
@@ -990,7 +996,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
           const szv = SIZE_VALUE_MAP[p.Size ?? ""] ?? "md";
           const g = buttonGlyph(n);
           if (g.kit) usedKit.add(g.kit);
-          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><IconButton variant="${v}" size="${szv}" aria-label="action">${g.jsx}</IconButton></div>`);
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><IconButton variant="${v}" size="${szv}" aria-label="action">${g.jsx}</IconButton></div>`);
           return;
         }
         case "Button": {
@@ -1004,28 +1010,28 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
             kitInstanceCount++;
             const g = buttonGlyph(n);
             if (g.kit) usedKit.add(g.kit);
-            lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><IconButton variant="${v}" size="${szv}" aria-label="action">${g.jsx}</IconButton></div>`);
+            lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><IconButton variant="${v}" size="${szv}" aria-label="action">${g.jsx}</IconButton></div>`);
             return;
           }
           usedKit.add("Button");
           kitInstanceCount++;
           if (icon) usedKit.add(icon);
           const lead = icon ? ` iconLeft={<${icon} size={16} />}` : "";
-          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><Button variant="${v}" size="${szv}"${lead}>${escText(String(label))}</Button></div>`);
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><Button variant="${v}" size="${szv}"${lead}>${escText(String(label))}</Button></div>`);
           return;
         }
         case "Checkbox": {
           usedKit.add("Checkbox");
           kitInstanceCount++;
           const checked = p.Checked === "True" ? " defaultChecked" : "";
-          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><Checkbox size="sm"${checked} /></div>`);
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><Checkbox size="sm"${checked} /></div>`);
           return;
         }
         case "Switch": {
           usedKit.add("Switch");
           kitInstanceCount++;
           const checked = p.Toggle === "True" ? " defaultChecked" : "";
-          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><Switch${checked} /></div>`);
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><Switch${checked} /></div>`);
           return;
         }
         case "Tabs": {
@@ -1034,7 +1040,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
           const labels = visibleTexts(n).filter((t) => t.trim());
           const tabs = labels.length ? labels : ["Tab"];
           const trig = tabs.map((t) => `<Tabs.Trigger value=${JSON.stringify(t)}>${escText(t)}</Tabs.Trigger>`).join("");
-          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><Tabs.Root defaultValue=${JSON.stringify(tabs[0])}><Tabs.List>${trig}</Tabs.List></Tabs.Root></div>`);
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><Tabs.Root defaultValue=${JSON.stringify(tabs[0])}><Tabs.List>${trig}</Tabs.List></Tabs.Root></div>`);
           return;
         }
         case "Input": {
@@ -1053,7 +1059,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
             state === "Error" ? `error="Invalid"` : "",
             state === "Disabled" ? "disabled" : "",
           ].filter(Boolean).join(" ");
-          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><Input ${attrs} /></div>`);
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><Input ${attrs} /></div>`);
           return;
         }
         case "Select": {
@@ -1066,7 +1072,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
           kitInstanceCount++;
           const texts = visibleTexts(n).filter((t) => t.trim() && t.trim() !== "Slot");
           const placeholder = texts[0] ?? "Select…";
-          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><Select.Root><Select.Trigger><Select.Value placeholder=${JSON.stringify(placeholder)} /></Select.Trigger></Select.Root></div>`);
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><Select.Root><Select.Trigger><Select.Value placeholder=${JSON.stringify(placeholder)} /></Select.Trigger></Select.Root></div>`);
           return;
         }
         case "Breadcrumb": {
@@ -1088,7 +1094,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
               parts.push(`<Breadcrumb.Separator />`);
             }
           });
-          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><Breadcrumb.Root>${parts.join("")}</Breadcrumb.Root></div>`);
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><Breadcrumb.Root>${parts.join("")}</Breadcrumb.Root></div>`);
           return;
         }
         case "Banner": {
@@ -1104,7 +1110,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
           const body = texts.join(" ");
           const intent = TAG_INTENT_MAP[p.Type ?? p.Intent ?? ""];
           const ia = intent ? ` intent="${intent}"` : "";
-          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><Banner${ia}>${escText(body)}</Banner></div>`);
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><Banner${ia}>${escText(body)}</Banner></div>`);
           return;
         }
         case "TextArea": {
@@ -1115,7 +1121,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
           const attrs = value
             ? `defaultValue=${JSON.stringify(value)}`
             : `placeholder=${JSON.stringify("")}`;
-          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><TextArea ${attrs} /></div>`);
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><TextArea ${attrs} /></div>`);
           return;
         }
         case "KeyboardShortcut": {
@@ -1135,7 +1141,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
             /^[\w-]+$/.test(seg) ? [seg] : Array.from(seg),
           ).filter(Boolean);
           const keysArr = keys.length ? keys : [combo];
-          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><KeyboardShortcut keys={${JSON.stringify(keysArr)}} /></div>`);
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><KeyboardShortcut keys={${JSON.stringify(keysArr)}} /></div>`);
           return;
         }
         case "SplitButton": {
@@ -1145,7 +1151,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
           const texts = visibleTexts(n).filter((t) => t.trim() && t.trim() !== "Slot");
           const label = texts[0] ?? "Action";
           // SplitButton composes SplitButtonItem children; emit the primary item.
-          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><SplitButton><SplitButtonItem>${escText(label)}</SplitButtonItem></SplitButton></div>`);
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><SplitButton><SplitButtonItem>${escText(label)}</SplitButtonItem></SplitButton></div>`);
           return;
         }
         case "Badge": {
@@ -1156,7 +1162,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
           // C2 — Badge `Variant` axis (Counter: Emphasis/Neutral) → kit variant.
           const variant = BADGE_VARIANT_MAP[p.Variant ?? ""];
           const va = variant ? ` variant="${variant}"` : "";
-          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><Badge${va}>${escText(label)}</Badge></div>`);
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><Badge${va}>${escText(label)}</Badge></div>`);
           return;
         }
         case "Tag": {
@@ -1171,7 +1177,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
           const attrs =
             (intent ? ` intent="${intent}"` : "") +
             (appearance ? ` appearance="${appearance}"` : "");
-          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><Tag${attrs}>${escText(label)}</Tag></div>`);
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><Tag${attrs}>${escText(label)}</Tag></div>`);
           return;
         }
         case "Avatar":
@@ -1213,7 +1219,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
             usedKit.add("AvatarCount");
             cnt = `<AvatarCount count={${cm[1]}} size="md" />`;
           }
-          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><AvatarGroup size="md">${inner.join("")}${cnt}</AvatarGroup></div>`);
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><AvatarGroup size="md">${inner.join("")}${cnt}</AvatarGroup></div>`);
           return;
         }
         case "ChatBubble": {
@@ -1225,7 +1231,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
           const variant = /sender/i.test(String(p.Type ?? p.Variant ?? "")) ? "sender" : "receiver";
           const texts = visibleTexts(n).filter((t) => t.trim());
           const body = texts.length ? texts.join(" ") : "";
-          lines.push(`${pad}<div style=${sx(centerBox(n, px, py, flex))}><ChatBubble variant="${variant}">${escText(body)}</ChatBubble></div>`);
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><ChatBubble variant="${variant}">${escText(body)}</ChatBubble></div>`);
           return;
         }
         default:
@@ -1243,7 +1249,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
         const s = nodeBox(n, px, py, flex);
         delete s.background;
         delete s.boxShadow;
-        lines.push(`${pad}<img src={${v}} style=${sx(s)} alt="" />`);
+        lines.push(`${pad}<img${figmaIdAttr(n)} src={${v}} style=${sx(s)} alt="" />`);
         return;
       }
       // Asset missing (export failed) — degrade to a plain box below.
@@ -1255,7 +1261,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
         const s = nodeBox(n, px, py, flex);
         delete s.background;
         s.objectFit = "cover";
-        lines.push(`${pad}<img src={${v}} style=${sx(s)} alt="" />`);
+        lines.push(`${pad}<img${figmaIdAttr(n)} src={${v}} style=${sx(s)} alt="" />`);
         return;
       }
     }
@@ -1273,7 +1279,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
         const s = nodeBox(n, px, py, flex);
         delete s.background;
         delete s.boxShadow;
-        lines.push(`${pad}<img src={${v}} style=${sx(s)} alt="" />`);
+        lines.push(`${pad}<img${figmaIdAttr(n)} src={${v}} style=${sx(s)} alt="" />`);
         return;
       }
       // Export missing — fall through to the container/box path below.
@@ -1291,7 +1297,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
       // line breaks — both were silently dropped by the old single-color,
       // single-run renderer. See textRuns / escTextWithBreaks.
       const inner = textRuns(n, tok, typeof s.color === "string" ? s.color : undefined);
-      lines.push(`${pad}<div${cls} style=${sx(s)}>${inner}</div>`);
+      lines.push(`${pad}<div${figmaIdAttr(n)}${cls} style=${sx(s)}>${inner}</div>`);
       return;
     }
 
@@ -1306,13 +1312,13 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
       ? { ...nodeBox(n, px, py, flex), ...flexContainerStyle(n) }
       : nodeBox(n, px, py, flex);
     if (!kids.length) {
-      lines.push(`${pad}<div style=${sx(s)} />`);
+      lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(s)} />`);
       return;
     }
     const childCtx: FlexCtx = flexHere
       ? { inFlex: true, parentMode: n.layoutMode }
       : ABSOLUTE_CTX;
-    lines.push(`${pad}<div style=${sx(s)}>`);
+    lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(s)}>`);
     for (const c of kids) emit(c, b.x ?? px, b.y ?? py, ind + 1, childCtx);
     lines.push(`${pad}</div>`);
   }
