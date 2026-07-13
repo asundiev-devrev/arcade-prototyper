@@ -1287,4 +1287,17 @@ describe("data-figma-id stamping", () => {
     // The <Checkbox tag itself must NOT carry data-figma-id.
     expect(r.source).not.toMatch(/<Checkbox[^>]*data-figma-id/);
   });
+
+  it("handles realistic colon-form Figma node IDs", () => {
+    const doc = frameNode("0", [{
+      id: "191:19683", type: "FRAME",
+      absoluteBoundingBox: bbox(0, 0, 100, 50),
+      fills: [{ type: "SOLID", color: { r: 0.2, g: 0.4, b: 0.6, a: 1 } }],
+    }]);
+    const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map() });
+    // The colon must be preserved exactly, and the attribute must be properly quoted.
+    expect(r.source).toMatch(/data-figma-id="191:19683"/);
+    // Ensure it's not malformed (missing quotes, broken tag).
+    expect(r.source).not.toMatch(/data-figma-id=191/);
+  });
 });
