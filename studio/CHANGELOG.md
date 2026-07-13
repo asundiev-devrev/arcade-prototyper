@@ -8,7 +8,17 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-## [0.43.3] — 2026-07-09
+## [0.44.0] — 2026-07-13
+
+### Added
+- **Studio now recognises more of your design system.** Banners, text areas, keyboard shortcuts, and split buttons imported from Figma now come through as real design-system components (not just look-alike boxes) — so more of your prototype is production-ready code, not a throwaway.
+- **Honest "what will transfer" summary after every Figma import.** When you import a design, Studio now tells you plainly how many elements came through as real design-system components versus how many were drawn as static pixels that won't carry over to production — and names the specific ones worth swapping to the design system in Figma. Utility and structural layers are kept out of the list so it stays scannable and actionable.
+
+### Fixed
+- **Old/deprecated components are no longer mislabelled as current ones.** If a design used an old-library button or avatar, Studio used to sometimes generate it as the current design-system component — which looked right but produced code that wouldn't fit production. It now leaves those faithful-but-static, so nothing is quietly mislabelled.
+
+### Changed
+- **Groundwork for round-tripping back to Figma.** Every generated element now carries an invisible reference to the Figma layer it came from. Nothing changes in how prototypes look — this is the foundation for future "send it back to Figma as real components" and "re-import just the parts that changed" workflows.
 
 ### Fixed
 - **Broken frames now get auto-repaired for syntax errors too.** When a generated frame had a JavaScript syntax error, the app would show a red error but the assistant kept looking at the wrong thing (imports) and couldn't fix it. Now it gets the real error — the file and line of the syntax problem — and fixes that instead.
