@@ -158,6 +158,11 @@ export function FrameCard({
         // Clean mount of the in-flight edit → promote it to last-good and
         // discard the probe. A LATE ready (after we went terminal) still lands
         // here and un-terminals: a slow fix arriving is a win.
+        // Swap navigates the visible iframe from the last-good (n=0) render to
+        // the agent's repaired source (n=reloadNonce). Any edit batch built on
+        // the old DOM is now stale — line/cols point into shifted source → tear
+        // the session down (same reason as the frame-changed teardown).
+        if (sessionFrameSlug === frame.slug) clear();
         setCommittedNonce(reloadNonce);
         setIncomingLoading(false);
         setChip("none");
@@ -179,7 +184,7 @@ export function FrameCard({
     }
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
-  }, [projectSlug, frame.slug, reloadNonce, refineTimeoutMs]);
+  }, [projectSlug, frame.slug, reloadNonce, refineTimeoutMs, sessionFrameSlug, clear]);
 
   // Clean up the terminal timer on unmount (no leaked setTimeout).
   useEffect(() => {

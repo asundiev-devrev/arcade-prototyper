@@ -232,4 +232,14 @@ describe("FrameCard double-buffer render (hold last-good)", () => {
     expect(queryByText(/couldn't get that change right/i)).toBeNull(); // late win un-terminals
     vi.useRealTimers();
   });
+
+  it("refetches with the new mode when projectMode switches (committedUrl derives from current projectMode)", () => {
+    const props = baseProps({ projectSlug: "proj", frame: F });
+    const { container, rerender } = render(<FrameCard {...props} />);
+    let committed = container.querySelector("iframe[data-frame-active='true']")!;
+    expect(committed.getAttribute("src")).toMatch(/mode=light/);
+    rerender(<FrameCard {...props} projectMode="dark" />);
+    committed = container.querySelector("iframe[data-frame-active='true']")!;
+    expect(committed.getAttribute("src")).toMatch(/mode=dark/);
+  });
 });
