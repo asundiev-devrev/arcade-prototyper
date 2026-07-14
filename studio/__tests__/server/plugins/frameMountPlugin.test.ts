@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createServer } from "vite";
-import { frameMountPlugin, buildFrameBootstrapSource } from "../../../server/plugins/frameMountPlugin";
+import { frameMountPlugin, buildFrameBootstrapSource, renderFrameShellHtml } from "../../../server/plugins/frameMountPlugin";
 
 let tmp: string;
 
@@ -73,5 +73,19 @@ describe("frameMountPlugin", () => {
     const res = await fetch(`http://localhost:${port}/api/frames/p/missing`);
     expect(res.status).toBe(404);
     await server.close();
+  });
+
+  it("bootstrap emits a happy-path frame-ready with the location nonce", () => {
+    const src = buildFrameBootstrapSource({ absFrame: "/x/index.tsx", absOverrides: "/x/o.css", mode: "light", slug: "proj", frame: "01" });
+    expect(src).toContain("arcade-studio:frame-ready");
+    expect(src).toMatch(/location\.search|URLSearchParams/); // reads its own nonce
+    expect(src).toMatch(/__arcadeFrameReadyPosted|readyPosted/); // idempotency guard
+  });
+
+  it("errorShim frame-error carries the nonce", () => {
+    // renderFrameShellHtml embeds the errorShim; assert it reads the nonce + includes it
+    const html = renderFrameShellHtml({ title: "t", mode: "light", overridesUrl: "", bootstrapUrl: "/b", errorScopeJson: { slug: "proj", frame: "01" } });
+    expect(html).toContain("arcade-studio:frame-error");
+    expect(html).toMatch(/location\.search|URLSearchParams/);
   });
 });

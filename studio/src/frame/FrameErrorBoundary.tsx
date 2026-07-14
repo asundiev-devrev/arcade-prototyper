@@ -16,6 +16,7 @@ export class FrameErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
+    const n = new URLSearchParams(window.location.search).get("n") || "";
     window.parent?.postMessage(
       {
         type: "arcade-studio:frame-error",
@@ -24,6 +25,7 @@ export class FrameErrorBoundary extends React.Component<Props, State> {
         message: String(error?.message ?? error),
         stack: String(error?.stack ?? ""),
         componentStack: String(info?.componentStack ?? ""),
+        n,
       },
       "*",
     );

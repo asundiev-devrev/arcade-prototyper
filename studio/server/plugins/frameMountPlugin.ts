@@ -38,7 +38,7 @@ function escapeHtml(s: string): string {
  * arcade-gen styles + error shim; the `bootstrapUrl` decides which virtual TSX
  * module Vite compiles.
  */
-function renderFrameShellHtml(opts: {
+export function renderFrameShellHtml(opts: {
   title: string;
   mode: "light" | "dark";
   overridesUrl: string | null;
@@ -55,6 +55,7 @@ function renderFrameShellHtml(opts: {
     (function () {
       var SLUG = ${slugJson};
       var FRAME = ${frameJson};
+      var NONCE = new URLSearchParams(location.search).get("n") || "";
       function isViteClientNoise(err) {
         var stack = String((err && err.stack) || "");
         if (!stack) return false;
@@ -77,7 +78,8 @@ function renderFrameShellHtml(opts: {
             slug: SLUG,
             frame: FRAME,
             message: msg,
-            stack: stack
+            stack: stack,
+            n: NONCE
           }, "*");
         } catch (e) {}
         var root = document.getElementById("root") || document.body;
@@ -274,12 +276,25 @@ export function buildFrameBootstrapSource(opts: {
     import "arcade-studio/frame/gestureForwarder";
     import Frame from "${absFrame}";
 
+    const __N = new URLSearchParams(location.search).get("n") || "";
+    let __arcadeFrameReadyPosted = false;
+    function ArcadeFrameReady() {
+      React.useEffect(() => {
+        if (__arcadeFrameReadyPosted) return;      // StrictMode double-invoke guard
+        __arcadeFrameReadyPosted = true;
+        window.parent && window.parent.postMessage(
+          { type: "arcade-studio:frame-ready", slug: ${JSON.stringify(slug)}, frame: ${JSON.stringify(frame)}, n: __N }, "*");
+      }, []);
+      return null;
+    }
+
     ReactDOM.createRoot(document.getElementById("root")).render(
       <React.StrictMode>
         <DevRevThemeProvider mode="${mode}">
           <FrameFontProxy />
           <FrameErrorBoundary slug=${JSON.stringify(slug)} frame=${JSON.stringify(frame)}>
             <Frame />
+            <ArcadeFrameReady />
           </FrameErrorBoundary>
         </DevRevThemeProvider>
       </React.StrictMode>
