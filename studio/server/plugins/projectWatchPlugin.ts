@@ -129,7 +129,7 @@ export function projectWatchPlugin(): Plugin {
     name: "arcade-studio-project-watch",
     configureServer(server) {
       watcher = chokidar.watch(projectsRoot(), { ignoreInitial: true, depth: 6 });
-      watcher.on("all", (event, filePath) => handleProjectWatchEvent(event, filePath, server));
+      watcher.on("all", async (event, filePath) => handleProjectWatchEvent(event, filePath, server));
     },
     async closeBundle() {
       await watcher?.close();
