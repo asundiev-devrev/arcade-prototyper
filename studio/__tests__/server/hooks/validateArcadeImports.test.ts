@@ -289,6 +289,7 @@ describe("formatErrorMessage", () => {
 });
 
 import { spawnSync } from "node:child_process";
+import os from "node:os";
 
 const HOOK = path.resolve(__dirname, "../../../server/hooks/validateArcadeImports.mjs");
 
@@ -303,6 +304,13 @@ function runHook(payload, envOverrides = {}) {
     },
     encoding: "utf-8",
   });
+}
+
+function tmpFrame(content: string): string {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "validate-hook-"));
+  const filePath = path.join(tmpDir, "test-frame.tsx");
+  fs.writeFileSync(filePath, content, "utf-8");
+  return filePath;
 }
 
 describe("validateArcadeImports hook (integration)", () => {
@@ -354,17 +362,19 @@ describe("validateArcadeImports hook (integration)", () => {
     expect(proc.stderr).toMatch(/ArrowDownSmall/);
   });
 
-  it("validates the new_string field for Edit tool calls", () => {
-    const proc = runHook({
-      tool_name: "Edit",
-      tool_input: {
-        file_path: "/tmp/frame.tsx",
-        old_string: `import { Button } from "arcade/components";`,
-        new_string: `import { Button, ArrowsUpDownSmall } from "arcade/components";`,
-      },
-    });
+  it("validates the whole post-edit FILE for imports on an Edit (not just new_string)", () => {
+    // write a file whose FULL content has a bad arcade import, but whose
+    // new_string snippet alone looks clean
+    const file = tmpFrame(`import { NotAThing } from "arcade/components";\nexport default () => <div/>;`);
+    const proc = runHook({ tool_name: "Edit", tool_input: { file_path: file, old_string: "<div/>", new_string: "<div />" } });
     expect(proc.status).toBe(2);
-    expect(proc.stderr).toMatch(/ArrowsUpDownSmall/);
+    expect(proc.stderr).toMatch(/NotAThing/);
+  });
+
+  it("does NOT block a valid render-prop / multi-binding component on edit (JSX-ref check removed)", () => {
+    const file = tmpFrame(`import { Button } from "arcade/components";\nconst A = 1, B = 2;\nexport default ({ as: C }) => <C><Button/></C>;`);
+    const proc = runHook({ tool_name: "Edit", tool_input: { file_path: file, old_string: "<Button/>", new_string: "<Button />" } });
+    expect(proc.status).toBe(0);
   });
 
   it("still validates when the dev arcade-gen source path is gone (resolves the shipped npm package)", () => {
@@ -573,60 +583,3 @@ describe("validateJsxReferences", () => {
   });
 });
 
-describe("validateArcadeImports hook — JSX reference integration", () => {
-  it("blocks a frame that uses <WindowWithGrid /> without importing it", () => {
-    // The exact shape from the beta-tester crash: import looks valid, but
-    // the generator dropped an invented composite name into the JSX.
-    const proc = runHook({
-      tool_name: "Write",
-      tool_input: {
-        file_path: "/tmp/frame.tsx",
-        content: [
-          `import { AppShell, NavSidebar } from "arcade-prototypes";`,
-          `export default function MyWorkPage() {`,
-          `  return (`,
-          `    <AppShell sidebar={<NavSidebar />}>`,
-          `      <WindowWithGrid />`,
-          `    </AppShell>`,
-          `  );`,
-          `}`,
-        ].join("\n"),
-      },
-    });
-    expect(proc.status).toBe(2);
-    expect(proc.stderr).toMatch(/WindowWithGrid/);
-    expect(proc.stderr).toMatch(/JSX/i);
-  });
-
-  it("allows a frame whose JSX names all resolve to imports", () => {
-    const proc = runHook({
-      tool_name: "Write",
-      tool_input: {
-        file_path: "/tmp/frame.tsx",
-        content: [
-          `import { AppShell, NavSidebar } from "arcade-prototypes";`,
-          `import { Button } from "arcade/components";`,
-          `export default function Page() {`,
-          `  return (`,
-          `    <AppShell sidebar={<NavSidebar />}>`,
-          `      <Button>click</Button>`,
-          `    </AppShell>`,
-          `  );`,
-          `}`,
-        ].join("\n"),
-      },
-    });
-    expect(proc.status).toBe(0);
-  });
-
-  it("does not run the JSX check on .ts files (type casts look like JSX)", () => {
-    const proc = runHook({
-      tool_name: "Write",
-      tool_input: {
-        file_path: "/tmp/helper.ts",
-        content: `export const asNode = (x: unknown) => x as { foo: string };`,
-      },
-    });
-    expect(proc.status).toBe(0);
-  });
-});

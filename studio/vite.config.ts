@@ -175,5 +175,14 @@ export default defineConfig({
     fs: {
       allow: [path.resolve(__dirname, ".."), studioRoot()],
     },
+    hmr: {
+      // Disable the global error overlay: a frame parse error broadcasts
+      // `vite:error` to ALL connected clients and would red-wall the shell even
+      // though the resilient-render feature now holds broken frames off-screen
+      // while auto-repair runs. The overlay is global-only with no per-scope
+      // config. Parse-error auto-repair (buildErrorReporter, server-side) is
+      // unaffected. The packaged app has no dev overlay anyway.
+      overlay: false,
+    },
   },
 });

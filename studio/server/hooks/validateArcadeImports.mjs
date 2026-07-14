@@ -556,7 +556,19 @@ async function main() {
   if (toolName !== "Write" && toolName !== "Edit") process.exit(0);
   const filePath = toolInput?.file_path;
   if (!isInScope(filePath)) process.exit(0);
-  const content = extractContent(toolName, toolInput);
+
+  // For Edit, the hook fires POST-write so the file at toolInput.file_path is
+  // already the post-edit file on disk. Read it to validate the whole file for
+  // imports (not just the new_string snippet, which could miss a bad import
+  // elsewhere in the file). Fall back to extractContent on read error (new-file/race).
+  let content = extractContent(toolName, toolInput);
+  if (toolName === "Edit" && filePath) {
+    try {
+      content = readFileSync(filePath, "utf-8");
+    } catch {
+      // new-file/race: fall back to new_string (already in `content`)
+    }
+  }
   if (!content) process.exit(0);
 
   const { barrels, barrelPaths } = loadAllBarrels();
@@ -564,27 +576,13 @@ async function main() {
   const imports = parseImports(content);
   const importViolations = imports.length ? validateImports(imports, barrels) : [];
 
-  // JSX-reference check only for .tsx — .ts files use `<Foo>x` as type casts.
-  let jsxViolations = [];
-  if (filePath.endsWith(".tsx")) {
-    const merged = new Set();
-    for (const s of Object.values(barrels)) for (const n of s) merged.add(n);
-    jsxViolations = validateJsxReferences(content, merged);
-  }
+  // JSX-reference check REMOVED: whole-file scope false-blocks valid React
+  // (as-props, render-props, multi-binding const). The import check is robust;
+  // undefined-JSX crashes are now handled by resilient render, not this gate.
 
-  if (importViolations.length === 0 && jsxViolations.length === 0) process.exit(0);
+  if (importViolations.length === 0) process.exit(0);
 
-  const chunks = [];
-  if (importViolations.length) {
-    chunks.push(formatErrorMessage(importViolations, barrels, barrelPaths));
-  }
-  if (jsxViolations.length) {
-    if (chunks.length === 0) {
-      chunks.push("Blocked: some JSX tags don't resolve to an import or a local declaration.\n");
-    }
-    chunks.push(formatJsxErrorMessage(jsxViolations, barrelPaths));
-  }
-  process.stderr.write(chunks.join("\n"));
+  process.stderr.write(formatErrorMessage(importViolations, barrels, barrelPaths));
   process.exit(2);
 }
 
