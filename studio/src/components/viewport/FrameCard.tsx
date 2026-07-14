@@ -99,13 +99,18 @@ export function FrameCard({
   useEffect(() => {
     function onFrameChanged(e: Event) {
       const detail = (e as CustomEvent).detail as { slug?: string; frameId?: string };
-      if (detail?.slug === projectSlug && detail?.frameId === frame.slug) {
-        setReloadNonce((n) => n + 1);
-      }
+      if (detail?.slug !== projectSlug || detail?.frameId !== frame.slug) return;
+      // This frame's DOM is about to be rebuilt. Any active edit batch on THIS
+      // frame holds element-ids + line/cols bound to the old DOM — stale after
+      // the agent edit that triggered the reload. Keeping them risks silent
+      // no-op previews and, worse, field edits writing the WRONG JSX node. Tear
+      // the session down (also nulls the detached frameWindow).
+      if (sessionFrameSlug === frame.slug) clear();
+      setReloadNonce((n) => n + 1);
     }
     window.addEventListener("arcade-studio:frame-changed", onFrameChanged);
     return () => window.removeEventListener("arcade-studio:frame-changed", onFrameChanged);
-  }, [projectSlug, frame.slug]);
+  }, [projectSlug, frame.slug, sessionFrameSlug, clear]);
 
   // Picking-gated effect: manages picker lifecycle in the iframe.
   useEffect(() => {
@@ -168,6 +173,16 @@ export function FrameCard({
   }, [picking, frame.slug, addOrFocus, setInspectorOpen, clear, frameWindow, sessionFrameSlug, toast]);
 
   function onIframeLoad() {
+    // Re-arm the picker if it was active before the reload. Posting
+    // frame-pick-start immediately on the nonce bump would fire before the new
+    // document is ready — do it here once the iframe's onLoad guarantees the
+    // fresh document + picker listener are live.
+    if (picking) {
+      iframeRef.current?.contentWindow?.postMessage(
+        { type: "arcade-studio:frame-pick-start" },
+        "*",
+      );
+    }
     if (phase !== "running") return;
     const wrapper = wipeWrapperRef.current;
     if (!wrapper) return;
