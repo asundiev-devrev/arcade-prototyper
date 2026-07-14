@@ -58,6 +58,7 @@ export function FrameCard({
   const [hoverHandle, setHoverHandle] = useState(false);
   const [picking, setPicking] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [reloadNonce, setReloadNonce] = useState(0);
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const wipeWrapperRef = useRef<HTMLDivElement | null>(null);
@@ -92,6 +93,19 @@ export function FrameCard({
       document.body.style.userSelect = prevSelect;
     };
   }, [resizing, onFrameWidthChange, zoom]);
+
+  // Targeted reload: when the server signals THIS frame changed, bump the nonce
+  // so the iframe refetches — the shell and other frames stay alive.
+  useEffect(() => {
+    function onFrameChanged(e: Event) {
+      const detail = (e as CustomEvent).detail as { slug?: string; frameId?: string };
+      if (detail?.slug === projectSlug && detail?.frameId === frame.slug) {
+        setReloadNonce((n) => n + 1);
+      }
+    }
+    window.addEventListener("arcade-studio:frame-changed", onFrameChanged);
+    return () => window.removeEventListener("arcade-studio:frame-changed", onFrameChanged);
+  }, [projectSlug, frame.slug]);
 
   // Picking-gated effect: manages picker lifecycle in the iframe.
   useEffect(() => {
@@ -179,7 +193,7 @@ export function FrameCard({
     Math.max(FRAME_WIDTH_MIN, frameWidth),
   );
   const handleVisible = hoverHandle || resizing;
-  const frameUrl = `/api/frames/${projectSlug}/${frame.slug}?mode=${projectMode}`;
+  const frameUrl = `/api/frames/${projectSlug}/${frame.slug}?mode=${projectMode}${reloadNonce ? `&n=${reloadNonce}` : ""}`;
   const isTargetedFrame = sessionFrameSlug === frame.slug && batch.length > 0;
   const lastSelection = batch[batch.length - 1]?.selection ?? null;
 
