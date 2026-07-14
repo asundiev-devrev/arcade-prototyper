@@ -87,5 +87,8 @@ describe("frameMountPlugin", () => {
     const html = renderFrameShellHtml({ title: "t", mode: "light", overridesUrl: "", bootstrapUrl: "/b", errorScopeJson: { slug: "proj", frame: "01" } });
     expect(html).toContain("arcade-studio:frame-error");
     expect(html).toMatch(/location\.search|URLSearchParams/);
+    // Assert the nonce variable is REFERENCED in the postMessage payload (n: NONCE).
+    // If this line is removed but the 'var NONCE' declaration stays, the test will fail.
+    expect(html).toMatch(/n:\s*NONCE/);
   });
 });
