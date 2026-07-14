@@ -22,30 +22,56 @@
 ## Task 1: Targeted per-frame reload — server side (Layer 0, server half)
 
 **Files:**
-- Modify: `studio/server/plugins/projectWatchPlugin.ts:111` (the `full-reload` send)
-- Test: `studio/__tests__/server/plugins/projectWatchPlugin.test.ts`
+- Modify: `studio/server/plugins/projectWatchPlugin.ts` (the `full-reload` send at ~`:111`; extract the write-handler for testability — see Step 1)
+- Create: `studio/__tests__/server/plugins/projectWatchPlugin.test.ts` (**this file does NOT exist — create it**)
 
 **Interfaces:**
 - Produces: on a frame-source write, the server emits `server.ws.send({ type: "custom", event: "arcade-studio:frame-changed", data: { slug, frameId } })` **instead of** `{ type: "full-reload", path: "*" }`. Module-graph invalidation is unchanged (runs before the send).
 
-- [ ] **Step 1: Write the failing test**
+**Context — no test harness exists.** There is NO `projectWatchPlugin.test.ts`, and the plugin does its work inside `configureServer` via a live chokidar watcher with no injectable seam (the sibling `frameMountPlugin.test.ts` stands up a **real Vite server** rather than faking `server.ws`). Driving a real chokidar filesystem event is slow/flaky. **Preferred: refactor for testability** — extract the per-event logic into an exported pure-ish function `handleProjectWatchEvent({ event, filePath, server })` that `configureServer`'s `watcher.on("all", …)` calls, so the test drives that function directly with a fake `server` exposing a `ws.send` spy + `moduleGraph` stub. This is a clean, low-risk extraction and makes the module-graph-invalidation + send logic unit-testable.
 
-Add to `studio/__tests__/server/plugins/projectWatchPlugin.test.ts` (follow the file's existing harness — it constructs a fake `server` with a spy `ws.send` and drives the chokidar `all` handler; mirror an existing frame-write test):
+- [ ] **Step 1: Refactor for testability, then write the failing test**
+
+First extract the handler in `projectWatchPlugin.ts` (move the body of `watcher.on("all", async (event, filePath) => { … })` into an exported `export async function handleProjectWatchEvent(event, filePath, server) { … }`; the watcher callback becomes `(event, filePath) => handleProjectWatchEvent(event, filePath, server)`). No behavior change.
+
+Then create `studio/__tests__/server/plugins/projectWatchPlugin.test.ts`:
 
 ```typescript
-it("sends a targeted frame-changed custom event (not full-reload) on a frame-source write", async () => {
+import { describe, it, expect } from "vitest";
+import path from "node:path";
+import { handleProjectWatchEvent } from "../../../server/plugins/projectWatchPlugin";
+import { projectsRoot } from "../../../server/paths"; // confirm the real export used by the plugin
+
+function fakeServer() {
   const sent: any[] = [];
-  const server = makeFakeServer({ wsSend: (m: any) => sent.push(m) }); // reuse existing helper
-  await triggerWatch(server, "add", frameFile("proj", "01-frame", "index.tsx")); // existing helper
-  const reloads = sent.filter((m) => m.type === "full-reload");
-  const targeted = sent.filter((m) => m.type === "custom" && m.event === "arcade-studio:frame-changed");
-  expect(reloads).toEqual([]); // no shell-wide reload
-  expect(targeted).toHaveLength(1);
-  expect(targeted[0].data).toEqual({ slug: "proj", frameId: "01-frame" });
+  return {
+    sent,
+    ws: { send: (m: any) => sent.push(m) },
+    moduleGraph: { getModulesByFile: () => new Set(), invalidateModule: () => {} },
+  };
+}
+const frameFile = (slug: string, frameId: string, file: string) =>
+  path.join(projectsRoot(), slug, "frames", frameId, file);
+
+describe("projectWatchPlugin frame-source write", () => {
+  it("sends a targeted frame-changed custom event (not full-reload)", async () => {
+    const server = fakeServer();
+    await handleProjectWatchEvent("add", frameFile("proj", "01-frame", "index.tsx"), server as any);
+    expect(server.sent.filter((m) => m.type === "full-reload")).toEqual([]);
+    const targeted = server.sent.filter((m) => m.type === "custom" && m.event === "arcade-studio:frame-changed");
+    expect(targeted).toHaveLength(1);
+    expect(targeted[0].data).toEqual({ slug: "proj", frameId: "01-frame" });
+  });
+
+  it("does NOT send for a non-frame-source write (theme-overrides.css)", async () => {
+    const server = fakeServer();
+    await handleProjectWatchEvent("change", path.join(projectsRoot(), "proj", "theme-overrides.css"), server as any);
+    expect(server.sent.filter((m) => m.type === "custom" || m.type === "full-reload")).toEqual([]);
+  });
 });
 ```
 
-If the file's helpers differ, adapt to its real shape (read the top of the test file first); do not invent a new harness.
+Confirm `reconcileFrames` doesn't throw in the test env (it reads the projects dir); if it does, the handler already wraps it in try/catch — the send path is what matters. Adjust imports to the plugin's real dependency names.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -54,7 +80,7 @@ Expected: FAIL — server still sends `full-reload`.
 
 - [ ] **Step 3: Replace the send (keep invalidation)**
 
-In `projectWatchPlugin.ts`, the `if (isFrameSource) { … }` block — keep both `invalidateFileInModuleGraph` calls exactly as-is, replace only the final send:
+In `handleProjectWatchEvent` (the extracted function), the `if (isFrameSource) { … }` block — keep both `invalidateFileInModuleGraph` calls exactly as-is, replace only the final send:
 
 ```typescript
             invalidateFileInModuleGraph(server, filePath);
@@ -213,6 +239,8 @@ command git commit -m "feat(studio/viewport): FrameCard reloads its own iframe o
 
 **Context:** `FrameCard` now survives the reload, so a surviving edit batch holds ids/line-cols bound to the pre-reload DOM → preview posts no-op and field edits can write the wrong JSX node (silent corruption). `clear()` (`editSessionContext.tsx:124`) resets batch + `frameWindow`. The picker effect only arms on mount, so the reloaded iframe's picker stays inactive unless re-posted.
 
+**C2 — new-frame discovery race (verified concern; handled by mount, gated in Task 7).** Removing `full-reload` also removes how *already-mounted* cards learned of writes. New frames are discovered by `useFrames.ts` polling `/api/projects/:slug` every 1500ms → a new `FrameCard` mounts → its iframe loads fresh (post module-graph-invalidation, so it re-resolves correctly). **The residual risk:** a `frame-changed` event fires for a frame whose card hasn't mounted yet (arrives in the ≤1.5s poll window) → no listener → the event is dropped. This is safe *because* the card, when it does mount, loads the iframe fresh against the already-invalidated module graph — it doesn't need the missed event. But the ejected-sibling race (`index.tsx` written, composite written a beat later — see `projectWatchPlugin.ts:60-69`) must be manually verified: the sibling's `frame-changed` must reach a mounted card, OR the card's mount-load must post-date the invalidation. Add the manual gate in Task 7. No code change here beyond confirming FrameCard's iframe does a full document load on mount (it does — `src` is set at first render).
+
 - [ ] **Step 1: Write the failing test**
 
 ```typescript
@@ -262,7 +290,7 @@ Extend the Task-2 `onFrameChanged` handler:
     }
 ```
 
-Re-arm the picker: in the picker effect's dependency array (the `useEffect` gated on `picking`), add `reloadNonce` so it re-posts `frame-pick-start` to the fresh iframe after a reload while picking is active. (Locate the effect — it posts `{ type: "arcade-studio:frame-pick-start" }` — and append `reloadNonce` to its deps.)
+Re-arm the picker **on the incoming iframe's `onLoad`, not on the nonce bump** — bumping `reloadNonce` triggers an async iframe reload, so re-posting `frame-pick-start` immediately would fire before the new document is ready and the picker.ts listener is registered. Instead: in `onIframeLoad` (the existing `:156` handler), if `picking` is true, post `{ type: "arcade-studio:frame-pick-start" }` to `iframeRef.current?.contentWindow`. That guarantees the fresh document is loaded before the arm message. (Adding `reloadNonce` to the picker effect deps alone is the timing bug — do it via onLoad.)
 
 - [ ] **Step 4: Run to verify pass**
 
@@ -310,7 +338,7 @@ it("errorShim frame-error carries the nonce", () => {
 });
 ```
 
-(If `renderFrameShellHtml` isn't exported, export it — it's already indirectly tested; a direct export is a benign test-seam addition.)
+**Required first:** `renderFrameShellHtml` is currently a module-local `function` (not exported). **Export it** — the second test calls it directly. Benign test-seam addition.
 
 - [ ] **Step 2: Run to verify fail**
 
@@ -338,11 +366,12 @@ In `buildFrameBootstrapSource`, render a mount-effect sibling of `<Frame/>` insi
         if (__arcadeFrameReadyPosted) return;      // StrictMode double-invoke guard
         __arcadeFrameReadyPosted = true;
         window.parent && window.parent.postMessage(
-          { type: "arcade-studio:frame-ready", slug: ${slugJson}, frame: ${frameJson}, n: __N }, "*");
+          { type: "arcade-studio:frame-ready", slug: ${JSON.stringify(slug)}, frame: ${JSON.stringify(frame)}, n: __N }, "*");
       }, []);
       return null;
     }
 ```
+**Note:** use `${JSON.stringify(slug)}`/`${JSON.stringify(frame)}` — `slugJson`/`frameJson` are variables in `renderFrameShellHtml`, NOT in scope in `buildFrameBootstrapSource` (which uses inline `JSON.stringify(slug)` at `:281`). `React` is already imported in the bootstrap source.
 And render it as a sibling AFTER `<Frame/>` inside `<FrameErrorBoundary>`:
 ```jsx
     <FrameErrorBoundary slug={…} frame={…}>
@@ -380,7 +409,11 @@ command git commit -m "feat(studio/frame): happy-path frame-ready signal + reloa
 - Consumes: `frame-ready`/`frame-error` messages (Task 4) carrying `n`; `reloadNonce` (Task 2).
 - Produces: an incoming hidden iframe at the bumped src; on a nonce-matched `frame-ready` → swap (incoming becomes visible, old discarded); on a nonce-matched `frame-error` → discard incoming, keep last-good, show "Refining your change…" chip; a bounded client timer flips the chip to a terminal "couldn't fix it" state; a later nonce-matched `frame-ready` un-terminals and swaps.
 
-**Context (decisions locked by the spec):** two-iframe path (not snapshot). The hidden incoming iframe must be `pointer-events:none` so its gestureForwarder/picker don't double-fire. Double `/api/runtime-error` from both iframes is de-duped by the per-frame rate-limit in `buildErrorReporter.ts` — do not remove that. Timer floor must exceed real repair latency (a repair is a full claude turn + 60s rate-limit); start with **90s**, tunable (see Manual acceptance). Terminal is driven by wall-clock since the failed edit, not attempt count.
+**Context (decisions locked by the spec):** two-iframe path (not snapshot). The hidden incoming iframe must be `pointer-events:none` so its gestureForwarder/picker don't double-fire. Timer floor must exceed real repair latency (a repair is a full claude turn + 60s rate-limit); start with **90s**, tunable (see Manual acceptance). Terminal is driven by wall-clock since the failed edit, not attempt count.
+
+**Two integration hazards to handle explicitly:**
+1. **`key={projectMode}` on the current iframe (`FrameCard.tsx:328`).** It force-remounts the iframe on a light/dark switch. When you split into two iframes, the **committed (visible)** iframe keeps a `key` tied to `projectMode` so mode switches still remount it; the incoming iframe's `src` already carries `mode=`, so it's correct by construction. Don't drop the mode-remount behavior.
+2. **A `frame-error` listener ALREADY exists in `Viewport.tsx:80-116`** — it POSTs to `/api/runtime-error` (the repair-dispatch path) and is intentionally **left as-is**. FrameCard's NEW `message` listener is purely for the *visual* buffer/chip (swap/keep/timer) — it does NOT post to `/api/runtime-error`. So the two coexist: Viewport triggers the background repair; FrameCard manages the last-good render. Both iframes posting `frame-error` → two `/api/runtime-error` POSTs → the second is de-duped by the per-frame rate-limit in `buildErrorReporter.ts` (`AUTO_RETRY_WINDOW_MS`) — that rate-limit is load-bearing here; do not remove it.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -476,7 +509,7 @@ Message handler (new `useEffect` on `window` "message"), gated on nonce:
 Render both iframes; the committed one is visible (`data-frame-active="true"`), the incoming one hidden + non-interactive:
 
 ```jsx
-  <iframe ref={iframeRef} data-frame-active="true" title={frame.name} src={committedSrc} onLoad={onIframeLoad} style={{ ... }} />
+  <iframe ref={iframeRef} key={projectMode} data-frame-active="true" title={frame.name} src={committedSrc} onLoad={onIframeLoad} style={{ ... }} />
   {incomingSrc && (
     <iframe title={frame.name + " (loading)"} src={incomingSrc}
       style={{ position: "absolute", inset: 0, opacity: 0, pointerEvents: "none" }} aria-hidden />
@@ -525,23 +558,23 @@ command git commit -m "feat(studio/viewport): double-buffer render — hold last
 - [ ] **Step 1: Write the failing test**
 
 ```typescript
-it("validates the whole post-edit FILE for imports on an Edit (not just new_string)", async () => {
+it("validates the whole post-edit FILE for imports on an Edit (not just new_string)", () => {
   // write a file whose FULL content has a bad arcade import, but whose
   // new_string snippet alone looks clean
   const file = tmpFrame(`import { NotAThing } from "arcade/components";\nexport default () => <div/>;`);
-  const res = await runHook({ tool_name: "Edit", tool_input: { file_path: file, old_string: "<div/>", new_string: "<div />" } });
-  expect(res.exitCode).toBe(2);
-  expect(res.stderr).toMatch(/NotAThing/);
+  const proc = runHook({ tool_name: "Edit", tool_input: { file_path: file, old_string: "<div/>", new_string: "<div />" } });
+  expect(proc.status).toBe(2);
+  expect(proc.stderr).toMatch(/NotAThing/);
 });
 
-it("does NOT block a valid render-prop / multi-binding component on edit (JSX-ref check removed)", async () => {
+it("does NOT block a valid render-prop / multi-binding component on edit (JSX-ref check removed)", () => {
   const file = tmpFrame(`import { Button } from "arcade/components";\nconst A = 1, B = 2;\nexport default ({ as: C }) => <C><Button/></C>;`);
-  const res = await runHook({ tool_name: "Edit", tool_input: { file_path: file, old_string: "<Button/>", new_string: "<Button />" } });
-  expect(res.exitCode).toBe(0);
+  const proc = runHook({ tool_name: "Edit", tool_input: { file_path: file, old_string: "<Button/>", new_string: "<Button />" } });
+  expect(proc.status).toBe(0);
 });
 ```
 
-`tmpFrame` writes a temp `.tsx` and returns its path; `runHook` execs the hook with a JSON stdin payload and captures exit/stderr — build these from the existing test's harness (the file already spawns/invokes the hook; reuse it, and note the prior test at `:358` asserted the snippet path — update it to write a real file).
+Harness facts (verified): `runHook` already EXISTS (`validateArcadeImports.test.ts:295`, `spawnSync`) and returns a spawnSync result — use **`proc.status`** and `proc.stderr` (NOT `exitCode`). `tmpFrame` does NOT exist — create a tiny helper that writes a temp `.tsx` (e.g. under `os.tmpdir()`) and returns the absolute path (the hook reads the file from disk on Edit). The prior test **at `:357`** ("validates the new_string field for Edit tool calls") asserts the behavior being removed (snippet-scoped Edit) — update it: it must now write a real file whose whole content is what's validated, or delete it if the two new tests cover its intent.
 
 - [ ] **Step 2: Run to verify fail**
 
@@ -607,6 +640,7 @@ Expected: PASS. Re-run any failing file in isolation to confirm it's contention,
 - Force an unfixable state (ask for something nonsensical) → confirm the chip goes **terminal** ("couldn't get that change right") within ~90s and the chat is usable.
 - Confirm the **shell/chat/scroll never reload** during any edit.
 - Tune `refineTimeoutMs` if 90s feels too long/short against observed repair latency.
+- **C2 gate (new-frame discovery):** generate a BRAND-NEW frame that ejects a composite (e.g. a prompt that produces `frames/<id>/index.tsx` + a sibling `ComputerScene.tsx` written a beat later). Confirm the frame resolves cleanly (no lingering `Failed to resolve ./ComputerScene`) once its card mounts — i.e. the removal of shell full-reload did NOT reintroduce the stale-sibling-resolution bug. If it does regress, FrameCard must re-fetch its iframe on first mount after invalidation (it already loads fresh; confirm timing).
 
 - [ ] **Step 3: No version bump here** (per project convention, releases are a separate explicit step). If the whole feature is ready to ship, that's a `chore/studio-0.x.0` release cut, not part of this plan.
 
