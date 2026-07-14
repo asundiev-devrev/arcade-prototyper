@@ -573,6 +573,9 @@ async function main() {
 
   const { barrels, barrelPaths } = loadAllBarrels();
 
+  // Import validation uses parseImports (import-statement regex anchored on
+  // `from "..."`), so `.ts` type-casts like `x = <Foo>y` are not mistaken for
+  // bad imports. No JSX parsing remains post-removal of validateJsxReferences.
   const imports = parseImports(content);
   const importViolations = imports.length ? validateImports(imports, barrels) : [];
 
