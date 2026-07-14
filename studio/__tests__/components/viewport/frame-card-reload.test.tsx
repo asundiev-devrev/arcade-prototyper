@@ -101,4 +101,19 @@ describe("FrameCard targeted reload", () => {
     });
     expect(iframe.getAttribute("src")).toBe(before);
   });
+
+  it("removes the frame-changed listener on unmount (no leak)", () => {
+    const removeSpy = vi.spyOn(window, "removeEventListener");
+    const { unmount } = render(
+      <FrameCard
+        {...baseProps({
+          projectSlug: "proj",
+          frame: { slug: "01-frame", name: "F", size: "1440", createdAt: "2026-01-01T00:00:00Z" },
+        })}
+      />
+    );
+    unmount();
+    expect(removeSpy).toHaveBeenCalledWith("arcade-studio:frame-changed", expect.any(Function));
+    removeSpy.mockRestore();
+  });
 });
