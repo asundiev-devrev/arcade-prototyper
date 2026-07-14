@@ -55,7 +55,7 @@ afterEach(() => {
   };
 });
 
-function baseProps(overrides: { projectSlug: string; frame: Frame; editSession?: any }) {
+function baseProps(overrides: { projectSlug: string; frame: Frame; editSession?: any; refineTimeoutMs?: number }) {
   if (overrides.editSession) {
     mockEditSession = { ...mockEditSession, ...overrides.editSession };
   }
@@ -67,11 +67,12 @@ function baseProps(overrides: { projectSlug: string; frame: Frame; editSession?:
     projectMode: "light" as const,
     zoom: 1,
     phase: "idle" as const,
+    ...(overrides.refineTimeoutMs != null ? { refineTimeoutMs: overrides.refineTimeoutMs } : {}),
   };
 }
 
 describe("FrameCard targeted reload", () => {
-  it("bumps the iframe src nonce when a matching frame-changed event fires", () => {
+  it("bumps the reload nonce (on the incoming probe iframe) when a matching frame-changed event fires", () => {
     const { container } = render(
       <FrameCard
         {...baseProps({
@@ -80,8 +81,10 @@ describe("FrameCard targeted reload", () => {
         })}
       />
     );
-    const iframe = container.querySelector("iframe")!;
-    const before = iframe.getAttribute("src")!;
+    // Before: only the committed (last-good) iframe, no reload nonce.
+    expect(container.querySelectorAll("iframe").length).toBe(1);
+    const committed = container.querySelector("iframe[data-frame-active='true']")!;
+    const committedSrc = committed.getAttribute("src")!;
     act(() => {
       window.dispatchEvent(
         new CustomEvent("arcade-studio:frame-changed", {
@@ -89,9 +92,12 @@ describe("FrameCard targeted reload", () => {
         })
       );
     });
-    const after = iframe.getAttribute("src")!;
-    expect(after).not.toBe(before);
-    expect(after).toMatch(/[?&]n=/);
+    // Double-buffer: the reload does NOT touch the visible iframe. A hidden
+    // incoming probe mounts at the bumped nonce; the committed src is unchanged.
+    expect(committed.getAttribute("src")).toBe(committedSrc);
+    const incoming = container.querySelector("iframe:not([data-frame-active='true'])")!;
+    expect(incoming).toBeTruthy();
+    expect(incoming.getAttribute("src")).toMatch(/[?&]n=/);
   });
 
   it("ignores frame-changed for a different frame", () => {
@@ -152,5 +158,78 @@ describe("FrameCard targeted reload", () => {
       window.dispatchEvent(new CustomEvent("arcade-studio:frame-changed", { detail: { slug: "proj", frameId: "01-frame" } }));
     });
     expect(clear).not.toHaveBeenCalled();
+  });
+});
+
+describe("FrameCard double-buffer render (hold last-good)", () => {
+  const F: Frame = { slug: "01", name: "F", size: "1440", createdAt: "2026-01-01T00:00:00Z" };
+
+  it("keeps the last-good iframe visible and shows the chip on a nonce-matched frame-error", () => {
+    const { container, getByText } = render(<FrameCard {...baseProps({ projectSlug: "proj", frame: F })} />);
+    // trigger a reload → nonce becomes 1
+    act(() => {
+      window.dispatchEvent(new CustomEvent("arcade-studio:frame-changed", { detail: { slug: "proj", frameId: "01" } }));
+    });
+    // incoming iframe errors with the CURRENT nonce
+    act(() => {
+      window.dispatchEvent(new MessageEvent("message", { data: { type: "arcade-studio:frame-error", slug: "proj", frame: "01", n: "1", message: "Select is not defined" } }));
+    });
+    expect(getByText(/refining your change/i)).toBeTruthy();
+    // the visible (last-good) iframe is still the pre-reload one (not swapped)
+    const active = container.querySelector("iframe[data-frame-active='true']")!;
+    expect(active).toBeTruthy();
+    // its src still points at the pre-reload nonce (no &n=1) — last-good held
+    expect(active.getAttribute("src")).not.toMatch(/[?&]n=1\b/);
+    // the incoming (hidden) iframe was discarded on error
+    expect(container.querySelectorAll("iframe").length).toBe(1);
+  });
+
+  it("ignores a stale-nonce message from the outgoing iframe", () => {
+    const { queryByText } = render(<FrameCard {...baseProps({ projectSlug: "proj", frame: F })} />);
+    act(() => {
+      window.dispatchEvent(new CustomEvent("arcade-studio:frame-changed", { detail: { slug: "proj", frameId: "01" } })); // nonce=1
+    });
+    act(() => {
+      window.dispatchEvent(new MessageEvent("message", { data: { type: "arcade-studio:frame-error", slug: "proj", frame: "01", n: "0", message: "old" } }));
+    });
+    expect(queryByText(/refining your change/i)).toBeNull(); // nonce 0 != current 1
+  });
+
+  it("swaps and clears the chip on a nonce-matched frame-ready", () => {
+    const { container, queryByText } = render(<FrameCard {...baseProps({ projectSlug: "proj", frame: F })} />);
+    act(() => {
+      window.dispatchEvent(new CustomEvent("arcade-studio:frame-changed", { detail: { slug: "proj", frameId: "01" } }));
+    });
+    act(() => {
+      window.dispatchEvent(new MessageEvent("message", { data: { type: "arcade-studio:frame-error", slug: "proj", frame: "01", n: "1", message: "x" } }));
+    });
+    act(() => {
+      window.dispatchEvent(new MessageEvent("message", { data: { type: "arcade-studio:frame-ready", slug: "proj", frame: "01", n: "1" } }));
+    });
+    expect(queryByText(/refining your change/i)).toBeNull();
+    // committed advanced to the validated nonce; incoming discarded
+    const active = container.querySelector("iframe[data-frame-active='true']")!;
+    expect(active.getAttribute("src")).toMatch(/[?&]n=1\b/);
+    expect(container.querySelectorAll("iframe").length).toBe(1);
+  });
+
+  it("goes terminal after the timer, and recovers if a late frame-ready arrives", () => {
+    vi.useFakeTimers();
+    const { getByText, queryByText } = render(<FrameCard {...baseProps({ projectSlug: "proj", frame: F, refineTimeoutMs: 90_000 })} />);
+    act(() => {
+      window.dispatchEvent(new CustomEvent("arcade-studio:frame-changed", { detail: { slug: "proj", frameId: "01" } }));
+    });
+    act(() => {
+      window.dispatchEvent(new MessageEvent("message", { data: { type: "arcade-studio:frame-error", slug: "proj", frame: "01", n: "1", message: "x" } }));
+    });
+    act(() => {
+      vi.advanceTimersByTime(90_001);
+    });
+    expect(getByText(/couldn't get that change right/i)).toBeTruthy();
+    act(() => {
+      window.dispatchEvent(new MessageEvent("message", { data: { type: "arcade-studio:frame-ready", slug: "proj", frame: "01", n: "1" } }));
+    });
+    expect(queryByText(/couldn't get that change right/i)).toBeNull(); // late win un-terminals
+    vi.useRealTimers();
   });
 });

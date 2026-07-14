@@ -41,6 +41,7 @@ export function FrameCard({
   highlighted,
   phase = "idle",
   onDelete,
+  refineTimeoutMs = 90_000,
 }: {
   projectSlug: string;
   frame: Frame;
@@ -53,12 +54,28 @@ export function FrameCard({
   highlighted?: "target" | "missing" | null;
   phase?: TurnPhase;
   onDelete?: (frameSlug: string) => void;
+  /** Wall-clock budget (ms) for a failed edit to be auto-repaired before the
+   *  "Refining…" chip flips to the terminal "couldn't fix it" state. Floor must
+   *  exceed real repair latency (a claude turn + 60s rate-limit) — default 90s;
+   *  overridable so tests can shrink it. */
+  refineTimeoutMs?: number;
 }) {
   const [resizing, setResizing] = useState(false);
   const [hoverHandle, setHoverHandle] = useState(false);
   const [picking, setPicking] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [reloadNonce, setReloadNonce] = useState(0);
+  // Double-buffer: `committedNonce` is the last-good render that stays VISIBLE.
+  // `reloadNonce` is the in-flight edit being validated in the hidden incoming
+  // iframe. They diverge while an edit is being verified and reconverge on a
+  // clean mount (swap) — an errored edit leaves committedNonce untouched so the
+  // designer keeps seeing the last render that worked. `incomingLoading` gates
+  // whether the hidden probe iframe is mounted at all.
+  const [committedNonce, setCommittedNonce] = useState(0);
+  const [incomingLoading, setIncomingLoading] = useState(false);
+  const [chip, setChip] = useState<"none" | "refining" | "terminal">("none");
+  const [chipDetailOpen, setChipDetailOpen] = useState(false);
+  const refineTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const wipeWrapperRef = useRef<HTMLDivElement | null>(null);
@@ -106,11 +123,73 @@ export function FrameCard({
       // no-op previews and, worse, field edits writing the WRONG JSX node. Tear
       // the session down (also nulls the detached frameWindow).
       if (sessionFrameSlug === frame.slug) clear();
+      // Bump the nonce (this becomes the in-flight edit's id) and arm the hidden
+      // incoming iframe. Do NOT touch committedNonce — the last-good render
+      // stays visible until this reload proves itself with a clean mount. A
+      // fresh attempt starts hopeful: clear the chip and cancel any pending
+      // terminal countdown from a prior failure.
       setReloadNonce((n) => n + 1);
+      setIncomingLoading(true);
+      setChip("none");
+      setChipDetailOpen(false);
+      if (refineTimer.current) {
+        clearTimeout(refineTimer.current);
+        refineTimer.current = null;
+      }
     }
     window.addEventListener("arcade-studio:frame-changed", onFrameChanged);
     return () => window.removeEventListener("arcade-studio:frame-changed", onFrameChanged);
   }, [projectSlug, frame.slug, sessionFrameSlug, clear]);
+
+  // Double-buffer signal handler (Layer A + C). PURELY VISUAL: it swaps/keeps
+  // the render and drives the chip/timer. It must NOT post to /api/runtime-error
+  // — the repair-dispatch listener in Viewport.tsx owns that path. Nonce-gated:
+  // messages whose `n` doesn't match the in-flight reloadNonce are late posts
+  // from an outgoing (already-superseded) iframe and are ignored.
+  useEffect(() => {
+    function onMsg(e: MessageEvent) {
+      const d = e.data as
+        | { type?: string; slug?: string; frame?: string; n?: unknown }
+        | undefined;
+      if (!d || typeof d !== "object") return;
+      if (d.slug !== projectSlug || d.frame !== frame.slug) return;
+      if (String(d.n ?? "") !== String(reloadNonce)) return; // stale iframe — ignore
+      if (d.type === "arcade-studio:frame-ready") {
+        // Clean mount of the in-flight edit → promote it to last-good and
+        // discard the probe. A LATE ready (after we went terminal) still lands
+        // here and un-terminals: a slow fix arriving is a win.
+        setCommittedNonce(reloadNonce);
+        setIncomingLoading(false);
+        setChip("none");
+        setChipDetailOpen(false);
+        if (refineTimer.current) {
+          clearTimeout(refineTimer.current);
+          refineTimer.current = null;
+        }
+      } else if (d.type === "arcade-studio:frame-error") {
+        // The in-flight edit crashed. Discard the broken probe, keep the
+        // last-good render visible, and reassure with a calm chip. Start (or
+        // restart) the terminal countdown — if no clean mount lands within the
+        // budget, the chip flips to "couldn't fix it".
+        setIncomingLoading(false);
+        setChip("refining");
+        if (refineTimer.current) clearTimeout(refineTimer.current);
+        refineTimer.current = setTimeout(() => setChip("terminal"), refineTimeoutMs);
+      }
+    }
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, [projectSlug, frame.slug, reloadNonce, refineTimeoutMs]);
+
+  // Clean up the terminal timer on unmount (no leaked setTimeout).
+  useEffect(() => {
+    return () => {
+      if (refineTimer.current) {
+        clearTimeout(refineTimer.current);
+        refineTimer.current = null;
+      }
+    };
+  }, []);
 
   // Picking-gated effect: manages picker lifecycle in the iframe.
   useEffect(() => {
@@ -208,7 +287,18 @@ export function FrameCard({
     Math.max(FRAME_WIDTH_MIN, frameWidth),
   );
   const handleVisible = hoverHandle || resizing;
-  const frameUrl = `/api/frames/${projectSlug}/${frame.slug}?mode=${projectMode}${reloadNonce ? `&n=${reloadNonce}` : ""}`;
+  // Derive each iframe's URL from its nonce + the CURRENT projectMode. Keeping
+  // `mode=${projectMode}` in the committed URL (rather than freezing a URL
+  // string at reload time) means a later light/dark switch flows through: the
+  // `key={projectMode}` on the committed iframe remounts it, and it refetches
+  // with the new mode. `committedNonce` is the last-good (visible) render;
+  // `reloadNonce` is the in-flight edit shown only in the hidden probe iframe.
+  const buildFrameUrl = (nonce: number) =>
+    `/api/frames/${projectSlug}/${frame.slug}?mode=${projectMode}${nonce ? `&n=${nonce}` : ""}`;
+  const committedUrl = buildFrameUrl(committedNonce);
+  const incomingUrl = buildFrameUrl(reloadNonce);
+  // "Open in new tab" targets the last-good (visible) render.
+  const frameUrl = committedUrl;
   const isTargetedFrame = sessionFrameSlug === frame.slug && batch.length > 0;
   const lastSelection = batch[batch.length - 1]?.selection ?? null;
 
@@ -352,11 +442,15 @@ export function FrameCard({
             transition: "box-shadow 0.2s ease",
           }}
         >
+          {/* Committed (last-good) iframe — the one the designer sees and the
+              picker/inspector target. `key={projectMode}` is preserved so a
+              light/dark switch still force-remounts it (integration hazard #1). */}
           <iframe
             ref={iframeRef}
             key={projectMode}
+            data-frame-active="true"
             title={frame.name}
-            src={frameUrl}
+            src={committedUrl}
             onLoad={onIframeLoad}
             style={{
               width: "100%",
@@ -365,6 +459,104 @@ export function FrameCard({
               pointerEvents: resizing ? "none" : "auto",
             }}
           />
+          {/* Incoming (in-flight edit) iframe — hidden, non-interactive probe.
+              pointer-events:none + opacity:0 + aria-hidden keep its
+              gestureForwarder/picker from double-firing pan/zoom/picks to the
+              parent. It swaps in only on a nonce-matched clean mount. A distinct
+              key stops React from reusing the committed node (which would reload
+              the broken edit into the VISIBLE frame). */}
+          {incomingLoading && (
+            <iframe
+              key={`incoming-${reloadNonce}`}
+              title={`${frame.name} (loading)`}
+              src={incomingUrl}
+              aria-hidden
+              tabIndex={-1}
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                border: 0,
+                opacity: 0,
+                pointerEvents: "none",
+              }}
+            />
+          )}
+          {chip !== "none" && (
+            <div
+              role="status"
+              aria-live="polite"
+              style={{
+                position: "absolute",
+                left: 12,
+                bottom: 12,
+                right: 12,
+                maxWidth: "calc(100% - 24px)",
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+                padding: "10px 12px",
+                borderRadius: 10,
+                background: "#fafafa",
+                border: "1px solid var(--stroke-neutral-subtle)",
+                boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+                fontFamily: "system-ui, -apple-system, sans-serif",
+                fontSize: 12.5,
+                lineHeight: 1.45,
+                color: "#374151",
+                zIndex: 3,
+              }}
+            >
+              <style>{`@keyframes arcade-studio-refine-pulse { 0%, 100% { opacity: 0.4; transform: scale(0.9); } 50% { opacity: 1; transform: scale(1.1); } }`}</style>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {chip === "refining" && (
+                  <span
+                    aria-hidden
+                    style={{
+                      display: "inline-block",
+                      width: 8,
+                      height: 8,
+                      flex: "none",
+                      borderRadius: "50%",
+                      background: "#a78bfa",
+                      animation: "arcade-studio-refine-pulse 1.4s ease-in-out infinite",
+                    }}
+                  />
+                )}
+                <span style={{ color: chip === "terminal" ? "#111827" : "#374151" }}>
+                  {chip === "refining"
+                    ? "Refining your change…"
+                    : "I couldn't get that change right — tell me what you'd like instead"}
+                </span>
+              </div>
+              {chip === "terminal" && (
+                <button
+                  type="button"
+                  onClick={() => setChipDetailOpen((o) => !o)}
+                  style={{
+                    alignSelf: "flex-start",
+                    padding: 0,
+                    border: 0,
+                    background: "none",
+                    color: "#6b7280",
+                    fontSize: 11.5,
+                    cursor: "pointer",
+                    textDecoration: "underline",
+                  }}
+                >
+                  {chipDetailOpen ? "Hide details" : "What happened?"}
+                </button>
+              )}
+              {chip === "terminal" && chipDetailOpen && (
+                <div style={{ color: "#6b7280", fontSize: 11.5 }}>
+                  The last edit kept crashing this frame, so we're still showing
+                  the version that worked. Describe the change again — or a
+                  different way to get there — in the chat.
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <div
           role="separator"
