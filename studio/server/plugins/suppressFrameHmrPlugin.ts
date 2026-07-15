@@ -29,17 +29,22 @@ import { isFrameSourcePath } from "./projectWatchPlugin";
  * SECOND, unwanted channel for frame modules — this plugin closes it.
  *
  * ── Mechanism (Vite 8 / rolldown-vite) ─────────────────────────────────────
- * `hotUpdate` runs in Vite core's `handleHMRUpdate`. For each plugin, if the
- * hook returns a value, core sets `options.modules = <returned>`. The
- * subsequent `hmr()` step early-returns without sending any update payload when
- * `options.modules.length === 0` (for non-.html files). So returning `[]` here
+ * `hotUpdate` runs in Vite core's `handleHMRUpdate`. For each plugin in sorted
+ * order, if the hook returns a truthy value, core assigns
+ * `options.modules = <returned>`. The LAST truthy return wins. So a suppressor
+ * (one that returns `[]` to prevent HMR) must run LAST to have the final say —
+ * this plugin is `enforce: "post"` so our `[]` is the final assignment and no
+ * later plugin can re-populate the frame module set.
+ *
+ * The subsequent `hmr()` step early-returns without sending any update payload
+ * when `options.modules.length === 0` (for non-.html files). So returning `[]`
  * empties the module set → NO `update` payload is broadcast → the client's
  * Fast-Refresh accept boundary never fires → the committed iframe is never hot-
- * swapped. `@vitejs/plugin-react` registers no competing `hotUpdate`/
- * `handleHotUpdate` hook (its Fast Refresh rides entirely on core's dispatch),
- * so emptying the set at the core level defeats it regardless of plugin order.
- * `enforce: "pre"` is set belt-and-braces so we win against any future plugin
- * that might try to re-populate the set.
+ * swapped. `@vitejs/plugin-react` registers no `hotUpdate` hook (its Fast
+ * Refresh rides on core's dispatch), and `@tailwindcss/vite` has a `hotUpdate`
+ * hook but it bails on non-asset JS modules (returns undefined for .tsx). By
+ * running post, we guarantee we have the final say regardless of what
+ * tailwind's or any future plugin's hotUpdate returns.
  *
  * Returning `undefined` for every other file preserves DEFAULT handling — CSS
  * HMR, shared/*.ts module HMR, theme-overrides, and all studio shell source are
@@ -49,7 +54,7 @@ import { isFrameSourcePath } from "./projectWatchPlugin";
 export function suppressFrameHmrPlugin(): Plugin {
   return {
     name: "arcade-studio-suppress-frame-hmr",
-    enforce: "pre",
+    enforce: "post",
     hotUpdate({ file }) {
       // Frame-source file → return [] = "handled, propagate nothing" = HMR
       // suppressed. Anything else → return undefined = default HMR handling.

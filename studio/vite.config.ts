@@ -142,10 +142,10 @@ export default defineConfig({
   cacheDir: process.env.ARCADE_STUDIO_ROOT
     ? path.join(process.env.ARCADE_STUDIO_ROOT, `.vite-cache-${process.env.ARCADE_APP_VERSION || "dev"}`)
     : undefined,
-  // suppressFrameHmrPlugin is enforce:"pre" and listed BEFORE react() so its
-  // hotUpdate hook empties the module set for frame-source files before any
-  // Fast-Refresh update can be dispatched — keeping the resilient-render
-  // double-buffer's hold-last-good from being defeated by an in-place HMR swap.
+  // HMR suppressor runs enforce:"post" (last) so its [] return is the final
+  // word on frame-source files, keeping the resilient-render double-buffer's
+  // hold-last-good from being defeated by an in-place HMR swap. Position in
+  // this array is moot (post plugins sort last regardless).
   plugins: [suppressFrameHmrPlugin(), injectStudioSourcePlugin(), kitManifestPlugin(), react(), tailwindcss(), frameMountPlugin(), projectWatchPlugin(), liftEmitPlugin(), apiPlugin()],
   resolve: {
     alias: [
