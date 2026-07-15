@@ -76,6 +76,14 @@ export function FrameCard({
   const [chip, setChip] = useState<"none" | "refining" | "terminal">("none");
   const [chipDetailOpen, setChipDetailOpen] = useState(false);
   const refineTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // True only while an edit cycle is in flight (a reload was signalled and
+  // hasn't cleanly swapped yet). Distinguishes an in-flight edit's probe
+  // errors from ORDINARY at-rest runtime errors on the last-good committed
+  // frame — which, after ≥1 successful edit, carry the same nonce and would
+  // otherwise wrongly drive the Refining/terminal chip. Kept true THROUGH the
+  // terminal state so a late frame-ready can still un-terminal (post-terminal
+  // recovery); cleared only on a successful swap.
+  const editCycleActive = useRef(false);
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const wipeWrapperRef = useRef<HTMLDivElement | null>(null);
@@ -130,6 +138,7 @@ export function FrameCard({
       // terminal countdown from a prior failure.
       setReloadNonce((n) => n + 1);
       setIncomingLoading(true);
+      editCycleActive.current = true;
       setChip("none");
       setChipDetailOpen(false);
       if (refineTimer.current) {
@@ -154,6 +163,11 @@ export function FrameCard({
       if (!d || typeof d !== "object") return;
       if (d.slug !== projectSlug || d.frame !== frame.slug) return;
       if (String(d.n ?? "") !== String(reloadNonce)) return; // stale iframe — ignore
+      // Not an in-flight edit — ignore at-rest committed-frame errors/readies
+      // (which reconverge to the same nonce after a successful edit). Viewport's
+      // listener + the errorShim still handle a genuine at-rest runtime error;
+      // this VISUAL handler must not chip/timer on one.
+      if (!editCycleActive.current) return;
       if (d.type === "arcade-studio:frame-ready") {
         // Clean mount of the in-flight edit → promote it to last-good and
         // discard the probe. A LATE ready (after we went terminal) still lands
@@ -165,6 +179,7 @@ export function FrameCard({
         if (sessionFrameSlug === frame.slug) clear();
         setCommittedNonce(reloadNonce);
         setIncomingLoading(false);
+        editCycleActive.current = false;
         setChip("none");
         setChipDetailOpen(false);
         if (refineTimer.current) {

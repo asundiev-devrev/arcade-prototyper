@@ -242,4 +242,30 @@ describe("FrameCard double-buffer render (hold last-good)", () => {
     committed = container.querySelector("iframe[data-frame-active='true']")!;
     expect(committed.getAttribute("src")).toMatch(/mode=dark/);
   });
+
+  it("ignores at-rest committed frame errors (after a successful edit, runtime errors on the visible frame do NOT trigger the Refining chip)", () => {
+    vi.useFakeTimers();
+    const { queryByText } = render(<FrameCard {...baseProps({ projectSlug: "proj", frame: F, refineTimeoutMs: 90_000 })} />);
+    // Simulate a successful edit cycle: frame-changed → nonce=1 → frame-ready
+    act(() => {
+      window.dispatchEvent(new CustomEvent("arcade-studio:frame-changed", { detail: { slug: "proj", frameId: "01" } }));
+    });
+    act(() => {
+      window.dispatchEvent(new MessageEvent("message", { data: { type: "arcade-studio:frame-ready", slug: "proj", frame: "01", n: "1" } }));
+    });
+    // Now committedNonce=1, editCycleActive=false, chip=none. The visible iframe
+    // is at n=1. An at-rest runtime error on it (async rejection, event-handler
+    // throw, etc.) posts frame-error with n:"1" — same as the committed nonce.
+    act(() => {
+      window.dispatchEvent(new MessageEvent("message", { data: { type: "arcade-studio:frame-error", slug: "proj", frame: "01", n: "1", message: "Unhandled rejection at rest" } }));
+    });
+    // The Refining chip should NOT appear (editCycleActive=false → gate drops it)
+    expect(queryByText(/refining your change/i)).toBeNull();
+    // Advancing the timer past the terminal countdown should NOT terminal either
+    act(() => {
+      vi.advanceTimersByTime(90_001);
+    });
+    expect(queryByText(/couldn't get that change right/i)).toBeNull();
+    vi.useRealTimers();
+  });
 });
