@@ -34,6 +34,38 @@ function invalidateFileInModuleGraph(server: any, filePath: string): void {
 }
 
 /**
+ * True iff `filePath` is a frame-source module written DIRECTLY into a project
+ * frame dir: `<projectsRoot>/<slug>/frames/<frameId>/<file>.tsx|.ts`.
+ *
+ * Single source of truth for "is this a frame's own source file". Two callers
+ * depend on it staying identical:
+ *   1. `handleProjectWatchEvent` (below) — decides whether to fire the targeted
+ *      `frame-changed` reload (our SOLE intended frame-reload channel).
+ *   2. `suppressFrameHmrPlugin` — suppresses Vite's Fast-Refresh HMR for exactly
+ *      these files, so the committed (last-good) iframe can't be hot-swapped
+ *      in place behind the resilient-render double-buffer's back.
+ *
+ * Scoped to files DIRECTLY in the frame dir (parts.length === 4) — covers
+ * index.tsx AND ejected sibling modules it imports (e.g. `ComputerScene.tsx`),
+ * but NOT theme-overrides.css, shared/*.ts, nested assets, or root scaffold.
+ */
+export function isFrameSourcePath(filePath: string): boolean {
+  const rel = path.relative(projectsRoot(), filePath);
+  // Outside the projects root (e.g. any studio shell source) → not a frame file.
+  if (rel.startsWith("..") || path.isAbsolute(rel)) return false;
+  const parts = rel.split(path.sep);
+  const slug = parts[0];
+  if (!slug || !/^[a-z0-9][a-z0-9-]{0,62}$/i.test(slug)) return false;
+  // parts === [slug, "frames", frameId, "<file>.tsx|.ts"]
+  return (
+    parts[1] === "frames" &&
+    !!parts[2] &&
+    parts.length === 4 &&
+    /\.(tsx|ts)$/.test(parts[3])
+  );
+}
+
+/**
  * Exported handler for project watch events. Extracted for testability.
  * Reconciles project frame state on tsx/ts/css writes, and sends targeted
  * reload events for frame-source changes.
@@ -61,14 +93,8 @@ export async function handleProjectWatchEvent(
   // in a frame dir (parts.length === 4) — NOT theme-overrides.css,
   // shared/*.ts, or root scaffold files, whose reloads used to race the
   // chat POST (see 0.23.6 regression / project-watch-full-reload-scope).
-  const dir = parts[1];
   const frameId = parts[2];
-  const fileName = parts[3];
-  const isFrameSource =
-    dir === "frames" &&
-    !!frameId &&
-    parts.length === 4 &&
-    /\.(tsx|ts)$/.test(fileName);
+  const isFrameSource = isFrameSourcePath(filePath);
 
   // Reconcile project frame state on any tsx/ts/css change (covers
   // shared/*.ts deletes, theme-overrides.css edits, frame

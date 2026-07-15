@@ -40,6 +40,7 @@ import { turnsMiddleware } from "./server/middleware/turns";
 import { updateMiddleware } from "./server/middleware/update";
 import { frameMountPlugin } from "./server/plugins/frameMountPlugin";
 import { projectWatchPlugin } from "./server/plugins/projectWatchPlugin";
+import { suppressFrameHmrPlugin } from "./server/plugins/suppressFrameHmrPlugin";
 import { injectStudioSourcePlugin } from "./server/plugins/injectStudioSourcePlugin";
 import { kitManifestPlugin } from "./server/plugins/kitManifestPlugin";
 import { liftEmitPlugin } from "./server/plugins/liftEmitPlugin";
@@ -141,7 +142,11 @@ export default defineConfig({
   cacheDir: process.env.ARCADE_STUDIO_ROOT
     ? path.join(process.env.ARCADE_STUDIO_ROOT, `.vite-cache-${process.env.ARCADE_APP_VERSION || "dev"}`)
     : undefined,
-  plugins: [injectStudioSourcePlugin(), kitManifestPlugin(), react(), tailwindcss(), frameMountPlugin(), projectWatchPlugin(), liftEmitPlugin(), apiPlugin()],
+  // suppressFrameHmrPlugin is enforce:"pre" and listed BEFORE react() so its
+  // hotUpdate hook empties the module set for frame-source files before any
+  // Fast-Refresh update can be dispatched — keeping the resilient-render
+  // double-buffer's hold-last-good from being defeated by an in-place HMR swap.
+  plugins: [suppressFrameHmrPlugin(), injectStudioSourcePlugin(), kitManifestPlugin(), react(), tailwindcss(), frameMountPlugin(), projectWatchPlugin(), liftEmitPlugin(), apiPlugin()],
   resolve: {
     alias: [
       { find: /^arcade\/components$/, replacement: path.resolve(__dirname, "prototype-kit/arcade-components.tsx") },
