@@ -303,6 +303,102 @@ function isInScope(filePath) {
 }
 
 /**
+ * Valid arcade-namespace import specifiers, mirroring Vite's alias SEMANTICS
+ * (studio/vite.config.ts resolve.alias — the authority for this predicate):
+ *   /^arcade$/            → EXACT: only bare "arcade"
+ *   /^arcade\/components$/ → EXACT: only bare "arcade/components" (so
+ *                           "arcade/components/icons" does NOT resolve — the bug)
+ *   "arcade-studio"       → PREFIX (bare string find): "arcade-studio" AND "arcade-studio/*"
+ *   "arcade-prototypes"   → PREFIX: "arcade-prototypes" AND "arcade-prototypes/*"
+ *   /^arcade-user\/(.+)$/ → requires a non-empty name
+ * If an alias is added/changed in vite.config.ts, update this in lockstep.
+ * (A second alias table for share-time esbuild lives in server/cloudflare/
+ * bundler.ts with different subpath semantics — NOT this hook's concern.)
+ */
+export function isResolvableArcadeSpecifier(spec) {
+  return (
+    spec === "arcade" ||
+    spec === "arcade/components" ||
+    spec === "arcade-studio" ||
+    spec.startsWith("arcade-studio/") ||
+    spec === "arcade-prototypes" ||
+    spec.startsWith("arcade-prototypes/") ||
+    /^arcade-user\/.+/.test(spec)
+  );
+}
+
+/** A specifier in the arcade namespace (the only specifiers the path check judges). */
+export function isArcadeNamespaceSpecifier(spec) {
+  return spec === "arcade" || spec.startsWith("arcade/") || spec.startsWith("arcade-");
+}
+
+/**
+ * Every import specifier in the source, across ALL import/export-from forms.
+ * MUST be anchored on the import/export STATEMENT shape, NOT a loose `\bfrom`
+ * — a bare `from "…"` matches prose/JSX/template text (e.g. help copy
+ * `'… from "arcade/x"'`), which stripComments keeps verbatim (its docstring
+ * says so), producing a PHANTOM specifier → false alarm on a valid frame
+ * (adversarial-review finding; spec Open Q1). So each pattern requires the
+ * leading `import`/`export` keyword:
+ *   - `import [type] {…}/Def/* as X from "…"`  → the `from` form
+ *   - `export [type] {…}/* from "…"`           → re-export-from (also a real path)
+ *   - `import "…"`                              → side-effect (no `from`)
+ * NOT reused from parseImports (named-only) or collectDefinedIdentifiers
+ * (captures the binding, not the path). Comments stripped first; string
+ * BODIES are deliberately kept by stripComments, so the STATEMENT anchor —
+ * not a string-stripper — is what prevents phantom matches (a real import's
+ * own specifier is a string too, so stripCommentsAndStrings would wrongly
+ * erase it).
+ */
+export function extractImportSpecifiers(source) {
+  if (typeof source !== "string" || !source) return [];
+  const clean = stripComments(source);
+  const out = [];
+  // `import`/`export` … `from "spec"` — the `[^;'"]*?` between the keyword and
+  // `from` spans the clause (braces/idents/`* as x`/`type`) but never crosses a
+  // statement end or a quote, so it can't leap from prose into a later import.
+  const fromRe = /\b(?:import|export)\b[^;'"]*?\bfrom\s+["']([^"']+)["']/g;
+  // Side-effect import: `import "spec"` with a quote right after `import`.
+  const sideRe = /\bimport\s+["']([^"']+)["']/g;
+  let m;
+  while ((m = fromRe.exec(clean)) !== null) out.push(m[1]);
+  while ((m = sideRe.exec(clean)) !== null) out.push(m[1]);
+  return out;
+}
+
+/**
+ * In-scope (arcade-namespace) specifiers that fail the resolvability predicate.
+ * Each carries a correct-path suggestion. An `arcade/<subpath>` → suggest
+ * `arcade/components` (the barrel re-exports all arcade-gen icons+components);
+ * anything else → list the valid forms.
+ */
+export function detectInvalidArcadePaths(source) {
+  const out = [];
+  const seen = new Set();
+  for (const spec of extractImportSpecifiers(source)) {
+    if (seen.has(spec)) continue;
+    seen.add(spec);
+    if (!isArcadeNamespaceSpecifier(spec)) continue;
+    if (isResolvableArcadeSpecifier(spec)) continue;
+    const suggestion = spec.startsWith("arcade/")
+      ? '`arcade/components` (it re-exports all arcade-gen icons and components) or `arcade`'
+      : "one of: `arcade`, `arcade/components`, `arcade-studio[/…]`, `arcade-prototypes[/…]`, `arcade-user/<name>`";
+    out.push({ specifier: spec, suggestion });
+  }
+  return out;
+}
+
+export function formatInvalidPathError(violations) {
+  if (!violations.length) return "";
+  const lines = ["Blocked: some imports use an arcade path that doesn't resolve", "(the symbols are real, but the path is not aliased → they'd be undefined at render).", ""];
+  for (const v of violations) {
+    lines.push(`  - \`${v.specifier}\` is not a valid import path. Import from ${v.suggestion}.`);
+  }
+  lines.push("", "Fix the import path(s) and re-Write. This hook runs on every Write/Edit.");
+  return lines.join("\n");
+}
+
+/**
  * Strip line comments and block comments. Strings and template literals
  * are left intact — downstream callers that need strings removed should
  * use `stripCommentsAndStrings` on top.
@@ -578,14 +674,19 @@ async function main() {
   // bad imports. No JSX parsing remains post-removal of validateJsxReferences.
   const imports = parseImports(content);
   const importViolations = imports.length ? validateImports(imports, barrels) : [];
+  const pathViolations = detectInvalidArcadePaths(content);   // needs no barrels
 
   // JSX-reference check REMOVED: whole-file scope false-blocks valid React
   // (as-props, render-props, multi-binding const). The import check is robust;
   // undefined-JSX crashes are now handled by resilient render, not this gate.
 
-  if (importViolations.length === 0) process.exit(0);
+  if (importViolations.length === 0 && pathViolations.length === 0) process.exit(0);
 
-  process.stderr.write(formatErrorMessage(importViolations, barrels, barrelPaths));
+  const message = [
+    importViolations.length ? formatErrorMessage(importViolations, barrels, barrelPaths) : "",
+    pathViolations.length ? formatInvalidPathError(pathViolations) : "",
+  ].filter(Boolean).join("\n\n");
+  process.stderr.write(message);
   process.exit(2);
 }
 

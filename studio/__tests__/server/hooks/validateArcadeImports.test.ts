@@ -1,7 +1,13 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 // @ts-expect-error — .mjs import of a pure-JS module with no types
-import { parseImports } from "../../../server/hooks/validateArcadeImports.mjs";
+import {
+  parseImports,
+  isResolvableArcadeSpecifier,
+  isArcadeNamespaceSpecifier,
+  extractImportSpecifiers,
+  detectInvalidArcadePaths,
+} from "../../../server/hooks/validateArcadeImports.mjs";
 
 describe("parseImports", () => {
   it("extracts named imports from arcade/components", () => {
@@ -436,6 +442,24 @@ describe("validateArcadeImports hook (integration)", () => {
     });
     expect(proc.status).toBe(0);
   });
+
+  it("exit 2 on the bug path arcade/components/icons; suggests arcade/components", () => {
+    const f = tmpFrame(`import { ChevronDownSmall } from "arcade/components/icons";\nexport default () => <ChevronDownSmall/>;`);
+    const p = runHook({ tool_name: "Write", tool_input: { file_path: f, content: fs.readFileSync(f, "utf-8") } });
+    expect(p.status).toBe(2);
+    expect(p.stderr).toMatch(/arcade\/components\/icons/);
+    expect(p.stderr).toMatch(/arcade\/components\b/);
+  });
+  it("exit 0 on a resolving prefix-alias subpath (Critical regression guard)", () => {
+    const f = tmpFrame(`import { FrameErrorBoundary } from "arcade-studio/frame/FrameErrorBoundary";\nexport default () => <div/>;`);
+    const p = runHook({ tool_name: "Write", tool_input: { file_path: f, content: fs.readFileSync(f, "utf-8") } });
+    expect(p.status).toBe(0);
+  });
+  it("exit 0 on valid arcade/components + relative + npm imports", () => {
+    const f = tmpFrame(`import { Button } from "arcade/components";\nimport X from "./pages/X";\nimport React from "react";\nexport default () => <Button/>;`);
+    const p = runHook({ tool_name: "Write", tool_input: { file_path: f, content: fs.readFileSync(f, "utf-8") } });
+    expect(p.status).toBe(0);
+  });
 });
 
 // @ts-expect-error — .mjs import of a pure-JS module with no types
@@ -516,6 +540,79 @@ describe("collectDefinedIdentifiers", () => {
     expect(defined.has("MyFn")).toBe(true);
     expect(defined.has("MyClass")).toBe(true);
     expect(defined.has("MyConst")).toBe(true);
+  });
+});
+
+describe("isResolvableArcadeSpecifier", () => {
+  it("exact aliases resolve", () => {
+    for (const s of ["arcade", "arcade/components", "arcade-studio", "arcade-prototypes"])
+      expect(isResolvableArcadeSpecifier(s)).toBe(true);
+  });
+  it("PREFIX aliases resolve with a subpath (the Critical regression guard)", () => {
+    expect(isResolvableArcadeSpecifier("arcade-studio/frame/FrameErrorBoundary")).toBe(true);
+    expect(isResolvableArcadeSpecifier("arcade-prototypes/examples/Foo")).toBe(true);
+  });
+  it("arcade-user requires a non-empty name", () => {
+    expect(isResolvableArcadeSpecifier("arcade-user/Foo")).toBe(true);
+    expect(isResolvableArcadeSpecifier("arcade-user")).toBe(false);
+  });
+  it("EXACT aliases do NOT resolve a subpath", () => {
+    expect(isResolvableArcadeSpecifier("arcade/components/icons")).toBe(false);
+    expect(isResolvableArcadeSpecifier("arcade/nope")).toBe(false);
+  });
+});
+
+describe("extractImportSpecifiers (all forms)", () => {
+  it("captures named, default, namespace, side-effect, and export-from specifiers", () => {
+    const src = [
+      'import { A } from "arcade/components";',
+      'import B from "arcade/components/icons";',
+      'import * as C from "arcade-studio/frame/x";',
+      'import "arcade-prototypes/side/effect";',
+      'export { D } from "arcade/reexport";',
+    ].join("\n");
+    const specs = extractImportSpecifiers(src);
+    expect(specs).toContain("arcade/components");
+    expect(specs).toContain("arcade/components/icons");
+    expect(specs).toContain("arcade-studio/frame/x");
+    expect(specs).toContain("arcade-prototypes/side/effect");
+    expect(specs).toContain("arcade/reexport");
+  });
+  it("does NOT extract a specifier from prose/JSX/template text (no phantom → no false alarm)", () => {
+    // Real, UNescaped string bodies (stripComments keeps them). The statement
+    // anchor must prevent a bare `from "..."` in copy from being read as an import.
+    const proseString = 'const help = ' + JSON.stringify('to import icons, use from "arcade/components/icons"') + ';';
+    const jsxText = '<p>Import from "arcade/fake/path" here</p>';
+    const tmpl = 'const t = `see from "arcade/other/thing"`;';
+    const specs = extractImportSpecifiers([proseString, jsxText, tmpl].join("\n"));
+    expect(specs).not.toContain("arcade/components/icons");
+    expect(specs).not.toContain("arcade/fake/path");
+    expect(specs).not.toContain("arcade/other/thing");
+    expect(specs).toEqual([]); // none of these are import statements
+  });
+});
+
+describe("detectInvalidArcadePaths", () => {
+  it("flags the bug path, suggests arcade/components", () => {
+    const v = detectInvalidArcadePaths(`import { ChevronDownSmall } from "arcade/components/icons";`);
+    expect(v.map((x) => x.specifier)).toEqual(["arcade/components/icons"]);
+    expect(v[0].suggestion).toMatch(/arcade\/components/);
+  });
+  it("does NOT flag prefix-alias subpaths (no false alarm)", () => {
+    const src = `import { FrameErrorBoundary } from "arcade-studio/frame/FrameErrorBoundary";
+                 import example from "arcade-prototypes/examples/Foo";`;
+    expect(detectInvalidArcadePaths(src)).toEqual([]);
+  });
+  it("does NOT flag non-arcade specifiers", () => {
+    const src = `import React from "react";
+                 import { X } from "@xorkavi/arcade-gen";
+                 import { Y } from "./pages/Foo";`;
+    expect(detectInvalidArcadePaths(src)).toEqual([]);
+  });
+  it("flags a bad path in default and namespace and side-effect forms", () => {
+    expect(detectInvalidArcadePaths(`import Foo from "arcade/bad";`)).toHaveLength(1);
+    expect(detectInvalidArcadePaths(`import * as Foo from "arcade/bad";`)).toHaveLength(1);
+    expect(detectInvalidArcadePaths(`import "arcade/bad";`)).toHaveLength(1);
   });
 });
 
