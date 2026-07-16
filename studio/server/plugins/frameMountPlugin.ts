@@ -108,7 +108,7 @@ export function renderFrameShellHtml(opts: {
           var dot = document.createElement("span");
           dot.style.cssText = "display:inline-block;width:8px;height:8px;border-radius:50%;background:#a78bfa;animation:arcade-frame-pulse 1.4s ease-in-out infinite;";
           var title = document.createElement("strong");
-          title.textContent = isOverlay ? "Refining your change..." : "Auto-repairing this frame";
+          title.textContent = isOverlay ? "Refining your change…" : "Auto-repairing this frame";
           title.style.cssText = "font-weight:600;color:#111827;";
           head.appendChild(dot); head.appendChild(title);
           var sub = document.createElement("div");
