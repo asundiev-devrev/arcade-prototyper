@@ -66,8 +66,27 @@ describe("errorShim keeps the DOM (never white-screen)", () => {
     // the empty branch retains innerHTML="" + the calm panel text
     expect(html).toContain("Auto-repairing this frame");
   });
+
+  it("softens the resting-state copy after a bounded wait (constraint 5)", () => {
+    // a pure interaction error may never get a repair swap — the banner must
+    // stop promising 'Refining…' forever and tell the user what to do.
+    expect(html).toMatch(/setTimeout/);
+    expect(html).toContain("Couldn't apply that change automatically");
+  });
+
+  it("the emitted errorShim script PARSES (guards against an escaping regression)", () => {
+    // Substring asserts can't catch a syntax error inside the template-embedded
+    // IIFE — a bad escape would still contain the substrings and ship a shim
+    // that white-screens on EVERY error. Extract the <script> and parse it.
+    const m = html.match(/<script>([\s\S]*?)<\/script>/);
+    expect(m).toBeTruthy();
+    // eslint-disable-next-line no-new-func
+    expect(() => new Function(m![1])).not.toThrow();
+  });
 });
 ```
+
+**Note on the parse test:** `renderFrameShellHtml`'s FIRST `<script>` is the errorShim (the react-refresh preamble script is a later `<script type="module">`). Match the first plain `<script>...</script>`. If the html has multiple, target the errorShim one (it contains `showFatal`). Adjust the regex to select the block containing `showFatal` if the first-match assumption is wrong — confirm against the real output.
 
 - [ ] **Step 2: Run to verify fail**
 
@@ -86,11 +105,14 @@ Replace the body of `showFatal` AFTER the postMessage block (keep the postMessag
         // the only content). Branch accordingly.
         var root = document.getElementById("root");
         // "Rendered" = #root has element children, OR the app painted via a
-        // body portal (kit modals/dialogs/toasts leave #root empty). Any
-        // portal element carries a data-radix-* / [role=dialog] marker on body.
+        // body portal that leaves #root empty. Real kit markers (verified
+        // against the radix dist): a modal renders [role='dialog']; popover /
+        // select / dropdown / tooltip content renders
+        // [data-radix-popper-content-wrapper]. (There is NO data-radix-portal
+        // attribute — the Portal wrapper is an unmarked div, so don't rely on it.)
         var rendered = !!root && (
           root.childElementCount > 0 ||
-          !!document.body.querySelector("[data-radix-portal],[data-radix-popper-content-wrapper],[role='dialog']")
+          !!document.body.querySelector("[data-radix-popper-content-wrapper],[role='dialog']")
         );
         // Idempotent: never stack overlays/panels on a second error.
         if (document.querySelector("[data-arcade-status-overlay]")) return;
@@ -135,6 +157,21 @@ Replace the body of `showFatal` AFTER the postMessage block (keep the postMessag
           overlay.style.cssText = "position:fixed;left:12px;bottom:12px;max-width:calc(100% - 24px);z-index:2147483647;padding:10px 12px;border-radius:10px;background:#fafafa;border:1px solid rgba(0,0,0,0.08);box-shadow:0 4px 16px rgba(0,0,0,0.12);font:12.5px/1.45 system-ui,-apple-system,sans-serif;color:#374151;display:flex;flex-direction:column;gap:6px;";
           buildCalm(overlay, true);
           document.body.appendChild(overlay);
+          // Bounded resting-state (spec constraint 5): repair may have nothing
+          // to fix (a pure interaction error → no file change → no swap → this
+          // overlay would otherwise promise "Refining…" forever). After a
+          // bounded wait with no swap, soften to tell the user what to DO. If a
+          // real repair lands first, the committed iframe reloads and this whole
+          // document (overlay + timer) is gone — so blindly softening is safe.
+          // Self-contained in the shim: does NOT touch the parent chip / timer.
+          setTimeout(function () {
+            var live = document.querySelector("[data-arcade-status-overlay]");
+            if (!live) return; // document already swapped/reloaded → nothing to do
+            var t = live.querySelector("strong");
+            var s = live.querySelector("div");
+            if (t) t.textContent = "Couldn't apply that change automatically";
+            if (s) s.textContent = "Tell the agent what you'd like instead, or reload.";
+          }, 90000);
         } else {
           // Empty frame (module-load crash, nothing rendered) — the panel IS
           // the content. Keep today's full-panel behavior.
@@ -203,8 +240,8 @@ Expected: PASS (clear ports 9223-9232 first if wsServer/bridge tests flake; re-r
 
 ## Self-review notes (author)
 
-- **Spec coverage:** the shim branch + overlay + idempotency + z-index + empty-case panel = Task 1; full suite = Task 2; the running-app gate = Task 3. All spec "Resolved constraints" mapped: z-index 2147483647 + body-append (constraint 1); rendered = childElementCount OR body-portal (constraint 2 + test); overlay appended to body survives React unmount of #root (constraint 3 — the out-of-boundary race degrades to overlay-on-empty, message present, not blank); sentinel `data-arcade-status-overlay` idempotency (constraint 4). Constraint 5 (bounded resting-state copy softening to "couldn't auto-fix") is DEFERRED — noted below.
-- **Deliberate deferral (flag for review):** constraint 5's "after a bounded wait with no swap, soften the copy to 'couldn't auto-fix — tell me what you'd like'" adds a `setTimeout` inside the shim. Phase-1 ships the overlay showing "Refining…"; if repair never lands the banner persists with that copy. Softening-copy-on-timeout is a small follow-up, NOT in Task 1, to keep the shim change minimal + reviewable. The frozen-frame-with-a-message (even if optimistic) already satisfies the "never white, always a message" bar; the softened copy is polish. Called out so the reviewer/user can pull it into Task 1 if they'd rather ship it now.
+- **Spec coverage:** the shim branch + overlay + idempotency + z-index + empty-case panel + bounded-softener = Task 1; full suite = Task 2; the running-app gate = Task 3. ALL FIVE spec "Resolved constraints" mapped: z-index 2147483647 + body-append (1); rendered = childElementCount OR body-portal via the REAL markers `[role='dialog']`/`[data-radix-popper-content-wrapper]` (2 + test; the non-existent `data-radix-portal` selector was dropped per review); overlay on body survives React unmount of #root — out-of-boundary race degrades to overlay-on-empty, message present, not blank (3); sentinel `data-arcade-status-overlay` idempotency on both branches (4); bounded resting-state softener at 90s → "Couldn't apply that change automatically / tell the agent what you'd like, or reload" (5 — pulled INTO Task 1 per adversarial review, since a permanent optimistic "Refining…" on an un-fixable interaction error misses the goal's "tell me what to do" half; small, self-contained `setTimeout` in the shim, no parent entanglement).
+- **Escaping-regression guard:** a `new Function(extractedShim)` parse test is in Task 1 Step 1 — substring asserts alone can't catch a syntax error in the template-embedded IIFE that would white-screen every error. (The reviewer ran this parse check against the proposed code; it passes.)
 - **No parent change:** confirmed the frozen-frame message is the shim's own overlay; `FrameCard`/`editCycleActive`/`FrameErrorBoundary` untouched (avoids the shipped false-"Refining" regression).
 - **Test reality:** unit tests assert the generated SHIM SOURCE (they can't run browser JS); the behavioral proof is the Task-3 manual gate. This is honest about what jsdom can and can't cover.
 - **Type/id consistency:** the sentinel attribute is `data-arcade-status-overlay` in the source, the idempotency guard, AND the tests. The postMessage payload/`n: NONCE` is unchanged from the shipped shim.
