@@ -29,18 +29,20 @@ Live repro (project `implement-this-precisely`, frame `01-figma-4368-19734`): us
 2. **Resolvability only, not intent-matching.** One objective question per reference: *does this `--x` resolve to a real token?* No false alarms is a HARD requirement — now satisfiable because "real" = "in the union," the complete set.
 3. **Auto-fix silently, like the crash path.** Dead reference → feed the agent the specific violation + (when the token is real-in-ADS) its value → self-correct before the turn reports done. Reuse the existing exit-2 → self-correct lane.
 4. **Design-token custom-property references in scope. Tailwind class-name existence OUT** (infinite/on-demand space — Non-goals).
-5. **Authority = the UNION** (ADS color seed ∪ kit CSS ∪ project theme-overrides ∪ same-file local defs). Neither ADS nor the kit CSS is complete alone (rev-4): ADS carries the expressive-orange family the kit lacks; the kit CSS carries the `*-on-prominent`/`transparent` tokens lossy ADS-name normalization drops.
+5. **Two sets, not one:** the RESOLVABLE (renders) set = kit CSS ∪ project theme-overrides ∪ same-file local defs; the ADS seed is a SEPARATE classification oracle for references that fail the resolvable set. Neither ADS nor the kit CSS is complete alone (rev-4): ADS carries the expressive-orange family the kit lacks (→ the seed's job); the kit CSS carries the `*-on-prominent`/`transparent` tokens lossy ADS-name normalization drops (→ the resolvable set's job). Conflating them (seed inside resolvable) silently accepts kit-absent tokens = the bug.
 
 ## The resolvable set (the UNION) and the two classes the check distinguishes
 
-**Resolvable set** for a reference `--x` on a generated frame =
-`ADS color seed names ∪ kit CSS names (loadTokenNames) ∪ project theme-overrides defs ∪ same-file local defs`.
-The **ADS value map** (`--x → #hex`) comes from the seed, used only for the correction message.
+**Two DIFFERENT sets — do not conflate (this was a rev-5 self-contradiction the plan review caught):**
+- **RESOLVABLE set = what actually renders** = `kit CSS names (loadTokenNames) ∪ project theme-overrides defs ∪ same-file local defs`. A reference in this set paints something. **The ADS seed is NOT in the resolvable set** — the whole point is that ADS knows tokens the kit doesn't ship, which do NOT render.
+- **ADS seed = the classification oracle** (`--x → #hex`, ~90 rows). Consulted ONLY for references that FAILED the resolvable set — to decide "real DS token" vs "typo" and to supply the value in the message.
 
 Given a referenced `--x`:
-- **Resolvable** (in the union) → OK, no action. This includes kit-shipped tokens (via `loadTokenNames`), ADS tokens the kit also ships, project-override tokens, and the author's own inline vars.
-- **Real in ADS but NOT resolvable at render** (in the ADS seed, absent from kit CSS + overrides + local — e.g. `--bg-expressive-orange-subtle`) → dead *at render* but a REAL token. exit-2 telling the agent the real ADS value (`#FCECD2`) so it emits a rendering form (per the shipped `resolveKitTokenVar` "hex fallback, never a dead var" precedent — prefer defining the token in the project's `theme-overrides.css`, which is imported last and wins the cascade AND stays theme-reactive; else literal `bg-[#FCECD2]`).
-- **Not in ADS at all** (e.g. `--bg-orange-subtle`, `--surface-canvas`) → typo/hallucination → exit-2 flagging it with nearest-real suggestions from the union (so the mangled `--bg-orange-subtle` is answered with the real `--bg-expressive-orange-subtle = #FCECD2`).
+- **Resolvable** (in the render set) → OK, no action. Includes kit-shipped tokens (via `loadTokenNames`), ADS tokens the kit ALSO ships (they're in the kit CSS), project-override tokens, and the author's own inline vars.
+- **Not resolvable, but in the ADS seed** (real DS token the kit doesn't ship — e.g. `--bg-expressive-orange-subtle`) → dead *at render* but REAL. exit-2 telling the agent the real ADS value (`#FCECD2`) so it emits a rendering form (per the shipped `resolveKitTokenVar` "hex fallback, never a dead var" precedent — prefer defining the token in the project's `theme-overrides.css`, imported last, wins the cascade AND stays theme-reactive; else literal `bg-[#FCECD2]`). **This lane is why the seed must NOT be in the resolvable set** — if it were, this token would pass and silently render nothing (the exact bug).
+- **Not resolvable AND not in ADS** (e.g. `--bg-orange-subtle`, `--surface-canvas`) → typo/hallucination → exit-2 flagging it with nearest-real suggestions.
+
+**Suggestion caveat (honest):** nearest-real is a leading-segment prefix hint, so a mangled `--bg-orange-subtle` surfaces other `bg-*` names, NOT the semantically-right `--bg-expressive-orange-subtle` (shares only the `bg` segment, tied with many). The agent re-derives the right token from the user's intent + the message; the message does NOT claim to name the exact target for a typo. (The value-bearing correction is exact only for the seed-hit lane above.)
 
 Either way: **no silent success on an edit that renders nothing**, and no wrong-token guessing (the real value is in the seed).
 
@@ -74,7 +76,7 @@ The hook never writes other files (a validator stays a validator); the agent per
 - One static seed + live kit CSS, all frames (no per-frame map, no pull infra) ✅ (design collapse).
 
 ## The motivating bug, traced end-to-end
-Agent writes `bg-(--bg-orange-subtle)` → extracted ref `bg-orange-subtle` → not in ADS table, not in local defs → **not-in-ADS → exit-2**: "`--bg-orange-subtle` is not a design-system token. The real token for a subtle orange background is `--bg-expressive-orange-subtle` (#FCECD2), which the kit doesn't ship — use `bg-[#FCECD2]` (or define `--bg-expressive-orange-subtle` in theme-overrides.css)." Agent rewrites, hook passes, turn completes with a visible orange background. No more "I did it" over an unchanged frame — and the correction is the value the user actually asked for.
+Agent writes `bg-(--bg-orange-subtle)` (mangled) → ref `bg-orange-subtle` → not in the resolvable set (kit CSS / overrides / local) AND not in the ADS seed (the real name is `bg-expressive-orange-subtle`) → **typo → exit-2** flagging it with nearest-real `bg-*` hints. Agent, using the user's intent + its DS knowledge, rewrites to the correct `bg-(--bg-expressive-orange-subtle)` → ref not resolvable BUT in the ADS seed → **real-but-kit-absent → exit-2 with `#FCECD2`** → agent defines it in `theme-overrides.css` (or `bg-[#FCECD2]`) → resolvable → hook passes → visible orange. Two exit-2 rounds worst case; either way, **no "I did it" over an unchanged frame.**
 
 ## Correction loop
 Identical mechanism to the named-form check already shipping in this file: `exit(2)` returns the message as a tool error; the agent rewrites; the hook re-runs and passes; the turn completes showing only the corrected result. Synchronous at write time (a dead token is a no-op, not a browser crash), so no dispatch/timer/chat surface and no interaction with the resilient-render HMR/overlay changes.
