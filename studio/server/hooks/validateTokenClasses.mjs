@@ -11,6 +11,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
+import { ADS_COLOR_SEED } from "../figma/adsColorSeed.mjs";
 
 // Tailwind prefixes that take a color/token value. A class of the form
 // `<prefix>-<tail>` where <tail> is a real token name but written WITHOUT the
@@ -105,6 +106,95 @@ export function detectTokenClassViolations(classes, tokenNames) {
 }
 
 /**
+ * Custom-property REFERENCES: Tailwind `bg-(--x)`, CSS `var(--x)`, `[var(--x)]`
+ * (all contain the `(--x)` substring). Requires ≥1 internal hyphen so a JS
+ * decrement `(--i)` is never captured (every DS token is multi-segment).
+ */
+export function extractTokenRefs(source) {
+  const out = new Set();
+  if (typeof source !== "string" || !source) return out;
+  const re = /\(\s*--([a-z0-9]+(?:-[a-z0-9]+)+)\s*\)/gi;
+  let m;
+  while ((m = re.exec(source)) !== null) out.add(m[1].toLowerCase());
+  return out;
+}
+
+/**
+ * Custom-property DEFINITIONS in the source, so an author's own inline var is
+ * never flagged as dead. Matches THREE forms:
+ *   --x:                       (CSS / style string)      →  --x\s*:
+ *   { "--x": v } / { '--x': v }(React quoted object key) →  ["']--x["']\s*:
+ *   { ["--x"]: v }             (React computed key)       →  \[\s*["']--x["']\s*\]\s*:
+ * The base regex `/--([a-z0-9-]+)\s*:/` (used by extractTokenNames) misses the
+ * quoted/bracketed forms because a "/] sits between name and colon.
+ */
+export function extractLocalDefs(source) {
+  const out = new Set();
+  if (typeof source !== "string" || !source) return out;
+  // Plain --x: and quoted "--x": / '--x': and computed ["--x"]: — the optional
+  // quote/bracket chars between the name and the colon are what the base regex lacks.
+  const re = /(?:\[\s*)?["']?--([a-z0-9-]+)["']?\s*\]?\s*:/gi;
+  let m;
+  while ((m = re.exec(source)) !== null) out.add(m[1].toLowerCase());
+  return out;
+}
+
+/** Longest-shared-leading-segment names from the resolvable set (a hint, not a
+ *  color matcher). Must share ≥1 leading segment. */
+export function suggestRealTokens(deadName, resolvable, limit = 3) {
+  const segs = String(deadName).split("-");
+  const scored = [];
+  for (const name of resolvable) {
+    const other = name.split("-");
+    let shared = 0;
+    while (shared < segs.length && shared < other.length && segs[shared] === other[shared]) shared++;
+    if (shared === 0) continue;
+    scored.push({ name, shared });
+  }
+  scored.sort((a, b) => b.shared - a.shared || a.name.localeCompare(b.name));
+  return scored.slice(0, limit).map((s) => s.name);
+}
+
+/**
+ * References to a `--custom-property` absent from the resolvable UNION. Each
+ * violation carries realValue = the ADS seed value when the token is a REAL
+ * design-system token the kit just doesn't ship (→ tell the agent the value),
+ * else null (→ typo/hallucination, suggest nearest real). Fails open on an
+ * empty union.
+ */
+export function detectDeadTokenRefs(source, resolvable, seed = ADS_COLOR_SEED) {
+  if (!resolvable || resolvable.size === 0) return [];
+  const out = [];
+  for (const ref of extractTokenRefs(source)) {
+    if (resolvable.has(ref)) continue;
+    const realValue = (seed && Object.prototype.hasOwnProperty.call(seed, ref)) ? seed[ref] : null;
+    out.push({ ref, realValue, suggestions: realValue ? [] : suggestRealTokens(ref, resolvable) });
+  }
+  return out;
+}
+
+export function formatDeadTokenError(violations) {
+  if (!violations.length) return "";
+  const lines = ["Blocked: these CSS-variable references resolve to NO design-system token",
+    "(the class compiles but paints nothing — a silent no-op). Fix each:", ""];
+  for (const v of violations) {
+    if (v.realValue) {
+      lines.push(`  - \`--${v.ref}\` is a REAL design-system token but the kit doesn't ship it as CSS.`);
+      lines.push(`    Define it in the project's theme-overrides.css (theme-reactive), e.g.`);
+      lines.push(`      :root { --${v.ref}: ${v.realValue}; }`);
+      lines.push(`    or use the literal value: the \`(--${v.ref})\` → \`[${v.realValue}]\`.`);
+    } else {
+      const hint = v.suggestions.length
+        ? ` Nearest real tokens: ${v.suggestions.map((s) => `--${s}`).join(", ")}.`
+        : ` (No near match — use a real design-system token that matches the intent.)`;
+      lines.push(`  - \`--${v.ref}\` is not a design-system token.${hint}`);
+    }
+  }
+  lines.push("", "This hook runs on every Write/Edit and will block again until the references resolve.");
+  return lines.join("\n");
+}
+
+/**
  * Resolve the shipped arcade-gen token CSS and return its token-name set.
  * The runtime aliases `arcade/components` to a barrel that re-exports
  * @xorkavi/arcade-gen; the compiled tokens live in that package's
@@ -146,6 +236,27 @@ function isInScope(filePath) {
   return filePath.endsWith(".tsx") || filePath.endsWith(".ts");
 }
 
+/** The dead-token-ref check runs ONLY on generated frame files
+ *  (…/projects/<slug>/frames/<id>/*.tsx|ts). Studio's own src/** .tsx would
+ *  false-flag. The existing named-form check keeps its broader .tsx scope. */
+function isFrameFile(filePath) {
+  if (typeof filePath !== "string") return false;
+  const s = path.sep;
+  return filePath.includes(`${s}projects${s}`) && filePath.includes(`${s}frames${s}`) &&
+    (filePath.endsWith(".tsx") || filePath.endsWith(".ts"));
+}
+
+/** A project's theme-overrides.css tokens genuinely resolve at render — union
+ *  them in. Best-effort; "" on any miss. */
+function readProjectThemeOverrides(frameFilePath) {
+  try {
+    const marker = `${path.sep}frames${path.sep}`;
+    const idx = frameFilePath.indexOf(marker);
+    if (idx === -1) return "";
+    return readFileSync(path.join(frameFilePath.slice(0, idx), "theme-overrides.css"), "utf-8");
+  } catch { return ""; }
+}
+
 function extractContent(toolName, toolInput) {
   if (!toolInput || typeof toolInput !== "object") return "";
   if (toolName === "Write") return typeof toolInput.content === "string" ? toolInput.content : "";
@@ -176,10 +287,28 @@ async function main() {
 
   const tokenNames = loadTokenNames();
   const classes = parseClassNames(content);
-  const violations = detectTokenClassViolations(classes, tokenNames);
-  if (violations.length === 0) process.exit(0);
+  const classViolations = detectTokenClassViolations(classes, tokenNames);
 
-  process.stderr.write(formatTokenClassError(violations));
+  let deadRefs = [];
+  if (isFrameFile(toolInput?.file_path)) {
+    // RESOLVABLE = what actually RENDERS: kit CSS (load-bearing — carries
+    // *-on-prominent) ∪ project overrides ∪ same-file local defs. The ADS seed
+    // is NOT in here — it's the classification oracle passed separately. A seed
+    // token the kit doesn't ship does NOT render, so it must NOT be resolvable
+    // (else it silently passes = the exact bug). Fail open: empty → skip.
+    const resolvable = new Set(tokenNames);                        // kit CSS (renders)
+    for (const t of extractTokenNames(readProjectThemeOverrides(toolInput.file_path))) resolvable.add(t);
+    for (const t of extractLocalDefs(content)) resolvable.add(t);   // author-local vars
+    if (resolvable.size > 0) deadRefs = detectDeadTokenRefs(content, resolvable, ADS_COLOR_SEED);
+  }
+
+  if (classViolations.length === 0 && deadRefs.length === 0) process.exit(0);
+
+  const message = [
+    classViolations.length ? formatTokenClassError(classViolations) : "",
+    deadRefs.length ? formatDeadTokenError(deadRefs) : "",
+  ].filter(Boolean).join("\n\n");
+  process.stderr.write(message);
   process.exit(2);
 }
 
