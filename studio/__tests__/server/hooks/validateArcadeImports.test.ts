@@ -443,13 +443,6 @@ describe("validateArcadeImports hook (integration)", () => {
     expect(proc.status).toBe(0);
   });
 
-  it("exit 2 on the bug path arcade/components/icons; suggests arcade/components", () => {
-    const f = tmpFrame(`import { ChevronDownSmall } from "arcade/components/icons";\nexport default () => <ChevronDownSmall/>;`);
-    const p = runHook({ tool_name: "Write", tool_input: { file_path: f, content: fs.readFileSync(f, "utf-8") } });
-    expect(p.status).toBe(2);
-    expect(p.stderr).toMatch(/arcade\/components\/icons/);
-    expect(p.stderr).toMatch(/arcade\/components\b/);
-  });
   it("exit 0 on a resolving prefix-alias subpath (Critical regression guard)", () => {
     const f = tmpFrame(`import { FrameErrorBoundary } from "arcade-studio/frame/FrameErrorBoundary";\nexport default () => <div/>;`);
     const p = runHook({ tool_name: "Write", tool_input: { file_path: f, content: fs.readFileSync(f, "utf-8") } });
@@ -459,6 +452,18 @@ describe("validateArcadeImports hook (integration)", () => {
     const f = tmpFrame(`import { Button } from "arcade/components";\nimport X from "./pages/X";\nimport React from "react";\nexport default () => <Button/>;`);
     const p = runHook({ tool_name: "Write", tool_input: { file_path: f, content: fs.readFileSync(f, "utf-8") } });
     expect(p.status).toBe(0);
+  });
+  it("exit 0 on a docs-style frame with the keyword in JSX text (no false alarm)", () => {
+    const f = tmpFrame(`export default () => <p>To import icons, do: import Cog from "arcade/components/icons"</p>;`);
+    const p = runHook({ tool_name: "Write", tool_input: { file_path: f, content: fs.readFileSync(f, "utf-8") } });
+    expect(p.status).toBe(0);
+  });
+  it("exit 2 on the bug path arcade/components/icons (real bad import, not phantom)", () => {
+    const f = tmpFrame(`import { ChevronDownSmall } from "arcade/components/icons";\nexport default () => <ChevronDownSmall/>;`);
+    const p = runHook({ tool_name: "Write", tool_input: { file_path: f, content: fs.readFileSync(f, "utf-8") } });
+    expect(p.status).toBe(2);
+    expect(p.stderr).toMatch(/arcade\/components\/icons/);
+    expect(p.stderr).toMatch(/arcade\/components\b/);
   });
 });
 
@@ -578,16 +583,38 @@ describe("extractImportSpecifiers (all forms)", () => {
     expect(specs).toContain("arcade-prototypes/side/effect");
     expect(specs).toContain("arcade/reexport");
   });
+  it("captures multi-line import blocks with indentation", () => {
+    const src = [
+      'import { A, B } from "arcade/components";',
+      '  import {',
+      '    C,',
+      '    D',
+      '  } from "arcade-prototypes";',
+      '  export { E } from "arcade/re";',
+      '  import "arcade/side";',
+    ].join("\n");
+    const specs = extractImportSpecifiers(src);
+    expect(specs).toContain("arcade/components");
+    expect(specs).toContain("arcade-prototypes");
+    expect(specs).toContain("arcade/re");
+    expect(specs).toContain("arcade/side");
+  });
   it("does NOT extract a specifier from prose/JSX/template text (no phantom → no false alarm)", () => {
-    // Real, UNescaped string bodies (stripComments keeps them). The statement
-    // anchor must prevent a bare `from "..."` in copy from being read as an import.
+    // Real, UNescaped string bodies (stripComments keeps them). The line-anchor
+    // AND binding-charset must prevent keywords in copy from being read as imports.
     const proseString = 'const help = ' + JSON.stringify('to import icons, use from "arcade/components/icons"') + ';';
     const jsxText = '<p>Import from "arcade/fake/path" here</p>';
     const tmpl = 'const t = `see from "arcade/other/thing"`;';
-    const specs = extractImportSpecifiers([proseString, jsxText, tmpl].join("\n"));
+    // NEW: keyword-bearing cases (the ones the old test missed):
+    const codeExample = 'const ex = ' + JSON.stringify('import { Cog } from "arcade/components/icons"') + ';';
+    const jsxKeyword = 'export default () => <p>import them from "arcade/bad" here</p>;';
+    const tmplKeyword = 'const t2 = `import { X } from "arcade/bad2"`;';
+    const specs = extractImportSpecifiers([proseString, jsxText, tmpl, codeExample, jsxKeyword, tmplKeyword].join("\n"));
     expect(specs).not.toContain("arcade/components/icons");
     expect(specs).not.toContain("arcade/fake/path");
     expect(specs).not.toContain("arcade/other/thing");
+    expect(specs).not.toContain("arcade/bad");
+    expect(specs).not.toContain("arcade/bad2");
     expect(specs).toEqual([]); // none of these are import statements
   });
 });

@@ -334,32 +334,44 @@ export function isArcadeNamespaceSpecifier(spec) {
 
 /**
  * Every import specifier in the source, across ALL import/export-from forms.
- * MUST be anchored on the import/export STATEMENT shape, NOT a loose `\bfrom`
- * — a bare `from "…"` matches prose/JSX/template text (e.g. help copy
- * `'… from "arcade/x"'`), which stripComments keeps verbatim (its docstring
- * says so), producing a PHANTOM specifier → false alarm on a valid frame
- * (adversarial-review finding; spec Open Q1). So each pattern requires the
- * leading `import`/`export` keyword:
+ * Anchored at line-start AND with binding-clause charset restriction to prevent
+ * phantom matches from string literals, JSX prose, or template contents (which
+ * stripComments keeps verbatim — its docstring says so):
+ *   - LINE-ANCHOR (^\s* with /m): the keyword must start a statement line. A
+ *     code-sample string on a `const x = "..."` line, JSX text, or template
+ *     prose is never at line-start.
+ *   - BINDING-CHARSET ([\w$*{}\s,]): chars between the keyword and `from` are
+ *     restricted to idents, braces, `*`, `as`/`type`, commas, and whitespace —
+ *     excludes `(`, `<`, `=>`, `.`, etc. So a line like
+ *     `export default () => <p>import ... from "x"</p>` (which starts with
+ *     `export` but has `(` before `from`) does NOT match.
+ * Forms matched:
  *   - `import [type] {…}/Def/* as X from "…"`  → the `from` form
- *   - `export [type] {…}/* from "…"`           → re-export-from (also a real path)
+ *   - `export [type] {…}/* from "…"`           → re-export-from
  *   - `import "…"`                              → side-effect (no `from`)
  * NOT reused from parseImports (named-only) or collectDefinedIdentifiers
  * (captures the binding, not the path). Comments stripped first; string
- * BODIES are deliberately kept by stripComments, so the STATEMENT anchor —
- * not a string-stripper — is what prevents phantom matches (a real import's
- * own specifier is a string too, so stripCommentsAndStrings would wrongly
- * erase it).
+ * BODIES are kept by stripComments (a real import's own specifier is a string
+ * too, so stripCommentsAndStrings would wrongly erase it). These two anchors —
+ * line-start AND binding-charset — are what prevent phantoms.
  */
 export function extractImportSpecifiers(source) {
   if (typeof source !== "string" || !source) return [];
   const clean = stripComments(source);
   const out = [];
-  // `import`/`export` … `from "spec"` — the `[^;'"]*?` between the keyword and
-  // `from` spans the clause (braces/idents/`* as x`/`type`) but never crosses a
-  // statement end or a quote, so it can't leap from prose into a later import.
-  const fromRe = /\b(?:import|export)\b[^;'"]*?\bfrom\s+["']([^"']+)["']/g;
-  // Side-effect import: `import "spec"` with a quote right after `import`.
-  const sideRe = /\bimport\s+["']([^"']+)["']/g;
+  // Line-anchored (^\s* with /m) so the keyword must START a statement line —
+  // a code-sample string on a `const x = "..."` line, or JSX/template copy, is
+  // never at line-start. AND the chars between the keyword and `from` are
+  // restricted to the binding-clause charset [\w$*{}\s,] (idents, braces, `*`,
+  // `as`/`type`, commas, ws) — which EXCLUDES `(`, `<`, `=>`, `.` etc., so a
+  // JSX line like `export default () => <p>import ... from "x"</p>` (starts with
+  // `export` at line-start but has `(`/`<` before `from`) does NOT match.
+  // stripComments keeps string bodies (its docstring), so these two anchors —
+  // NOT stripCommentsAndStrings (which would erase a real import's own
+  // specifier) — are what prevent phantom matches from copy/JSX/templates.
+  const fromRe = /^\s*(?:import|export)\s+(?:type\s+)?[\w$*{}\s,]*?\bfrom\s+["']([^"']+)["']/gm;
+  // Side-effect import: `import "spec"` at line-start with a quote right after.
+  const sideRe = /^\s*import\s+["']([^"']+)["']/gm;
   let m;
   while ((m = fromRe.exec(clean)) !== null) out.push(m[1]);
   while ((m = sideRe.exec(clean)) !== null) out.push(m[1]);
