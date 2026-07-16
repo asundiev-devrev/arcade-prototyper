@@ -459,9 +459,9 @@ describe("validateArcadeImports hook (integration)", () => {
     expect(p.status).toBe(0);
   });
   it("exit 0 on a docs frame that RENDERS a MULTI-LINE code sample in a backtick template (round-2 Critical, no false alarm)", () => {
-    // The displayed import is at line-start inside the template body; without
-    // stripTemplateBodies the line-anchored extractor phantom-matches it and
-    // exits 2 on a perfectly valid gallery/docs frame.
+    // The displayed import lives inside a template-literal body. The AST parser
+    // sees it as string content, never an import declaration, so a perfectly
+    // valid gallery/docs frame is not phantom-blocked.
     const f = tmpFrame(`export default () => (
   <pre>{\`
 import { ChevronDownSmall } from "arcade/components/icons";
@@ -580,68 +580,79 @@ describe("isResolvableArcadeSpecifier", () => {
   });
 });
 
-describe("extractImportSpecifiers (all forms)", () => {
-  it("captures named, default, namespace, side-effect, and export-from specifiers", () => {
+// Parser-era matrix. extractImportSpecifiers now walks the TypeScript AST, so
+// the REAL/PHANTOM split is decided by lexical structure — not regex anchors.
+// Every REAL specifier is extracted; every PHANTOM (import-looking text inside
+// a string, template, JSX text, or comment) is invisible to the parser.
+describe("extractImportSpecifiers (real vs phantom, AST parser)", () => {
+  // --- REAL: each form's specifier MUST be returned ---
+  it("named import", () => {
+    expect(extractImportSpecifiers(`import { ChevronDownSmall } from "arcade/components/icons";`))
+      .toContain("arcade/components/icons");
+  });
+  it("multi-line block: named + default + export-from (3 specifiers)", () => {
     const src = [
-      'import { A } from "arcade/components";',
-      'import B from "arcade/components/icons";',
-      'import * as C from "arcade-studio/frame/x";',
-      'import "arcade-prototypes/side/effect";',
-      'export { D } from "arcade/reexport";',
+      'import {',
+      '  A,',
+      '  B,',
+      '} from "arcade/a";',
+      'import Def from "arcade/b";',
+      'export { C } from "arcade/c";',
     ].join("\n");
     const specs = extractImportSpecifiers(src);
-    expect(specs).toContain("arcade/components");
+    expect(specs).toContain("arcade/a");
+    expect(specs).toContain("arcade/b");
+    expect(specs).toContain("arcade/c");
+    expect(specs).toHaveLength(3);
+  });
+  it("side-effect import", () => {
+    expect(extractImportSpecifiers(`import "arcade/x";`)).toContain("arcade/x");
+  });
+  it("export * from", () => {
+    expect(extractImportSpecifiers(`export * from "arcade/x";`)).toContain("arcade/x");
+  });
+  it("import type", () => {
+    expect(extractImportSpecifiers(`import type { T } from "arcade/x";`)).toContain("arcade/x");
+  });
+  it("no space after `import` (parser handles it; old regex could not)", () => {
+    expect(extractImportSpecifiers(`import{Foo} from "arcade/x";`)).toContain("arcade/x");
+  });
+  it("default + named on one statement", () => {
+    expect(extractImportSpecifiers(`import D, { E } from "arcade/x";`)).toContain("arcade/x");
+  });
+
+  // --- PHANTOM: import-looking text the parser never treats as an import ---
+  it("multi-line template code sample → []", () => {
+    const src = 'export default () => (<pre>{`\nimport { X } from "arcade/PHANTOM";\n`}</pre>);';
+    const specs = extractImportSpecifiers(src);
+    expect(specs).not.toContain("arcade/PHANTOM");
+    expect(specs).toEqual([]);
+  });
+  it("string code-sample → []", () => {
+    const src = `const e = "import { C } from 'arcade/PHANTOM'";`;
+    const specs = extractImportSpecifiers(src);
+    expect(specs).not.toContain("arcade/PHANTOM");
+    expect(specs).toEqual([]);
+  });
+  it("JSX prose → []", () => {
+    const src = `export default () => <p>import them from "arcade/PHANTOM"</p>;`;
+    const specs = extractImportSpecifiers(src);
+    expect(specs).not.toContain("arcade/PHANTOM");
+    expect(specs).toEqual([]);
+  });
+  it("prose-backtick-then-pre → []", () => {
+    const src = 'export default () => (<><p>press ` key</p><pre>{`\nimport {X} from "arcade/PHANTOM";\n`}</pre></>);';
+    const specs = extractImportSpecifiers(src);
+    expect(specs).not.toContain("arcade/PHANTOM");
+    expect(specs).toEqual([]);
+  });
+  it("stray backtick in a string then a REAL import — the round-2 regression the parser fixes", () => {
+    // A string containing a lone backtick used to desync the hand-lexer's
+    // template tracking and swallow the REAL import that followed. The AST is
+    // immune: the string is a string, and the import that follows is parsed.
+    const src = 'const h = "press ` key";\nimport { Bad } from "arcade/components/icons";';
+    const specs = extractImportSpecifiers(src);
     expect(specs).toContain("arcade/components/icons");
-    expect(specs).toContain("arcade-studio/frame/x");
-    expect(specs).toContain("arcade-prototypes/side/effect");
-    expect(specs).toContain("arcade/reexport");
-  });
-  it("captures multi-line import blocks with indentation", () => {
-    const src = [
-      'import { A, B } from "arcade/components";',
-      '  import {',
-      '    C,',
-      '    D',
-      '  } from "arcade-prototypes";',
-      '  export { E } from "arcade/re";',
-      '  import "arcade/side";',
-    ].join("\n");
-    const specs = extractImportSpecifiers(src);
-    expect(specs).toContain("arcade/components");
-    expect(specs).toContain("arcade-prototypes");
-    expect(specs).toContain("arcade/re");
-    expect(specs).toContain("arcade/side");
-  });
-  it("does NOT extract a specifier from prose/JSX/template text (no phantom → no false alarm)", () => {
-    // Real, UNescaped string bodies (stripComments keeps them). The line-anchor
-    // AND binding-charset must prevent keywords in copy from being read as imports.
-    const proseString = 'const help = ' + JSON.stringify('to import icons, use from "arcade/components/icons"') + ';';
-    const jsxText = '<p>Import from "arcade/fake/path" here</p>';
-    const tmpl = 'const t = `see from "arcade/other/thing"`;';
-    // NEW: keyword-bearing cases (the ones the old test missed):
-    const codeExample = 'const ex = ' + JSON.stringify('import { Cog } from "arcade/components/icons"') + ';';
-    const jsxKeyword = 'export default () => <p>import them from "arcade/bad" here</p>;';
-    const tmplKeyword = 'const t2 = `import { X } from "arcade/bad2"`;';
-    const specs = extractImportSpecifiers([proseString, jsxText, tmpl, codeExample, jsxKeyword, tmplKeyword].join("\n"));
-    expect(specs).not.toContain("arcade/components/icons");
-    expect(specs).not.toContain("arcade/fake/path");
-    expect(specs).not.toContain("arcade/other/thing");
-    expect(specs).not.toContain("arcade/bad");
-    expect(specs).not.toContain("arcade/bad2");
-    expect(specs).toEqual([]); // none of these are import statements
-  });
-  it("does NOT extract from a MULTI-LINE template code sample (the round-2 Critical → no false alarm)", () => {
-    // A valid docs/gallery frame that RENDERS a code sample inside a backtick
-    // template. The displayed `import … from "arcade/…"` sits at LINE-START
-    // inside the template body, which defeats the line-anchor — stripComments
-    // keeps template bodies verbatim. stripTemplateBodies collapses the body
-    // first, so the phantom can never reach the regex.
-    const src = `export default () => (
-  <pre>{\`
-import { ChevronDownSmall } from "arcade/components/icons";
-\`}</pre>
-);`;
-    expect(extractImportSpecifiers(src)).toEqual([]);
   });
 });
 
