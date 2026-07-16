@@ -1,6 +1,6 @@
 # Edit reliability — "an edit that renders nothing must not report success"
 
-**Date:** 2026-07-15 (rev. 3 — reframed on Figma-as-source-of-truth after a second adversarial review + user direction)
+**Date:** 2026-07-16 (rev. 4 — ADS-as-source-of-truth, after three revisions each killed by a completeness flaw a review caught, then resolved by verifying against the real ADS Figma file)
 **Status:** design for review
 **Umbrella:** "edit reliability" (beta feedback, gil.zissu). Sibling of the shipped resilient-render work (crash class). This covers the **silent-no-op class**: the agent reports a change as done, but the result doesn't change — no crash, no error, nothing caught it.
 
@@ -8,92 +8,99 @@
 
 > **If the tool says it made your change, your change is visible. It never claims success on an edit that renders nothing.**
 
-Live repro (2026-07-15, project `implement-this-precisely`, frame `01-figma-4368-19734`): user asked to set the background to `bg/expressive/orange/subtle`. The agent wrote `className="bg-(--bg-orange-subtle)"`, reported success, and **the background did not change.** `bg-(--bg-orange-subtle)` is valid Tailwind v4 (compiles to `background-color: var(--bg-orange-subtle)`); the **class is fine, the variable is dead** → resolves to nothing → silent no-op that compiles and never throws.
+Live repro (project `implement-this-precisely`, frame `01-figma-4368-19734`): user asked to set the background to `bg/expressive/orange/subtle`. The agent wrote `className="bg-(--bg-orange-subtle)"`, reported success, and **the background did not change.** `bg-(--bg-orange-subtle)` is valid Tailwind v4 (compiles to `background-color: var(--bg-orange-subtle)`); the **class is fine, the variable is dead** → resolves to nothing → silent no-op that compiles and never throws.
 
-## The reframe that corrects two prior revisions (user direction: "take it from Figma")
+## What three prior revisions + adversarial reviews established (don't repeat them)
 
-Rev-1/rev-2 tried to validate references against arcade-gen's shipped CSS (`styles.css`). Two adversarial reviews proved that source is **an incomplete mirror of the real design system**, which lives in **Figma**:
-
-- `BG/Expressive/Orange/Subtle = #fcecd2` is a **real DS token in Figma** (confirmed via `get_variable_defs` on node 4368-19734). arcade-gen simply doesn't export an expressive-orange family (only blue + yellow). So the user asked for a token that genuinely exists — the tool's local knowledge was just too narrow to honor it.
-- Validating against `styles.css` alone therefore both **misses** (a real Figma token the kit lacks looks "dead") and **false-alarms** (see below).
-
-**The shipped precedent for exactly this case already exists:** `server/figma/kitTokens.ts::resolveKitTokenVar` — when a bound Figma variable has no matching kit token, it **falls back to the literal Figma hex value** ("never a dead var that paints nothing"). This spec generalizes that principle to the edit path.
+1. **The check must not validate against arcade-gen's shipped CSS** (`styles.css`/`tokens.css`) — those are an **incomplete mirror** of the design system. Validating against them both misses real tokens the kit doesn't ship AND false-flags valid frames.
+2. **The design system's source of truth is the ADS Figma file** (`a2uKnm88LxRXEWAL1kOqeQ`, "Arcade Design System"). Verified directly via the Figma Desktop Bridge:
+   - `BG/Expressive/Orange/Subtle = #FCECD2` **is a real ADS token** — exactly what the user asked for. arcade-gen simply doesn't export an expressive-orange family. So the user requested a genuine token; the tool's local knowledge was too narrow.
+   - The 5 tokens a review feared were "false alarms" (`surface-canvas`, `surface-default`, `fg-critical-prominent`, `bg-interactive-primary-resting`, `surface-overlay-hovered`) are **absent from ADS too** — genuinely dead names invented by the LLM. Flagging them is CORRECT; they are the silent-no-op bug, just previously unnoticed.
+3. **The ADS variable set is pullable on ANY plan** via the Figma Desktop Bridge (`figma-console` MCP / the studio's `getVariables` CLI path) — NOT gated on the Enterprise Variables REST API. So an ADS-sourced check is buildable without an Enterprise dependency.
+4. **This collapses the design to ONE part.** Earlier revisions built a per-frame, node-scoped Figma token map to work around the wrong (incomplete) source. With ADS as the complete source, no per-frame map is needed: one cached ADS token table covers **every** frame regardless of origin (Figma-imported, LLM-authored, hand-edited).
 
 ## Scope decisions (locked with the user)
 
 1. **Static, not rendered.** Verify the code the agent wrote, not pixels. (Pixel verification = the fidelity keystone, separate — see [[studio-fidelity-metric-keystone]].)
-2. **Resolvability only, not intent-matching.** One objective question per reference: *does this `--x` resolve to a real definition/value?* No false alarms is a HARD requirement.
-3. **Auto-fix silently, like the crash path.** Dead reference → feed the agent the specific violation + the real Figma value → it self-corrects before the turn reports done. Reuse the existing exit-2 → self-correct lane.
+2. **Resolvability only, not intent-matching.** One objective question per reference: *does this `--x` resolve to a real token?* No false alarms is a HARD requirement — now satisfiable because "real" = "in ADS," the complete set.
+3. **Auto-fix silently, like the crash path.** Dead reference → feed the agent the specific violation + (when the token is real-in-ADS) its value → self-correct before the turn reports done. Reuse the existing exit-2 → self-correct lane.
 4. **Design-token custom-property references in scope. Tailwind class-name existence OUT** (infinite/on-demand space — Non-goals).
-5. **Source of truth = Figma, mirror = local CSS.** The resolvable set is the union of all **render-time** local sources PLUS the **per-frame Figma token map** captured at import.
-6. **Capture scope = tokens used in this frame** (user choice). At import, persist the name→value map for tokens actually bound in the imported node (`resolveTokens`'s `tokens.colors`, already computed — zero extra fetch). Accepted gap: a real Figma token the agent introduces later that was NOT in the original node is unknown to the map and falls through to the local-CSS check.
+5. **Source of truth = the ADS Figma file.** The resolvable set = ADS token names ∪ the frame's actual render-time local defs (project `theme-overrides.css` + same-file local vars). Local CSS (arcade-gen) is NOT the authority; it's a subset of ADS.
 
-## Two false-alarm bugs the reviews proved (must fix — the hard no-false-alarms rule)
+## The two classes the check distinguishes (both from the ADS table)
 
-Verified against the repo:
-1. **The resolvable set must be ALL render-time sources, not just `styles.css`.** A frame imports THREE stylesheets at render (`frameMountPlugin.ts:259-261`): `@xorkavi/arcade-gen/styles.css` + `arcade-studio/styles/tailwind.css` (a `@theme` block defining `--shadow-elevation-02`, `--radius-bubble`, `--spacing-gutter`, `--height-control-*`, …) + `arcade-studio/styles/arcade-gen-patches.css` (`--component-bubble-*`). Plus the project's `theme-overrides.css` and same-file local defs. Validating against `styles.css` alone false-flags a valid frame — proven: an existing frame uses `var(--shadow-elevation-02)` (a real `@theme` token, 0 hits in `styles.css`); ~8/47 real frames would be flagged. **The resolvable set = styles.css ∪ tailwind.css @theme ∪ arcade-gen-patches.css ∪ project theme-overrides.css ∪ same-file local defs ∪ per-frame Figma token map.**
-2. **Local-def extraction must handle React object-key syntax.** The existing `extractTokenNames` regex (`/--([a-z0-9-]+)\s*:/`) requires the colon immediately after the name — it does NOT match `{ "--x": v }` or `{ ["--x"]: v }` (a `"`/`]` sits between name and colon), the standard React way to set a CSS var. So an author's own inline-style var is NOT captured as locally-defined → false-flagged. The local-def scan must match the quoted/bracketed object-key forms too.
+Given a referenced `--x` on a generated frame:
+- **Real in ADS.** The token exists in the design system. Two sub-cases, both fine to allow-with-guidance:
+  - arcade-gen **ships** it (it's in the kit CSS) → resolvable → OK, no action.
+  - arcade-gen does **not** ship it (e.g. `--bg-expressive-orange-subtle`) → the reference is dead *at render* but the token is REAL. exit-2 telling the agent the real ADS value (`#FCECD2`) so it emits a rendering form (per the shipped `resolveKitTokenVar` "hex fallback, never a dead var" precedent — literal value, or define the token in the project's `theme-overrides.css` which is imported last and wins the cascade).
+- **Not in ADS at all** (e.g. `--bg-orange-subtle`, `--surface-canvas`) → a typo/hallucination → exit-2 flagging it with nearest-real ADS suggestions (so the mangled `--bg-orange-subtle` is answered with the real `--bg-expressive-orange-subtle = #FCECD2`).
 
-## Design — two parts
+Either way: **no silent success on an edit that renders nothing**, and no wrong-token guessing (the real value is in the table).
 
-### Part A — capture the per-frame Figma token map at import (name → value)
+## Design — one cached ADS table + one edit-time check
 
-At Figma import, `resolveTokens` (`server/figmaIngest.ts:270`) already yields `tokens.colors: Record<figmaVarName, hexValue>` for tokens bound in the imported node. Persist that map **per-frame**, beside the generated frame, in a shape the edit-time hook can read offline (e.g. a `figma-tokens.json` sidecar in the frame dir, or a field in the frame's LIFT manifest — confirm the exact carrier at plan time; `LIFT.json`'s currently-empty `tokenPatches`/`valueMap` are candidate homes). Keys are normalized to the kit custom-property form via the existing `figmaVarNameToKitToken` (`BG/Expressive/Orange/Subtle → --bg-expressive-orange-subtle`), values are the literal Figma color. This is the offline record of "what real DS tokens/values this frame legitimately uses," paid once at import, zero edit-path latency, no Enterprise/live dependency when editing.
+### Part A — a cached ADS token table (name → value), refreshed on a cadence
 
-### Part B — validate references at edit time (extend the shipped token hook)
+- A new module pulls the ADS file's color variables (name + resolved Light/Dark value) via the existing `getVariables`/Desktop-Bridge path, normalizes each name to the kit custom-property form via the existing `figmaVarNameToKitToken` (`BG/Expressive/Orange/Subtle → --bg-expressive-orange-subtle`), and writes a small JSON table to a writable, hook-readable location under `studioRoot()` (e.g. `studioRoot()/ads-tokens.json`; confirm exact path at plan time — must be readable by the spawned `.mjs` hook and survive across turns).
+- The ADS file key is a new named constant (`a2uKnm88LxRXEWAL1kOqeQ`); it is NOT referenced anywhere today.
+- **Refresh cadence:** pull on a TTL (e.g. once per day / on server boot if stale) — NOT on the edit path. The table is the offline authority the hook reads; a live pull never blocks an edit. **Staleness is the accepted cost** (a token added to ADS today may not be known until the next refresh) — far more tractable than mirroring incomplete files, because ADS is the complete truth.
+- **Fail open / bootstrap:** if the table is missing or unreadable (never pulled, or the pull failed), the check falls back to the render-time local set only (today's behavior for that portion) or skips — it must NEVER block generation on an absent/failed ADS pull. Ship a checked-in seed table so the feature works before the first live pull.
+
+### Part B — edit-time resolvability check (extend the shipped token hook)
 
 Extend `studio/server/hooks/validateTokenClasses.mjs` (already a PostToolUse Write/Edit hook that catches the *named-form* token no-op and self-corrects via exit-2). Add a paren/var-form resolvability check, scoped to generated frame files only:
 
-1. **Build the resolvable set** (fail open — empty → skip): normalize-and-union the token NAMES from all render-time sources listed above, PLUS the per-frame Figma map keys.
-2. **Build the Figma value map** for this frame: `--x → hexValue` from the persisted sidecar.
+1. **Build the resolvable NAME set** (fail open — empty → skip that source): ADS table names ∪ project `theme-overrides.css` defs ∪ same-file local defs. (arcade-gen CSS names are a subset of ADS, so ADS covers them; include them too if cheap for belt-and-braces.)
+2. **Load the ADS value map** (`--x → #hex`) from the table for messaging.
 3. **Extract every `--custom-property` reference** in the post-edit source via `(--x)` / `var(--x)` (one regex covers `bg-(--x)`, `var(--x)`, `[var(--x)]`), requiring ≥1 internal hyphen so JS `(--i)` is never captured.
-4. **Classify each reference:**
-   - **Resolvable** (in the render-time set, incl. project overrides + local defs) → OK.
-   - **Real-in-Figma but absent from rendered CSS** (in the per-frame Figma value map, not in the render-time set) → NOT a silent success, but NOT a plain typo either: the token is real, the kit just doesn't ship it. Per the `resolveKitTokenVar` precedent, exit-2 instructing the agent to **use the literal Figma value** (e.g. `bg-[#fcecd2]` arbitrary value, or an inline style) — the shipped "hex fallback, never a dead var" behavior, applied at edit time.
-   - **Dead everywhere** (not resolvable, not in the Figma map) → a typo/hallucination → exit-2 flagging it, with nearest-real suggestions drawn from the render-time set ∪ Figma map (so a mangled `--bg-orange-subtle` is answered with the real `--bg-expressive-orange-subtle = #fcecd2`).
-5. **Fail open** at every step (unreadable CSS/sidecar → skip that source; empty resolvable set → skip the check).
+4. **Fix local-def extraction to match React object-key syntax** (`{ "--x": v }`, `{ ["--x"]: v }`) — the existing `extractTokenNames` regex requires an immediate colon and misses these, which would false-flag an author's own inline var. (Proven bug from a prior review.)
+5. **Classify + exit-2** per "the two classes" above (real-in-ADS-kit-absent → value guidance; not-in-ADS → typo + nearest-real). Real-in-ADS-and-kit-shipped, or resolvable locally → OK.
+6. **Fail open** at every step (unreadable table/CSS → skip that source; empty resolvable set → skip the check). Frame-files-only scope for the NEW check; the existing named-form check keeps its broader `.tsx` scope.
 
-The exact end-state the agent writes (arbitrary-value `bg-[#fcecd2]` vs. inline style vs. defining the token in `theme-overrides.css`) follows the shipped hex-fallback precedent = **literal value**; do NOT auto-mutate other files from the hook (a validator must not write). The agent performs the correction; the hook re-validates.
+The hook never writes other files (a validator stays a validator); the agent performs the correction; the hook re-validates on the next write.
 
 ### Why this satisfies the decisions
-- Static (re-reads written source + offline sidecar; no render) ✅ #1.
-- Resolvability-only; local + author + Figma-real vars all exempt → no false alarms ✅ #2.
+- Static; no render ✅ #1.
+- Resolvability-only against the COMPLETE set (ADS) → real tokens never false-flagged, invented ones caught ✅ #2 (the completeness fix).
 - Silent exit-2 self-correct before "done" ✅ #3.
 - Custom-property refs in scope; class names out ✅ #4.
-- Figma is truth; local CSS is the mirror; per-frame Figma map bridges the gap ✅ #5.
-- Map = tokens used in this frame ✅ #6.
+- ADS is the authority; local CSS is a subset ✅ #5.
+- One table, all frames (no per-frame map) ✅ (design collapse).
 
-## The motivating bug, traced end-to-end on this design
-Agent writes `bg-(--bg-orange-subtle)` → extracted ref `bg-orange-subtle` → not in render-time set, not in the Figma map (the map has `--bg-expressive-orange-subtle`, the *un*-mangled name) → **dead everywhere → exit-2**, message: "`--bg-orange-subtle` is undefined; the real Figma token for this frame's background is `--bg-expressive-orange-subtle` (#fcecd2), which the kit doesn't ship — use `bg-[#fcecd2]`." Agent rewrites, hook passes, turn completes with a visible orange background. No more "I did it" over an unchanged frame.
+## The motivating bug, traced end-to-end
+Agent writes `bg-(--bg-orange-subtle)` → extracted ref `bg-orange-subtle` → not in ADS table, not in local defs → **not-in-ADS → exit-2**: "`--bg-orange-subtle` is not a design-system token. The real token for a subtle orange background is `--bg-expressive-orange-subtle` (#FCECD2), which the kit doesn't ship — use `bg-[#FCECD2]` (or define `--bg-expressive-orange-subtle` in theme-overrides.css)." Agent rewrites, hook passes, turn completes with a visible orange background. No more "I did it" over an unchanged frame — and the correction is the value the user actually asked for.
 
 ## Correction loop
 Identical mechanism to the named-form check already shipping in this file: `exit(2)` returns the message as a tool error; the agent rewrites; the hook re-runs and passes; the turn completes showing only the corrected result. Synchronous at write time (a dead token is a no-op, not a browser crash), so no dispatch/timer/chat surface and no interaction with the resilient-render HMR/overlay changes.
 
 ## Immediate one-frame fix (data, separate from the code change)
-The live repro frame stays wrong until re-touched. `--bg-orange-subtle` → `bg-[#fcecd2]` (the Figma value for `BG/Expressive/Orange/Subtle`) in that frame's `index.tsx:9`. A data fix to one project file, done at manual-acceptance; not committed to the repo.
+The live repro frame stays wrong until re-touched. `--bg-orange-subtle` → `bg-[#FCECD2]` (the ADS value for `BG/Expressive/Orange/Subtle`) in that frame's `index.tsx:9`. A data fix to one project file, done at manual-acceptance; not committed to the repo.
 
 ## Non-goals (explicit)
 - **Tailwind class-name validation** — infinite/on-demand space; not statically decidable without the compiler; would break no-false-alarms. Residual: a misspelled *utility* class (not a var) still silently no-ops. (The *named-form* token utility no-op IS already caught by this hook's existing check.)
 - **Rendered/pixel verification** — fidelity keystone; separate.
 - **Intent-matching**; **wrong-element / overridden-value** no-ops — not statically detectable.
-- **Full-file Figma token pull** — capture is node-scoped (#6); a later-introduced token outside the original node is a known gap.
-- **Live Figma lookup on the edit path** — rejected for latency + Enterprise-gating of the Variables REST API; capture happens once at import instead.
-- **Hook writing to other files** (e.g. auto-appending to theme-overrides.css) — a validator stays a validator; the agent does the correction.
-- **Filling the arcade-gen coverage gap** (shipping an expressive-orange family) — a real kit-vs-Figma gap tracked separately (kit-emit mapping work).
+- **Live ADS pull on the edit path** — rejected for latency; the table is pulled on a cadence off the edit path.
+- **Per-frame node-scoped token map** — obviated by the complete ADS table (earlier revisions' workaround for the wrong source).
+- **Hook writing to other files** (auto-appending to theme-overrides.css) — the agent does the correction; the validator only flags + guides.
+- **`new_string`-only miss:** the hook reads the Edit's `new_string`, not the whole file, so a dead token written by an EARLIER edit whose later edit doesn't touch that line is not re-seen. Acknowledged limitation inherited from the existing hook; the dominant case (the edit that introduces the dead token) IS caught. Widening to whole-file re-read on Edit is a possible follow-up, out of scope here.
+- **Filling the arcade-gen coverage gap** (shipping an expressive-orange family) — a real kit-vs-ADS gap tracked separately (kit-emit mapping work).
 - **Phantom edits** — separate spec.
 
 ## Files (indicative — confirm exact carriers at plan time)
 | File | Change |
 |---|---|
-| `studio/server/figmaIngest.ts` (or the frame-authoring path in `server/middleware/lift.ts` / `liftEmitPlugin.ts`) | Part A: persist the per-frame Figma token map (`tokens.colors`, keys normalized via `figmaVarNameToKitToken`, values = Figma hex) as a sidecar the edit hook can read. Reuse existing `resolveTokens` output; do not add a fetch. |
-| `studio/server/hooks/validateTokenClasses.mjs` | Part B: build the FULL render-time resolvable set (styles.css ∪ tailwind.css @theme ∪ arcade-gen-patches.css ∪ project theme-overrides.css ∪ same-file local defs ∪ per-frame Figma map); fix local-def extraction to match React object-key syntax; add `extractTokenRefs` + `detectDeadTokenRefs` (real-in-Figma → suggest literal value; dead-everywhere → suggest nearest real); wire into `main()` alongside the existing named-form check; frame-files-only scope. Reuse `loadTokenNames`/`extractTokenNames`/`parseClassNames`; fail open throughout. |
-| `studio/server/figma/kitTokens.ts` | Possibly expose a shared normalizer/helper (`figmaVarNameToKitToken` already exists) so import-capture and edit-validation agree on the `--x` key form. |
-| `studio/__tests__/server/hooks/validateTokenClasses.test.ts` | dead-everywhere ref → exit 2 + nearest suggestion; real-in-Figma-map ref → exit 2 suggesting the literal value; render-time-set refs (incl. a `@theme` token like `--shadow-elevation-02` and a project-override token) → exit 0 (no false alarm); React object-key local var `{ "--x": v }` referenced via `var(--x)` → exit 0; both `(--x)`/`var(--x)` forms; fail-open on unreadable sources. Port the `runHook`/`tmpFrame` harness from `validateArcadeImports.test.ts` and write files under a `/projects/<slug>/frames/<id>/` path (so the frame-file scope matches); this hook reads `new_string`, so the integration case uses `Write` with full content (NOT an Edit relying on disk read). |
-| `studio/__tests__/server/figmaIngest.test.ts` (or the ingest test) | Part A: an imported node with a bound variable persists the normalized name→value entry. |
-| project frame `01-figma-4368-19734/index.tsx` (data, not code) | one-frame fix: `bg-(--bg-orange-subtle)` → `bg-[#fcecd2]`. Manual-acceptance step. |
+| `studio/server/figma/adsTokens.ts` (new) | Part A: pull ADS color variables (via `getVariables`/Desktop Bridge), normalize names via `figmaVarNameToKitToken`, write `studioRoot()/ads-tokens.json` (name→value); TTL refresh off the edit path; the ADS file-key constant; fail-open + a checked-in seed. |
+| server boot / a refresh trigger (`vite.config.ts` apiPlugin boot block, where other stale-refreshes live) | schedule/kick the ADS table refresh on boot when stale (mirrors `refreshStaleClaudeMd`). |
+| `studio/server/hooks/validateTokenClasses.mjs` | Part B: build resolvable set = ADS table ∪ theme-overrides ∪ same-file local defs; fix local-def extraction for React object-key syntax; add `extractTokenRefs` + `detectDeadTokenRefs` (real-in-ADS-kit-absent → value guidance; not-in-ADS → nearest-real); wire into `main()` alongside the existing named-form check; frame-files-only scope; fail open. |
+| `studio/server/figma/kitTokens.ts` | reuse `figmaVarNameToKitToken` so pull-time and edit-time agree on the `--x` key form. |
+| `studio/__tests__/server/figma/adsTokens.test.ts` (new) | pull→normalize→write produces `--bg-expressive-orange-subtle → #FCECD2`; fail-open on pull error; TTL/staleness. |
+| `studio/__tests__/server/hooks/validateTokenClasses.test.ts` | not-in-ADS ref (`--bg-orange-subtle`, `--surface-canvas`) → exit 2 + nearest suggestion; real-in-ADS-kit-absent (`--bg-expressive-orange-subtle`) → exit 2 with the #FCECD2 value guidance; kit-shipped/local-override/`@theme`-style token → exit 0; React object-key local var → exit 0 (no false alarm); both `(--x)`/`var(--x)` forms; fail-open on missing table. Port `runHook`/`tmpFrame` from `validateArcadeImports.test.ts`, writing files under a `/projects/<slug>/frames/<id>/` path; integration cases use `Write` with full content (the hook reads `new_string`, not disk). |
+| project frame `01-figma-4368-19734/index.tsx` (data, not code) | one-frame fix: `bg-(--bg-orange-subtle)` → `bg-[#FCECD2]`. Manual-acceptance step. |
 
 ## Open questions (resolve in the plan)
-1. **Exact per-frame carrier for the Figma map** — new `figma-tokens.json` sidecar in the frame dir, vs. populating `LIFT.json.tokenPatches`/`valueMap`. Confirm which the frame-authoring path can write and the hook can locate from `file_path`.
-2. **Value form the agent should emit** for a real-in-Figma/absent-from-kit token — the spec picks the shipped precedent (literal value, `bg-[#hex]`). Confirm the message wording drives that, not a dead re-spelling.
-3. **Nearest-real suggestion ranking** — leading-segment prefix over (render-time set ∪ Figma map); cap the list; no fuzzy color matcher (YAGNI).
-4. **Cost** — the hook is a spawned process per PostToolUse (module-scope cache doesn't persist across invocations); parsing 3 CSS files + one small sidecar per edit is negligible vs. the Bedrock round-trip; confirm no measurable regression.
+1. **Exact table path + seed** — `studioRoot()/ads-tokens.json` readable by the spawned `.mjs` hook; ship a checked-in seed (the ADS color set as of authoring) so the feature works pre-first-pull, and confirm the hook resolves the path in both dev and packaged app.
+2. **Refresh trigger + TTL** — boot-if-stale (like `refreshStaleClaudeMd`) vs. a periodic job; pick a TTL (a day?) and confirm a failed pull leaves the last good table in place (never truncates to empty).
+3. **Value form the agent should emit** for a real-in-ADS/kit-absent token — literal `bg-[#hex]` vs. defining the token in `theme-overrides.css` (theme-correct, survives light/dark). The message should offer the theme-correct route first; confirm wording in the plan.
+4. **Namespace/property sanity** — do we validate only that the name exists in ADS, or also that its namespace matches the utility (a `--fg-*` used as a `bg-` value)? The shipped `resolveKitTokenVar` does namespace disambiguation; decide whether the edit check mirrors it or stays name-existence-only (YAGNI leans name-existence for v1).
+5. **Cost** — the hook is a spawned process per PostToolUse; reading one JSON table + 1-2 CSS files per edit is negligible vs. the Bedrock round-trip; confirm.
