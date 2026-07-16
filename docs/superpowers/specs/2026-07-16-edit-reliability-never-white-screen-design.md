@@ -26,42 +26,47 @@ Both self-heal (auto-repair runs, the frame recovers), but the user SEES the bla
 
 This split is honest: Phase 1 makes the frame never blank on interaction errors (what the user mostly hit); Phase 2 remains a known residual (a mid-edit render crash can still briefly show the panel, and still recovers).
 
-## Design — Phase 1: errorShim keeps the DOM, parent chip communicates
+## Design — Phase 1: the errorShim OVERLAYS (never blanks), and it must self-communicate
 
-### The one behavioral change (in the frame's errorShim, `frameMountPlugin.ts` `showFatal`)
-Today `showFatal`:
-1. posts `arcade-studio:frame-error` to the parent (KEEP — the parent already listens; this drives auto-repair dispatch AND the calm chip), then
-2. `root.innerHTML = ""` + builds a full-screen "Auto-repairing this frame" panel INSIDE the frame (REMOVE — this is the blanking).
+Two corrections from adversarial review that reshape the naive "just don't wipe" idea (both verified against code):
 
-New `showFatal`:
-1. post `arcade-studio:frame-error` (unchanged — same payload incl. the reload nonce).
-2. **Do NOT touch the DOM.** Leave the last rendered frame exactly as it was. No `innerHTML`, no injected panel.
-3. (Optional, minimal) set a non-destructive marker the parent can read if needed — but the parent already knows from the postMessage, so nothing else is required inside the frame.
+- **The errorShim is SHARED by two error classes with opposite DOM states.** `window.onerror → showFatal` fires for BOTH an interaction/async error (React tree mounted → DOM intact) AND a **module-load error before React mounts** (`root` is an empty `<div>` — the injected panel is the ONLY visible content). So "remove the wipe unconditionally" would turn the module-load case into a **fully white frame** — worse than today. The shim must branch on whether the frame actually rendered.
+- **The parent chip is deliberately OFF for at-rest errors.** `FrameCard`'s chip handler early-returns on `!editCycleActive.current` (a shipped fix so an ordinary at-rest runtime error doesn't falsely show "Refining" over a fine frame — pinned by a test). So an interaction error on a committed frame does NOT reach the chip, and relaxing that gate reintroduces the exact bug it fixed. **Phase 1 must NOT rely on the parent chip** — the frozen frame carries its own minimal status.
 
-The frame is now frozen-but-visible (its JS threw, so it won't respond to further interaction until repair swaps in a fresh iframe — that's the acceptable "freeze"). The user keeps seeing their prototype, not a blank.
+### The change (in `frameMountPlugin.ts` `showFatal`)
+Keep the `arcade-studio:frame-error` postMessage (unchanged — still drives Viewport's auto-repair dispatch + the chat system-message breadcrumb). Then, instead of `root.innerHTML = ""` + full-screen panel:
 
-### The parent already does the rest (reuse, no new surface)
-`FrameCard` already listens for `arcade-studio:frame-error` and shows the calm chip ("Refining your change…", then terminal "I couldn't get that change right — tell me what you'd like instead" after the timer). That chip is the "clear message" the user asked for. On a clean repair, the double-buffer swaps a fresh iframe in and the frozen frame is replaced with a live one. **No parent change needed for Phase 1** beyond confirming the chip fires for a committed-frame interaction error (it keys on the nonce; verify the committed frame's error carries a nonce the parent accepts, or relax that gate for the "frame already visible" case — resolve in the plan).
+1. **If the frame rendered something** (`root.childElementCount > 0` / a mounted tree exists): **do NOT touch the existing DOM.** APPEND a small, non-destructive calm status **overlay** on top of it (a positioned banner reusing the existing calm styling — pulsing dot + "Refining your change…" / "We hit a snag, fixing it — watch the chat", detail-on-tap). The user's prototype stays fully visible underneath, frozen, with a clear on-frame message. No blanking.
+2. **If the frame is empty** (module-load crash before React mounted — nothing to preserve): keep TODAY's behavior — show the calm "Auto-repairing this frame" panel (it IS the only content; there's no render to protect, and a message beats a blank).
+3. **Idempotent:** if the overlay/panel is already present (a second error fires), don't stack duplicates.
 
-### Why the panel-removal is safe
-- The panel was the *only* thing the shim added; removing the wipe + panel leaves the real render. Nothing depended on the in-frame panel (the durable record is the chat system-messages + the parent chip).
-- The `FrameErrorBoundary` (React render/lifecycle path) is a DIFFERENT handler — Phase 1 does NOT change it (that's the Phase-2 render-crash path). Interaction errors never reach the boundary (React doesn't catch event-handler throws), so Phase 1's errorShim change fully owns the interaction case.
+The overlay is a sibling appended to `root` (or `document.body`), `position:fixed`/`absolute`, non-interactive where it covers nothing important — it never removes or rewrites the frame's nodes. That is the whole "keep the DOM" guarantee, made safe for both classes.
 
-## The two cases after Phase 1
-| Trigger | Handler | After Phase 1 |
-|---|---|---|
-| Click / event handler throws on a visible frame | errorShim (`window.onerror`) | **Frame stays on screen (frozen) + calm chip. No white screen.** ✅ |
-| async / unhandledrejection on a visible frame | errorShim | Same — frame kept, chip. ✅ |
-| Broken NEW edit (incoming) | double-buffer (shipped) | Held in hidden iframe, never swapped in — already fine. ✅ |
-| Render-phase crash mid-multi-file edit | FrameErrorBoundary | **Residual — may still briefly show the panel; recovers.** (Phase 2) ⚠️ |
+### Why this delivers the goal for both classes
+| Case | root state | Phase-1 behavior | Result |
+|---|---|---|---|
+| Click / event-handler / async throw on a visible frame | mounted (DOM intact) | keep DOM + append overlay | **prototype stays visible, frozen, clear message. Never white.** ✅ |
+| Module-load crash (bad import, before React mounts) | empty | keep today's panel | message on an unavoidably-empty frame (no render existed) — not a regression ✅ |
+
+### What Phase 1 does NOT touch
+- **`FrameErrorBoundary`** (React render/lifecycle path) — unchanged. A render-phase crash mid-multi-file edit still routes there (Phase 2).
+- **The parent chip / `editCycleActive` / nonce gate** — unchanged (avoids reintroducing the false-"Refining" bug). The frozen-frame status is the shim's own overlay, independent of the parent chip.
+- **Auto-repair dispatch** — unchanged; the `frame-error` post still triggers it via Viewport + the chat breadcrumb still appears.
+
+## The cases after Phase 1
+| Trigger | Handler | root state | After Phase 1 |
+|---|---|---|---|
+| Click / event-handler / async throw on a visible frame | errorShim (`window.onerror`) | mounted | **Prototype stays visible (frozen) + calm overlay. Never white.** ✅ |
+| Module-load crash (bad import, pre-React-mount) | errorShim | empty | Calm panel on an unavoidably-empty frame (no render to keep). Not a regression. ✅ |
+| Broken NEW edit (incoming) | double-buffer (shipped) | — | Held in hidden iframe, never swapped in. ✅ |
+| Render-phase crash mid-multi-file edit | FrameErrorBoundary | tree destroyed | **Residual — may still briefly show the panel; recovers.** (Phase 2) ⚠️ |
 
 ## Files (indicative — confirm at plan time)
 | File | Change |
 |---|---|
-| `studio/server/plugins/frameMountPlugin.ts` | errorShim `showFatal`: keep the `frame-error` postMessage; REMOVE `root.innerHTML=""` + the injected panel DOM. Leave the frame's DOM untouched on an interaction/async error. |
-| `studio/src/components/viewport/FrameCard.tsx` | Confirm the calm chip fires for a committed-frame `frame-error` (interaction error on the visible frame). If the nonce gate blocks it (the committed frame's error may not match the in-flight reloadNonce), allow the chip for a committed-frame error too. Small, verify in the plan. |
-| `studio/__tests__/server/plugins/frameMountPlugin.test.ts` | errorShim no longer emits the wipe/panel markup; still posts `frame-error` with the nonce. Assert the generated shim source does NOT contain `innerHTML = ""` / the panel, and DOES still postMessage. |
-| `studio/__tests__/components/viewport/frame-card-reload.test.tsx` | a committed-frame `frame-error` (interaction) shows the calm chip (not silent, not a swap). |
+| `studio/server/plugins/frameMountPlugin.ts` | errorShim `showFatal`: keep the `frame-error` postMessage. Branch on `root.childElementCount > 0`: **mounted →** do NOT wipe; APPEND a non-destructive calm status overlay (reuse the existing `wrap`/dot/`sub` styling, positioned as an overlay, idempotent). **empty →** keep today's `innerHTML=""` + panel (nothing to preserve). Never blank a rendered frame. |
+| `studio/__tests__/server/plugins/frameMountPlugin.test.ts` | Assert the generated shim: still posts `frame-error`; branches on `childElementCount`/root-empty; the mounted branch does NOT `innerHTML=""` and APPENDS an overlay; the empty branch keeps the panel; idempotent (no duplicate overlay on a second error). |
+| (no FrameCard/parent-chip change in Phase 1) | The frozen-frame message is the shim's own overlay; the parent chip + `editCycleActive` gate stay as-is (relaxing them would reintroduce the shipped false-"Refining" bug). |
 
 ## Non-goals (explicit)
 - **Render-phase mid-multi-file crash** (`Tabs is not defined` during a 6-file migration) — Phase 2, separate spec.
@@ -71,6 +76,7 @@ The frame is now frozen-but-visible (its JS threw, so it won't respond to furthe
 - **Changing auto-repair dispatch** — unchanged; the `frame-error` post still triggers it.
 
 ## Open questions (resolve in the plan)
-1. **Committed-frame error + the chip's nonce gate.** The parent's chip logic keys on `reloadNonce` (an in-flight edit). An interaction error on an at-rest committed frame may not match. Decide: relax the gate to also show the chip for a committed-frame error, and ensure it doesn't collide with the `editCycleActive` logic that (correctly) ignores at-rest errors for the *edit* flow. The chip should say "something went wrong, repairing" for a genuine at-rest crash, but NOT mis-fire on the benign at-rest cases the editCycleActive gate was added to suppress. This interaction needs care — it's the one subtle part.
-2. **Does auto-repair even fire for a pure interaction error** (no file write followed)? If the user clicks and it throws but no edit is in flight, repair may have nothing to fix. The frame stays frozen + chip; confirm the terminal-timer message ("tell me what you'd like") is the right resting state, and the user can just re-prompt. The frozen-but-not-blank frame is still the win.
-3. **errorShim: keep a tiny non-destructive hook?** Confirm removing the panel entirely doesn't lose the only signal in some edge (e.g. a module-load error before React mounts — there the frame is empty anyway, so a blank is unavoidable; decide whether that pre-mount case keeps a minimal message vs. relies on the parent chip over an empty frame).
+1. **Overlay mechanics.** Position/z-index so the overlay sits above the frozen frame without destroying or reflowing it; `pointer-events` so it doesn't trap clicks meant for nothing (the frame is frozen anyway). Reuse the existing calm styling (pulsing dot + sub-text + detail-on-tap). Confirm it renders correctly over an arbitrary frame layout.
+2. **Detecting "did the frame render."** `root.childElementCount > 0` is the proposed test (React mounted → children exist; pre-mount module-load → empty). Confirm this reliably distinguishes the two at the moment `showFatal` runs (e.g. a crash DURING first render might leave partial children — treat partial-but-present as "mounted, keep + overlay", which is still better than blanking). Pin the exact condition in the plan.
+3. **Auto-repair for a pure interaction error** (no file write followed). Repair DOES dispatch (Viewport → `/api/runtime-error` is ungated), but the agent may have nothing to fix, so no swap follows and the frame stays frozen under the overlay. That's acceptable (frozen + clear message beats blank), but the overlay copy should NOT promise "Refining…" indefinitely — after a bounded wait with no swap, soften to "we couldn't auto-fix this — tell me what you'd like, or reload" so the user knows to act. Decide the copy + whether the shim or a bounded timer drives that transition (may borrow the parent's terminal-timer idea, but self-contained in the overlay to avoid the editCycleActive entanglement).
+4. **Idempotency + cleanup.** Second error while the overlay is up → no duplicate. When repair swaps a fresh iframe in, the whole document is replaced, so the overlay is gone by construction — confirm no stale overlay leaks.
