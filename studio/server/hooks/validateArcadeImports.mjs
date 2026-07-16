@@ -334,9 +334,7 @@ export function isArcadeNamespaceSpecifier(spec) {
 
 /**
  * Every import specifier in the source, across ALL import/export-from forms.
- * Anchored at line-start AND with binding-clause charset restriction to prevent
- * phantom matches from string literals, JSX prose, or template contents (which
- * stripComments keeps verbatim — its docstring says so):
+ * THREE phantom guards keep code-samples/prose from being read as imports:
  *   - LINE-ANCHOR (^\s* with /m): the keyword must start a statement line. A
  *     code-sample string on a `const x = "..."` line, JSX text, or template
  *     prose is never at line-start.
@@ -345,6 +343,12 @@ export function isArcadeNamespaceSpecifier(spec) {
  *     excludes `(`, `<`, `=>`, `.`, etc. So a line like
  *     `export default () => <p>import ... from "x"</p>` (which starts with
  *     `export` but has `(` before `from`) does NOT match.
+ *   - TEMPLATE-BODY STRIP (stripTemplateBodies): a MULTI-LINE code sample
+ *     rendered inside a backtick template (`<pre>{`…import … from "arcade/…"…`}
+ *     </pre>`) puts the displayed import AT line-start inside the body, which
+ *     defeats the line-anchor. stripComments keeps template bodies verbatim, so
+ *     we collapse them to empty backticks first. Real imports never live in a
+ *     template, so nothing real is lost.
  * Forms matched:
  *   - `import [type] {…}/Def/* as X from "…"`  → the `from` form
  *   - `export [type] {…}/* from "…"`           → re-export-from
@@ -352,12 +356,12 @@ export function isArcadeNamespaceSpecifier(spec) {
  * NOT reused from parseImports (named-only) or collectDefinedIdentifiers
  * (captures the binding, not the path). Comments stripped first; string
  * BODIES are kept by stripComments (a real import's own specifier is a string
- * too, so stripCommentsAndStrings would wrongly erase it). These two anchors —
- * line-start AND binding-charset — are what prevent phantoms.
+ * too, so stripCommentsAndStrings would wrongly erase it). These three guards —
+ * line-start, binding-charset, and template-body strip — prevent phantoms.
  */
 export function extractImportSpecifiers(source) {
   if (typeof source !== "string" || !source) return [];
-  const clean = stripComments(source);
+  const clean = stripTemplateBodies(stripComments(source));
   const out = [];
   // Line-anchored (^\s* with /m) so the keyword must START a statement line —
   // a code-sample string on a `const x = "..."` line, or JSX/template copy, is
@@ -408,6 +412,33 @@ export function formatInvalidPathError(violations) {
   }
   lines.push("", "Fix the import path(s) and re-Write. This hook runs on every Write/Edit.");
   return lines.join("\n");
+}
+
+/**
+ * Replace backtick TEMPLATE-LITERAL bodies with empty backticks. Real import
+ * statements never live inside a template; a frame that RENDERS a code sample
+ * in a `<pre>{`…`}</pre>` template would otherwise have its displayed
+ * `import … from "arcade/…"` (at line-start inside the body) phantom-matched by
+ * the line-anchored extractor → exit-2 on a valid frame. stripComments keeps
+ * template bodies verbatim, so we strip them here before specifier extraction.
+ */
+export function stripTemplateBodies(source) {
+  if (typeof source !== "string" || !source) return "";
+  let out = "", i = 0, n = source.length;
+  while (i < n) {
+    const c = source[i];
+    if (c === "`") {
+      out += "``"; i++;
+      while (i < n) {
+        if (source[i] === "\\") { i += 2; continue; }
+        if (source[i] === "`") { i++; break; }
+        i++;
+      }
+      continue;
+    }
+    out += c; i++;
+  }
+  return out;
 }
 
 /**

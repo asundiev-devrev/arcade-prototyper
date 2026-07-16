@@ -458,6 +458,19 @@ describe("validateArcadeImports hook (integration)", () => {
     const p = runHook({ tool_name: "Write", tool_input: { file_path: f, content: fs.readFileSync(f, "utf-8") } });
     expect(p.status).toBe(0);
   });
+  it("exit 0 on a docs frame that RENDERS a MULTI-LINE code sample in a backtick template (round-2 Critical, no false alarm)", () => {
+    // The displayed import is at line-start inside the template body; without
+    // stripTemplateBodies the line-anchored extractor phantom-matches it and
+    // exits 2 on a perfectly valid gallery/docs frame.
+    const f = tmpFrame(`export default () => (
+  <pre>{\`
+import { ChevronDownSmall } from "arcade/components/icons";
+import { Button } from "arcade/components";
+\`}</pre>
+);`);
+    const p = runHook({ tool_name: "Write", tool_input: { file_path: f, content: fs.readFileSync(f, "utf-8") } });
+    expect(p.status).toBe(0);
+  });
   it("exit 2 on the bug path arcade/components/icons (real bad import, not phantom)", () => {
     const f = tmpFrame(`import { ChevronDownSmall } from "arcade/components/icons";\nexport default () => <ChevronDownSmall/>;`);
     const p = runHook({ tool_name: "Write", tool_input: { file_path: f, content: fs.readFileSync(f, "utf-8") } });
@@ -616,6 +629,19 @@ describe("extractImportSpecifiers (all forms)", () => {
     expect(specs).not.toContain("arcade/bad");
     expect(specs).not.toContain("arcade/bad2");
     expect(specs).toEqual([]); // none of these are import statements
+  });
+  it("does NOT extract from a MULTI-LINE template code sample (the round-2 Critical → no false alarm)", () => {
+    // A valid docs/gallery frame that RENDERS a code sample inside a backtick
+    // template. The displayed `import … from "arcade/…"` sits at LINE-START
+    // inside the template body, which defeats the line-anchor — stripComments
+    // keeps template bodies verbatim. stripTemplateBodies collapses the body
+    // first, so the phantom can never reach the regex.
+    const src = `export default () => (
+  <pre>{\`
+import { ChevronDownSmall } from "arcade/components/icons";
+\`}</pre>
+);`;
+    expect(extractImportSpecifiers(src)).toEqual([]);
   });
 });
 
