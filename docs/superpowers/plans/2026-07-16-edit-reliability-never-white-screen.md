@@ -74,13 +74,17 @@ describe("errorShim keeps the DOM (never white-screen)", () => {
     expect(html).toContain("Couldn't apply that change automatically");
   });
 
-  it("softener targets the sub-line by marker, NOT querySelector('div') (would corrupt the dot+title head)", () => {
+  it("softener targets the sub-line by marker, NOT a bare-div query (would corrupt the dot+title head)", () => {
     // regression guard: the sub element carries data-arcade-status-sub and the
     // softener queries THAT, never a bare 'div' (the head flex-row is the first
     // div; textContent on it destroys the dot+title).
     expect(html).toContain("data-arcade-status-sub");
     expect(html).toMatch(/querySelector\(\s*["'`]\[data-arcade-status-sub\]/);
-    expect(html).not.toMatch(/querySelector\(\s*["'`]div["'`]\s*\)/); // never target a bare div
+    // Strip JS comments FIRST — the errorShim's own explanatory comments ship
+    // verbatim into the HTML, so assert against CODE, not comment text. Then no
+    // bare-div lookup may survive (that's the corruption path).
+    const codeOnly = html.replace(/\/\/[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(codeOnly).not.toMatch(/querySelector\(\s*["'`]div["'`]\s*\)/);
   });
 
   it("the emitted errorShim script PARSES (guards against an escaping regression)", () => {
@@ -137,7 +141,7 @@ Replace the body of `showFatal` AFTER the postMessage block (keep the postMessag
           title.style.cssText = "font-weight:600;color:#111827;";
           head.appendChild(dot); head.appendChild(title);
           var sub = document.createElement("div");
-          sub.setAttribute("data-arcade-status-sub", "");   // targeted by the softener — do NOT rely on querySelector("div") (head div comes first)
+          sub.setAttribute("data-arcade-status-sub", "");   // targeted by the softener via this marker — a bare-div lookup would grab the head row (dot+title) instead
           sub.style.cssText = "color:#6b7280;font-size:12.5px;";
           sub.textContent = "We caught a " + (label === "Frame failed to load" ? "load" : "runtime") + " error and asked the agent to fix it. Watch the chat for an update.";
           var details = document.createElement("details");
@@ -177,10 +181,10 @@ Replace the body of `showFatal` AFTER the postMessage block (keep the postMessag
           setTimeout(function () {
             var live = document.querySelector("[data-arcade-status-overlay]");
             if (!live) return; // document already swapped/reloaded → nothing to do
-            // Target elements EXPLICITLY. querySelector("div") would hit the
-            // `head` flex-row (dot+title) — the FIRST div — and .textContent on
-            // it would DESTROY the dot+title children. Use the sub's marker attr
-            // and the title <strong> (which has no element children).
+            // Target elements EXPLICITLY via markers. A bare-div lookup would
+            // hit the `head` flex-row (dot+title) — the FIRST div — and
+            // .textContent on it would DESTROY the dot+title children. Use the
+            // sub's marker attr and the title <strong> (no element children).
             var t = live.querySelector("strong");
             var s = live.querySelector("[data-arcade-status-sub]");
             if (t) t.textContent = "Couldn't apply that change automatically";
