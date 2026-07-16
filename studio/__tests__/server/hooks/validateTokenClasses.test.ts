@@ -200,6 +200,11 @@ describe("detectDeadTokenRefs", () => {
   it("fails open on an empty union", () => {
     expect(detectDeadTokenRefs(`className="bg-(--bg-orange-subtle)"`, new Set(), SEED)).toEqual([]);
   });
+  it("skips Tailwind-default refs (framework primitives, not DS tokens)", () => {
+    // --radius-md is a Tailwind built-in, never in resolvable, but always resolves → skip it.
+    const v = detectDeadTokenRefs(`className="rounded-(--radius-md)"`, UNION, SEED);
+    expect(v).toEqual([]);
+  });
 });
 
 describe("suggestRealTokens", () => {
@@ -244,6 +249,21 @@ describe("validateTokenClasses hook (dead-ref integration)", () => {
   });
   it("exit 0 for a kit-shipped *-on-prominent token (rev-4 regression guard)", () => {
     const f = tmpFrame(`export default () => <div className="text-(--fg-neutral-on-prominent)" />;`);
+    const p = runHook({ tool_name: "Write", tool_input: { file_path: f, content: fs.readFileSync(f, "utf-8") } });
+    expect(p.status).toBe(0);
+  });
+  it("exit 0 for --radius-bubble (real, in tailwind.css @theme)", () => {
+    const f = tmpFrame(`export default () => <div className="rounded-(--radius-bubble)" />;`);
+    const p = runHook({ tool_name: "Write", tool_input: { file_path: f, content: fs.readFileSync(f, "utf-8") } });
+    expect(p.status).toBe(0);
+  });
+  it("exit 0 for --component-bubble-radius (real, in arcade-gen-patches.css)", () => {
+    const f = tmpFrame(`export default () => <div style={{ borderRadius: "var(--component-bubble-radius)" }} />;`);
+    const p = runHook({ tool_name: "Write", tool_input: { file_path: f, content: fs.readFileSync(f, "utf-8") } });
+    expect(p.status).toBe(0);
+  });
+  it("exit 0 for --radius-md (Tailwind default, allowlisted)", () => {
+    const f = tmpFrame(`export default () => <div className="rounded-(--radius-md)" />;`);
     const p = runHook({ tool_name: "Write", tool_input: { file_path: f, content: fs.readFileSync(f, "utf-8") } });
     expect(p.status).toBe(0);
   });

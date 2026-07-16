@@ -10,8 +10,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
-import { pathToFileURL } from "node:url";
-import { ADS_COLOR_SEED } from "../figma/adsColorSeed.mjs";
+import { pathToFileURL, fileURLToPath } from "node:url";
 
 // Tailwind prefixes that take a color/token value. A class of the form
 // `<prefix>-<tail>` where <tail> is a real token name but written WITHOUT the
@@ -19,6 +18,18 @@ import { ADS_COLOR_SEED } from "../figma/adsColorSeed.mjs";
 const TOKEN_PREFIXES = [
   "text", "bg", "border", "fill", "ring", "stroke", "from", "to", "via",
   "divide", "outline", "decoration", "accent", "caret", "placeholder",
+];
+
+// Tailwind v4 built-in theme var prefixes. These namespace framework primitives
+// that always resolve; a ref in one of these namespaces is not what the DS-token
+// check should judge. Deliberately SAFE-DIRECTION scope: skipping a framework ref
+// risks a MISS on a genuinely-dead one (e.g. --shadow-elevation-02, whose real DS
+// token is --elevation-02), never a FALSE ALARM on a real token; misses are
+// acceptable under the one-directional HARD rule, false alarms are not.
+const TAILWIND_DEFAULT_PREFIXES = [
+  "radius-", "spacing-", "text-", "font-", "font-weight-", "leading-", "tracking-",
+  "container-", "color-", "ease-", "breakpoint-", "blur-", "shadow-", "aspect-",
+  "animate-", "perspective-", "inset-shadow-", "drop-shadow-",
 ];
 
 /** Every custom-property name (sans leading --) defined in the CSS text. */
@@ -160,13 +171,16 @@ export function suggestRealTokens(deadName, resolvable, limit = 3) {
  * violation carries realValue = the ADS seed value when the token is a REAL
  * design-system token the kit just doesn't ship (→ tell the agent the value),
  * else null (→ typo/hallucination, suggest nearest real). Fails open on an
- * empty union.
+ * empty union. Skips framework-primitive refs (TAILWIND_DEFAULT_PREFIXES) to
+ * avoid false alarms on built-in vars that always resolve.
  */
-export function detectDeadTokenRefs(source, resolvable, seed = ADS_COLOR_SEED) {
+export function detectDeadTokenRefs(source, resolvable, seed) {
   if (!resolvable || resolvable.size === 0) return [];
   const out = [];
   for (const ref of extractTokenRefs(source)) {
     if (resolvable.has(ref)) continue;
+    // Skip Tailwind-default framework refs (deliberate safe direction: misses OK, false alarms not).
+    if (TAILWIND_DEFAULT_PREFIXES.some((prefix) => ref.startsWith(prefix))) continue;
     const realValue = (seed && Object.prototype.hasOwnProperty.call(seed, ref)) ? seed[ref] : null;
     out.push({ ref, realValue, suggestions: realValue ? [] : suggestRealTokens(ref, resolvable) });
   }
@@ -212,6 +226,31 @@ export function loadTokenNames() {
   } catch {
     return new Set(); // fail open
   }
+}
+
+/**
+ * Load token names from studio's own tailwind.css and arcade-gen-patches.css
+ * (@theme defs + component vars that render but aren't in arcade-gen's dist).
+ * Fails open per-file: a missing file contributes nothing (packaged layout may
+ * move src/, but the Tailwind-default allowlist + styles.css cover the common
+ * cases).
+ */
+function loadStudioStyleTokens() {
+  const hookDir = path.dirname(fileURLToPath(import.meta.url)); // studio/server/hooks
+  const paths = [
+    path.join(hookDir, "../../src/styles/tailwind.css"),
+    path.join(hookDir, "../../src/styles/arcade-gen-patches.css"),
+  ];
+  const tokens = new Set();
+  for (const p of paths) {
+    try {
+      const css = readFileSync(p, "utf-8");
+      for (const t of extractTokenNames(css)) tokens.add(t);
+    } catch {
+      // fail open per-file
+    }
+  }
+  return tokens;
 }
 
 export function formatTokenClassError(violations) {
@@ -285,6 +324,15 @@ async function main() {
   const content = extractContent(toolName, toolInput);
   if (!content) process.exit(0);
 
+  // Fail-open seed load (top-level import throws at module load before main()'s catch).
+  let seed = {};
+  try {
+    const m = await import("../figma/adsColorSeed.mjs");
+    seed = m.ADS_COLOR_SEED || {};
+  } catch {
+    // fail open: no ADS oracle → typo lane only
+  }
+
   const tokenNames = loadTokenNames();
   const classes = parseClassNames(content);
   const classViolations = detectTokenClassViolations(classes, tokenNames);
@@ -292,14 +340,16 @@ async function main() {
   let deadRefs = [];
   if (isFrameFile(toolInput?.file_path)) {
     // RESOLVABLE = what actually RENDERS: kit CSS (load-bearing — carries
-    // *-on-prominent) ∪ project overrides ∪ same-file local defs. The ADS seed
-    // is NOT in here — it's the classification oracle passed separately. A seed
-    // token the kit doesn't ship does NOT render, so it must NOT be resolvable
-    // (else it silently passes = the exact bug). Fail open: empty → skip.
+    // *-on-prominent) ∪ studio stylesheets (tailwind.css @theme, patches :root)
+    // ∪ project overrides ∪ same-file local defs. The ADS seed is NOT in here —
+    // it's the classification oracle passed separately. A seed token the kit
+    // doesn't ship does NOT render, so it must NOT be resolvable (else it
+    // silently passes = the exact bug). Fail open: empty → skip.
     const resolvable = new Set(tokenNames);                        // kit CSS (renders)
+    for (const t of loadStudioStyleTokens()) resolvable.add(t);    // studio's @theme + patches
     for (const t of extractTokenNames(readProjectThemeOverrides(toolInput.file_path))) resolvable.add(t);
     for (const t of extractLocalDefs(content)) resolvable.add(t);   // author-local vars
-    if (resolvable.size > 0) deadRefs = detectDeadTokenRefs(content, resolvable, ADS_COLOR_SEED);
+    if (resolvable.size > 0) deadRefs = detectDeadTokenRefs(content, resolvable, seed);
   }
 
   if (classViolations.length === 0 && deadRefs.length === 0) process.exit(0);
