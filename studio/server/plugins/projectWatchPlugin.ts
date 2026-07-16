@@ -45,9 +45,16 @@ function invalidateFileInModuleGraph(server: any, filePath: string): void {
  *      these files, so the committed (last-good) iframe can't be hot-swapped
  *      in place behind the resilient-render double-buffer's back.
  *
- * Scoped to files DIRECTLY in the frame dir (parts.length === 4) — covers
- * index.tsx AND ejected sibling modules it imports (e.g. `ComputerScene.tsx`),
- * but NOT theme-overrides.css, shared/*.ts, nested assets, or root scaffold.
+ * Scoped to CODE modules anywhere under the frame dir:
+ * `<slug>/frames/<frameId>/…/<file>.tsx|.ts` at ANY depth — covers index.tsx,
+ * ejected siblings (`ComputerScene.tsx`), AND nested code (`pages/Skills.tsx`,
+ * `components/Row.ts`) the frame imports. Real frames eject nested `pages/`
+ * modules; a broken edit to one must route through the resilient reload path
+ * like index.tsx, or Vite Fast-Refresh hot-swaps it into the visible iframe
+ * (white screen — the resilient-render safety net never engages).
+ * EXCLUDED: theme-overrides.css, shared/*.ts, root scaffold, and anything under
+ * an `assets/` segment (images/svgs the frame references by URL — copied files,
+ * not imported modules Vite hot-swaps).
  */
 export function isFrameSourcePath(filePath: string): boolean {
   const rel = path.relative(projectsRoot(), filePath);
@@ -56,13 +63,11 @@ export function isFrameSourcePath(filePath: string): boolean {
   const parts = rel.split(path.sep);
   const slug = parts[0];
   if (!slug || !/^[a-z0-9][a-z0-9-]{0,62}$/i.test(slug)) return false;
-  // parts === [slug, "frames", frameId, "<file>.tsx|.ts"]
-  return (
-    parts[1] === "frames" &&
-    !!parts[2] &&
-    parts.length === 4 &&
-    /\.(tsx|ts)$/.test(parts[3])
-  );
+  // parts === [slug, "frames", frameId, …nested…, "<file>.tsx|.ts"]
+  if (parts[1] !== "frames" || !parts[2] || parts.length < 4) return false;
+  // Exclude non-code asset trees anywhere under the frame (frames/<id>/assets/*).
+  if (parts.slice(3).includes("assets")) return false;
+  return /\.(tsx|ts)$/.test(parts[parts.length - 1]);
 }
 
 /**
@@ -88,11 +93,13 @@ export async function handleProjectWatchEvent(
   // so index.tsx's `./ComputerScene` resolution failed and Vite cached
   // the miss. Reloading only on index.tsx left that stale failure on
   // screen ("[vite:import-analysis] Failed to resolve ./ComputerScene")
-  // until a manual restart. Reload on any frame-dir source file so the
-  // sibling's arrival re-runs resolution. Still scoped to files DIRECTLY
-  // in a frame dir (parts.length === 4) — NOT theme-overrides.css,
-  // shared/*.ts, or root scaffold files, whose reloads used to race the
-  // chat POST (see 0.23.6 regression / project-watch-full-reload-scope).
+  // until a manual restart. Reload on any frame CODE module — at any depth
+  // under the frame dir (index.tsx, ejected siblings, nested pages/*.tsx) so
+  // the sibling's arrival re-runs resolution and a nested-module edit still
+  // routes through the resilient reload path. Scoping (incl. the assets/ and
+  // scaffold exclusions that used to race the chat POST — 0.23.6 regression /
+  // project-watch-full-reload-scope) lives in isFrameSourcePath. frameId is
+  // always parts[2] (the frame dir), regardless of nesting depth.
   const frameId = parts[2];
   const isFrameSource = isFrameSourcePath(filePath);
 

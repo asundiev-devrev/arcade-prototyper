@@ -48,8 +48,18 @@ describe("suppressFrameHmrPlugin hotUpdate", () => {
     expect(handler(ctx(abs("proj", "shared", "devrev.ts")))).toBeUndefined();
   });
 
-  it("does NOT suppress a nested file inside a frame dir (parts.length > 4)", () => {
-    // e.g. frames/01-frame/assets/icon.tsx — not directly in the frame dir
+  it("SUPPRESSES a nested code module under the frame dir (pages/Skills.tsx)", () => {
+    // Real frames eject nested code (frames/<id>/pages/*.tsx). A broken edit to
+    // one must route through the resilient reload path like index.tsx — else
+    // Vite Fast-Refresh hot-swaps it into the visible iframe (white screen).
+    expect(handler(ctx(abs("proj", "frames", "01-frame", "pages", "Skills.tsx")))).toEqual([]);
+    expect(handler(ctx(abs("proj", "frames", "01-frame", "components", "Row.ts")))).toEqual([]);
+  });
+
+  it("does NOT suppress a nested ASSET (frames/<id>/assets/* is copied, not imported code)", () => {
+    // assets/ holds images/svgs the frame references by URL, not modules Vite
+    // hot-swaps — keep them out of the frame-source reload/suppress path.
+    expect(handler(ctx(abs("proj", "frames", "01-frame", "assets", "icon.svg")))).toBeUndefined();
     expect(handler(ctx(abs("proj", "frames", "01-frame", "assets", "icon.tsx")))).toBeUndefined();
   });
 
