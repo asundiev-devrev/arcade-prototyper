@@ -66,19 +66,32 @@ describe("isResolvableArcadeSpecifier", () => {
 });
 
 describe("extractImportSpecifiers (all forms)", () => {
-  it("captures named, default, namespace, and side-effect specifiers", () => {
-    const src = `
-      import { A } from "arcade/components";
-      import B from "arcade/components/icons";
-      import * as C from "arcade-studio/frame/x";
-      import "arcade-prototypes/side/effect";
-      const notImport = "from \\"arcade/fake\\"";
-    `;
+  it("captures named, default, namespace, side-effect, and export-from specifiers", () => {
+    const src = [
+      'import { A } from "arcade/components";',
+      'import B from "arcade/components/icons";',
+      'import * as C from "arcade-studio/frame/x";',
+      'import "arcade-prototypes/side/effect";',
+      'export { D } from "arcade/reexport";',
+    ].join("\n");
     const specs = extractImportSpecifiers(src);
     expect(specs).toContain("arcade/components");
     expect(specs).toContain("arcade/components/icons");
     expect(specs).toContain("arcade-studio/frame/x");
     expect(specs).toContain("arcade-prototypes/side/effect");
+    expect(specs).toContain("arcade/reexport");
+  });
+  it("does NOT extract a specifier from prose/JSX/template text (no phantom → no false alarm)", () => {
+    // Real, UNescaped string bodies (stripComments keeps them). The statement
+    // anchor must prevent a bare `from "..."` in copy from being read as an import.
+    const proseString = 'const help = ' + JSON.stringify('to import icons, use from "arcade/components/icons"') + ';';
+    const jsxText = '<p>Import from "arcade/fake/path" here</p>';
+    const tmpl = 'const t = `see from "arcade/other/thing"`;';
+    const specs = extractImportSpecifiers([proseString, jsxText, tmpl].join("\n"));
+    expect(specs).not.toContain("arcade/components/icons");
+    expect(specs).not.toContain("arcade/fake/path");
+    expect(specs).not.toContain("arcade/other/thing");
+    expect(specs).toEqual([]); // none of these are import statements
   });
 });
 
@@ -148,18 +161,33 @@ export function isArcadeNamespaceSpecifier(spec) {
 }
 
 /**
- * Every import specifier in the source, across ALL import forms:
- *   named/default/namespace all end in `from "…"`; side-effect is `import "…"`.
- * Comments stripped first so a commented-out import isn't judged. NOT reused
- * from parseImports (named-only) or collectDefinedIdentifiers (captures the
- * binding, not the specifier) — those don't yield the path.
+ * Every import specifier in the source, across ALL import/export-from forms.
+ * MUST be anchored on the import/export STATEMENT shape, NOT a loose `\bfrom`
+ * — a bare `from "…"` matches prose/JSX/template text (e.g. help copy
+ * `'… from "arcade/x"'`), which stripComments keeps verbatim (its docstring
+ * says so), producing a PHANTOM specifier → false alarm on a valid frame
+ * (adversarial-review finding; spec Open Q1). So each pattern requires the
+ * leading `import`/`export` keyword:
+ *   - `import [type] {…}/Def/* as X from "…"`  → the `from` form
+ *   - `export [type] {…}/* from "…"`           → re-export-from (also a real path)
+ *   - `import "…"`                              → side-effect (no `from`)
+ * NOT reused from parseImports (named-only) or collectDefinedIdentifiers
+ * (captures the binding, not the path). Comments stripped first; string
+ * BODIES are deliberately kept by stripComments, so the STATEMENT anchor —
+ * not a string-stripper — is what prevents phantom matches (a real import's
+ * own specifier is a string too, so stripCommentsAndStrings would wrongly
+ * erase it).
  */
 export function extractImportSpecifiers(source) {
   if (typeof source !== "string" || !source) return [];
   const clean = stripComments(source);
   const out = [];
-  const fromRe = /\bfrom\s+["']([^"']+)["']/g;                 // named/default/namespace
-  const sideRe = /(?:^|[;\n])\s*import\s+["']([^"']+)["']/g;    // side-effect (no `from`)
+  // `import`/`export` … `from "spec"` — the `[^;'"]*?` between the keyword and
+  // `from` spans the clause (braces/idents/`* as x`/`type`) but never crosses a
+  // statement end or a quote, so it can't leap from prose into a later import.
+  const fromRe = /\b(?:import|export)\b[^;'"]*?\bfrom\s+["']([^"']+)["']/g;
+  // Side-effect import: `import "spec"` with a quote right after `import`.
+  const sideRe = /\bimport\s+["']([^"']+)["']/g;
   let m;
   while ((m = fromRe.exec(clean)) !== null) out.push(m[1]);
   while ((m = sideRe.exec(clean)) !== null) out.push(m[1]);
@@ -297,3 +325,5 @@ In `~/Library/Application Support/arcade-studio/projects/computer-settings/frame
 - **Composition:** `detectInvalidArcadePaths` takes only `content` (no barrels) so it runs even if barrel load degraded; unioned with the named-symbol check into one exit-2; clean → exit-0 unchanged.
 - **Type consistency:** `detectInvalidArcadePaths` → `{specifier, suggestion}[]`; `formatInvalidPathError` consumes exactly that; `main()` unions `importViolations` (named) + `pathViolations` (path) messages.
 - **No false alarms:** only `isArcadeNamespaceSpecifier` specifiers judged; `@xorkavi/arcade-gen` (starts `@`), relative, npm all excluded; prefix aliases resolve. Fail-open: empty extraction → no violations.
+- **String-literal phantom fixed (adversarial-review Important):** the extractor is anchored on the `import`/`export … from` STATEMENT keyword, NOT a loose `\bfrom`, because `stripComments` keeps string bodies verbatim (its docstring); a bare `from "arcade/x"` in JSX copy / a template / a prose string would otherwise be a phantom specifier → false alarm. A dedicated test asserts prose/JSX/template `from "arcade/…"` yields `[]`. (Can't use `stripCommentsAndStrings` — a real import's specifier is itself a string, which it would erase.)
+- **`import type` decision (YAGNI):** a bad path in a type-only import is runtime-harmless (erased at build), and the anchored regex still flags it. Kept flagged deliberately — a wrong path is worth correcting even in a type import, and an `import type` exclusion adds complexity for a rare case. Noted, not excluded.
