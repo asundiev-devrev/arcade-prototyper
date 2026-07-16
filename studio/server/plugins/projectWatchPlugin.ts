@@ -34,8 +34,8 @@ function invalidateFileInModuleGraph(server: any, filePath: string): void {
 }
 
 /**
- * True iff `filePath` is a frame-source module written DIRECTLY into a project
- * frame dir: `<projectsRoot>/<slug>/frames/<frameId>/<file>.tsx|.ts`.
+ * True iff `filePath` is a frame-source CODE module anywhere under a project
+ * frame dir: `<projectsRoot>/<slug>/frames/<frameId>/…/<file>.tsx|.ts`.
  *
  * Single source of truth for "is this a frame's own source file". Two callers
  * depend on it staying identical:
@@ -52,9 +52,13 @@ function invalidateFileInModuleGraph(server: any, filePath: string): void {
  * modules; a broken edit to one must route through the resilient reload path
  * like index.tsx, or Vite Fast-Refresh hot-swaps it into the visible iframe
  * (white screen — the resilient-render safety net never engages).
- * EXCLUDED: theme-overrides.css, shared/*.ts, root scaffold, and anything under
- * an `assets/` segment (images/svgs the frame references by URL — copied files,
- * not imported modules Vite hot-swaps).
+ * EXCLUDED: theme-overrides.css, shared/*.ts, root scaffold, and the frame's
+ * top-level `assets/` dir (`frames/<id>/assets/*` — images/svgs referenced by
+ * URL, copied files not imported modules). NOTE the exclusion is the TOP-LEVEL
+ * assets dir ONLY (`parts[3]`), not an `assets` segment at any depth: a nested
+ * CODE module like `pages/assets/Library.tsx` (a designer's asset-browser page)
+ * is real frame source and MUST stay protected — matching `assets` anywhere
+ * re-opened the white-screen for that layout.
  */
 export function isFrameSourcePath(filePath: string): boolean {
   const rel = path.relative(projectsRoot(), filePath);
@@ -65,8 +69,8 @@ export function isFrameSourcePath(filePath: string): boolean {
   if (!slug || !/^[a-z0-9][a-z0-9-]{0,62}$/i.test(slug)) return false;
   // parts === [slug, "frames", frameId, …nested…, "<file>.tsx|.ts"]
   if (parts[1] !== "frames" || !parts[2] || parts.length < 4) return false;
-  // Exclude non-code asset trees anywhere under the frame (frames/<id>/assets/*).
-  if (parts.slice(3).includes("assets")) return false;
+  // Exclude the frame's TOP-LEVEL assets dir only (frames/<id>/assets/*).
+  if (parts[3] === "assets") return false;
   return /\.(tsx|ts)$/.test(parts[parts.length - 1]);
 }
 

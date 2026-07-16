@@ -56,11 +56,19 @@ describe("suppressFrameHmrPlugin hotUpdate", () => {
     expect(handler(ctx(abs("proj", "frames", "01-frame", "components", "Row.ts")))).toEqual([]);
   });
 
-  it("does NOT suppress a nested ASSET (frames/<id>/assets/* is copied, not imported code)", () => {
+  it("does NOT suppress the frame's TOP-LEVEL assets dir (frames/<id>/assets/* is copied, not imported code)", () => {
     // assets/ holds images/svgs the frame references by URL, not modules Vite
     // hot-swaps — keep them out of the frame-source reload/suppress path.
     expect(handler(ctx(abs("proj", "frames", "01-frame", "assets", "icon.svg")))).toBeUndefined();
     expect(handler(ctx(abs("proj", "frames", "01-frame", "assets", "icon.tsx")))).toBeUndefined();
+  });
+
+  it("SUPPRESSES a nested code module under an assets-NAMED subfolder (pages/assets/Library.tsx)", () => {
+    // The exclusion is the TOP-LEVEL assets dir only. A designer's asset-browser
+    // page nested at pages/assets/*.tsx is real code — matching `assets` at any
+    // depth would re-open the white-screen for that layout.
+    expect(handler(ctx(abs("proj", "frames", "01-frame", "pages", "assets", "Library.tsx")))).toEqual([]);
+    expect(handler(ctx(abs("proj", "frames", "01-frame", "components", "assets", "Card.tsx")))).toEqual([]);
   });
 
   it("does NOT suppress a studio shell source file (returns undefined)", () => {
