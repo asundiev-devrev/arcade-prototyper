@@ -54,45 +54,57 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
   // A candidate buffered by FrameCard when an edit's fingerprint matched the
   // prior render. The turn-end effect below decides whether to auto-retry.
   const noOpCandidate = useRef<string | null>(null);
-  // One-shot keyed on the ORIGINATING user turn id — survives the corrective
-  // turn's own `end` (which carries a different turn id) so we never loop.
-  const triggeredForTurn = useRef<string | null>(null);
-  // The turn id the corrective retry runs under (from the POST's 202 body) —
-  // never trigger a retry for it; its `done` only drives the banner.
-  const correctiveTurnId = useRef<string | null>(null);
+  // The turn id we last acted on (POSTed a retry for, or classified as the
+  // corrective) — so the same `done` can't be handled twice.
+  const handledTurn = useRef<string | null>(null);
+  // TRUE while we're expecting the corrective turn's `done`. Turns are
+  // serialized per slug (the server 409s a second concurrent turn), so the
+  // FIRST new turn to end after we POST a retry IS the corrective — we don't
+  // need its id from the POST body (which could fail to parse). Its `done` is
+  // banner-only; it can never itself trigger another retry → no loop.
+  const awaitingCorrective = useRef(false);
   const [visualNoOpBannerForFrame, setVisualNoOpBannerForFrame] = useState<string | null>(null);
 
   const onVisualNoOp = useCallback((frameSlug: string) => {
     noOpCandidate.current = frameSlug;
   }, []);
 
-  // Wrap send so a NEW user turn resets the one-shot + clears any stale banner.
-  const send = useCallback(
-    (prompt: string, images?: string[]) => {
-      triggeredForTurn.current = null;
-      correctiveTurnId.current = null;
-      noOpCandidate.current = null;
-      setVisualNoOpBannerForFrame(null);
-      rawSend(prompt, images);
-    },
-    [rawSend],
-  );
+  // Reset per-turn state when a genuinely NEW user turn starts. Keyed on the
+  // turn id transitioning to a running phase — this fires regardless of WHICH
+  // send path was used (the main ChatPane composer sends via the raw stream,
+  // NOT the wrapper below), so it's the send-path-independent reset. It must
+  // NOT reset for the corrective turn (which we started ourselves), so it's
+  // gated on `!awaitingCorrective.current`.
+  const lastSeenTurn = useRef<string | null>(null);
+  useEffect(() => {
+    const turnId = chat.turnId;
+    if (!turnId || turnId === lastSeenTurn.current) return;
+    lastSeenTurn.current = turnId;
+    if (awaitingCorrective.current) return; // this new turn IS the corrective — keep state
+    // A fresh user turn — clear any stale candidate/banner/one-shot.
+    noOpCandidate.current = null;
+    handledTurn.current = null;
+    setVisualNoOpBannerForFrame(null);
+  }, [chat.turnId]);
 
-  // On a clean turn end: if a no-op candidate is buffered AND the agent's
-  // summary claimed a visual change AND this is a not-yet-handled USER turn →
-  // POST the corrective retry and reconnect the stream. If instead this is the
-  // CORRECTIVE turn ending still-no-op → show the banner (no second retry).
+  // Nicety wrapper (used by a few non-composer send paths); the reset above is
+  // the load-bearing one, so this only needs to forward.
+  const send = rawSend;
+
+  // On a clean turn end: if this is the CORRECTIVE turn → banner-only (never
+  // re-POST). Otherwise, if a no-op candidate is buffered AND the agent's
+  // summary claimed a visual change → POST the corrective retry + reconnect.
   useEffect(() => {
     if (chat.phase !== "done") return;
     const turnId = chat.turnId;
-    if (!turnId) return;
+    if (!turnId || turnId === handledTurn.current) return;
 
-    // The corrective turn ended. If it ALSO produced a no-op candidate, the
-    // retry didn't move pixels → surface the honest banner. Never re-POST.
-    if (turnId === correctiveTurnId.current) {
-      if (noOpCandidate.current) {
-        setVisualNoOpBannerForFrame(noOpCandidate.current);
-      }
+    // The corrective turn ended. If it ALSO left a no-op candidate, the retry
+    // didn't move pixels → surface the honest banner. Never re-POST.
+    if (awaitingCorrective.current) {
+      handledTurn.current = turnId;
+      awaitingCorrective.current = false;
+      if (noOpCandidate.current) setVisualNoOpBannerForFrame(noOpCandidate.current);
       return;
     }
 
@@ -105,29 +117,29 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
         candidateBuffered: candidate != null,
         phase: chat.phase,
         summaryClaimsVisual,
-        alreadyTriggeredThisTurn: triggeredForTurn.current === turnId,
+        alreadyTriggeredThisTurn: false,
       })
     ) {
       return;
     }
-    triggeredForTurn.current = turnId;
+    handledTurn.current = turnId;
+    awaitingCorrective.current = true;
     // Clear the candidate so a fresh onVisualNoOp during the corrective turn is
     // distinguishable (a re-noop → banner).
     noOpCandidate.current = null;
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch("/api/chat/visual-noop-retry", {
+        await fetch("/api/chat/visual-noop-retry", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ slug, frame: candidate, userTurnId: turnId }),
         });
         if (cancelled) return;
-        const data = (await res.json().catch(() => null)) as { turnId?: string } | null;
-        if (data?.turnId) correctiveTurnId.current = data.turnId;
         chatStream.reconnect();
       } catch {
         // Best-effort — a failed retry just means no auto-correction this turn.
+        awaitingCorrective.current = false;
       }
     })();
     return () => {
