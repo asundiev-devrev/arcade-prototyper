@@ -271,14 +271,14 @@ command git commit -m "feat(studio/frame): renderFingerprint — geometry+paint 
 ## Task 2: frame emits the `frame-fingerprint` message
 
 **Files:**
-- Modify: `studio/server/plugins/frameMountPlugin.ts` (`frameBootstrap`, the template string around `:326-338`)
-- Test: `studio/__tests__/server/frame-fingerprint-bootstrap.test.ts` (NEW — substring assertions on the generated bootstrap source, mirroring existing frameMountPlugin tests)
+- Modify: `studio/server/plugins/frameMountPlugin.ts` (`buildFrameBootstrapSource`, the exported template builder at `:296`; its returned ES-module string)
+- Test: `studio/__tests__/server/frame-fingerprint-bootstrap.test.ts` (NEW — substring assertions on the generated bootstrap source, mirroring the existing `frameMountPlugin.test.ts` which already imports `buildFrameBootstrapSource`)
 
 **Interfaces:**
 - Consumes: `computeFingerprint`, `productionMeasure` from Task 1.
 - Produces: every frame render posts, in addition to the existing `arcade-studio:frame-ready`, a NEW message `{ type: "arcade-studio:frame-fingerprint", slug, frame, n, fp }` after fonts + layout settle.
 
-**Context:** `frameBootstrap` (`frameMountPlugin.ts:298+`) returns a template-string ES module that Vite serves as the iframe's entry. It already imports `arcade-studio/frame/picker` etc. and defines `ArcadeFrameReady` which posts `frame-ready` in a `useEffect`. The fingerprint must NOT be folded into `frame-ready` (that message drives the double-buffer swap and must fire instantly). Add a SEPARATE effect that awaits `document.fonts.ready`, double-rAFs, computes the fp over `document.body`, and posts it.
+**Context:** `buildFrameBootstrapSource(opts)` (`frameMountPlugin.ts:296`, ALREADY EXPORTED — the existing test imports it at `frameMountPlugin.test.ts:6`) returns a template-string ES module that Vite serves as the iframe's entry. It already imports `arcade-studio/frame/picker` etc. and defines `ArcadeFrameReady` which posts `frame-ready` in a `useEffect`. The fingerprint must NOT be folded into `frame-ready` (that message drives the double-buffer swap and must fire instantly). Add a SEPARATE effect that awaits `document.fonts.ready`, double-rAFs, computes the fp over `document.body`, and posts it. **No rename needed — use `buildFrameBootstrapSource` as-is.**
 
 - [ ] **Step 1: Write the failing test**
 
@@ -287,12 +287,9 @@ Create `studio/__tests__/server/frame-fingerprint-bootstrap.test.ts`:
 ```typescript
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { renderFrameBootstrap } from "../../server/plugins/frameMountPlugin";
+import { buildFrameBootstrapSource } from "../../server/plugins/frameMountPlugin";
 
-// renderFrameBootstrap is the exported template builder (see Step 3 note: if it
-// isn't exported yet, export it in this task — the existing frameBootstrap is a
-// module-private const; expose a named export for testing).
-const src = renderFrameBootstrap({
+const src = buildFrameBootstrapSource({
   absFrame: "/x/index.tsx",
   absOverrides: "/x/theme.css",
   mode: "light",
@@ -322,11 +319,11 @@ describe("frame bootstrap fingerprint emit", () => {
 - [ ] **Step 2: Run to verify fail**
 
 Run: `pnpm run studio:test studio/__tests__/server/frame-fingerprint-bootstrap.test.ts`
-Expected: FAIL — `renderFrameBootstrap` not exported / fingerprint strings absent.
+Expected: FAIL — fingerprint strings absent from the bootstrap source.
 
 - [ ] **Step 3: Implement**
 
-In `frameMountPlugin.ts`: (a) if the bootstrap builder is a private const, rename/export it as `renderFrameBootstrap` (keep the call site working); (b) add the fingerprint import + emit effect. The added module code (inside the returned template string, after the existing `import "arcade-studio/frame/gestureForwarder";` line and alongside `ArcadeFrameReady`):
+In `frameMountPlugin.ts` `buildFrameBootstrapSource`, add the fingerprint import + emit effect to the returned template string (after the existing `import "arcade-studio/frame/gestureForwarder";` line and alongside `ArcadeFrameReady`):
 
 Add to the imports block of the template:
 ```javascript
@@ -377,16 +374,20 @@ command git commit -m "feat(studio/frame): emit frame-fingerprint message after 
 
 ---
 
-## Task 3: visualNoOp decision + FrameCard capture/compare
+## Task 3: visualNoOp fingerprint tracker + FrameCard wiring
+
+> **REV-4 — this task was rewritten after the plan review found the rev-3 design (keying capture-vs-compare on `editCycleActive`) is DEAD in the app.** The frame's `frame-ready` posts immediately on mount (`frameMountPlugin.ts:330`, bare effect) and the swap sets `editCycleActive.current = false` at `FrameCard.tsx:182`. Our fingerprint deliberately lands LATER (awaits `document.fonts.ready` + double-rAF). So by the time the probe's fingerprint arrives, `editCycleActive` is already `false` → the rev-3 handler would misclassify every probe as an at-rest baseline capture and NEVER compare. The fix (the spec's original "pair by `n`" instruction, which rev-3 dropped): key entirely on the **nonce**, never on `editCycleActive`. The tracker holds a `{ fp, nonce }` baseline and compares any fingerprint whose nonce differs from the baseline's; equal fp → candidate; then promotes. This is ordering-immune AND self-poison-proof by construction (a render is never compared against its own baseline — different nonce is required to compare, same nonce just refreshes).
 
 **Files:**
 - Create: `studio/src/components/viewport/visualNoOp.ts`
-- Modify: `studio/src/components/viewport/FrameCard.tsx` (add `onVisualNoOp?` prop; add `lastCommittedFp` ref; handle the `frame-fingerprint` message in/near the existing `onMsg` effect `:158-202`)
-- Test: `studio/__tests__/components/visualNoOp.test.ts` (decision), `studio/__tests__/components/frame-card-visual-noop.test.tsx` (message handling)
+- Modify: `studio/src/components/viewport/FrameCard.tsx` (add `onVisualNoOp?` prop; add a `FpTracker` ref; handle the `frame-fingerprint` message in the existing `onMsg` effect, and capture the current `reloadNonce` on `frame-changed`)
+- Test: `studio/__tests__/components/visualNoOp.test.ts`
 
 **Interfaces:**
 - Produces:
   - `isVisualNoOp(probeFp: string | null | undefined, baselineFp: string | null | undefined): boolean` — true only when both present and equal.
+  - `type FpTracker = { baseline: { fp: string; nonce: string } | null }`.
+  - `observeFingerprint(tracker: FpTracker, fp: string, nonce: string): "captured" | "no-op" | "changed"` — the whole capture/compare/promote decision, nonce-keyed. Pure except it mutates `tracker.baseline`.
   - `FrameCard` new optional prop `onVisualNoOp?: (frameSlug: string) => void`.
 
 - [ ] **Step 1: Write the failing decision test**
@@ -395,7 +396,7 @@ Create `studio/__tests__/components/visualNoOp.test.ts`:
 
 ```typescript
 import { describe, it, expect } from "vitest";
-import { isVisualNoOp } from "../../src/components/viewport/visualNoOp";
+import { isVisualNoOp, observeFingerprint, type FpTracker } from "../../src/components/viewport/visualNoOp";
 
 describe("isVisualNoOp", () => {
   it("true when probe equals baseline", () => {
@@ -404,13 +405,48 @@ describe("isVisualNoOp", () => {
   it("false when they differ", () => {
     expect(isVisualNoOp("abc123", "def456")).toBe(false);
   });
-  it("false when baseline is null (first generation — nothing to compare)", () => {
+  it("false when baseline is null (first generation)", () => {
     expect(isVisualNoOp("abc123", null)).toBe(false);
     expect(isVisualNoOp("abc123", undefined)).toBe(false);
   });
   it("false when probe is missing", () => {
     expect(isVisualNoOp(null, "abc123")).toBe(false);
-    expect(isVisualNoOp(undefined, "abc123")).toBe(false);
+  });
+});
+
+describe("observeFingerprint (nonce-keyed — ordering-immune, self-poison-proof)", () => {
+  it("first fingerprint (no baseline) is captured, not compared", () => {
+    const t: FpTracker = { baseline: null };
+    expect(observeFingerprint(t, "base1", "")).toBe("captured");
+    expect(t.baseline).toEqual({ fp: "base1", nonce: "" });
+  });
+
+  it("same-nonce fingerprint just refreshes the baseline (never a self-compare)", () => {
+    const t: FpTracker = { baseline: { fp: "base1", nonce: "" } };
+    // A second fingerprint for the SAME render (e.g. re-measure) — refresh, no compare.
+    expect(observeFingerprint(t, "base1b", "")).toBe("captured");
+    expect(t.baseline).toEqual({ fp: "base1b", nonce: "" });
+  });
+
+  it("a NEW-nonce fingerprint equal to baseline → no-op, then promotes (nonce advances)", () => {
+    const t: FpTracker = { baseline: { fp: "base1", nonce: "0" } };
+    expect(observeFingerprint(t, "base1", "1")).toBe("no-op");
+    // promoted so the NEXT edit compares against this render
+    expect(t.baseline).toEqual({ fp: "base1", nonce: "1" });
+  });
+
+  it("a NEW-nonce fingerprint that DIFFERS → changed, then promotes", () => {
+    const t: FpTracker = { baseline: { fp: "base1", nonce: "0" } };
+    expect(observeFingerprint(t, "moved2", "1")).toBe("changed");
+    expect(t.baseline).toEqual({ fp: "moved2", nonce: "1" });
+  });
+
+  it("does NOT self-poison: an edit that truly changed pixels never reports no-op even if its fingerprint arrives after editCycle bookkeeping cleared", () => {
+    // The whole point: no editCycleActive read. Ordering can't break it.
+    const t: FpTracker = { baseline: { fp: "A", nonce: "0" } };
+    expect(observeFingerprint(t, "B", "1")).toBe("changed");
+    // subsequent identical render on nonce 2 vs the now-B baseline
+    expect(observeFingerprint(t, "B", "2")).toBe("no-op");
   });
 });
 ```
@@ -420,184 +456,97 @@ describe("isVisualNoOp", () => {
 Run: `pnpm run studio:test studio/__tests__/components/visualNoOp.test.ts`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement the decision**
+- [ ] **Step 3: Implement**
 
 Create `studio/src/components/viewport/visualNoOp.ts`:
 
 ```typescript
 /**
- * Pure decision for visual-no-op detection. A "visual no-op" is when an
- * in-flight edit's render fingerprint is byte-identical to the last committed
- * (at-rest) render's fingerprint — the code changed but the pixels didn't.
+ * Visual-no-op detection: an edit changed the code but the rendered frame is
+ * pixel-identical to the prior render. See the spec.
  *
- * Only a candidate signal: the narration-gate + server one-shot decide whether
- * to actually retry. See the spec.
+ * NONCE-KEYED, not editCycleActive-keyed. Rationale (plan review, rev-4): the
+ * fingerprint message arrives AFTER `frame-ready` (it awaits fonts+rAF), by
+ * which point the double-buffer swap has already cleared `editCycleActive`. So
+ * we cannot read that flag to decide "is this the in-flight probe?" — we key on
+ * the nonce instead: a fingerprint whose nonce differs from the baseline's is a
+ * NEW render (compare it); a same-nonce fingerprint just refreshes the baseline
+ * (a render is never compared against itself → no self-poison).
  */
+
 export function isVisualNoOp(
   probeFp: string | null | undefined,
   baselineFp: string | null | undefined,
 ): boolean {
-  if (!probeFp || !baselineFp) return false; // nothing to compare / first gen
+  if (!probeFp || !baselineFp) return false;
   return probeFp === baselineFp;
 }
-```
 
-- [ ] **Step 4: Run to verify decision passes**
-
-Run: `pnpm run studio:test studio/__tests__/components/visualNoOp.test.ts`
-Expected: PASS (4 tests).
-
-- [ ] **Step 5: Write the failing FrameCard message-handling test**
-
-Create `studio/__tests__/components/frame-card-visual-noop.test.tsx`. Rather than render the full FrameCard (heavy, needs providers), test the extracted message-handler logic. **Extract the fingerprint-message handling into a pure helper** `handleFingerprintMessage` (Step 6) so it's testable without the component:
-
-```typescript
-import { describe, it, expect, vi } from "vitest";
-import { handleFingerprintMessage } from "../../src/components/viewport/visualNoOp";
-
-// State container mirrors the refs FrameCard holds.
-function makeState() {
-  return { lastCommittedFp: null as string | null };
-}
-
-describe("handleFingerprintMessage", () => {
-  it("captures baseline from an at-rest fingerprint (editCycleActive=false), incl. initial n=''", () => {
-    const s = makeState();
-    const onNoOp = vi.fn();
-    handleFingerprintMessage(
-      { fp: "base1", n: "" },
-      { editCycleActive: false, committedNonce: 0, reloadNonce: 0, state: s, onVisualNoOp: onNoOp, frameSlug: "f" },
-    );
-    expect(s.lastCommittedFp).toBe("base1");
-    expect(onNoOp).not.toHaveBeenCalled();
-  });
-
-  it("on an edit-cycle probe fingerprint equal to the PRE-EXISTING baseline → fires onVisualNoOp", () => {
-    const s = makeState();
-    s.lastCommittedFp = "base1";
-    const onNoOp = vi.fn();
-    handleFingerprintMessage(
-      { fp: "base1", n: "1" },
-      { editCycleActive: true, committedNonce: 0, reloadNonce: 1, state: s, onVisualNoOp: onNoOp, frameSlug: "f" },
-    );
-    expect(onNoOp).toHaveBeenCalledWith("f");
-    // MUST NOT overwrite the baseline from the probe (that's the self-poison).
-    expect(s.lastCommittedFp).toBe("base1");
-  });
-
-  it("on an edit-cycle probe fingerprint that DIFFERS → no fire (a real visible edit)", () => {
-    const s = makeState();
-    s.lastCommittedFp = "base1";
-    const onNoOp = vi.fn();
-    handleFingerprintMessage(
-      { fp: "changed2", n: "1" },
-      { editCycleActive: true, committedNonce: 0, reloadNonce: 1, state: s, onVisualNoOp: onNoOp, frameSlug: "f" },
-    );
-    expect(onNoOp).not.toHaveBeenCalled();
-    expect(s.lastCommittedFp).toBe("base1"); // baseline unchanged until swap
-  });
-
-  it("does NOT capture an at-rest fingerprint whose nonce doesn't match committedNonce (stale outgoing iframe)", () => {
-    const s = makeState();
-    s.lastCommittedFp = "base1";
-    const onNoOp = vi.fn();
-    handleFingerprintMessage(
-      { fp: "stale9", n: "7" },
-      { editCycleActive: false, committedNonce: 0, reloadNonce: 0, state: s, onVisualNoOp: onNoOp, frameSlug: "f" },
-    );
-    expect(s.lastCommittedFp).toBe("base1"); // unchanged — stale post ignored
-  });
-});
-```
-
-- [ ] **Step 6: Implement `handleFingerprintMessage` + wire FrameCard**
-
-Add to `studio/src/components/viewport/visualNoOp.ts`:
-
-```typescript
-/** Minimal state FrameCard hands to the fingerprint handler (its refs). */
-export interface FingerprintHandlerState {
-  lastCommittedFp: string | null;
-}
-
-export interface FingerprintHandlerCtx {
-  editCycleActive: boolean;
-  committedNonce: number;
-  reloadNonce: number;
-  state: FingerprintHandlerState;
-  onVisualNoOp?: (frameSlug: string) => void;
-  frameSlug: string;
-}
+export type FpTracker = { baseline: { fp: string; nonce: string } | null };
 
 /**
- * Decide what a `frame-fingerprint` message means. Pure except for mutating
- * `ctx.state.lastCommittedFp` (a ref) — kept out of the component so it's
- * unit-testable.
- *
- * - At-rest (editCycleActive=false): this is a committed render (incl. the
- *   initial n="" render, whose nonce "" normalizes to committedNonce 0).
- *   Refresh the baseline — but only when the message's nonce matches the
- *   committed nonce, so a late post from a superseded iframe can't poison it.
- * - Edit-cycle (editCycleActive=true): this is the in-flight probe. Compare
- *   against the PRE-EXISTING baseline; equal → candidate. NEVER overwrite the
- *   baseline here (doing so makes the compare always equal — the self-poison).
- *   The baseline is updated from the probe elsewhere, only inside the swap.
+ * Fold one `frame-fingerprint` into the tracker. Returns what it meant:
+ *   "captured" — no baseline yet, or same-nonce refresh (no comparison made)
+ *   "no-op"    — a new-nonce render whose fp equals the baseline (candidate!)
+ *   "changed"  — a new-nonce render whose fp differs (a real visible change)
+ * In all NEW-nonce cases the baseline is promoted to this render, so the next
+ * edit compares against the latest committed pixels. Mutates `tracker.baseline`.
  */
-export function handleFingerprintMessage(
-  msg: { fp?: unknown; n?: unknown },
-  ctx: FingerprintHandlerCtx,
-): void {
-  const fp = typeof msg.fp === "string" ? msg.fp : null;
-  if (!fp) return;
-  const nonce = String(msg.n ?? "");
-  if (ctx.editCycleActive) {
-    if (isVisualNoOp(fp, ctx.state.lastCommittedFp)) ctx.onVisualNoOp?.(ctx.frameSlug);
-    return;
+export function observeFingerprint(
+  tracker: FpTracker,
+  fp: string,
+  nonce: string,
+): "captured" | "no-op" | "changed" {
+  const prev = tracker.baseline;
+  if (!prev || prev.nonce === nonce) {
+    // First render, or a re-measure of the SAME render → refresh, never compare.
+    tracker.baseline = { fp, nonce };
+    return "captured";
   }
-  // At-rest: nonce-match against committed ("" ↔ 0 normalized).
-  const committed = String(ctx.committedNonce);
-  const nonceMatches = nonce === committed || (nonce === "" && ctx.committedNonce === 0);
-  if (nonceMatches) ctx.state.lastCommittedFp = fp;
+  const result = isVisualNoOp(fp, prev.fp) ? "no-op" : "changed";
+  tracker.baseline = { fp, nonce }; // promote so the next edit compares vs this
+  return result;
 }
 ```
 
+- [ ] **Step 4: Run to verify pass**
+
+Run: `pnpm run studio:test studio/__tests__/components/visualNoOp.test.ts`
+Expected: PASS.
+
+- [ ] **Step 5: Wire FrameCard**
+
 In `FrameCard.tsx`:
-1. Add the prop to the component's props type: `onVisualNoOp?: (frameSlug: string) => void;` and destructure it.
-2. Add a ref near the other refs (`:74-88`): `const lastCommittedFp = useRef<string | null>(null);`
-3. In the `onMsg` handler (`:158-202`), BEFORE the existing `d.type === "arcade-studio:frame-ready"` branch, handle the fingerprint. The fingerprint message is NOT subject to the existing `frame-ready` nonce/editCycle early-returns — route it first:
+1. Import: `import { observeFingerprint, type FpTracker } from "./visualNoOp";`
+2. Add the prop to the component's props type: `onVisualNoOp?: (frameSlug: string) => void;` and destructure it.
+3. Add a ref near the other refs (`:74-88`): `const fpTracker = useRef<FpTracker>({ baseline: null });`
+4. In the `onMsg` handler (`:158-202`), AFTER the `d.slug !== projectSlug || d.frame !== frame.slug` guard (`:164`) but BEFORE the `:165` nonce gate (the fingerprint has its own nonce semantics and must not be dropped by the frame-ready gate), add:
 
 ```typescript
       if (d.type === "arcade-studio:frame-fingerprint") {
-        handleFingerprintMessage(
-          { fp: (d as { fp?: unknown }).fp, n: d.n },
-          {
-            editCycleActive: editCycleActive.current,
-            committedNonce,
-            reloadNonce,
-            state: { get lastCommittedFp() { return lastCommittedFp.current; }, set lastCommittedFp(v) { lastCommittedFp.current = v; } },
-            onVisualNoOp,
-            frameSlug: frame.slug,
-          },
-        );
+        const fp = (d as { fp?: unknown }).fp;
+        if (typeof fp === "string") {
+          const outcome = observeFingerprint(fpTracker.current, fp, String(d.n ?? ""));
+          if (outcome === "no-op") onVisualNoOp?.(frame.slug);
+        }
         return;
       }
 ```
 
-   (The `d.slug !== projectSlug || d.frame !== frame.slug` guard at `:164` still applies — keep the fingerprint handling AFTER that guard but BEFORE the `:165` nonce gate. The getter/setter adapter lets the pure helper mutate the ref.)
-4. In the swap branch (`:180`, right after `setCommittedNonce(reloadNonce)`), promote the probe's fp to the baseline. The probe's fp arrived on the fingerprint message during the edit cycle; store the most recent edit-cycle fp in a second ref `pendingProbeFp` (set it in the `editCycleActive` branch of `handleFingerprintMessage` — add `state.pendingProbeFp = fp` there) and on swap do `lastCommittedFp.current = pendingProbeFp.current ?? lastCommittedFp.current`.
+That is the ENTIRE FrameCard change for detection — no `editCycleActive` read, no swap-time promotion (the tracker promotes itself on every new-nonce fingerprint). The nonce on the fingerprint message is the same `n` the iframe was loaded with (`__N`), so the initial render (`n=""`) captures the baseline, and each edit's probe (`n=reloadNonce`) is a new nonce → compared. No dependency on message ordering.
 
-   Update `FingerprintHandlerState` to `{ lastCommittedFp: string | null; pendingProbeFp: string | null }` and set `ctx.state.pendingProbeFp = fp` at the top of the edit-cycle branch. Add the corresponding ref in FrameCard and thread it through the adapter. Update the Step-5 test's `makeState()` to include `pendingProbeFp: null` and add an assertion: after the edit-cycle call, `s.pendingProbeFp === <the probe fp>`.
+**Note (verified):** `onMsg`'s existing `frame-ready`/`frame-error` branches keep their nonce+editCycle gates unchanged — this new branch `return`s before them, and it's the only place `frame-fingerprint` is handled.
 
-- [ ] **Step 7: Run both tests**
+- [ ] **Step 6: Run the focused test + a FrameCard-imports smoke**
 
-Run: `pnpm run studio:test studio/__tests__/components/visualNoOp.test.ts studio/__tests__/components/frame-card-visual-noop.test.tsx`
-Expected: PASS.
+Run: `pnpm run studio:test studio/__tests__/components/visualNoOp.test.ts`
+Expected: PASS. (The FrameCard render behavior is covered by the integration test in Task 5a and the manual gate — jsdom can't post real cross-iframe messages.)
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-command git add studio/src/components/viewport/visualNoOp.ts studio/src/components/viewport/FrameCard.tsx studio/__tests__/components/visualNoOp.test.ts studio/__tests__/components/frame-card-visual-noop.test.tsx
-command git commit -m "feat(studio/viewport): FrameCard captures render fingerprint + flags visual no-op candidates"
+command git add studio/src/components/viewport/visualNoOp.ts studio/src/components/viewport/FrameCard.tsx studio/__tests__/components/visualNoOp.test.ts
+command git commit -m "feat(studio/viewport): nonce-keyed render-fingerprint tracker flags visual no-op candidates"
 ```
 
 ---
@@ -785,7 +734,11 @@ In `chatMiddleware`'s POST branch (`:132-136`), match it BEFORE `handleStart` (s
     }
 ```
 
-Add `handleVisualNoOpRetry`, mirroring `handleStart`'s body-read + validation + the phantom-retry spawn shape (`chat.ts:984-1022`). It reads `{ slug, frame, userTurnId }`, validates, checks the one-shot guard, marks it, then runs `runClaudeTurnWithRetry` resuming `project.sessionId` with `VISUAL_NOOP_RETRY_PROMPT` — registering a turn via `startTurn` so the reconnected client stream replays it. Do NOT paint a user bubble (no prompt echoed to history as a user message). Persist a rotated session id at the end (mirror `:1072`). Full handler:
+Add `handleVisualNoOpRetry`. **REV-4 — this MUST register a real turn via `startTurn`, exactly like `handleStart` (`chat.ts:275-307`), reusing `runClaudeBranch` as the corrective's `run`.** The rev-3 snippet's "fire-and-forget `runClaudeTurnWithRetry` after the 202" was broken: no turn is registered, so the client's `reconnect()` finds the previous (ended) turn and streams nothing; and `runClaudeBranch` already handles session-resume + narration `emit` + `appendHistory` + the frame-change contract, so calling the lower-level `runClaudeTurnWithRetry` directly would duplicate all of that (and reference `DEFAULT_MODEL`, which does not exist — the real const is the private `DEFAULT_GENERATION_MODEL` at `claudeCode.ts:199`; `runClaudeTurn` resolves the model internally at `:266`, so we pass no model at all here).
+
+`runClaudeBranch(ctx: { emit, slug, prompt, images?, project, signal })` (`chat.ts:662`) is the SAME function `handleStart` uses for a normal Claude turn — it resumes `project.sessionId`, streams narration via `emit`, runs the hooks, and `appendHistory`s the assistant reply. We reuse it verbatim, passing `VISUAL_NOOP_RETRY_PROMPT` as the prompt. Because it's wrapped in `startTurn`, the corrective is registered under the slug and the reconnected client stream replays it. No user bubble is written (only `handleStart`'s pre-`startTurn` `appendHistory` at `:267` writes the user message; we don't call that).
+
+Full handler:
 
 ```typescript
 async function handleVisualNoOpRetry(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -822,34 +775,29 @@ async function handleVisualNoOpRetry(req: IncomingMessage, res: ServerResponse):
     return;
   }
   markVisualNoOpRetryRan(userTurnId);
-  res.writeHead(202, { "Content-Type": "application/json" });
-  res.end(JSON.stringify({ ok: true }));
 
-  // Fire-and-forget corrective turn on the persisted session; the client
-  // reconnects to the stream to read the narration. Mirror the phantom-retry
-  // spawn (chat.ts phantom path) — register a turn so the stream replays it.
-  let capturedSessionId = project.sessionId;
-  try {
-    await runClaudeTurnWithRetry({
-      cwd: projectDir(slug),
-      prompt: VISUAL_NOOP_RETRY_PROMPT,
-      sessionId: project.sessionId,
-      bin: resolveClaudeBin(),
-      model: DEFAULT_MODEL, // mirror handleStart's model resolution
-      onEvent: (ev) => {
-        if (ev.kind === "session") capturedSessionId = ev.sessionId;
-      },
-    });
-  } catch (err) {
-    console.warn(`[studio] visual-noop retry failed for ${slug}:`, err);
-  }
-  if (capturedSessionId && capturedSessionId !== project.sessionId) {
-    await updateProject(slug, { sessionId: capturedSessionId });
-  }
+  // Register the corrective as a REAL turn — SAME shape as handleStart (:275),
+  // reusing runClaudeBranch so session-resume + narration + appendHistory +
+  // the frame-change contract all work. NO user-message appendHistory (no
+  // fake user bubble). Respond 202 AFTER startTurn so the reconnecting client
+  // finds the registered turn to replay (proven ordering: startTurn is sync).
+  const turn = startTurn(slug, {
+    prompt: VISUAL_NOOP_RETRY_PROMPT,
+    run: ({ emit, end, signal }) => {
+      runClaudeBranch({ emit, slug, prompt: VISUAL_NOOP_RETRY_PROMPT, project, signal }).then(
+        (result) => end(result),
+        (err) => end({ ok: false, error: err?.message ?? String(err) }),
+      );
+    },
+  });
+  res.writeHead(202, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ turnId: turn.id, slug }));
 }
 ```
 
-**Note for the implementer:** `handleStart` runs the turn *inside* the stream response with a `startTurn`/subscriber wiring — inspect `chat.ts:260-345` and mirror its EXACT turn-registration + streaming so the corrective turn is registered under the slug (so the reconnected client stream replays it) rather than run detached. The snippet above shows intent; the real spawn must register the turn identically to `handleStart`, using the same `startTurn` + subscriber flush the existing code uses. Import `projectDir`, `resolveClaudeBin`, the model resolver, `startTurn`, `updateProject` — all already used in this file.
+`startTurn`, `getTurn`, `getProject`, `runClaudeBranch` are all already defined/imported in `chat.ts` (verified: `runClaudeBranch` at `:662`; `startTurn` used at `:275`). No new imports beyond `VISUAL_NOOP_RETRY_PROMPT`, `visualNoOpRetryAlreadyRan`, `markVisualNoOpRetryRan` from `../visualNoOpRetry`.
+
+**On the banner trailer (resolves a rev-3 inconsistency):** the still-no-op banner is driven ENTIRELY client-side (a fresh `onVisualNoOp` for the frame during the corrective turn's render — Task 5). The server route does NOT append any sentinel to history — it can't see pixels, and a narration-based append could falsely fire the banner over a corrective that DID fix the render (violating the cardinal "never falsely claim nothing changed"). So `handleVisualNoOpRetry` writes no trailer; the banner is a client-only, pixel-observed signal.
 
 - [ ] **Step 7: Export `reconnect` from useChatStream**
 
@@ -877,12 +825,12 @@ command git commit -m "feat(studio/server): visual-noop corrective-retry route +
 
 **Files:**
 - Create: `studio/src/components/chat/VisualNoOpBanner.tsx`
-- Modify: the chat controller / `Viewport.tsx` (buffer the candidate; on clean `end` + visual claim, POST + reconnect; one-shot; drive the banner)
+- Modify: `studio/src/hooks/useChatStream.ts` (export `reconnect` — done in Task 4 Step 7 — AND add `turnId` to the state it sets from the turn header), `studio/src/hooks/chatStreamReducer.ts` (add `turnId` to `StreamState` + `INITIAL_STATE`), `studio/src/hooks/useProjectFromHost.ts` (buffer + trigger effect + one-shot), `studio/src/routes/ProjectDetail.tsx` + `studio/src/components/viewport/Viewport.tsx` (thread `onVisualNoOp` prop down to `FrameCard`), the chat pane that renders `NoFrameChangesBanner` (render `VisualNoOpBanner` from transient state)
 - Test: `studio/__tests__/components/visual-noop-banner.test.tsx`, `studio/__tests__/components/visual-noop-trigger.test.ts`
 
 **Interfaces:**
-- Consumes: `onVisualNoOp` from FrameCard (Task 3); `narrationClaimsVisualChange` (Task 4); `reconnect` (Task 4); the SSE `state.phase` + summary line.
-- Produces: `VisualNoOpBanner` component + `VISUAL_NOOP_SENTINEL` + `splitVisualNoOpTrailer(content)`; a pure trigger decision `shouldTriggerVisualNoOpRetry(...)`.
+- Consumes: `onVisualNoOp` from FrameCard (Task 3); `narrationClaimsVisualChange` (Task 4); `reconnect` + the POST's returned `turnId` (Task 4); the SSE `state.phase`/`state.turnId`/`state.narrations`.
+- Produces: `VisualNoOpBanner` component + `VISUAL_NOOP_SENTINEL` + `splitVisualNoOpTrailer(content)`; pure `shouldTriggerVisualNoOpRetry(...)` + `firstSummaryLine(...)` in `visualNoOp.ts`; `StreamState.turnId`.
 
 - [ ] **Step 1: Write the failing banner test**
 
@@ -998,6 +946,23 @@ describe("shouldTriggerVisualNoOpRetry", () => {
     expect(shouldTriggerVisualNoOpRetry({ ...base, alreadyTriggeredThisTurn: true })).toBe(false);
   });
 });
+
+import { firstSummaryLine } from "../../src/components/viewport/visualNoOp";
+
+describe("firstSummaryLine", () => {
+  it("strips journey (→) lines and returns the first summary line", () => {
+    expect(firstSummaryLine(["→ Scanning", "→ Composing", "Made the toggles vertical.", "### Deviations", "None."])).toBe(
+      "Made the toggles vertical.",
+    );
+  });
+  it("stops at ### Deviations (never reads the deviations body)", () => {
+    expect(firstSummaryLine(["Done.", "### Deviations", "- used a wrapper for layout"])).toBe("Done.");
+  });
+  it("returns '' when there is no summary", () => {
+    expect(firstSummaryLine(["→ only journey lines"])).toBe("");
+    expect(firstSummaryLine([])).toBe("");
+  });
+});
 ```
 
 - [ ] **Step 5: Implement the trigger decision + wire the controller**
@@ -1016,17 +981,41 @@ export function shouldTriggerVisualNoOpRetry(input: {
   if (input.alreadyTriggeredThisTurn) return false;
   return true;
 }
+
+/**
+ * The agent's one-sentence summary line from a turn's narrations. Drops journey
+ * lines (prefixed `→ `) and stops at `### Deviations` so the visual-claim gate
+ * reads the summary only, never the deviations body or server-side lines.
+ */
+export function firstSummaryLine(narrations: string[]): string {
+  for (const raw of narrations) {
+    for (const line of raw.split("\n")) {
+      const t = line.trim();
+      if (!t) continue;
+      if (t.startsWith("→")) continue;      // journey line
+      if (t.startsWith("### Deviations")) return ""; // reached deviations w/o a summary
+      return t;                              // first real summary line
+    }
+  }
+  return "";
+}
 ```
 
-Wire the controller (the component that owns `useChatStream` + renders `FrameCard`s — `Viewport.tsx` / the chat context). Add:
-1. A per-turn candidate buffer: `const noOpCandidate = useRef<string | null>(null)` (holds the frame slug). `onVisualNoOp={(slug) => { noOpCandidate.current = slug; }}` passed to each `FrameCard`.
-2. A per-turn one-shot ref: `const triggeredThisTurn = useRef(false)`. Reset it to `false` inside `send()` (a new USER turn) — do this where the user prompt is submitted, NOT on every `end`.
-3. Track the originating user turn id: capture the turn id from the SSE `turn` header (`state` exposes it, or read from the turn event); pass it as `userTurnId` to the POST.
-4. An effect keyed on `state.phase`: when it transitions to `"done"`, compute `summaryClaimsVisual = narrationClaimsVisualChange(firstSummaryLine(state.narrations))` and `shouldTriggerVisualNoOpRetry({ candidateBuffered: noOpCandidate.current != null, phase: state.phase, summaryClaimsVisual, alreadyTriggeredThisTurn: triggeredThisTurn.current })`. If true: `triggeredThisTurn.current = true`, `POST /api/chat/visual-noop-retry {slug, frame: noOpCandidate.current, userTurnId}`, then `reconnect()`. Clear `noOpCandidate.current = null`.
-5. `firstSummaryLine(narrations: string[])`: join, take the first non-`→`-prefixed line before `### Deviations` (the response-shape summary). Add it as a small exported helper in `visualNoOp.ts` and unit-test it (summary extraction: strips journey `→ ` lines, stops at `### Deviations`).
-6. The banner: after the CORRECTIVE turn ends, if the frame is STILL a no-op candidate (a second `onVisualNoOp` fired for it during the corrective turn's render) AND `triggeredThisTurn.current` is already true → the persisted assistant message for the corrective turn gets the `VISUAL_NOOP_SENTINEL` trailer (append server-side in `handleVisualNoOpRetry`'s narration, mirroring how `NO_CHANGES_TRAILER` is appended), and `MessageList`/the message renderer splits on `VISUAL_NOOP_SENTINEL` and renders `<VisualNoOpBanner/>` (mirror the existing `splitNoChangesTrailer` + `NoFrameChangesBanner` render site). Treat the corrective turn's `end` as banner-only — do NOT re-run the trigger for it (the `triggeredThisTurn` guard already blocks a second POST).
+**REV-4 — wire the STREAM OWNER, not `Viewport`.** Verified: `Viewport.tsx` only receives `phase` as a prop (`:14-30`) — it does NOT own `useChatStream`. The stream is owned by `useProjectFromHost` (`src/hooks/useProjectFromHost.ts:38` `const chatStream = useChatStream(...)`, returns `{ chatStream, send, ... }`), provided via `ChatStreamProvider` in `src/routes/ProjectDetail.tsx:344`, which renders `<Viewport phase={chatStream.state.phase} … />` at `:452`. So `reconnect`, `state.narrations`, `send`, and the turn id all live in `useProjectFromHost`/`ProjectDetail`. Put the buffer + trigger there; thread `onVisualNoOp` down `ProjectDetail → Viewport → FrameCard` (two new prop hops).
 
-   **Implementer:** find the render site that uses `splitNoChangesTrailer`/`NoFrameChangesBanner` (`command grep -rn "NoFrameChangesBanner\|splitNoChangesTrailer" studio/src`) and add the sibling split+render for the visual-no-op sentinel right beside it. Append the trailer in `handleVisualNoOpRetry` only when the corrective produced no further edit (or unconditionally as the honest "still nothing moved" note — decide based on whether the corrective wrote a file; simplest correct v1: append it when the agent's corrective reply itself claims a visual change again, matching the same gate).
+**REV-4 — turnId plumbing (Critical C3): `StreamState` does NOT currently keep the turn id.** Verified: the SSE `turn` header carries `turnId` (`useChatStream.ts:35`) but the reducer's turn-header branch (`:196-213`) sets `busy/phase/lastPrompt/turnStartedAt` and DROPS `turnId`; `StreamState` (`chatStreamReducer.ts:37-75`) has no `turnId`. Without it the one-shot guards are unkeyable. Fix (part of this task):
+- Add `turnId: string | null` to `StreamState` + `INITIAL_STATE` (`chatStreamReducer.ts`).
+- In `useChatStream.ts`'s turn-header handler (`:199-211`), add `turnId: header.turnId` to the state it sets.
+
+Then, in `useProjectFromHost` (where `chatStream` + `send` live):
+1. Candidate buffer: `const noOpCandidate = useRef<string | null>(null)` (frame slug). Pass `onVisualNoOp={(s) => { noOpCandidate.current = s; }}` down to each `FrameCard` (via Viewport prop-thread).
+2. One-shot: `const triggeredForTurn = useRef<string | null>(null)` (holds the userTurnId already triggered). This survives the corrective turn's `end` because it's keyed on the ORIGINATING user turn id, not reset on every `end`.
+3. An effect keyed on `[chatStream.state.phase, chatStream.state.turnId]`: when `phase === "done"` AND `turnId` is a NEW user turn (see 4), evaluate the trigger.
+4. **Distinguish a user turn from the corrective turn.** The corrective is registered under a fresh turn id too, so its `done` would otherwise re-evaluate. Guard: only trigger when `state.turnId !== triggeredForTurn.current` AND `noOpCandidate.current != null` AND `narrationClaimsVisualChange(firstSummaryLine(state.narrations))` AND `shouldTriggerVisualNoOpRetry(...)`. On trigger: set `triggeredForTurn.current = state.turnId` (the ORIGINATING turn), `POST /api/chat/visual-noop-retry { slug, frame: noOpCandidate.current, userTurnId: state.turnId }`, then `chatStream.reconnect()`, then clear `noOpCandidate.current = null`. When the CORRECTIVE turn later ends `done`, its `turnId` is different, but `noOpCandidate.current` was cleared AND (if it re-nooped) the banner path (6) handles it — and crucially we do NOT POST again because a fresh candidate for the corrective turn is what drives the banner, not another retry. To be certain: also track `correctiveTurnId` — set it to the POST's returned `turnId` (from the 202 body) and never trigger a retry for that id.
+5. `firstSummaryLine(narrations: string[]): string` — exported helper in `visualNoOp.ts`: join with `\n`, drop lines starting with `→ ` (journey lines), stop at the first `### Deviations`, return the first remaining non-empty line. Unit-test it (strips `→ ` lines; stops at `### Deviations`; returns "" on empty).
+6. **The banner (client-observed, NOT server-appended — resolves the rev-3 inconsistency + the cardinal-sin risk).** When the CORRECTIVE turn (id === `correctiveTurnId`) reaches `phase === "done"`, check whether `noOpCandidate.current` was set AGAIN during it (a fresh `onVisualNoOp` fired for the frame → the corrective ALSO produced identical pixels). If so → set a piece of state `visualNoOpBannerForFrame = frame` that the chat pane renders as `<VisualNoOpBanner/>` below the corrective turn's assistant message. If the corrective MOVED pixels (no fresh candidate) → no banner (silent success). The banner is thus gated on a pixel-observed still-no-op, never on narration — the server appends nothing (see Task 4). Do NOT re-POST for the corrective turn (guard 4).
+
+   **Simplify:** the banner can be a transient piece of shell state (not a persisted history trailer) — render `<VisualNoOpBanner/>` in the chat pane when `visualNoOpBannerForFrame` is set for the current view, cleared on the next user `send()`. This avoids touching history persistence entirely. `splitVisualNoOpTrailer`/`VISUAL_NOOP_SENTINEL` remain exported (they're tested + available if a persisted variant is wanted later) but v1 uses transient state. Render it beside where `NoFrameChangesBanner` renders (`command grep -rn "NoFrameChangesBanner" studio/src` → the chat message list / pane).
 
 - [ ] **Step 6: Run the client tests**
 
@@ -1036,8 +1025,11 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-command git add studio/src/components/chat/VisualNoOpBanner.tsx studio/src/components/viewport/visualNoOp.ts studio/src/components/viewport/Viewport.tsx studio/__tests__/components/visual-noop-banner.test.tsx studio/__tests__/components/visual-noop-trigger.test.ts
-# plus the message-render site file touched in Step 5.6
+command git add studio/src/components/chat/VisualNoOpBanner.tsx studio/src/components/viewport/visualNoOp.ts \
+  studio/src/hooks/chatStreamReducer.ts studio/src/hooks/useChatStream.ts studio/src/hooks/useProjectFromHost.ts \
+  studio/src/routes/ProjectDetail.tsx studio/src/components/viewport/Viewport.tsx \
+  studio/__tests__/components/visual-noop-banner.test.tsx studio/__tests__/components/visual-noop-trigger.test.ts
+# plus the chat-pane file where VisualNoOpBanner is rendered beside NoFrameChangesBanner
 command git commit -m "feat(studio/chat): buffer visual-noop candidate, gate on visual claim, POST retry + soft banner"
 ```
 
@@ -1070,9 +1062,16 @@ Expected: PASS.
 
 ---
 
-## Self-review notes (author)
+## Self-review notes (author, rev-4)
 
 - **Spec coverage:** Piece 1 (fingerprint) = Task 1; Piece 1 emit = Task 2; Piece 2 (compare) = Task 3; Piece 3 (corrective route + policy + gate + reconnect) = Task 4; Piece 3 client trigger + Piece 4 banner = Task 5; suite = Task 6; manual gate = Task 7.
-- **The rev-2/rev-3 review fixes are all in tasks:** self-poison → Task 3 (baseline captured at-rest only, compare against pre-existing, `frame-card-visual-noop.test.tsx` asserts a real-change edit does NOT fire + baseline not overwritten by probe); `document.body` + status-overlay exclusion → Task 1 (`productionMeasure`) + Task 1 test (null-skip); no textContent → Task 1 test (different text → same hash); separate `frame-fingerprint` message + `document.fonts.ready` → Task 2 + its test; export `reconnect` → Task 4 Step 7; narration-gate on summary, biased to fire → Task 4 (`narrationClaimsVisualChange` + tests both directions); fire only on `phase==="done"` → Task 5 (`shouldTriggerVisualNoOpRetry` test); one-shot on user-turn lineage → Task 4 guard (`markVisualNoOpRetryRan`) + Task 5 client `triggeredThisTurn` reset only on `send()`.
-- **Type consistency:** `computeFingerprint(root, measure)` / `MeasureFn`/`Measured`/`PAINT_PROPS` (Task 1) → consumed by `productionMeasure` (Task 1) + Task 2 emit. `isVisualNoOp(probeFp, baselineFp)` + `handleFingerprintMessage` + `FingerprintHandlerState{lastCommittedFp,pendingProbeFp}` + `shouldTriggerVisualNoOpRetry` (Task 3/5) all in `visualNoOp.ts`. `narrationClaimsVisualChange`/`shouldRunVisualNoOpRetry`/`VISUAL_NOOP_RETRY_PROMPT`/`markVisualNoOpRetryRan`/`visualNoOpRetryAlreadyRan` (Task 4) in `visualNoOpRetry.ts`. `VISUAL_NOOP_SENTINEL`/`splitVisualNoOpTrailer`/`VisualNoOpBanner` (Task 5) in `VisualNoOpBanner.tsx`. Message type string `arcade-studio:frame-fingerprint` consistent Task 2 emit ↔ Task 3 handle.
-- **Known implementer judgment calls (flagged, not placeholders):** Task 4 Step 6 — the corrective turn must be registered/streamed EXACTLY like `handleStart` (mirror `chat.ts:260-345`); Task 5 Step 5.6 — the exact banner-trailer append condition + the message render-site edit. Both are "mirror the existing sibling" instructions with the sibling named, not open-ended TODOs.
+- **The plan-review Criticals are all fixed in rev-4:**
+  - **C1 (compare dead in the app — `editCycleActive` cleared before the fingerprint arrives):** Task 3 rewritten to be NONCE-keyed via `observeFingerprint({fp,nonce})` — no `editCycleActive` read at all, so message ordering can't break it, and a render is never compared against its own baseline (self-poison-proof by construction). Test asserts a new-nonce equal fp → "no-op", new-nonce different fp → "changed", same-nonce → "captured" (no compare).
+  - **C2 (server route was a non-streaming placeholder + `DEFAULT_MODEL` doesn't exist):** Task 4 rewritten to register a real turn via `startTurn` reusing `runClaudeBranch` (the same path `handleStart` uses — free session-resume + narration emit + `appendHistory`), respond 202 after `startTurn` so the reconnecting client replays it, and pass NO model (resolved internally at `claudeCode.ts:266`).
+  - **C3 (`userTurnId` not obtainable — `StreamState` drops `turnId`):** Task 5 adds `turnId` to `StreamState` + `INITIAL_STATE` and sets it in the reducer's turn-header branch; the one-shot keys on it.
+  - **Important (wrong wiring file):** Task 5 now wires `useProjectFromHost`/`ProjectDetail` (the real stream owner) and threads `onVisualNoOp` down through `Viewport` to `FrameCard`, not `Viewport` alone.
+  - **Important (false-"nothing changed" banner):** the banner is client-observed only (a fresh `onVisualNoOp` during the corrective turn), never server-appended on narration — so a corrective that DID fix the render never shows the banner.
+  - **Task 2 name:** uses the real `buildFrameBootstrapSource` (`frameMountPlugin.ts:296`, already exported), not the invented `renderFrameBootstrap`. (Fix the Task 2 test import + Step 3 accordingly — see the correction note in Task 2.)
+- **Rev-2/rev-3 fixes retained:** `document.body` + status-overlay exclusion (Task 1 `productionMeasure` + null-skip test); no textContent (Task 1 "different text → same hash" test); separate `frame-fingerprint` message + `document.fonts.ready` (Task 2); narration-gate on the summary line, biased to fire (Task 4 `narrationClaimsVisualChange` + both-direction tests); fire only on `phase==="done"` (Task 5 `shouldTriggerVisualNoOpRetry`).
+- **Type consistency:** `computeFingerprint`/`MeasureFn`/`Measured`/`PAINT_PROPS`/`productionMeasure` (Task 1) → Task 2 emit. `isVisualNoOp`/`FpTracker`/`observeFingerprint`/`shouldTriggerVisualNoOpRetry`/`firstSummaryLine` (Task 3/5) in `visualNoOp.ts`. `narrationClaimsVisualChange`/`shouldRunVisualNoOpRetry`/`VISUAL_NOOP_RETRY_PROMPT`/`markVisualNoOpRetryRan`/`visualNoOpRetryAlreadyRan` (Task 4) in `visualNoOpRetry.ts`. `VISUAL_NOOP_SENTINEL`/`splitVisualNoOpTrailer`/`VisualNoOpBanner` (Task 5) in `VisualNoOpBanner.tsx`. `StreamState.turnId` (Task 5). Message string `arcade-studio:frame-fingerprint` consistent Task 2 emit ↔ Task 3 handle.
+- **Integration coverage (plan-review point #5):** the pure seams are unit-tested; the real cross-iframe message flow (frame-changed → frame-ready → frame-fingerprint → candidate) can't run in jsdom, so it is a NAMED manual-gate item (Task 7 Step 1), consistent with the NWS-HMR lesson that jsdom is blind to real message/HMR flow. `observeFingerprint`'s ordering-immunity is what removes the need for a live test to catch C1 (the bug is now structurally impossible, not just untested).
