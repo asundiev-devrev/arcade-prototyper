@@ -323,6 +323,7 @@ export function buildFrameBootstrapSource(opts: {
     import "arcade-studio/frame/picker";
     import "arcade-studio/frame/inspector";
     import "arcade-studio/frame/gestureForwarder";
+    import { computeFingerprint, productionMeasure } from "arcade-studio/frame/renderFingerprint";
     import Frame from "${absFrame}";
 
     const __N = new URLSearchParams(location.search).get("n") || "";
@@ -337,6 +338,29 @@ export function buildFrameBootstrapSource(opts: {
       return null;
     }
 
+    // Rides its OWN message — never folded into frame-ready (which must fire
+    // instantly to drive the double-buffer swap). Awaits fonts + double-rAF so
+    // the fingerprint reflects the AT-REST rendered layout. Best-effort: any
+    // failure is swallowed so it can never break the frame.
+    function ArcadeFrameFingerprint() {
+      React.useEffect(() => {
+        let cancelled = false;
+        const post = () => {
+          if (cancelled) return;
+          try {
+            const fp = computeFingerprint(document.body, productionMeasure);
+            window.parent && window.parent.postMessage(
+              { type: "arcade-studio:frame-fingerprint", slug: ${JSON.stringify(slug)}, frame: ${JSON.stringify(frame)}, n: __N, fp: fp }, "*");
+          } catch (_) { /* fingerprint is best-effort; never break the frame */ }
+        };
+        const afterLayout = () => requestAnimationFrame(() => requestAnimationFrame(post));
+        const fonts = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+        fonts.then(afterLayout, afterLayout);
+        return () => { cancelled = true; };
+      }, []);
+      return null;
+    }
+
     ReactDOM.createRoot(document.getElementById("root")).render(
       <React.StrictMode>
         <DevRevThemeProvider mode="${mode}">
@@ -344,6 +368,7 @@ export function buildFrameBootstrapSource(opts: {
           <FrameErrorBoundary slug=${JSON.stringify(slug)} frame=${JSON.stringify(frame)}>
             <Frame />
             <ArcadeFrameReady />
+            <ArcadeFrameFingerprint />
           </FrameErrorBoundary>
         </DevRevThemeProvider>
       </React.StrictMode>
