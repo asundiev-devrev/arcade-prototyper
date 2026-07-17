@@ -62,3 +62,16 @@ describe("CLAUDE.md template — DevRev API split out", () => {
     expect(tpl).not.toContain("custom_fields.tnt__sprint_group");
   });
 });
+
+describe("CLAUDE.md template — Deviations contract (None. is verified claim)", () => {
+  it("frames None. as a verified claim, not an appended default", () => {
+    const tpl = fs.readFileSync(TEMPLATE, "utf-8");
+    // the old 'Even a trivial edit gets None. appended' default must be gone
+    expect(tpl).not.toMatch(/gets `### Deviations\\n\\nNone\.` appended/);
+    // and the NEW verified-claim wording present — a distinctive phrase from the
+    // reworded line, so this doesn't pass vacuously on the old text (both looser
+    // patterns matched the UNMODIFIED tpl per review). Match the reword verbatim-ish:
+    expect(tpl).toMatch(/`?None\.?`?\s+is a VERIFIED claim/i);
+    expect(tpl).toMatch(/never (write `?None\.?`?|silently claim success you did ?n['']?t deliver)/i);
+  });
+});
