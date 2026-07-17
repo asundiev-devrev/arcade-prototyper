@@ -42,9 +42,10 @@ export const PRIMITIVE_CAPABILITIES: Record<string, string> = {
     "`value`/`defaultValue` are STRINGS. No multi-value. (react-tabs index.d.ts: defaultValue?: string)",
   ToggleGroup:
     "supports BOTH `type=\"single\"` (`value`/`defaultValue`: string) and `type=\"multiple\"` (`value`/`defaultValue`: string[]). Multi-select IS supported — via `type=\"multiple\"`, NOT a `multiple` prop. (react-toggle-group index.d.ts: union on `type`)",
-  Switch: "boolean. `checked`/`defaultChecked`. No value array.",
-  Input: "text control. `value`/`defaultValue` strings; `onChange`. No `multiple`.",
-  Button: "`variant`/`size`/`disabled`/`onClick`. Not a form-value control.",
+  Switch: "boolean toggle. `checked`/`defaultChecked` (booleans); `onCheckedChange`. Not a multi-value control.",
+  Input:
+    "single-line text control. `value`/`defaultValue` are STRINGS; `onChange`. (It spreads native input attributes, so file-input props like `multiple` type-check but do nothing useful on a text field — don't reach for them for multi-value.)",
+  Button: "`variant`/`size`/`disabled`/`onClick`. Not a form-value control (no `value`/`defaultValue`).",
 };
 
 /** Render the capability table as a manifest markdown section. */
