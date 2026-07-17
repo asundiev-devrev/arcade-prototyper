@@ -94,6 +94,11 @@ export function FrameCard({
   // the last committed render's {fp, nonce}; each new-nonce fingerprint is
   // compared against it and then promotes. See visualNoOp.ts.
   const fpTracker = useRef<FpTracker>({ baseline: null });
+  // onVisualNoOp read via a ref inside the message handler so the handler's
+  // effect does NOT re-subscribe the global `message` listener every render
+  // when the parent passes an inline callback (identity changes each render).
+  const onVisualNoOpRef = useRef(onVisualNoOp);
+  onVisualNoOpRef.current = onVisualNoOp;
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const wipeWrapperRef = useRef<HTMLDivElement | null>(null);
@@ -174,9 +179,21 @@ export function FrameCard({
       if (d.slug !== projectSlug || d.frame !== frame.slug) return;
       if (d.type === "arcade-studio:frame-fingerprint") {
         const fp = (d as { fp?: unknown }).fp;
-        if (typeof fp === "string") {
-          const outcome = observeFingerprint(fpTracker.current, fp, String(d.n ?? ""));
-          if (outcome === "no-op") onVisualNoOp?.(frame.slug);
+        const n = String(d.n ?? "");
+        // Only fold fingerprints from a LIVE iframe — the currently-committed
+        // render (committedNonce) or the in-flight probe (reloadNonce), with the
+        // 0↔"" normalization buildFrameUrl uses. A post from a superseded
+        // outgoing iframe (an edit bumped reloadNonce before its probe measured)
+        // carries a stale nonce that matches neither; folding it would poison the
+        // baseline with a render the user never saw → a false "no-op" on the next
+        // edit (the cardinal sin). Drop it.
+        const liveNonce =
+          n === String(committedNonce) ||
+          n === String(reloadNonce) ||
+          (n === "" && (committedNonce === 0 || reloadNonce === 0));
+        if (typeof fp === "string" && liveNonce) {
+          const outcome = observeFingerprint(fpTracker.current, fp, n);
+          if (outcome === "no-op") onVisualNoOpRef.current?.(frame.slug);
         }
         return;
       }
@@ -217,7 +234,7 @@ export function FrameCard({
     }
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
-  }, [projectSlug, frame.slug, reloadNonce, refineTimeoutMs, sessionFrameSlug, clear, onVisualNoOp]);
+  }, [projectSlug, frame.slug, reloadNonce, committedNonce, refineTimeoutMs, sessionFrameSlug, clear]);
 
   // Clean up the terminal timer on unmount (no leaked setTimeout).
   useEffect(() => {
