@@ -358,5 +358,5 @@ export function useChatStream(
     }
   }, [slug]);
 
-  return { state, send, retry, cancel };
+  return { state, send, retry, cancel, reconnect };
 }

@@ -34,6 +34,11 @@ import {
   isMemoryOnlyPrompt,
   PHANTOM_EDIT_RETRY_PROMPT,
 } from "../phantomEditRetry";
+import {
+  VISUAL_NOOP_RETRY_PROMPT,
+  visualNoOpRetryAlreadyRan,
+  markVisualNoOpRetryRan,
+} from "../visualNoOpRetry";
 import type { Frame } from "../types";
 import {
   snapshotProjectFiles,
@@ -117,6 +122,7 @@ export function frameSlugFromDiff(diff: { added: string[]; changed: string[]; re
 const STREAM_URL = /^\/api\/chat\/stream\/([a-z0-9][a-z0-9-]{0,62})$/i;
 const STATUS_URL = /^\/api\/chat\/status\/([a-z0-9][a-z0-9-]{0,62})$/i;
 const CANCEL_URL = /^\/api\/chat\/cancel\/([a-z0-9][a-z0-9-]{0,62})$/i;
+const VISUAL_NOOP_RETRY_URL = /^\/api\/chat\/visual-noop-retry$/;
 
 export function chatMiddleware() {
   return async (req: IncomingMessage, res: ServerResponse, next?: () => void) => {
@@ -132,6 +138,7 @@ export function chatMiddleware() {
     if (req.url.startsWith("/api/chat") && req.method === "POST") {
       const cancelMatch = req.url.match(CANCEL_URL);
       if (cancelMatch) return handleCancel(res, cancelMatch[1].toLowerCase());
+      if (VISUAL_NOOP_RETRY_URL.test(req.url)) return handleVisualNoOpRetry(req, res);
       return handleStart(req, res);
     }
 
@@ -303,6 +310,59 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
     },
   });
 
+  res.writeHead(202, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ turnId: turn.id, slug }));
+}
+
+async function handleVisualNoOpRetry(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  let buf = "";
+  for await (const chunk of req) buf += chunk;
+  let body: { slug?: string; frame?: string; userTurnId?: string };
+  try { body = JSON.parse(buf); } catch {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "bad_request", message: "Invalid JSON" } }));
+    return;
+  }
+  const { slug, frame, userTurnId } = body;
+  if (typeof slug !== "string" || !slug || typeof frame !== "string" || !frame || typeof userTurnId !== "string" || !userTurnId) {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "bad_request", message: "slug, frame, userTurnId required" } }));
+    return;
+  }
+  const project = await getProject(slug);
+  if (!project) {
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "not_found", message: "Project not found" } }));
+    return;
+  }
+  // One-shot per originating user-turn (stable across session rotation).
+  if (visualNoOpRetryAlreadyRan(userTurnId)) {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true, skipped: "already_ran" }));
+    return;
+  }
+  const running = getTurn(slug);
+  if (running && running.status === "running") {
+    res.writeHead(409, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "turn_in_progress", message: "A turn is already running." } }));
+    return;
+  }
+  markVisualNoOpRetryRan(userTurnId);
+
+  // Register the corrective as a REAL turn — SAME shape as handleStart (:275),
+  // reusing runClaudeBranch so session-resume + narration + appendHistory +
+  // the frame-change contract all work. NO user-message appendHistory (no
+  // fake user bubble). Respond 202 AFTER startTurn so the reconnecting client
+  // finds the registered turn to replay (proven ordering: startTurn is sync).
+  const turn = startTurn(slug, {
+    prompt: VISUAL_NOOP_RETRY_PROMPT,
+    run: ({ emit, end, signal }) => {
+      runClaudeBranch({ emit, slug, prompt: VISUAL_NOOP_RETRY_PROMPT, project, signal }).then(
+        (result) => end(result),
+        (err) => end({ ok: false, error: err?.message ?? String(err) }),
+      );
+    },
+  });
   res.writeHead(202, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ turnId: turn.id, slug }));
 }
