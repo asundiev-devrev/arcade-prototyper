@@ -68,6 +68,19 @@ describe("detectComponentPropViolations — exemptions (must NOT flag)", () => {
   it("does NOT flag unrelated components", () => {
     expect(V(`<Button multiple /><Card value={["a"]} />`)).toBe(0);
   });
+  // Non-array-LITERAL value/defaultValue must NOT flag — only array literals
+  // are provably wrong-shaped. A variable / call / conditional may resolve to
+  // a valid string. (The "false alarms NOT OK" class — guard against a
+  // regression that starts flagging dynamic expressions.)
+  it("does NOT flag a variable defaultValue on Select", () => {
+    expect(V(`<Select.Root defaultValue={vals} />`)).toBe(0);
+  });
+  it("does NOT flag a call-expression value on Select", () => {
+    expect(V(`<Select.Root value={getDefault()} />`)).toBe(0);
+  });
+  it("does NOT flag a conditional defaultValue on Select", () => {
+    expect(V(`<Select.Root defaultValue={cond ? "a" : "b"} />`)).toBe(0);
+  });
   it("returns [] on parse of non-JSX", () => {
     expect(V(`const x = 1;`)).toBe(0);
   });
