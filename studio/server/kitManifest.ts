@@ -42,6 +42,8 @@ export const PRIMITIVE_CAPABILITIES: Record<string, string> = {
     "`value`/`defaultValue` are STRINGS. No multi-value. (react-tabs index.d.ts: defaultValue?: string)",
   ToggleGroup:
     "supports BOTH `type=\"single\"` (`value`/`defaultValue`: string) and `type=\"multiple\"` (`value`/`defaultValue`: string[]). Multi-select IS supported — via `type=\"multiple\"`, NOT a `multiple` prop. (react-toggle-group index.d.ts: union on `type`)",
+  Accordion:
+    "same `type` union as ToggleGroup: `type=\"single\"` (`value`/`defaultValue`: string) or `type=\"multiple\"` (`value`/`defaultValue`: string[]). Multiple open panels IS supported — via `type=\"multiple\"`, NOT a `multiple` prop. (react-accordion index.d.ts: union on `type`)",
   Switch: "boolean toggle. `checked`/`defaultChecked` (booleans); `onCheckedChange`. Not a multi-value control.",
   Input:
     "single-line text control. `value`/`defaultValue` are STRINGS; `onChange`. (It spreads native input attributes, so file-input props like `multiple` type-check but do nothing useful on a text field — don't reach for them for multi-value.)",
@@ -327,7 +329,8 @@ export function renderManifestIndex(entries: KitManifestEntry[]): string {
       .join("\n") + compound;
   };
   const body = [
-    "## Templates\n",
+    renderPrimitiveCapabilities(),
+    "\n## Templates\n",
     ...templates.map(line),
     "\n## Composites\n",
     ...composites.map(line),

@@ -6,7 +6,7 @@
 > template source; if a prop signature here is enough, skip the extra
 > `Read`. Open the `.tsx` only when you need the full rendered markup.
 
-_38 entries — 34 composites, 4 templates._
+_37 entries — 33 composites, 4 templates._
 
 ## Primitive capabilities
 
@@ -16,6 +16,7 @@ _38 entries — 34 composites, 4 templates._
 - **Select** — single-value. `value`/`defaultValue` are STRINGS. NO `multiple` prop — the kit has no multi-select Select. (react-select index.d.ts: defaultValue?: string)
 - **Tabs** — `value`/`defaultValue` are STRINGS. No multi-value. (react-tabs index.d.ts: defaultValue?: string)
 - **ToggleGroup** — supports BOTH `type="single"` (`value`/`defaultValue`: string) and `type="multiple"` (`value`/`defaultValue`: string[]). Multi-select IS supported — via `type="multiple"`, NOT a `multiple` prop. (react-toggle-group index.d.ts: union on `type`)
+- **Accordion** — same `type` union as ToggleGroup: `type="single"` (`value`/`defaultValue`: string) or `type="multiple"` (`value`/`defaultValue`: string[]). Multiple open panels IS supported — via `type="multiple"`, NOT a `multiple` prop. (react-accordion index.d.ts: union on `type`)
 - **Switch** — boolean toggle. `checked`/`defaultChecked` (booleans); `onCheckedChange`. Not a multi-value control.
 - **Input** — single-line text control. `value`/`defaultValue` are STRINGS; `onChange`. (It spreads native input attributes, so file-input props like `multiple` type-check but do nothing useful on a text field — don't reach for them for multi-value.)
 - **Button** — `variant`/`size`/`disabled`/`onClick`. Not a form-value control (no `value`/`defaultValue`).
@@ -2021,25 +2022,3 @@ type VistaToolbarProps = {
 **When NOT to use this:**
 - Do NOT inline `<IconButton variant="secondary" size="sm">…</IconButton>` into the `toolbarIcons` slot. Use `<VistaToolbar.IconAction icon={<AtSymbol />} label="Mentions" />` — the subcomponent bakes variant/size so icons in the toolbar match DevRev vista chrome exactly.
 - Do NOT wrap `toolbarIcons` children in your own `<div className="flex gap-*">`. The composite applies the correct inter-icon spacing; your wrapper will either collapse it or double it.
-
-## SkillCardAndrey (composite)
-_source: `composites/SkillCardAndrey.tsx`_
-
-SkillCardAndrey — vertical skill card with icon, status badge, title/description, and author row.
-
-Matches the Skills page card: lightning icon (blue), optional "Added" badge,
-title + 2-line-clamped description, and author avatar + name at the bottom.
-
-
-```ts
-type SkillCardAndreyProps = {
-  /** Skill title. */
-  title?: string;
-  /** Skill description (clamps to 2 lines). */
-  description?: string;
-  /** Author name (shows avatar initials + name). */
-  author?: string;
-  /** When true, renders "Added" status badge. */
-  added?: boolean;
-}
-```
