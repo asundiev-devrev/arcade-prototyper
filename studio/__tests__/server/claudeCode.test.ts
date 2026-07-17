@@ -111,7 +111,7 @@ describe("runClaudeTurn", () => {
         ...settings.hooks.PreToolUse.flatMap((m: any) => m.hooks.map((h: any) => h.command)),
         ...settings.hooks.PostToolUse.flatMap((m: any) => m.hooks.map((h: any) => h.command)),
       ];
-      expect(commands.length).toBe(3);
+      expect(commands.length).toBe(4);
       for (const cmd of commands) {
         // Never a bare `node` invocation — that's the bug.
         expect(cmd).not.toMatch(/^node\s/);
@@ -119,10 +119,11 @@ describe("runClaudeTurn", () => {
         expect(cmd).toContain("ELECTRON_RUN_AS_NODE=1");
         expect(cmd).toContain(JSON.stringify(process.execPath));
       }
-      // All three guardrail scripts are wired.
+      // All four guardrail scripts are wired.
       expect(commands.some((c) => c.includes("blockImageReshape.mjs"))).toBe(true);
       expect(commands.some((c) => c.includes("validateArcadeImports.mjs"))).toBe(true);
       expect(commands.some((c) => c.includes("validateTokenClasses.mjs"))).toBe(true);
+      expect(commands.some((c) => c.includes("validateComponentProps.mjs"))).toBe(true);
     } finally {
       fs.rmSync(spy, { force: true });
       fs.rmSync(logFile, { force: true });
