@@ -130,7 +130,7 @@ Expected: PASS.
 
 - [ ] **Step 5: Regenerate the committed manifest so the artifact matches the render**
 
-The checked-in `KIT-MANIFEST.md` is generated. Regenerate it so it carries the new section (else the repo file diverges from what the generator now emits). **Do NOT try `node -e require('./studio/server/kitManifest')` — it's a `.ts` file, plain node can't load it (no ts-node) and it will throw.** Use the dev-server path: start `pnpm run studio`, let `kitManifestPlugin` regenerate `KIT-MANIFEST.md` on `buildStart` (it calls `writeManifest`→`renderManifestMarkdown`), then stop it. Confirm `studio/prototype-kit/KIT-MANIFEST.md` now contains `## Primitive capabilities`.
+The checked-in `KIT-MANIFEST.md` is generated. Regenerate it so it carries the new section (else the repo file diverges from what the generator now emits). **Do NOT try `node -e require('./studio/server/kitManifest')` — it's a `.ts` file, plain node can't load it (no ts-node) and it will throw.** Use the dev-server path: start `pnpm run studio`, let `kitManifestPlugin.buildStart` regenerate `KIT-MANIFEST.md` (it calls `writeMergedManifest`→`renderManifestMarkdown` — both writers route through the same renderer, so the new section lands), then stop it. Confirm `studio/prototype-kit/KIT-MANIFEST.md` now contains `## Primitive capabilities`.
 
 - [ ] **Step 6: Commit**
 
