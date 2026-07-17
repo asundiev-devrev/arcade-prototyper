@@ -4,6 +4,7 @@ import type { Frame } from "../../../server/types";
 import { useEditSession } from "../../hooks/editSessionContext";
 import type { TurnPhase } from "../../hooks/chatStreamReducer";
 import { SaveComponentModal } from "../assets/SaveComponentModal";
+import { observeFingerprint, type FpTracker } from "./visualNoOp";
 
 const FRAME_WIDTH_MIN = 320;
 const FRAME_WIDTH_MAX = 2560;
@@ -41,6 +42,7 @@ export function FrameCard({
   highlighted,
   phase = "idle",
   onDelete,
+  onVisualNoOp,
   refineTimeoutMs = 90_000,
 }: {
   projectSlug: string;
@@ -54,6 +56,10 @@ export function FrameCard({
   highlighted?: "target" | "missing" | null;
   phase?: TurnPhase;
   onDelete?: (frameSlug: string) => void;
+  /** Fired when an in-flight edit's at-rest render is pixel-identical to the
+   *  prior committed render (a visual no-op candidate — a valid prop the
+   *  component silently ignored). See visualNoOp.ts + the spec. */
+  onVisualNoOp?: (frameSlug: string) => void;
   /** Wall-clock budget (ms) for a failed edit to be auto-repaired before the
    *  "Refining…" chip flips to the terminal "couldn't fix it" state. Floor must
    *  exceed real repair latency (a claude turn + 60s rate-limit) — default 90s;
@@ -84,6 +90,10 @@ export function FrameCard({
   // terminal state so a late frame-ready can still un-terminal (post-terminal
   // recovery); cleared only on a successful swap.
   const editCycleActive = useRef(false);
+  // Nonce-keyed render-fingerprint baseline for visual-no-op detection. Holds
+  // the last committed render's {fp, nonce}; each new-nonce fingerprint is
+  // compared against it and then promotes. See visualNoOp.ts.
+  const fpTracker = useRef<FpTracker>({ baseline: null });
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const wipeWrapperRef = useRef<HTMLDivElement | null>(null);
@@ -162,6 +172,14 @@ export function FrameCard({
         | undefined;
       if (!d || typeof d !== "object") return;
       if (d.slug !== projectSlug || d.frame !== frame.slug) return;
+      if (d.type === "arcade-studio:frame-fingerprint") {
+        const fp = (d as { fp?: unknown }).fp;
+        if (typeof fp === "string") {
+          const outcome = observeFingerprint(fpTracker.current, fp, String(d.n ?? ""));
+          if (outcome === "no-op") onVisualNoOp?.(frame.slug);
+        }
+        return;
+      }
       if (String(d.n ?? "") !== String(reloadNonce)) return; // stale iframe — ignore
       // Not an in-flight edit — ignore at-rest committed-frame errors/readies
       // (which reconverge to the same nonce after a successful edit). Viewport's
@@ -199,7 +217,7 @@ export function FrameCard({
     }
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
-  }, [projectSlug, frame.slug, reloadNonce, refineTimeoutMs, sessionFrameSlug, clear]);
+  }, [projectSlug, frame.slug, reloadNonce, refineTimeoutMs, sessionFrameSlug, clear, onVisualNoOp]);
 
   // Clean up the terminal timer on unmount (no leaked setTimeout).
   useEffect(() => {
