@@ -44,3 +44,41 @@ export function observeFingerprint(
   tracker.baseline = { fp, nonce }; // promote so the next edit compares vs this
   return result;
 }
+
+/**
+ * Whether the chat controller should fire the server-owned corrective retry.
+ * All four gates must hold: a no-op candidate was buffered during the turn, the
+ * turn ended cleanly (`phase === "done"` — never on error/cancelled), the
+ * agent's summary claimed a visual change, and we haven't already fired for
+ * this originating user turn. Pure so it's testable without the component.
+ */
+export function shouldTriggerVisualNoOpRetry(input: {
+  candidateBuffered: boolean;
+  phase: "done" | "error" | "cancelled" | string;
+  summaryClaimsVisual: boolean;
+  alreadyTriggeredThisTurn: boolean;
+}): boolean {
+  if (!input.candidateBuffered) return false;
+  if (input.phase !== "done") return false;
+  if (!input.summaryClaimsVisual) return false;
+  if (input.alreadyTriggeredThisTurn) return false;
+  return true;
+}
+
+/**
+ * The agent's one-sentence summary line from a turn's narrations. Drops journey
+ * lines (prefixed `→ `) and stops at `### Deviations` so the visual-claim gate
+ * reads the summary only, never the deviations body or server-side lines.
+ */
+export function firstSummaryLine(narrations: string[]): string {
+  for (const raw of narrations) {
+    for (const line of raw.split("\n")) {
+      const t = line.trim();
+      if (!t) continue;
+      if (t.startsWith("→")) continue;      // journey line
+      if (t.startsWith("### Deviations")) return ""; // reached deviations w/o a summary
+      return t;                              // first real summary line
+    }
+  }
+  return "";
+}

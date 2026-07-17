@@ -20,6 +20,7 @@ export function Viewport({
   onZoomChange,
   onSeedChat,
   phase = "idle",
+  onVisualNoOp,
 }: {
   project: Project;
   frameWidth: number;
@@ -28,6 +29,7 @@ export function Viewport({
   onZoomChange: (next: number) => void;
   onSeedChat: (text: string) => void;
   phase?: TurnPhase;
+  onVisualNoOp?: (frameSlug: string) => void;
 }) {
   const { frames, refresh } = useFrames(project);
   const [creatingFrame, setCreatingFrame] = useState(false);
@@ -198,6 +200,7 @@ export function Viewport({
             highlighted={highlight?.slug === f.slug ? highlight.kind : null}
             phase={phase}
             onDelete={handleDeleteFrame}
+            onVisualNoOp={onVisualNoOp}
           />
         ))}
         <NewFrameCard onClick={handleCreateFrame} busy={creatingFrame} />
