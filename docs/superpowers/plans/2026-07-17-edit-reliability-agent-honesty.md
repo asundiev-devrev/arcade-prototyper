@@ -130,9 +130,7 @@ Expected: PASS.
 
 - [ ] **Step 5: Regenerate the committed manifest so the artifact matches the render**
 
-The checked-in `KIT-MANIFEST.md` is generated. Regenerate it so it carries the new section (else the repo file diverges from what the generator now emits). Run the studio dev server briefly OR call the writer:
-`command node -e "require('./studio/server/kitManifest').writeManifest('studio/prototype-kit').then(p=>console.log(p))"` (adjust to the real export/signature — `writeManifest(kitRoot)`; confirm the path arg). Confirm `studio/prototype-kit/KIT-MANIFEST.md` now contains `## Primitive capabilities`.
-(If the writer is ESM-only / needs the running server, start `pnpm run studio`, let it regenerate on boot, stop it, and confirm the file changed.)
+The checked-in `KIT-MANIFEST.md` is generated. Regenerate it so it carries the new section (else the repo file diverges from what the generator now emits). **Do NOT try `node -e require('./studio/server/kitManifest')` — it's a `.ts` file, plain node can't load it (no ts-node) and it will throw.** Use the dev-server path: start `pnpm run studio`, let `kitManifestPlugin` regenerate `KIT-MANIFEST.md` on `buildStart` (it calls `writeManifest`→`renderManifestMarkdown`), then stop it. Confirm `studio/prototype-kit/KIT-MANIFEST.md` now contains `## Primitive capabilities`.
 
 - [ ] **Step 6: Commit**
 
@@ -166,9 +164,11 @@ const tpl = readFileSync(path.resolve(__dirname, "../../templates/CLAUDE.md.tpl"
 it("frames None. as a verified claim, not an appended default", () => {
   // the old 'Even a trivial edit gets None. appended' default must be gone
   expect(tpl).not.toMatch(/gets `### Deviations\\n\\nNone\.` appended/);
-  // and the verified-claim rule present
-  expect(tpl).toMatch(/None\.[\s\S]*only when/i);
-  expect(tpl).toMatch(/could ?n['’]?t|unable to|the kit (has no|lacks)/i); // must-report-if-couldn't
+  // and the NEW verified-claim wording present — a distinctive phrase from the
+  // reworded line, so this doesn't pass vacuously on the old text (both looser
+  // patterns matched the UNMODIFIED tpl per review). Match the reword verbatim-ish:
+  expect(tpl).toMatch(/`?None\.?`?\s+is a VERIFIED claim/i);
+  expect(tpl).toMatch(/never (write `?None\.?`?|silently claim success you did ?n['’]?t deliver)/i);
 });
 ```
 
@@ -292,8 +292,13 @@ function kitComponentOf(tagNode) {
 
 function attr(openingEl, propName) {
   const props = openingEl.attributes?.properties ?? [];
-  return props.find((p) => ts.isJsxAttribute(p) && p.name && p.name.getText?.() === propName
-    || (ts.isJsxAttribute(p) && p.name && p.name.text === propName));
+  // Use `.name.text` — NEVER `.getText()`. The tree is built with
+  // setParentNodes=false (below), so `.getText()` walks a null parent chain
+  // and THROWS (the `?.` does NOT catch a throw), which would crash the whole
+  // detector → the hook fails open → does nothing. `.text` reads the identifier
+  // directly and is safe on a parentless node (same pattern the sibling
+  // validateArcadeImports.mjs uses: it reads `.text`, never `.getText()`).
+  return props.find((p) => ts.isJsxAttribute(p) && p.name && p.name.text === propName);
 }
 
 function isArrayLiteralInitializer(a) {
@@ -361,7 +366,7 @@ export function detectComponentPropViolations(source) {
 
 `main()`: mirror `validateArcadeImports.mjs` — read the post-edit file (Edit) / `content` (Write), `const v = detectComponentPropViolations(content); if (!v.length) process.exit(0); process.stderr.write(formatted); process.exit(2);`. Fail open on read/parse errors. Frame-files-only scope IF the sibling hooks scope that way (match their `isInScope`).
 
-NOTE: the `attr` helper above is sketched — implement a clean JSX-attribute lookup (iterate `opening.attributes.properties`, match `ts.isJsxAttribute(p) && p.name.text === propName`); confirm the exact TS API (`p.name` is an `Identifier` with `.text`). Verify against the real `ts` version before relying on `.getText()`.
+NOTE (verified against TS 5.9.3 by adversarial review — build the AST and confirm before trusting): `<Select.Root>` tagName IS a `PropertyAccessExpression` with `.expression` an `Identifier` (`.text==="Select"`); a `multiple` shorthand is a `JsxAttribute` with `initializer===undefined`; `type="single"` initializer IS a `StringLiteral` (`ts.isStringLiteral(init)` true); `defaultValue={[…]}` is a `JsxExpression` wrapping an `ArrayLiteralExpression`; dynamic `type={x}` inner is an `Identifier`; native `<select>` tagName is a lowercase `Identifier` (not PropertyAccess → `kitComponentOf` returns null → never flagged). The ONLY unsafe API is `.getText()` on this parentless tree — it THROWS (crashing the detector → hook fails open → does nothing), so `attr` uses `.name.text` exclusively. `visit` runs OUTSIDE the try/catch, so a throw there is NOT swallowed — keep the accessor safe.
 
 - [ ] **Step 4: Run to verify pass**
 
@@ -382,9 +387,11 @@ and a third entry in the `PostToolUse` array (`:276`):
         },
 ```
 
-- [ ] **Step 6: Run the hooks-related tests + confirm registration**
+- [ ] **Step 6: Update the hook-count assertion, then run the hooks + claudeCode tests**
 
-Run: `pnpm run studio:test studio/__tests__/server/hooks/`  (+ any `claudeCode` test)
+`studio/__tests__/server/claudeCode.test.ts` (~`:114`) asserts the flattened Pre+Post hook command count `toBe(3)` (2 PostToolUse + 1 PreToolUse today). Registering the 4th hook makes it 4 → this test WILL go red if not updated. Bump `toBe(3)` → `toBe(4)` and add `expect(commands.some((c) => c.includes("validateComponentProps.mjs"))).toBe(true)`.
+
+Run: `pnpm run studio:test studio/__tests__/server/hooks/ studio/__tests__/server/claudeCode.test.ts`
 Expected: PASS. Confirm the new hook is in the registered set.
 
 - [ ] **Step 7: Commit**
