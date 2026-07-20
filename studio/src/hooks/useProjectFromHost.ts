@@ -39,6 +39,21 @@ export interface ProjectShellSource {
   renderMismatchBannerForFrame: string | null;
 }
 
+export interface PerTurnRefs {
+  noOpCandidate: { current: string | null };
+  handledTurn: { current: string | null };
+  digestByFrame: { current: Map<string, unknown> };
+}
+/** Clear per-turn state at a new USER turn. Deliberately does NOT touch
+ *  digestByFrame — render-verify needs the mount-time digest on a no-edit turn,
+ *  which never re-pushes. This omission is the feature's crux. */
+export function resetPerTurn(refs: PerTurnRefs, clearBanners: () => void): void {
+  refs.noOpCandidate.current = null;
+  refs.handledTurn.current = null;
+  clearBanners();
+  // digestByFrame intentionally NOT reset.
+}
+
 /**
  * Aggregate the host-side data sources that `ProjectDetail` needs:
  *
@@ -120,16 +135,20 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
     lastSeenTurn.current = turnId;
     if (awaitingCorrective.current) return; // this new turn IS the VN corrective — keep state
     if (awaitingRvCorrective.current) return; // this new turn IS the RV corrective — keep state
-    // A fresh user turn — clear any stale candidate/banner/one-shot.
-    noOpCandidate.current = null;
-    handledTurn.current = null;
-    setVisualNoOpBannerForFrame(null);
+    // A fresh user turn — clear any stale candidate/banner/one-shot. The pure
+    // `resetPerTurn` helper clears the per-turn refs + banners but deliberately
+    // LEAVES digestByFrame (the mount-time digest must survive — the crux).
+    resetPerTurn(
+      { noOpCandidate, handledTurn, digestByFrame },
+      () => {
+        setVisualNoOpBannerForFrame(null);
+        setRenderMismatchBannerForFrame(null);
+      },
+    );
     // Capture the USER'S originating prompt BEFORE any corrective overwrites
     // `lastPrompt` (the corrective turn's SSE header rewrites it). turnId +
     // lastPrompt are set atomically by the turn header (useChatStream.ts:199-212).
     originating.current = { prompt: chat.lastPrompt ?? "", turnId };
-    setRenderMismatchBannerForFrame(null); // a new user turn dismisses the RV banner
-    // NOTE: do NOT touch digestByFrame here — it must survive the turn (the crux).
   }, [chat.turnId]);
 
   // Nicety wrapper (used by a few non-composer send paths); the reset above is
