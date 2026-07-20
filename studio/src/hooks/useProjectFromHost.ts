@@ -6,6 +6,12 @@ import {
   shouldTriggerVisualNoOpRetry,
 } from "../components/viewport/visualNoOp";
 import { narrationClaimsVisualChange } from "../../server/visualNoOpRetry";
+import {
+  extractRequestedProperties,
+  reconcile,
+  RENDER_VERIFY_RETRY_PROMPT,
+} from "../../server/renderVerify";
+import type { RenderDigest } from "../frame/frameDigest";
 
 type ChatStream = ReturnType<typeof useChatStream>;
 
@@ -23,6 +29,14 @@ export interface ProjectShellSource {
    *  stayed pixel-identical THROUGH one corrective retry. Drives the soft
    *  VisualNoOpBanner. Cleared on the next user send. */
   visualNoOpBannerForFrame: string | null;
+  /** Buffer a frame's render digest (called by FrameCard via the Viewport
+   *  prop-thread). Turn-persistent — the mount-time digest is the only one on a
+   *  no-edit turn, so render-verify keeps it across turns. */
+  onRenderDigest: (frameSlug: string, digest: RenderDigest) => void;
+  /** Set to a frame slug when the user asked for a visual property (e.g.
+   *  vertical) that the render still contradicts AFTER one corrective retry.
+   *  Drives the soft RenderMismatchBanner. Cleared on the next user send. */
+  renderMismatchBannerForFrame: string | null;
 }
 
 /**
@@ -69,6 +83,30 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
     noOpCandidate.current = frameSlug;
   }, []);
 
+  // ── Render-verify (the user asked for a visual property the render contradicts) ──
+  // PARALLEL path to VN: own digest store, own corrective flag, own banner,
+  // own turn-end effect (declared AFTER VN's). The ONLY shared state is VN's
+  // existing `handledTurn` ref (the one-corrective-per-turn guard). VN's effect
+  // runs first (declared first) → if VN fires it claims `handledTurn` and RV
+  // skips the turn (edit-noop priority).
+  //
+  // digestByFrame is TURN-PERSISTENT — NEVER cleared on a turn/frame transition.
+  // The mount-time digest is the only one on a no-edit turn; clearing it would
+  // leave the no-edit repro nothing to compare and self-defeat the feature.
+  const digestByFrame = useRef<Map<string, RenderDigest>>(new Map());
+  // The USER'S originating prompt for the current turn, captured at turn start
+  // (never the corrective-overwritten `lastPrompt`).
+  const originating = useRef<{ prompt: string; turnId: string } | null>(null);
+  // RV's OWN corrective flag — NOT VN's `awaitingCorrective`.
+  const awaitingRvCorrective = useRef(false);
+  const rvPendingFrame = useRef<string | null>(null);
+  const [renderMismatchBannerForFrame, setRenderMismatchBannerForFrame] =
+    useState<string | null>(null);
+
+  const onRenderDigest = useCallback((frameSlug: string, digest: RenderDigest) => {
+    digestByFrame.current.set(frameSlug, digest);
+  }, []);
+
   // Reset per-turn state when a genuinely NEW user turn starts. Keyed on the
   // turn id transitioning to a running phase — this fires regardless of WHICH
   // send path was used (the main ChatPane composer sends via the raw stream,
@@ -80,11 +118,18 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
     const turnId = chat.turnId;
     if (!turnId || turnId === lastSeenTurn.current) return;
     lastSeenTurn.current = turnId;
-    if (awaitingCorrective.current) return; // this new turn IS the corrective — keep state
+    if (awaitingCorrective.current) return; // this new turn IS the VN corrective — keep state
+    if (awaitingRvCorrective.current) return; // this new turn IS the RV corrective — keep state
     // A fresh user turn — clear any stale candidate/banner/one-shot.
     noOpCandidate.current = null;
     handledTurn.current = null;
     setVisualNoOpBannerForFrame(null);
+    // Capture the USER'S originating prompt BEFORE any corrective overwrites
+    // `lastPrompt` (the corrective turn's SSE header rewrites it). turnId +
+    // lastPrompt are set atomically by the turn header (useChatStream.ts:199-212).
+    originating.current = { prompt: chat.lastPrompt ?? "", turnId };
+    setRenderMismatchBannerForFrame(null); // a new user turn dismisses the RV banner
+    // NOTE: do NOT touch digestByFrame here — it must survive the turn (the crux).
   }, [chat.turnId]);
 
   // Nicety wrapper (used by a few non-composer send paths); the reset above is
@@ -140,6 +185,78 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
       } catch {
         // Best-effort — a failed retry just means no auto-correction this turn.
         awaitingCorrective.current = false;
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chat.phase, chat.turnId, slug]);
+
+  // Render-verify turn-end effect — declared AFTER VN's (so VN runs first →
+  // priority via the shared `handledTurn` guard). On a clean turn end:
+  //   - if this IS the RV corrective turn → banner-only (never re-POST); if the
+  //     buffered digest still contradicts, surface the RV banner;
+  //   - else, if VN didn't claim the turn AND the USER'S originating prompt
+  //     requested a visual property the buffered digest UNANIMOUSLY contradicts
+  //     → POST the RV corrective + reconnect.
+  useEffect(() => {
+    if (chat.phase !== "done") return;
+    const turnId = chat.turnId;
+    if (!turnId) return;
+
+    // The RV corrective turn ended → banner-only, never re-POST.
+    if (awaitingRvCorrective.current) {
+      awaitingRvCorrective.current = false;
+      const target = rvPendingFrame.current;
+      rvPendingFrame.current = null;
+      if (target && originating.current) {
+        const requested = extractRequestedProperties(originating.current.prompt);
+        const digest = digestByFrame.current.get(target);
+        if (requested.length > 0 && digest && reconcile(requested, digest).length > 0) {
+          setRenderMismatchBannerForFrame(target); // corrective didn't fix it
+        }
+      }
+      return;
+    }
+
+    // Shared one-fire guard: VN's effect (declared first) sets handledTurn when
+    // it fires → RV skips this turn. If VN didn't claim the turn, RV may.
+    if (handledTurn.current === turnId) return;
+    if (!originating.current || originating.current.turnId !== turnId) return;
+
+    const requested = extractRequestedProperties(originating.current.prompt);
+    if (requested.length === 0) return;
+
+    // v1 target-frame resolution: first frame whose digest unanimously contradicts.
+    let target: string | null = null;
+    let mismatchPrompt = "";
+    for (const [frameSlug, digest] of digestByFrame.current) {
+      const mismatches = reconcile(requested, digest);
+      if (mismatches.length > 0) {
+        target = frameSlug;
+        mismatchPrompt = RENDER_VERIFY_RETRY_PROMPT(mismatches[0]);
+        break;
+      }
+    }
+    if (!target) return;
+
+    handledTurn.current = turnId; // claim the turn (blocks a late VN fire too)
+    awaitingRvCorrective.current = true;
+    rvPendingFrame.current = target;
+    const userTurnId = originating.current.turnId;
+    let cancelled = false;
+    void (async () => {
+      try {
+        await fetch("/api/chat/render-verify-retry", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ slug, frame: target, userTurnId, prompt: mismatchPrompt }),
+        });
+        if (cancelled) return;
+        chatStream.reconnect();
+      } catch {
+        awaitingRvCorrective.current = false;
       }
     })();
     return () => {
@@ -216,5 +333,7 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
     refresh,
     onVisualNoOp,
     visualNoOpBannerForFrame,
+    onRenderDigest,
+    renderMismatchBannerForFrame,
   };
 }
