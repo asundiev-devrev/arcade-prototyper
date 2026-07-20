@@ -324,6 +324,7 @@ export function buildFrameBootstrapSource(opts: {
     import "arcade-studio/frame/inspector";
     import "arcade-studio/frame/gestureForwarder";
     import { computeFingerprint, productionMeasure } from "arcade-studio/frame/renderFingerprint";
+    import { digestElements } from "arcade-studio/frame/frameDigest";
     import Frame from "${absFrame}";
 
     const __N = new URLSearchParams(location.search).get("n") || "";
@@ -351,6 +352,9 @@ export function buildFrameBootstrapSource(opts: {
             const fp = computeFingerprint(document.body, productionMeasure);
             window.parent && window.parent.postMessage(
               { type: "arcade-studio:frame-fingerprint", slug: ${JSON.stringify(slug)}, frame: ${JSON.stringify(frame)}, n: __N, fp: fp }, "*");
+            const digest = digestElements(document.body, productionMeasure);
+            window.parent && window.parent.postMessage(
+              { type: "arcade-studio:frame-digest", slug: ${JSON.stringify(slug)}, frame: ${JSON.stringify(frame)}, n: __N, digest: digest }, "*");
           } catch (_) { /* fingerprint is best-effort; never break the frame */ }
         };
         const afterLayout = () => requestAnimationFrame(() => requestAnimationFrame(post));
