@@ -203,30 +203,12 @@ export function FrameCard({
           n === String(reloadNonce) ||
           (n === "" && (committedNonce === 0 || reloadNonce === 0));
         if (typeof fp === "string" && liveNonce) {
-          // [RV-DIAG] temporary — VN fingerprint decision. A "no-op" here on an
-          // edit that visibly changed the frame is the false-fire we're hunting.
-          const prev = fpTracker.current.baseline;
           const outcome = observeFingerprint(fpTracker.current, fp, n);
-          console.log(
-            `[RV-DIAG] VN fingerprint frame=${frame.slug} n=${n} committed=${committedNonce} reload=${reloadNonce}` +
-              ` prevBaseline=${prev ? prev.nonce + ":" + prev.fp : "null"} thisFp=${fp} outcome=${outcome}`,
-          );
           if (outcome === "no-op") onVisualNoOpRef.current?.(frame.slug);
-        } else if (typeof fp === "string") {
-          console.log(`[RV-DIAG] VN fingerprint DROPPED (stale nonce) frame=${frame.slug} n=${n} committed=${committedNonce} reload=${reloadNonce}`);
         }
         return;
       }
       if (d.type === "arcade-studio:frame-digest") {
-        // [RV-DIAG] temporary — did the shell receive the digest + will the
-        // liveNonce gate in handleDigestMessage accept it?
-        const dn = String((d as { n?: unknown }).n ?? "");
-        const live =
-          dn === String(committedNonce) || dn === String(reloadNonce) ||
-          (dn === "" && (committedNonce === 0 || reloadNonce === 0));
-        console.log(
-          `[RV-DIAG] FrameCard rx digest frame=${(d as { frame?: unknown }).frame} n=${dn} committed=${committedNonce} reload=${reloadNonce} liveNonce=${live}`,
-        );
         handleDigestMessage(d as Parameters<typeof handleDigestMessage>[0], {
           projectSlug,
           frameSlug: frame.slug,

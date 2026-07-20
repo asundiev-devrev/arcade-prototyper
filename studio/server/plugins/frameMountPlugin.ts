@@ -353,38 +353,14 @@ export function buildFrameBootstrapSource(opts: {
             window.parent && window.parent.postMessage(
               { type: "arcade-studio:frame-fingerprint", slug: ${JSON.stringify(slug)}, frame: ${JSON.stringify(frame)}, n: __N, fp: fp }, "*");
             const digest = digestElements(document.body, productionMeasure);
-            var __rvCarriers = digest.elements.filter(function (e) { return e.dataOrientation !== null; });
-            console.log("[RV-DIAG] frame pushing digest frame=" + ${JSON.stringify(frame)} + " n=" + __N + " elements=" + digest.elements.length + " carriers=" + __rvCarriers.length,
-              __rvCarriers.map(function (c) { return c.dataOrientation + "/" + c.styles.flexDirection; }));
             window.parent && window.parent.postMessage(
               { type: "arcade-studio:frame-digest", slug: ${JSON.stringify(slug)}, frame: ${JSON.stringify(frame)}, n: __N, digest: digest }, "*");
-          } catch (e) { console.log("[RV-DIAG] frame digest push FAILED", e); /* best-effort; never break the frame */ }
+          } catch (_) { /* fingerprint is best-effort; never break the frame */ }
         };
-        // [RV-DIAG-PROBE] temporary — distinguish "content not mounted / wrong tree / prop absent".
-        // Reads the RAW DOM (bypasses our digest walk) + whether page content is present,
-        // and re-checks 2s later to catch a late client-routed mount.
-        const probe = (label) => {
-          try {
-            const raw = Array.prototype.slice.call(document.querySelectorAll("[data-orientation]"));
-            const oris = raw.map(function (el) {
-              return el.getAttribute("data-orientation") + "/" + getComputedStyle(el).flexDirection + "/" + el.tagName.toLowerCase();
-            });
-            const txt = (document.body.innerText || "");
-            console.log(
-              "[RV-DIAG-PROBE " + label + "] frame=" + ${JSON.stringify(frame)} +
-                " rawCarriers=" + raw.length +
-                " hasTimezoneText=" + txt.indexOf("Timezone") +
-                " hasPreferencesText=" + txt.indexOf("Preferences") +
-                " bodyChildEls=" + document.body.getElementsByTagName("*").length,
-              oris,
-            );
-          } catch (e) { console.log("[RV-DIAG-PROBE] failed", e); }
-        };
-        const afterLayout = () => requestAnimationFrame(() => requestAnimationFrame(() => { probe("t0"); post(); }));
+        const afterLayout = () => requestAnimationFrame(() => requestAnimationFrame(post));
         const fonts = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
         fonts.then(afterLayout, afterLayout);
-        const __lateProbe = setTimeout(() => { if (!cancelled) probe("t+2s"); }, 2000);
-        return () => { cancelled = true; clearTimeout(__lateProbe); };
+        return () => { cancelled = true; };
       }, []);
       return null;
     }

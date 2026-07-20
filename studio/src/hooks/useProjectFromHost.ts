@@ -55,6 +55,34 @@ export function resetPerTurn(refs: PerTurnRefs, clearBanners: () => void): void 
 }
 
 /**
+ * Master switch for the two RENDER-MEASUREMENT features — visual-noop detection
+ * and render-verify. Both compare a fingerprint/digest of the frame's rendered
+ * `document.body` before vs after a turn.
+ *
+ * DISABLED (2026-07-20) after a live manual gate proved the measurement premise
+ * is broken for the common case: arcade frames are client-routed MULTI-PAGE
+ * apps (a sidebar + `renderPage(active)` that mounts only the active page). The
+ * measurement runs at iframe mount, when the DEFAULT page is showing — so it
+ * measures the wrong page and returns a CONSTANT fingerprint across every edit
+ * (proven: fp `d8b977cd` on every render; the edited Preferences page + its
+ * vertical ToggleGroups never appear in the measured DOM — `hasTimezoneText=-1`,
+ * only 6 unrelated horizontal carriers from the default MyComputer page). That
+ * made both features FALSE-FIRE "nothing changed" on real edits and churn good
+ * work into nonsense (ToggleGroup→ButtonGroup), plus leak the internal
+ * corrective prompt into the chat as a fake user bubble.
+ *
+ * Correctly measuring the edited page in a multi-page frame (detect the page,
+ * drive the router to it, measure before+after) is the real render-verify
+ * KEYSTONE — a large, fragile lift, out of scope for this release. The other
+ * five edit-reliability features do NOT depend on measurement and ship.
+ *
+ * Code kept behind this flag (not deleted) so the keystone effort resumes with
+ * full context. Flip true only once measurement is page-aware. See
+ * docs/superpowers/specs/2026-07-20-edit-reliability-render-verify-rendered-fact-design.md.
+ */
+const RENDER_MEASUREMENT_FEATURES_ENABLED = false;
+
+/**
  * Aggregate the host-side data sources that `ProjectDetail` needs:
  *
  *   - `GET /api/projects/:slug` for the `Project` record (header title,
@@ -120,12 +148,6 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
 
   const onRenderDigest = useCallback((frameSlug: string, digest: RenderDigest) => {
     digestByFrame.current.set(frameSlug, digest);
-    // [RV-DIAG] temporary — how many orientation carriers did this render expose?
-    const carriers = digest.elements.filter((e) => e.dataOrientation !== null);
-    console.log(
-      `[RV-DIAG] digest buffered frame=${frameSlug} elements=${digest.elements.length} carriers=${carriers.length}`,
-      carriers.map((c) => `${c.dataOrientation}/${c.styles.flexDirection}`),
-    );
   }, []);
 
   // Reset per-turn state when a genuinely NEW user turn starts. Keyed on the
@@ -165,6 +187,7 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
   // re-POST). Otherwise, if a no-op candidate is buffered AND the agent's
   // summary claimed a visual change → POST the corrective retry + reconnect.
   useEffect(() => {
+    if (!RENDER_MEASUREMENT_FEATURES_ENABLED) return; // DISABLED — see the flag comment above
     if (chat.phase !== "done") return;
     const turnId = chat.turnId;
     if (!turnId || turnId === handledTurn.current) return;
@@ -182,22 +205,16 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
     const summaryClaimsVisual = narrationClaimsVisualChange(
       firstSummaryLine(chat.narrations),
     );
-    // [RV-DIAG] temporary — VN turn-end decision. If this FIRES on a turn whose
-    // edit visibly changed the frame, that's the false-fire that churned the edit.
-    const willFire = shouldTriggerVisualNoOpRetry({
-      candidateBuffered: candidate != null,
-      phase: chat.phase,
-      summaryClaimsVisual,
-      alreadyTriggeredThisTurn: false,
-    });
-    console.log(
-      `[RV-DIAG] VN turn-end turnId=${turnId} candidate=${candidate ?? "null"} summaryClaimsVisual=${summaryClaimsVisual}` +
-        ` summary=${JSON.stringify(firstSummaryLine(chat.narrations).slice(0, 80))} willFireCorrective=${willFire}`,
-    );
-    if (!willFire) {
+    if (
+      !shouldTriggerVisualNoOpRetry({
+        candidateBuffered: candidate != null,
+        phase: chat.phase,
+        summaryClaimsVisual,
+        alreadyTriggeredThisTurn: false,
+      })
+    ) {
       return;
     }
-    console.log(`[RV-DIAG] VN FIRING corrective (nothing-changed) for frame=${candidate}`);
     handledTurn.current = turnId;
     awaitingCorrective.current = true;
     // Clear the candidate so a fresh onVisualNoOp during the corrective turn is
@@ -232,6 +249,7 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
   //     requested a visual property the buffered digest UNANIMOUSLY contradicts
   //     → POST the RV corrective + reconnect.
   useEffect(() => {
+    if (!RENDER_MEASUREMENT_FEATURES_ENABLED) return; // DISABLED — see the flag comment above
     if (chat.phase !== "done") return;
     const turnId = chat.turnId;
     if (!turnId) return;
@@ -257,36 +275,26 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
       return;
     }
 
-    // [RV-DIAG] temporary — trace why RV does/doesn't fire on this turn end.
-    console.log(
-      `[RV-DIAG] turn-end phase=done turnId=${turnId} handledByVN=${handledTurn.current === turnId}` +
-        ` originatingTurn=${originating.current?.turnId ?? "null"} originatingPrompt=${JSON.stringify(originating.current?.prompt ?? null)}` +
-        ` bufferedFrames=${[...digestByFrame.current.keys()].join(",") || "none"}`,
-    );
-
     // Shared one-fire guard: VN's effect (declared first) sets handledTurn when
     // it fires → RV skips this turn. If VN didn't claim the turn, RV may.
-    if (handledTurn.current === turnId) { console.log("[RV-DIAG] skip: VN claimed this turn"); return; }
-    if (!originating.current || originating.current.turnId !== turnId) { console.log("[RV-DIAG] skip: no originating prompt for this turn"); return; }
+    if (handledTurn.current === turnId) return;
+    if (!originating.current || originating.current.turnId !== turnId) return;
 
     const requested = extractRequestedProperties(originating.current.prompt);
-    console.log("[RV-DIAG] requested =", JSON.stringify(requested));
-    if (requested.length === 0) { console.log("[RV-DIAG] skip: prompt requested no mappable property"); return; }
+    if (requested.length === 0) return;
 
     // v1 target-frame resolution: first frame whose digest unanimously contradicts.
     let target: string | null = null;
     let mismatchPrompt = "";
     for (const [frameSlug, digest] of digestByFrame.current) {
       const mismatches = reconcile(requested, digest);
-      console.log(`[RV-DIAG] reconcile frame=${frameSlug} carriers=${digest.elements.filter((e) => e.dataOrientation !== null).length} mismatches=${mismatches.length}`);
       if (mismatches.length > 0) {
         target = frameSlug;
         mismatchPrompt = RENDER_VERIFY_RETRY_PROMPT(mismatches[0]);
         break;
       }
     }
-    if (!target) { console.log("[RV-DIAG] skip: no frame unanimously contradicts the ask"); return; }
-    console.log(`[RV-DIAG] FIRING render-verify corrective for frame=${target}`);
+    if (!target) return;
 
     handledTurn.current = turnId; // claim the turn (blocks a late VN fire too)
     awaitingRvCorrective.current = true;
