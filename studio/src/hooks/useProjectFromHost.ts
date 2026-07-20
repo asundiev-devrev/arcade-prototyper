@@ -11,6 +11,12 @@ import {
   reconcile,
   RENDER_VERIFY_RETRY_PROMPT,
 } from "../../server/renderVerify";
+import { verifyRenderNoOp } from "../lib/renderVerifyClient";
+// A pure string const exported from a server file — safe to import client-side
+// (same pattern as narrationClaimsVisualChange above). The server route is
+// unchanged; the client sends this as the corrective's POST body prompt.
+import { RENDER_VERIFY_CORRECTIVE_PROMPT } from "../../server/renderVerifyIsolation";
+import { shouldRunRenderVerify } from "./renderVerifyGate";
 import type { RenderDigest } from "../frame/frameDigest";
 
 type ChatStream = ReturnType<typeof useChatStream>;
@@ -150,6 +156,29 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
     digestByFrame.current.set(frameSlug, digest);
   }, []);
 
+  // ── Render-verify v3 (isolation before/after) — a NEW, separate path ────────
+  // Independent of the DISABLED v1/v2 effects above (which stay gated behind
+  // RENDER_MEASUREMENT_FEATURES_ENABLED). v3 renders the edited page in
+  // ISOLATION (server-bundled), before vs after, and fingerprints each in a
+  // hidden iframe — no live multi-page router in the loop (the trap that killed
+  // v1/v2). Fully separate state from VN's: its own one-shot, corrective flag,
+  // and target refs.
+  //
+  // The turnId we last acted on for v3 (POSTed a corrective for, or classified
+  // as the v3 corrective turn) — the per-turn one-shot guard.
+  const rvV3Handled = useRef<string | null>(null);
+  // TRUE while we're awaiting the v3 corrective turn's `done` (its end is
+  // re-verified ONCE then banner-only — never a second corrective → no loop).
+  const awaitingRvV3 = useRef(false);
+  // The frame + target page to re-verify (and banner) when the v3 corrective ends.
+  const rvV3Frame = useRef<string | null>(null);
+  const rvV3TargetPage = useRef<string | null>(null);
+  // Live mirror of chat.turnId, updated at the top of the v3 effect on EVERY
+  // turnId change (before the phase guard). The async verify takes ~1.2s; the
+  // effect closure's `turnId` is a render-time snapshot that never mutates, so
+  // this ref is how the post-await guard actually detects a superseding turn.
+  const rvV3LiveTurnId = useRef<string | null>(null);
+
   // Reset per-turn state when a genuinely NEW user turn starts. Keyed on the
   // turn id transitioning to a running phase — this fires regardless of WHICH
   // send path was used (the main ChatPane composer sends via the raw stream,
@@ -163,6 +192,7 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
     lastSeenTurn.current = turnId;
     if (awaitingCorrective.current) return; // this new turn IS the VN corrective — keep state
     if (awaitingRvCorrective.current) return; // this new turn IS the RV corrective — keep state
+    if (awaitingRvV3.current) return; // this new turn IS the RV3 corrective — keep state
     // A fresh user turn — clear any stale candidate/banner/one-shot. The pure
     // `resetPerTurn` helper clears the per-turn refs + banners but deliberately
     // LEAVES digestByFrame (the mount-time digest must survive — the crux).
@@ -173,6 +203,13 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
         setRenderMismatchBannerForFrame(null);
       },
     );
+    // Reset RV3's own per-turn state on a fresh user turn (guarded above so a
+    // v3 corrective turn does NOT reset them — that turn must keep rvV3Frame /
+    // rvV3TargetPage / rvV3Handled so its end can re-verify + banner).
+    rvV3Handled.current = null;
+    awaitingRvV3.current = false;
+    rvV3Frame.current = null;
+    rvV3TargetPage.current = null;
     // Capture the USER'S originating prompt BEFORE any corrective overwrites
     // `lastPrompt` (the corrective turn's SSE header rewrites it). turnId +
     // lastPrompt are set atomically by the turn header (useChatStream.ts:199-212).
@@ -314,6 +351,124 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
         awaitingRvCorrective.current = false;
       }
     })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chat.phase, chat.turnId, slug]);
+
+  // ── Render-verify v3 turn-end effect (isolation before/after) ───────────────
+  // A NEW, separate path — NOT gated by RENDER_MEASUREMENT_FEATURES_ENABLED (the
+  // disabled v1/v2 flag). On an EDIT turn that claimed a visual change, fetch the
+  // turn meta, isolation-render the edited page before vs after, and on a
+  // confirmed no-op fire ONE render-gated corrective (the EXISTING v2 route,
+  // v3 corrective prompt in the body). The corrective turn's end is re-verified
+  // ONCE → still no-op → honest banner. One corrective per user turn (hard stop).
+  useEffect(() => {
+    // Keep the live-turnId mirror current on EVERY turnId change (before any
+    // phase guard) — this is what the post-await guard reads to detect a turn
+    // that superseded the one we started verifying.
+    rvV3LiveTurnId.current = chat.turnId;
+
+    if (chat.phase !== "done") return;
+    const turnId = chat.turnId;
+    if (!turnId) return;
+
+    let cancelled = false;
+
+    // The v3 corrective turn ended → re-verify ONCE, then banner-only. Never
+    // POST again (hard stop — one corrective per originating user turn). Clear
+    // awaitingRvV3 + the frame/page refs SYNCHRONOUSLY now (capturing them into
+    // locals first) — NOT after the async re-verify. If cleared only after the
+    // ~1.2s re-verify, a new user turn landing in that window would hit the
+    // reset effect's `awaitingRvV3` early-return and never reset → stuck state.
+    if (awaitingRvV3.current) {
+      const frame = rvV3Frame.current;
+      const targetPage = rvV3TargetPage.current;
+      awaitingRvV3.current = false;
+      rvV3Frame.current = null;
+      rvV3TargetPage.current = null;
+      if (!frame || !targetPage) return;
+      void (async () => {
+        const outcome = await verifyRenderNoOp(slug, frame, targetPage);
+        // Async guard: a new user turn may have landed during the ~1.2s verify.
+        // Bail if this effect was torn down (cancelled) OR chat.turnId advanced
+        // past the corrective turn we were re-verifying (superseded) — never
+        // banner a stale frame for a turn the user has moved past.
+        if (cancelled || rvV3LiveTurnId.current !== turnId) return;
+        if (outcome === "no-op") setRenderMismatchBannerForFrame(frame);
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    // Not the corrective turn → maybe fire v3 on this user turn. Fetch the
+    // post-turn meta the server published (turnType + edited frame + page).
+    void (async () => {
+      let meta: { turnType?: string; frame?: string | null; targetPage?: string | null };
+      try {
+        const res = await fetch(`/api/chat/last-turn-meta/${slug}`);
+        if (!res.ok) return; // fail open
+        meta = await res.json();
+      } catch {
+        return; // fail open
+      }
+      // Async guard #1: bail if torn down OR the turn advanced while fetching.
+      if (cancelled || rvV3LiveTurnId.current !== turnId) return;
+
+      const frame = meta.frame ?? null;
+      const targetPage = meta.targetPage ?? null;
+      const isEditTurn = meta.turnType === "edit" && !!frame && !!targetPage;
+      const summaryClaimsChange = narrationClaimsVisualChange(
+        firstSummaryLine(chat.narrations),
+      );
+      if (
+        !shouldRunRenderVerify({
+          phase: chat.phase,
+          isEditTurn,
+          summaryClaimsChange,
+          alreadyRan: rvV3Handled.current === turnId,
+        })
+      ) {
+        return;
+      }
+      // Narrow for TS (isEditTurn already guarantees these are non-null).
+      if (!frame || !targetPage) return;
+
+      const outcome = await verifyRenderNoOp(slug, frame, targetPage);
+      // Async guard #2 — THE async-in-effect guard (write it explicitly, not
+      // just "mirror"): after the ~1.2s verify, bail if this effect was torn
+      // down (cancelled) OR a new user turn landed (chat.turnId advanced past
+      // the turn we verified) — a corrective for a superseded turn is wrong.
+      if (cancelled || rvV3LiveTurnId.current !== turnId) return;
+      if (outcome !== "no-op") return; // "changed"/"skip" → silent (fail open)
+
+      // Confirmed no-op → claim the turn, fire ONE corrective via the EXISTING
+      // v2 route (v3 corrective prompt in the body), then reconnect to stream
+      // the corrective turn.
+      rvV3Handled.current = turnId;
+      awaitingRvV3.current = true;
+      rvV3Frame.current = frame;
+      rvV3TargetPage.current = targetPage;
+      try {
+        await fetch("/api/chat/render-verify-retry", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            slug,
+            frame,
+            userTurnId: turnId,
+            prompt: RENDER_VERIFY_CORRECTIVE_PROMPT,
+          }),
+        });
+        if (cancelled) return;
+        chatStream.reconnect();
+      } catch {
+        awaitingRvV3.current = false; // POST failed → no corrective this turn
+      }
+    })();
+
     return () => {
       cancelled = true;
     };

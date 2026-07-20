@@ -41,7 +41,7 @@ import {
 } from "../visualNoOpRetry";
 import { renderVerifyAlreadyRan, markRenderVerifyRan } from "../renderVerify";
 import { cachePreTurnSources, getPreTurnSource } from "../editHistory";
-import { buildIsolationHtml } from "../renderVerifyIsolation";
+import { buildIsolationHtml, resolveTargetPage } from "../renderVerifyIsolation";
 import type { Frame } from "../types";
 import {
   snapshotProjectFiles,
@@ -128,6 +128,18 @@ const CANCEL_URL = /^\/api\/chat\/cancel\/([a-z0-9][a-z0-9-]{0,62})$/i;
 const VISUAL_NOOP_RETRY_URL = /^\/api\/chat\/visual-noop-retry$/;
 const RENDER_VERIFY_RETRY_URL = /^\/api\/chat\/render-verify-retry$/;
 const VERIFY_RENDER_URL = /^\/api\/verify-render$/;
+const LAST_TURN_META_URL = /^\/api\/chat\/last-turn-meta\/([a-z0-9][a-z0-9-]{0,62})$/i;
+
+// Render-verify (keystone v3): the post-turn channel to the client. The SSE
+// `end` event is a closed `{kind:"end", ok}` type with no metadata slot, so the
+// client reads this per-slug store via GET after `phase==="done"`. Populated in
+// runClaudeBranch at turn-end (from turnType + the frame diff) BEFORE end()
+// fires, so the client's fetch never races an empty store. Best-effort: a miss
+// reads `turnType:"none"` → client skips (fail open).
+const lastTurnMeta = new Map<
+  string,
+  { turnType: string; frame: string | null; targetPage: string | null }
+>();
 
 export function chatMiddleware() {
   return async (req: IncomingMessage, res: ServerResponse, next?: () => void) => {
@@ -138,6 +150,8 @@ export function chatMiddleware() {
       if (streamMatch) return handleStream(req, res, streamMatch[1].toLowerCase());
       const statusMatch = req.url.match(STATUS_URL);
       if (statusMatch) return handleStatus(res, statusMatch[1].toLowerCase());
+      const metaMatch = req.url.match(LAST_TURN_META_URL);
+      if (metaMatch) return handleLastTurnMeta(res, metaMatch[1].toLowerCase());
     }
 
     if ((req.url.startsWith("/api/chat") || VERIFY_RENDER_URL.test(req.url)) && req.method === "POST") {
@@ -562,6 +576,15 @@ function handleStatus(res: ServerResponse, slug: string): void {
       error: turn.error,
     }),
   );
+}
+
+// Render-verify (keystone v3): the post-turn meta channel. Returns the last
+// turn's classification for this slug so the client can decide whether to run
+// the isolation render-verify. A miss → `turnType:"none"` → client skips.
+function handleLastTurnMeta(res: ServerResponse, slug: string): void {
+  const meta = lastTurnMeta.get(slug) ?? { turnType: "none", frame: null, targetPage: null };
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify(meta));
 }
 
 function handleCancel(res: ServerResponse, slug: string): void {
@@ -1078,6 +1101,21 @@ async function runClaudeBranch(ctx: {
         } catch { /* frame vanished — leave frameLines undefined */ }
       }
     } catch { /* metrics classification is best-effort */ }
+  }
+  // Render-verify (keystone v3): publish the post-turn meta channel BEFORE this
+  // function returns (its result drives end() in the caller), so the client's
+  // phase==="done" fetch of GET /api/chat/last-turn-meta never races an empty
+  // store. frame = the touched frame's dir slug (frames/<frame>/...); targetPage
+  // = the edited page resolved from the diff. Best-effort — a miss reads
+  // turnType:"none" → client skips (fail open).
+  {
+    const changedFrame =
+      afterDiff?.changed.find((p) => /^frames\//.test(p)) ??
+      afterDiff?.added.find((p) => /^frames\//.test(p)) ??
+      null;
+    const rvFrame = changedFrame ? changedFrame.split("/")[1] : null; // frames/<frame>/...
+    const rvTargetPage = afterDiff ? resolveTargetPage(afterDiff.changed) : null;
+    lastTurnMeta.set(slug, { turnType, frame: rvFrame, targetPage: rvTargetPage });
   }
   void recordTurnMetric({
     at: new Date().toISOString(),
