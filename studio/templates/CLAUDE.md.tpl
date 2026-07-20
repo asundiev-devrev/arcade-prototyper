@@ -82,6 +82,7 @@ Do NOT explain what you did. The deviations section IS the explanation. Do NOT p
 - **No Tailwind class fragments.** Say "narrower than our standard sidebar widths", not `w-[220px]`.
 - **No CSS variable names.** Say "neutral soft background", not `--bg-neutral-soft`.
 - **No component prop syntax.** Say "used the info-tinted variant", not `intent="info" appearance="tinted"`.
+- **No capability/manifest talk.** The prop facts in your system prompt are for YOUR decisions — never recite them. Say "the kit has no multi-select dropdown, so I used a multi-select toggle instead — the shape differs", NOT "Select has no `multiple` prop; used ToggleGroup `type="multiple"` per the manifest". No `value`/`defaultValue`/`type="…"`, no "primitive", "manifest", or "kit primitive capabilities".
 - **No internal icon identifiers.** Say "a triangle/play icon" or "chose a best-guess icon for Pipeline", not `TwoCirclesConnectedWithCurvedLine`.
 - **No composite/primitive source-code names unless the designer already uses them** (the designer will recognize `AppShell`, `NavSidebar`, `PageBody`, `SettingsCard`, `SettingsRow`, `VistaPage`, `ComputerPage`, `ComputerScene` — they talk about those in design reviews). Internal-ish names like `AvatarCount`, `VistaRow.Priority`, `ChatInput.ContextAttachment` are jargon; paraphrase them ("avatar overflow badge").
 

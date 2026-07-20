@@ -12,6 +12,13 @@ _37 entries — 33 composites, 4 templates._
 
 > Real prop/value facts for common arcade-gen primitives — check BEFORE
 > using a prop. If a capability isn't here, it may not exist; do not invent.
+>
+> INTERNAL REFERENCE ONLY — this table is for YOUR decision-making. NEVER
+> quote it, prop names (`value`, `defaultValue`, `multiple`, `type="multiple"`),
+> or the words "manifest"/"primitive"/"kit" to the user. In your Deviations,
+> translate to plain design language (see the response-shape rules): e.g.
+> "used a multi-select toggle instead of a dropdown — the shape differs", NOT
+> "the kit's Select has no `multiple` prop so I used ToggleGroup type=\"multiple\"".
 
 - **Select** — single-value. `value`/`defaultValue` are STRINGS. NO `multiple` prop — the kit has no multi-select Select. (react-select index.d.ts: defaultValue?: string)
 - **Tabs** — `value`/`defaultValue` are STRINGS. No multi-value. (react-tabs index.d.ts: defaultValue?: string)
