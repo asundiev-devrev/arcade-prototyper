@@ -152,8 +152,8 @@ command git commit -m "feat(studio/server): pre-turn source cache for render-ver
   - `SYNTHETIC_ENTRY(targetRelPath: string): string` — the isolation `index.tsx` source that renders the target page directly. For `"pages/Preferences.tsx"` → `import Page from "./pages/Preferences"; export default () => <Page/>;` (strip the `.tsx` ext; keep the `./` + subdir).
   - `resolveTargetPage(changedRelPaths: string[]): string | null` — pick the edited page from the frame-diff's changed files. v1: first path matching `pages/*.tsx`; if none but `index.tsx` changed → `"index.tsx"`; else null.
   - `buildIsolationHtml(frameDir: string, targetRelPath: string, targetSource: string): Promise<string>` — copy frameDir to a temp dir, overwrite the target page file with `targetSource`, overwrite `index.tsx` with `SYNTHETIC_ENTRY(target)`, `packFromDir` → HTML. (Mirrors the spike.)
-  - `RENDER_VERIFY_CORRECTIVE_PROMPT: string` — the component-agnostic corrective.
-  - `renderVerifyAlreadyRan(userTurnId)` / `markRenderVerifyRan(userTurnId)` — own one-shot Set.
+  - `RENDER_VERIFY_CORRECTIVE_PROMPT: string` — the component-agnostic corrective (client sends it as the POST body prompt to the EXISTING route).
+  - (NO one-shot here — the existing `server/renderVerify.ts` one-shot is reused by the live route; do not redefine.)
 
 - [ ] **Step 1: Write the failing test**
 
@@ -166,8 +166,6 @@ import {
   SYNTHETIC_ENTRY,
   resolveTargetPage,
   RENDER_VERIFY_CORRECTIVE_PROMPT,
-  renderVerifyAlreadyRan,
-  markRenderVerifyRan,
 } from "../../server/renderVerifyIsolation";
 
 describe("SYNTHETIC_ENTRY", () => {
@@ -196,20 +194,16 @@ describe("resolveTargetPage", () => {
   });
 });
 
-describe("one-shot + prompt", () => {
-  it("one-shot per user turn", () => {
-    expect(renderVerifyAlreadyRan("t1")).toBe(false);
-    markRenderVerifyRan("t1");
-    expect(renderVerifyAlreadyRan("t1")).toBe(true);
-    expect(renderVerifyAlreadyRan("t2")).toBe(false);
-  });
-  it("corrective prompt is component-agnostic + says never-report-false", () => {
+describe("corrective prompt", () => {
+  it("is component-agnostic + says never-report-false", () => {
     expect(RENDER_VERIFY_CORRECTIVE_PROMPT).toMatch(/did ?n['’]?t (render|alter)|identical/i);
     expect(RENDER_VERIFY_CORRECTIVE_PROMPT).toMatch(/ignored|another way|different/i);
     expect(RENDER_VERIFY_CORRECTIVE_PROMPT).toMatch(/never (report|claim)/i);
   });
 });
 ```
+
+**REV-2 (plan review, Critical): do NOT define `renderVerifyAlreadyRan`/`markRenderVerifyRan` here.** They already exist in `server/renderVerify.ts:104-108` and are used by the LIVE `handleRenderVerifyRetry` route this feature reuses. Redefining them (here + the existing import in `chat.ts:42`) would be a duplicate binding. `renderVerifyIsolation.ts` exports ONLY `SYNTHETIC_ENTRY`, `resolveTargetPage`, `buildIsolationHtml`, `RENDER_VERIFY_CORRECTIVE_PROMPT`. The one-shot is the existing route's; the client-side per-turn guard is `rvV3Handled` (Task 5).
 
 - [ ] **Step 2: Run to verify fail**
 
@@ -295,13 +289,9 @@ export const RENDER_VERIFY_CORRECTIVE_PROMPT =
   "visual result the render doesn't show. Keep the response shape: a one-sentence " +
   "summary plus a ### Deviations section.";
 
-const ranForTurn = new Set<string>();
-export function renderVerifyAlreadyRan(userTurnId: string): boolean {
-  return ranForTurn.has(userTurnId);
-}
-export function markRenderVerifyRan(userTurnId: string): void {
-  ranForTurn.add(userTurnId);
-}
+// NOTE: no one-shot Set here. The corrective reuses the EXISTING route
+// (chat.ts handleRenderVerifyRetry), whose one-shot lives in server/renderVerify.ts.
+// Redefining renderVerifyAlreadyRan/markRenderVerifyRan here would duplicate that binding.
 ```
 
 - [ ] **Step 4: Run to verify pass**
@@ -322,7 +312,7 @@ command git commit -m "feat(studio/server): renderVerifyIsolation — synthetic 
 
 **Files:**
 - Modify: `studio/server/middleware/chat.ts`
-- Test: `studio/__tests__/server/chat-verify-render-route.test.ts` (NEW)
+- Test: `studio/__tests__/server/verify-render-isolation-route.test.ts` (NEW)
 
 **Interfaces:**
 - Consumes: `cachePreTurnSources` (Task 1), `buildIsolationHtml`/`getPreTurnSource` (Tasks 1+2), the existing `beforeSnapshot` point (`chat.ts:866`).
@@ -332,7 +322,7 @@ command git commit -m "feat(studio/server): renderVerifyIsolation — synthetic 
 
 - [ ] **Step 1: Write the failing route test**
 
-Create `studio/__tests__/server/chat-verify-render-route.test.ts` (guard-level, mirroring `chat-visual-noop-route.test.ts` — the full render needs the bundler + a real frame, covered by the manual gate):
+Create `studio/__tests__/server/verify-render-isolation-route.test.ts` (guard-level, mirroring `chat-visual-noop-route.test.ts` — the full render needs the bundler + a real frame, covered by the manual gate):
 
 ```typescript
 // @vitest-environment node
@@ -351,7 +341,7 @@ describe("verify-render route composition", () => {
 
 - [ ] **Step 2: Run to verify pass** (depends only on Task 2)
 
-Run: `pnpm run studio:test studio/__tests__/server/chat-verify-render-route.test.ts`
+Run: `pnpm run studio:test studio/__tests__/server/verify-render-isolation-route.test.ts`
 Expected: PASS.
 
 - [ ] **Step 3: Capture before-sources at turn start**
@@ -433,13 +423,13 @@ async function handleVerifyRender(req: IncomingMessage, res: ServerResponse): Pr
 
 - [ ] **Step 5: Run the route test + a chat-middleware smoke**
 
-Run: `pnpm run studio:test studio/__tests__/server/chat-verify-render-route.test.ts studio/__tests__/server/middleware/chat.test.ts`
+Run: `pnpm run studio:test studio/__tests__/server/verify-render-isolation-route.test.ts studio/__tests__/server/middleware/chat.test.ts`
 Expected: PASS (no regression from the new dispatch/import).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-command git add studio/server/middleware/chat.ts studio/__tests__/server/chat-verify-render-route.test.ts
+command git add studio/server/middleware/chat.ts studio/__tests__/server/verify-render-isolation-route.test.ts
 command git commit -m "feat(studio/server): cache pre-edit page sources + /api/verify-render isolation route"
 ```
 
@@ -454,7 +444,7 @@ command git commit -m "feat(studio/server): cache pre-edit page sources + /api/v
 **Interfaces:**
 - Consumes: `computeFingerprint`, `productionMeasure` (`src/frame/renderFingerprint.ts`); the `/api/verify-render` route (Task 3).
 - Produces:
-  - `renderIsolatedFingerprint(html: string): Promise<string | null>` — mount `html` in a hidden same-origin iframe (mirror `captureComponentThumb`: `srcdoc`, hidden, settle via `fonts.ready`+timeout), `computeFingerprint(doc.body, productionMeasure)`, teardown. Null on any failure (fail open).
+  - `renderIsolatedFingerprint(html: string): Promise<string | null>` — mount `html` in a hidden same-origin iframe via **`srcdoc`** (NOT `doc.write` — the bundle is an inline module script that doc.write executes unreliably → blank → false no-op), await load + settle, then `computeFingerprint(doc.body, productionMeasure)`. Null on any failure OR a **blank render below `NONBLANK_TEXT_FLOOR`** (fail open — a page that didn't mount in isolation must NOT read as a no-op).
   - `verifyRenderNoOp(slug, frame, targetPage): Promise<"no-op" | "changed" | "skip">` — fetch before+after HTML, fingerprint each; equal → "no-op", differ → "changed", any fetch/render failure → "skip" (fail open).
 
 - [ ] **Step 1: Write the failing test**
@@ -474,10 +464,10 @@ describe("decideNoOp (pure)", () => {
   it("different → changed", () => {
     expect(decideNoOp("abc", "def")).toBe("changed");
   });
-  it("null either side → skip (fail open)", () => {
+  it("null either side → skip (fail open — a blank/failed render is null, NOT a no-op)", () => {
     expect(decideNoOp(null, "abc")).toBe("skip");
     expect(decideNoOp("abc", null)).toBe("skip");
-    expect(decideNoOp(null, null)).toBe("skip");
+    expect(decideNoOp(null, null)).toBe("skip"); // two blank renders must NOT read as no-op → false corrective (cardinal sin)
   });
 });
 ```
@@ -506,21 +496,37 @@ export function decideNoOp(beforeFp: string | null, afterFp: string | null): "no
   return beforeFp === afterFp ? "no-op" : "changed";
 }
 
+/** Minimum rendered text length for a render to count as non-blank. The spike
+ *  saw textLen≈395 for a real page; a page that fails to mount in isolation
+ *  renders near-empty. Two BLANK renders would fingerprint-EQUAL → a false
+ *  "no-op" → a false corrective (the cardinal sin). So a render below this floor
+ *  is treated as "couldn't render" → null → skip (fail open), NOT a no-op. */
+export const NONBLANK_TEXT_FLOOR = 20;
+
 /** Mount HTML in a hidden same-origin iframe, fingerprint its body, tear down.
- *  Null on any failure (fail open). Mirrors captureComponentThumb's lifecycle. */
+ *  Null on any failure OR a blank render (fail open). Uses `srcdoc` (NOT
+ *  doc.write): the bundle is an inline `<script type="module">`, and module
+ *  scripts execute reliably via srcdoc but are engine-fragile via doc.write on
+ *  an already-loaded iframe — a no-op write → blank render → false no-op. */
 export async function renderIsolatedFingerprint(html: string): Promise<string | null> {
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
   iframe.style.cssText = "position:fixed;left:-10000px;top:0;width:1295px;height:900px;border:0;visibility:hidden;";
-  document.body.appendChild(iframe);
   try {
-    const doc = iframe.contentDocument;
-    if (!doc) return null;
-    doc.open(); doc.write(html); doc.close();
-    // settle: fonts + a couple frames (bundle is large)
+    await new Promise<void>((resolve, reject) => {
+      const timer = window.setTimeout(() => reject(new Error("iso load timeout")), 8000);
+      iframe.addEventListener("load", () => { window.clearTimeout(timer); resolve(); }, { once: true });
+      iframe.addEventListener("error", () => { window.clearTimeout(timer); reject(new Error("iso load error")); }, { once: true });
+      iframe.srcdoc = html;             // set AFTER listeners; triggers load
+      document.body.appendChild(iframe);
+    });
+    // settle: fonts + a couple frames (large bundle mounts async)
     await new Promise((r) => setTimeout(r, 600));
-    const body = doc.body;
+    const doc = iframe.contentDocument;
+    const body = doc?.body;
     if (!body) return null;
+    // Blank-render floor: a page that didn't actually mount → skip, never no-op.
+    if ((body.textContent ?? "").trim().length < NONBLANK_TEXT_FLOOR) return null;
     return computeFingerprint(body, productionMeasure);
   } catch {
     return null;
@@ -573,20 +579,34 @@ command git commit -m "feat(studio/client): renderVerifyClient — isolation bef
 
 **Files:**
 - Modify: `studio/src/hooks/useProjectFromHost.ts` (turn-end trigger — a NEW effect, independent of the disabled v1/v2 effects)
-- Modify: `studio/server/middleware/chat.ts` (the corrective route — reuse the shipped corrective-turn shape)
+- Modify: `studio/server/middleware/chat.ts` (populate a last-turn-meta store at turn-end + a GET route; the corrective route ALREADY EXISTS — reuse it)
 - Reuse: `studio/src/components/chat/RenderMismatchBanner.tsx`
 - Test: `studio/__tests__/components/render-verify-v3-trigger.test.ts`
 
+**REV-2 (plan review, 1 Critical) — the v2 corrective route + one-shot ALREADY EXIST and are LIVE.** `RENDER_MEASUREMENT_FEATURES_ENABLED=false` gates only the CLIENT effects; the server still has `RENDER_VERIFY_RETRY_URL` + `handleRenderVerifyRetry` (`chat.ts:127,144,379-424`) + `renderVerifyAlreadyRan`/`markRenderVerifyRan` (`server/renderVerify.ts:104-108`). The existing handler reads `prompt` FROM THE BODY and runs it via `startTurn`+`runClaudeBranch` with its own per-userTurnId one-shot — which is EXACTLY what v3 needs. So: **reuse `/api/chat/render-verify-retry` verbatim, client passes the v3 corrective as `body.prompt`.** Do NOT add a route, do NOT redefine `renderVerifyAlreadyRan`/`markRenderVerifyRan`, and Task 2's `RENDER_VERIFY_CORRECTIVE_PROMPT` is a CLIENT-SENT string const (the client imports it from `renderVerifyIsolation.ts` and puts it in the POST body) — the server stays untouched for the corrective. This deletes the old Step 4 entirely.
+
 **Interfaces:**
-- Consumes: `verifyRenderNoOp` (Task 4); `narrationClaimsVisualChange`+`firstSummaryLine`; `renderVerifyAlreadyRan`/`markRenderVerifyRan`+`RENDER_VERIFY_CORRECTIVE_PROMPT` (Task 2); the SSE state (`phase`, `turnId`, `narrations`, `lastPrompt`); the edit turn's changed-page (from a new field on the turn/SSE, see Step 1).
+- Consumes: `verifyRenderNoOp` (Task 4); `narrationClaimsVisualChange`+`firstSummaryLine`; `RENDER_VERIFY_CORRECTIVE_PROMPT` (Task 2, client-imported as the POST body prompt); the SSE state (`phase`, `turnId`, `narrations`); the edit turn's `{turnType, frame, targetPage}` (from the new last-turn-meta route, Step 1). Reuses the EXISTING `POST /api/chat/render-verify-retry {slug, frame, userTurnId, prompt}`.
 - Produces:
-  - Server: on turn-end for an edit turn, include the resolved `targetPage` + `turnType` in the terminal SSE `end` (or a small `/api/chat/last-turn-meta/:slug` the client reads) so the client knows WHICH page to verify. Reuse the already-computed `afterDiff`/`turnType` at `chat.ts:1003`.
-  - Server: `POST /api/chat/render-verify-retry { slug, frame, userTurnId }` — reuse the `handleVisualNoOpRetry` shape verbatim (own one-shot via `renderVerifyAlreadyRan`, `RENDER_VERIFY_CORRECTIVE_PROMPT`, `startTurn`+`runClaudeBranch`).
+  - Server: a per-slug last-turn-meta store, populated in `runClaudeBranch` at turn-end (from `turnType` + `resolveTargetPage(afterDiff.changed)` + the touched frame) BEFORE `end()` fires, + `GET /api/chat/last-turn-meta/:slug` → `{ turnType, frame, targetPage }`.
   - Client: `shouldRunRenderVerify({ phase, isEditTurn, summaryClaimsChange, alreadyRan })` — pure gate.
 
-- [ ] **Step 1: Expose the edit-turn target page to the client**
+- [ ] **Step 1: Server — last-turn-meta store + GET route (the review's under-specified channel — now fully specified)**
 
-The client needs `{ turnType, targetPage, frame }` for the just-ended turn. The server already computes `turnType` + the touched frame at `chat.ts:1003-1009` and can `resolveTargetPage(afterDiff.changed)`. Persist it on the project record or emit it in the `end` event. Simplest: add `renderVerifyTarget?: { frame: string; targetPage: string }` to the turn's persisted metadata that the client already reads post-turn (mirror how `turnType`/metrics are surfaced). **Implementer: locate how turn metrics reach the client (`GET /api/metrics` or the end event) and attach `renderVerifyTarget` the same way.** If no clean channel exists, add `GET /api/chat/last-turn-meta/:slug` returning `{ turnType, frame, targetPage }` from the last turn.
+**REV-2 (plan review, Important): there is NO existing post-turn channel to the client.** Verified: the terminal `end` SSE event is a closed type `{kind:"end", ok}` (`streamJson.ts:66-67`) with no metadata slot; `/api/metrics` is an aggregate the client never fetches; the project record has no last-turn field. So build one, minimally:
+
+- In `chat.ts`, add a module-level `const lastTurnMeta = new Map<string, { turnType: string; frame: string | null; targetPage: string | null }>()`.
+- Populate it in `runClaudeBranch` right where `turnType`/`afterDiff` are computed (`chat.ts:1001-1017`), BEFORE the function returns / `end()` fires — so the client's `phase==="done"` fetch never races an empty store:
+  ```typescript
+  const changedFrame = afterDiff?.changed.find((p) => /^frames\//.test(p)) ?? afterDiff?.added.find((p) => /^frames\//.test(p)) ?? null;
+  const frame = changedFrame ? changedFrame.split("/")[1] : null; // frames/<frame>/...
+  const targetPage = afterDiff ? resolveTargetPage(afterDiff.changed) : null;
+  lastTurnMeta.set(slug, { turnType, frame, targetPage });
+  ```
+  (`resolveTargetPage` imported from `../renderVerifyIsolation`.)
+- Add `GET /api/chat/last-turn-meta/:slug` returning `lastTurnMeta.get(slug) ?? { turnType: "none", frame: null, targetPage: null }`.
+
+**Implementer note:** confirm `runClaudeBranch` is the function holding `turnType`/`afterDiff` (`chat.ts:1001`) and that it runs for a normal edit turn (it does — it's the Claude branch). The store is best-effort; a miss → client reads `turnType:"none"` → skips (fail open).
 
 - [ ] **Step 2: Write the failing gate test**
 
@@ -634,20 +654,19 @@ export function shouldRunRenderVerify(input: {
 }
 ```
 
-In `useProjectFromHost.ts`, add a NEW turn-end effect (independent of the disabled v1/v2 effects — do NOT touch `RENDER_MEASUREMENT_FEATURES_ENABLED`):
-- On `phase === "done"`: read the just-ended turn's `{turnType, frame, targetPage}` (Step 1). Compute `summaryClaimsChange = narrationClaimsVisualChange(firstSummaryLine(chat.narrations))`.
-- If `shouldRunRenderVerify(...)` and the turn is NOT itself a render-verify corrective (guard with a `rvV3Handled` ref keyed on turnId + an `awaitingRvV3` flag, mirroring the shipped one-shot pattern):
+In `useProjectFromHost.ts`, add a NEW turn-end effect (independent of the disabled v1/v2 effects — do NOT touch `RENDER_MEASUREMENT_FEATURES_ENABLED`). Fire-and-forget async with a cancelled guard, mirroring the shipped VN/RV effect structure (`useProjectFromHost.ts:224-240,304-319`):
+- On `phase === "done"`: fetch `{turnType, frame, targetPage}` from `GET /api/chat/last-turn-meta/:slug` (Step 1). `isEditTurn = turnType === "edit" && !!frame && !!targetPage`. `summaryClaimsChange = narrationClaimsVisualChange(firstSummaryLine(chat.narrations))`.
+- If `shouldRunRenderVerify({phase, isEditTurn, summaryClaimsChange, alreadyRan: rvV3Handled.current === turnId})` and NOT the corrective turn (`awaitingRvV3` false):
   - `const outcome = await verifyRenderNoOp(slug, frame, targetPage)`.
-  - `"no-op"` → mark handled, set `awaitingRvV3`, `POST /api/chat/render-verify-retry {slug, frame, userTurnId: turnId}`, `reconnect()`.
+  - **After the await, bail if `cancelled` OR `chat.turnId` changed** (a new user turn landed during the ~1.2s verify — do NOT POST a corrective for a superseded turn). This is the async-in-effect guard — write it explicitly, don't just "mirror".
+  - `"no-op"` → `rvV3Handled.current = turnId`, `awaitingRvV3.current = true`, `POST /api/chat/render-verify-retry { slug, frame, userTurnId: turnId, prompt: RENDER_VERIFY_CORRECTIVE_PROMPT }` (the EXISTING v2 route — prompt in body), then `chatStream.reconnect()`.
   - `"changed"`/`"skip"` → nothing (silent).
-- When the corrective turn ends (`awaitingRvV3`): re-run `verifyRenderNoOp` once; still `"no-op"` → `setRenderMismatchBannerForFrame(frame)`; clear flags. Never POST again (hard stop).
-- Reset per new user turn (mirror the existing `resetPerTurn` / turn-transition effect — add the rvV3 refs there).
+- When the corrective turn ends (`awaitingRvV3.current`): clear `awaitingRvV3`; re-run `verifyRenderNoOp` once (same cancelled/turn-changed guard); still `"no-op"` → `setRenderMismatchBannerForFrame(frame)`. Never POST again (hard stop — one corrective per user turn).
+- Reset `rvV3Handled`/`awaitingRvV3`/`renderMismatchBannerForFrame` per new USER turn (add to the existing turn-transition reset effect / `resetPerTurn`, guarded so the corrective turn doesn't reset them).
 
-**Implementer:** mirror the EXACT one-shot + reset structure the shipped code uses; keep this effect's state (`rvV3Handled`, `awaitingRvV3`) separate from VN's (which is disabled anyway). Reuse `RenderMismatchBanner` + its render site.
+**Implementer:** `RENDER_VERIFY_CORRECTIVE_PROMPT` is imported by the CLIENT from `renderVerifyIsolation.ts` and sent as `body.prompt` — the server route is UNCHANGED (it already accepts a body prompt). Keep the effect's state (`rvV3Handled`, `awaitingRvV3`) separate from VN's disabled state. Reuse `RenderMismatchBanner` + its render site.
 
-- [ ] **Step 4: Add the corrective route** (mirror `handleVisualNoOpRetry` / `handleRenderVerifyRetry` verbatim, own one-shot)
-
-In `chat.ts`, dispatch + handler for `POST /api/chat/render-verify-retry` using `renderVerifyAlreadyRan`/`markRenderVerifyRan` + `RENDER_VERIFY_CORRECTIVE_PROMPT` + `startTurn({prompt, run: ({emit,end,signal}) => runClaudeBranch({emit,slug,prompt,project,signal}).then(end,...)})`, 202 after startTurn. (This is the proven shape from the shipped VN/RV routes — copy it; the ONLY difference is the prompt const + one-shot Set.)
+- [ ] **Step 4: (server corrective route — NONE NEEDED)** The existing `POST /api/chat/render-verify-retry` (`chat.ts:379`) already accepts `{slug, frame, userTurnId, prompt}`, runs the prompt via `startTurn`+`runClaudeBranch`, and one-shots per userTurnId. The client just sends `RENDER_VERIFY_CORRECTIVE_PROMPT` as `prompt`. No server change for the corrective. (Server changes this task = ONLY the last-turn-meta store + GET route from Step 1.)
 
 - [ ] **Step 5: Run the gate test + route smoke**
 
