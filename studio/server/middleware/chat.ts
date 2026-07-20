@@ -39,6 +39,7 @@ import {
   visualNoOpRetryAlreadyRan,
   markVisualNoOpRetryRan,
 } from "../visualNoOpRetry";
+import { renderVerifyAlreadyRan, markRenderVerifyRan } from "../renderVerify";
 import type { Frame } from "../types";
 import {
   snapshotProjectFiles,
@@ -123,6 +124,7 @@ const STREAM_URL = /^\/api\/chat\/stream\/([a-z0-9][a-z0-9-]{0,62})$/i;
 const STATUS_URL = /^\/api\/chat\/status\/([a-z0-9][a-z0-9-]{0,62})$/i;
 const CANCEL_URL = /^\/api\/chat\/cancel\/([a-z0-9][a-z0-9-]{0,62})$/i;
 const VISUAL_NOOP_RETRY_URL = /^\/api\/chat\/visual-noop-retry$/;
+const RENDER_VERIFY_RETRY_URL = /^\/api\/chat\/render-verify-retry$/;
 
 export function chatMiddleware() {
   return async (req: IncomingMessage, res: ServerResponse, next?: () => void) => {
@@ -139,6 +141,7 @@ export function chatMiddleware() {
       const cancelMatch = req.url.match(CANCEL_URL);
       if (cancelMatch) return handleCancel(res, cancelMatch[1].toLowerCase());
       if (VISUAL_NOOP_RETRY_URL.test(req.url)) return handleVisualNoOpRetry(req, res);
+      if (RENDER_VERIFY_RETRY_URL.test(req.url)) return handleRenderVerifyRetry(req, res);
       return handleStart(req, res);
     }
 
@@ -358,6 +361,59 @@ async function handleVisualNoOpRetry(req: IncomingMessage, res: ServerResponse):
     prompt: VISUAL_NOOP_RETRY_PROMPT,
     run: ({ emit, end, signal }) => {
       runClaudeBranch({ emit, slug, prompt: VISUAL_NOOP_RETRY_PROMPT, project, signal }).then(
+        (result) => end(result),
+        (err) => end({ ok: false, error: err?.message ?? String(err) }),
+      );
+    },
+  });
+  res.writeHead(202, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ turnId: turn.id, slug }));
+}
+
+// Render-verify corrective: the client detected that the render CONTRADICTS the
+// user's requested visual property (own reconcile), and passes the corrective
+// PROMPT it computed via RENDER_VERIFY_RETRY_PROMPT. Mirrors handleVisualNoOpRetry
+// exactly (session-resumed turn via runClaudeBranch, 202 after startTurn) but with
+// its OWN one-shot Set and the prompt from the request body rather than a const —
+// the server does not re-derive the mismatch. Do NOT fold into VN's handler.
+async function handleRenderVerifyRetry(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  let buf = "";
+  for await (const chunk of req) buf += chunk;
+  let body: { slug?: string; frame?: string; userTurnId?: string; prompt?: string };
+  try { body = JSON.parse(buf); } catch {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "bad_request", message: "Invalid JSON" } }));
+    return;
+  }
+  const { slug, frame, userTurnId, prompt } = body;
+  if (typeof slug !== "string" || !slug || typeof frame !== "string" || !frame ||
+      typeof userTurnId !== "string" || !userTurnId || typeof prompt !== "string" || !prompt) {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "bad_request", message: "slug, frame, userTurnId, prompt required" } }));
+    return;
+  }
+  const project = await getProject(slug);
+  if (!project) {
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "not_found", message: "Project not found" } }));
+    return;
+  }
+  if (renderVerifyAlreadyRan(userTurnId)) {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true, skipped: "already_ran" }));
+    return;
+  }
+  const running = getTurn(slug);
+  if (running && running.status === "running") {
+    res.writeHead(409, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "turn_in_progress", message: "A turn is already running." } }));
+    return;
+  }
+  markRenderVerifyRan(userTurnId);
+  const turn = startTurn(slug, {
+    prompt,
+    run: ({ emit, end, signal }) => {
+      runClaudeBranch({ emit, slug, prompt, project, signal }).then(
         (result) => end(result),
         (err) => end({ ok: false, error: err?.message ?? String(err) }),
       );
