@@ -208,6 +208,12 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
     // The RV corrective turn ended → banner-only, never re-POST.
     if (awaitingRvCorrective.current) {
       awaitingRvCorrective.current = false;
+      // Claim this corrective turn in the SHARED guard so VN's effect (declared
+      // first) doesn't treat it as an un-handled turn and pile a SECOND
+      // corrective on it (RV corrective → also a visual-noop with a
+      // visual-claiming summary → VN would otherwise fire). Mirrors VN's own
+      // banner-only branch, which claims handledTurn for the same reason.
+      handledTurn.current = turnId;
       const target = rvPendingFrame.current;
       rvPendingFrame.current = null;
       if (target && originating.current) {
