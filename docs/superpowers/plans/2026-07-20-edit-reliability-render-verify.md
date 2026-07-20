@@ -16,7 +16,7 @@
 - **The cardinal sin is a FALSE mismatch** (claiming "the render is wrong" over a correct render). Reconcile fires ONLY on a unanimous, clear contradiction; any ambiguity → silence. A MISSED verify is acceptable; a false one is not.
 - **Verify against the USER'S ORIGINATING prompt**, never the agent's summary and never the live `state.lastPrompt` (the corrective turn's header overwrites it — `useChatStream.ts:204`).
 - **The digest buffer MUST be turn-persistent** (never cleared on a turn/frame-changed transition) — model on `fpTracker` (`FrameCard.tsx:96`, survives turns), NOT `noOpCandidate` (wiped per turn). Else the no-edit turn has nothing to compare and the feature self-defeats. This is the crux.
-- **Do NOT modify VN's `handleVisualNoOpRetry` / `visualNoOpRetry.ts` one-shot / VN banner state.** Render-verify is parallel (own route, own state, own one-shot); the ONLY shared thing is a single `correctiveFiredForTurn` guard (VN priority). VN is shipped-but-ungated — keep its tests green.
+- **Do NOT modify VN's `handleVisualNoOpRetry` / `visualNoOpRetry.ts` one-shot / VN banner state.** Render-verify is parallel (own route, own state, own one-shot, own turn-end effect, own corrective flag); the ONLY shared thing is VN's existing `handledTurn` ref as a one-corrective-per-turn guard (VN's effect declared first → priority). VN is shipped-but-ungated — keep its tests green.
 - **Reconcile compares COMPUTED `flexDirection`** (e.g. `row`), NOT the `data-orientation` attribute (which lies — says "vertical" on a swallowed prop). Candidates are IDENTIFIED by the attribute, JUDGED by the computed style.
 - Spec: `docs/superpowers/specs/2026-07-20-edit-reliability-render-verify-rendered-fact-design.md` (rev-3).
 
@@ -491,6 +491,17 @@ describe("extractRequestedProperties (from the USER prompt)", () => {
     expect(extractRequestedProperties("make it nicer")).toEqual([]);
     expect(extractRequestedProperties("wire the button to open the modal")).toEqual([]);
   });
+  // FALSE-FIRE guards (the cardinal sin) — the orientation word is present but
+  // NOT a layout directive. Must extract NOTHING.
+  it("does NOT extract when the orientation word is an adjective on a noun ('the vertical scrollbar')", () => {
+    expect(extractRequestedProperties("make the vertical scrollbar bigger")).toEqual([]);
+    expect(extractRequestedProperties("hide the horizontal divider")).toEqual([]);
+  });
+  it("does NOT extract under negation ('don't make it vertical')", () => {
+    expect(extractRequestedProperties("don't make it vertical")).toEqual([]);
+    expect(extractRequestedProperties("do not stack them")).toEqual([]);
+    expect(extractRequestedProperties("keep it from being vertical")).toEqual([]);
+  });
 });
 
 describe("reconcile (UNANIMOUS contradiction only — compares COMPUTED flexDirection)", () => {
@@ -567,15 +578,30 @@ import type { RenderDigest } from "../src/frame/frameDigest";
 export type RequestedProperty = { property: "orientation"; expected: "vertical" | "horizontal" };
 export type Mismatch = { property: string; expected: string; rendered: string };
 
-const VERTICAL = /\b(vertical|vertically|stacked?|stack them|in a column|as a column|column layout)\b/i;
-const HORIZONTAL = /\b(horizontal|horizontally|side by side|side-by-side|in a row|as a row|row layout)\b/i;
+// The orientation words. `directive` forms (a verb phrase — "stack them", "in a
+// column") are unambiguous layout asks. `bare` forms (the adjective "vertical"/
+// "horizontal") need false-fire guards below because they also appear as
+// adjectives on a noun ("the vertical scrollbar") or under negation.
+const VERTICAL_DIRECTIVE = /\b(stacked?|stack them|in a column|as a column|column layout)\b/i;
+const HORIZONTAL_DIRECTIVE = /\b(side by side|side-by-side|in a row|as a row|row layout)\b/i;
+const VERTICAL_BARE = /\b(vertical|vertically)\b/i;
+const HORIZONTAL_BARE = /\b(horizontal|horizontally)\b/i;
+// A bare orientation word is NOT a directive when negated before it, or when it
+// adjectivally qualifies a following concrete noun ("vertical scrollbar/divider
+// /line/rule/scroll"). Either → drop the extraction (cardinal-sin bias).
+const NEGATION = /\b(don'?t|do not|not|never|avoid|without|keep (it|them) from|stop)\b/i;
+const ADJECTIVE_NOUN = /\b(vertical|horizontal)\s+(scroll\w*|divider|separator|line|rule|bar|axis|gridlines?)\b/i;
 
 /** Extract requested visual properties from the USER'S prompt. v1: orientation.
- *  Conservative — no match / both match (contradictory) → nothing (bias to silence). */
+ *  Conservative — no match / both match / negated / adjectival → nothing (bias
+ *  to silence: a false "this is wrong" over a correct render is the cardinal sin). */
 export function extractRequestedProperties(prompt: string): RequestedProperty[] {
   const p = prompt ?? "";
-  const v = VERTICAL.test(p);
-  const h = HORIZONTAL.test(p);
+  // A directive form is trusted (unambiguous layout ask). A bare adjective is
+  // trusted ONLY if it's not negated and not qualifying a concrete noun.
+  const bareSafe = !NEGATION.test(p) && !ADJECTIVE_NOUN.test(p);
+  const v = VERTICAL_DIRECTIVE.test(p) || (bareSafe && VERTICAL_BARE.test(p));
+  const h = HORIZONTAL_DIRECTIVE.test(p) || (bareSafe && HORIZONTAL_BARE.test(p));
   if (v === h) return []; // neither, or both (ambiguous) → no claim
   return [{ property: "orientation", expected: v ? "vertical" : "horizontal" }];
 }
@@ -778,7 +804,7 @@ command git commit -m "feat(studio/server): render-verify-retry route (own one-s
 
 **Files:**
 - Create: `studio/src/components/chat/RenderMismatchBanner.tsx`
-- Modify: `studio/src/hooks/useProjectFromHost.ts` (turn-persistent digest store; capture originating prompt; turn-end reconcile; shared `correctiveFiredForTurn` guard; banner state)
+- Modify: `studio/src/hooks/useProjectFromHost.ts` (turn-persistent digest store; capture originating prompt; OWN turn-end reconcile effect + OWN `awaitingRvCorrective` flag; shared `handledTurn` one-fire guard; banner state; `resetPerTurn` extract)
 - Modify: `studio/src/components/viewport/Viewport.tsx` + `studio/src/routes/ProjectDetail.tsx` (thread `onRenderDigest`; render the banner)
 - Test: `studio/__tests__/components/render-mismatch-banner.test.tsx`, and a client-decision test folded into an existing/new pure helper
 
@@ -786,7 +812,7 @@ command git commit -m "feat(studio/server): render-verify-retry route (own one-s
 - Consumes: `extractRequestedProperties`, `reconcile`, `RENDER_VERIFY_RETRY_PROMPT` (from `renderVerify.ts` — pure, client-importable, zero node deps — same as VN imports `narrationClaimsVisualChange`); `RenderDigest` (type); `onRenderDigest` (from FrameCard, Task 3).
 - Produces: `RenderMismatchBanner` + `RENDER_MISMATCH_SENTINEL` + `splitRenderMismatchTrailer`; `useProjectFromHost` now exposes `onRenderDigest` + `renderMismatchBannerForFrame`.
 
-**Context:** `useProjectFromHost` already has the VN turn-end machinery: a turn-transition reset effect, an `awaitingCorrective` flag, `handledTurn`, a `noOpCandidate` ref, the `send`-path-independent reset, and the `visualNoOpBannerForFrame` state. Render-verify adds a PARALLEL path: its own digest store, its own banner state, and a SHARED `correctiveFiredForTurn` ref both checks consult. VN keeps priority (it runs first in the effect; if it fires, render-verify is skipped this turn).
+**Context:** `useProjectFromHost` already has the VN turn-end machinery: a turn-transition reset effect, an `awaitingCorrective` flag, `handledTurn`, a `noOpCandidate` ref, the `send`-path-independent reset, and the `visualNoOpBannerForFrame` state. Render-verify adds a PARALLEL path: its own digest store, its own `awaitingRvCorrective` flag, its own banner state, and its OWN turn-end effect (declared AFTER VN's). They share only VN's existing `handledTurn` ref as the one-corrective-per-turn guard — VN's effect runs first, so if VN fires it sets `handledTurn` and render-verify skips the turn (edit-noop priority).
 
 - [ ] **Step 1: Write the failing banner test**
 
@@ -870,57 +896,95 @@ export function RenderMismatchBanner() {
 
 Read the current turn-end effect + refs first (`command grep -n "noOpCandidate\|awaitingCorrective\|handledTurn\|correctiveFiredForTurn\|visualNoOpBannerForFrame\|onVisualNoOp\|lastSeenTurn" studio/src/hooks/useProjectFromHost.ts`). Add, mirroring the VN machinery:
 
+**REV-FIX (plan review, 2 Criticals) — render-verify gets its OWN turn-end effect + its OWN corrective flag (`awaitingRvCorrective`); it does NOT append to VN's effect (which `return`s early on a no-candidate turn → dead code on the no-edit repro) and does NOT reuse VN's `awaitingCorrective` (whose corrective-end branch only sets the VN banner → the RV banner would be swallowed).** The two effects coexist and are serialized by the SHARED `handledTurn` ref (VN's existing one-shot; whichever effect runs first for a turn and sets `handledTurn.current = turnId` blocks the other). React runs effects in declaration order, so VN's effect (declared first) wins when both would fire (edit-noop priority). No `correctiveFiredForTurn` — `handledTurn` IS the shared guard.
+
 1. Imports: `import { extractRequestedProperties, reconcile, RENDER_VERIFY_RETRY_PROMPT } from "../../server/renderVerify"; import type { RenderDigest } from "../frame/frameDigest";`
-2. Refs/state:
-```typescript
-   const digestByFrame = useRef<Map<string, RenderDigest>>(new Map()); // TURN-PERSISTENT — never cleared per turn
-   const originating = useRef<{ prompt: string; turnId: string } | null>(null);
-   const correctiveFiredForTurn = useRef<string | null>(null); // shared VN + render-verify one-fire guard
-   const [renderMismatchBannerForFrame, setRenderMismatchBannerForFrame] = useState<string | null>(null);
-```
-3. `onRenderDigest` callback (buffer — NOT cleared on turn transition):
+2. `onRenderDigest` callback (buffer — NOT cleared on any turn transition; this is the turn-persistence crux):
 ```typescript
    const onRenderDigest = useCallback((frameSlug: string, digest: RenderDigest) => {
      digestByFrame.current.set(frameSlug, digest);
    }, []);
 ```
-4. Capture the originating prompt at each NEW user turn (in the existing turn-transition effect, where `noOpCandidate`/banner are reset — but do NOT reset `digestByFrame`). When a new turn id appears AND it's not the corrective (`!awaitingCorrective.current` per the existing VN logic): `originating.current = { prompt: chat.lastPrompt, turnId: chat.turnId }`. Also clear the render-mismatch banner here (a new user turn dismisses it) and reset `correctiveFiredForTurn.current = null`.
-5. In the turn-end effect (`phase==="done"`), AFTER the existing VN check: if VN did NOT fire this turn (`correctiveFiredForTurn.current !== chat.turnId`), run render-verify:
+   Refs/state:
 ```typescript
-   // Render-verify (parallel to VN). Uses the ORIGINATING prompt, not lastPrompt
-   // (the corrective turn's header overwrites lastPrompt).
-   if (correctiveFiredForTurn.current !== chat.turnId && originating.current && !awaitingCorrective.current) {
-     const requested = extractRequestedProperties(originating.current.prompt);
-     if (requested.length > 0) {
-       // v1 target-frame resolution: check each buffered frame; first unanimous mismatch fires.
-       for (const [frameSlug, digest] of digestByFrame.current) {
-         const mismatches = reconcile(requested, digest);
-         if (mismatches.length > 0) {
-           correctiveFiredForTurn.current = chat.turnId;
-           awaitingCorrective.current = true; // reuse VN's banner-only-on-corrective-end gate
-           const userTurnId = originating.current.turnId;
-           const prompt = RENDER_VERIFY_RETRY_PROMPT(mismatches[0]);
-           const target = frameSlug;
-           void (async () => {
-             try {
-               await fetch("/api/chat/render-verify-retry", {
-                 method: "POST", headers: { "Content-Type": "application/json" },
-                 body: JSON.stringify({ slug, frame: target, userTurnId, prompt }),
-               });
-               chatStream.reconnect();
-             } catch { awaitingCorrective.current = false; }
-           })();
-           // remember which frame to banner if the corrective doesn't fix it
-           renderVerifyPendingFrame.current = target;
-           break;
+   const digestByFrame = useRef<Map<string, RenderDigest>>(new Map()); // TURN-PERSISTENT — never cleared per turn
+   const originating = useRef<{ prompt: string; turnId: string } | null>(null);
+   const awaitingRvCorrective = useRef(false);        // RV's OWN — NOT VN's awaitingCorrective
+   const rvPendingFrame = useRef<string | null>(null);
+   const [renderMismatchBannerForFrame, setRenderMismatchBannerForFrame] = useState<string | null>(null);
+```
+
+4. Capture the originating prompt in the EXISTING turn-transition reset effect (`useProjectFromHost.ts:79-88`). Add these lines to that effect's body, and guard on BOTH corrective flags so a corrective turn (VN's or RV's) doesn't overwrite the originating prompt or clear state:
+```typescript
+     // (existing) if (awaitingCorrective.current) return;  ← VN corrective
+     if (awaitingRvCorrective.current) return;            // ADD: RV corrective — keep state
+     // (existing resets: noOpCandidate, handledTurn, setVisualNoOpBannerForFrame)
+     originating.current = { prompt: chat.lastPrompt ?? "", turnId };   // ADD (turnId is in scope here)
+     setRenderMismatchBannerForFrame(null);                              // ADD: a new user turn dismisses the RV banner
+     // NOTE: do NOT touch digestByFrame here — it must survive the turn (the crux).
+```
+   (`chat.turnId`+`chat.lastPrompt` are set atomically by the SSE turn header — verified `useChatStream.ts:199-212` — so `originating` captures the user's prompt before any corrective can overwrite `lastPrompt`.)
+
+5. Add a SEPARATE render-verify turn-end effect, declared AFTER VN's turn-end effect (so VN's runs first → priority via `handledTurn`):
+```typescript
+   useEffect(() => {
+     if (chat.phase !== "done") return;
+     const turnId = chat.turnId;
+     if (!turnId) return;
+
+     // The RV corrective turn ended → banner-only, never re-POST.
+     if (awaitingRvCorrective.current) {
+       awaitingRvCorrective.current = false;
+       const target = rvPendingFrame.current;
+       rvPendingFrame.current = null;
+       if (target && originating.current) {
+         const requested = extractRequestedProperties(originating.current.prompt);
+         const digest = digestByFrame.current.get(target);
+         if (requested.length > 0 && digest && reconcile(requested, digest).length > 0) {
+           setRenderMismatchBannerForFrame(target); // corrective didn't fix it
          }
        }
+       return;
      }
-   }
-```
-   Add `const renderVerifyPendingFrame = useRef<string | null>(null);`. When the CORRECTIVE turn ends (the existing `awaitingCorrective` branch), if `renderVerifyPendingFrame.current` is set, re-reconcile the buffered digest for that frame against the SAME `originating.current.prompt`; still mismatched → `setRenderMismatchBannerForFrame(renderVerifyPendingFrame.current)`; clear `renderVerifyPendingFrame.current`.
 
-   **Note (VN interaction):** `awaitingCorrective` is VN's flag; render-verify reuses it so the corrective turn's `done` is treated as banner-only by whichever check fired. Since only ONE check fires per turn (the `correctiveFiredForTurn` guard), there's no conflict — but the corrective-end handler must check BOTH `renderVerifyPendingFrame` (render-verify) and VN's `noOpCandidate` (VN) to pick the right banner. Keep them mutually exclusive via the guard.
+     // Shared one-fire guard: VN's effect (declared first) sets handledTurn when
+     // it fires → RV skips this turn. If VN didn't claim the turn, RV may.
+     if (handledTurn.current === turnId) return;
+     if (!originating.current || originating.current.turnId !== turnId) return;
+
+     const requested = extractRequestedProperties(originating.current.prompt);
+     if (requested.length === 0) return;
+
+     // v1 target-frame resolution: first frame whose digest unanimously contradicts.
+     let target: string | null = null;
+     let mismatchPrompt = "";
+     for (const [frameSlug, digest] of digestByFrame.current) {
+       const mismatches = reconcile(requested, digest);
+       if (mismatches.length > 0) { target = frameSlug; mismatchPrompt = RENDER_VERIFY_RETRY_PROMPT(mismatches[0]); break; }
+     }
+     if (!target) return;
+
+     handledTurn.current = turnId;          // claim the turn (blocks a late VN fire too)
+     awaitingRvCorrective.current = true;
+     rvPendingFrame.current = target;
+     const userTurnId = originating.current.turnId;
+     let cancelled = false;
+     void (async () => {
+       try {
+         await fetch("/api/chat/render-verify-retry", {
+           method: "POST", headers: { "Content-Type": "application/json" },
+           body: JSON.stringify({ slug, frame: target, userTurnId, prompt: mismatchPrompt }),
+         });
+         if (cancelled) return;
+         chatStream.reconnect();
+       } catch { awaitingRvCorrective.current = false; }
+     })();
+     return () => { cancelled = true; };
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+   }, [chat.phase, chat.turnId, slug]);
+```
+   **Why this composes (no dead code, no banner-swallow):** RV has its own effect (VN's early `return` can't shadow it) and its own `awaitingRvCorrective` + banner setter (VN's corrective-end branch only touches VN's banner; RV's touches RV's). `handledTurn` is the single shared guard — VN declared first wins ties. On the no-edit repro: VN's effect returns (no candidate, doesn't set `handledTurn`), then RV's effect runs, `handledTurn` is still null, extracts `{orientation,vertical}` from the captured user prompt, reconciles the buffered mount-time digest (all `row`) → mismatch → fires. Exactly the case that was dead before.
+
 6. Return `onRenderDigest` + `renderMismatchBannerForFrame` from the hook (add to the return object + the `ProjectShellSource` interface).
 
 - [ ] **Step 5: Thread the prop + render the banner**
@@ -956,19 +1020,64 @@ command git commit -m "feat(studio/chat): render-verify client — buffer digest
 
 - [ ] **Step 1: Turn-persistence assertion (the crux — a dedicated test)**
 
-The make-or-break is that the buffered digest SURVIVES a turn transition (else the no-edit turn has nothing to compare). Add a focused test `studio/__tests__/hooks/render-verify-persistence.test.ts` that asserts the digest store is NOT cleared by the turn-transition reset. Since `useProjectFromHost` is a hook needing a host, extract the reset logic minimally OR assert via the `Map` ref semantics in a small pure helper. Concretely, if the reset is expressible as a pure `resetPerTurn(refs)` that deliberately OMITS `digestByFrame`, test that `resetPerTurn` leaves a pre-populated `digestByFrame` untouched while clearing `noOpCandidate`/banner. If not cleanly extractable, assert it by code-review + a comment `// digestByFrame is intentionally NOT reset here (render-verify needs the mount-time digest on a no-edit turn)` and cover the reconcile-from-buffer path in the renderVerify unit tests (already done). State which was chosen in the commit.
+The make-or-break is that the buffered digest SURVIVES a turn transition (else the no-edit turn has nothing to compare). **MANDATORY (review — no code-review-comment escape hatch): extract the per-turn reset as a pure function and test it.** The reset currently lives inline in the turn-transition effect (`useProjectFromHost.ts:79-88`); pull the mutations into a pure `resetPerTurn` and call it from the effect. Then unit-test that it clears the per-turn refs but leaves `digestByFrame` untouched.
+
+Signature (a pure helper in `useProjectFromHost.ts`, exported for the test):
+```typescript
+export interface PerTurnRefs {
+  noOpCandidate: { current: string | null };
+  handledTurn: { current: string | null };
+  digestByFrame: { current: Map<string, unknown> };
+}
+/** Clear per-turn state at a new USER turn. Deliberately does NOT touch
+ *  digestByFrame — render-verify needs the mount-time digest on a no-edit turn,
+ *  which never re-pushes. This omission is the feature's crux. */
+export function resetPerTurn(refs: PerTurnRefs, clearBanners: () => void): void {
+  refs.noOpCandidate.current = null;
+  refs.handledTurn.current = null;
+  clearBanners();
+  // digestByFrame intentionally NOT reset.
+}
+```
+Call it from the reset effect (replacing the inline `noOpCandidate.current = null; handledTurn.current = null; setVisualNoOpBannerForFrame(null)`), passing `clearBanners = () => { setVisualNoOpBannerForFrame(null); setRenderMismatchBannerForFrame(null); }`.
+
+Create `studio/__tests__/hooks/render-verify-persistence.test.ts`:
+```typescript
+import { describe, it, expect, vi } from "vitest";
+import { resetPerTurn } from "../../src/hooks/useProjectFromHost";
+
+describe("resetPerTurn — the turn-persistence crux", () => {
+  it("clears per-turn refs but LEAVES digestByFrame (mount-time digest survives)", () => {
+    const digest = new Map<string, unknown>([["01-frame", { elements: [], truncated: false }]]);
+    const refs = {
+      noOpCandidate: { current: "01-frame" as string | null },
+      handledTurn: { current: "turn-1" as string | null },
+      digestByFrame: { current: digest },
+    };
+    const clearBanners = vi.fn();
+    resetPerTurn(refs, clearBanners);
+    expect(refs.noOpCandidate.current).toBeNull();
+    expect(refs.handledTurn.current).toBeNull();
+    expect(clearBanners).toHaveBeenCalledOnce();
+    // THE ASSERTION THAT MATTERS: the digest is still there for the no-edit turn.
+    expect(refs.digestByFrame.current.get("01-frame")).toBeTruthy();
+  });
+});
+```
+(Exporting `resetPerTurn` from the hook module is fine — it's a pure helper; the hook imports nothing extra.)
 
 - [ ] **Step 2: Full suite green**
 
 Run: `pnpm run studio:test` (clear ports 9223-9232 first).
 Expected: PASS. `chat-figma-context.test.ts` contention flake is known/unrelated — re-run in isolation if it fails; anything else (esp. VN's 5 test files) is a real regression to fix.
 
-- [ ] **Step 3: Commit** (only if Step 1 added a test file)
+- [ ] **Step 3: Commit**
 
 ```bash
-command git add studio/__tests__/hooks/render-verify-persistence.test.ts
-command git commit -m "test(studio): assert render-verify digest buffer survives a turn transition (no-edit crux)"
+command git add studio/src/hooks/useProjectFromHost.ts studio/__tests__/hooks/render-verify-persistence.test.ts
+command git commit -m "test(studio): resetPerTurn extract + assert render-verify digest survives a turn transition (no-edit crux)"
 ```
+(The `resetPerTurn` extract is a small edit to `useProjectFromHost.ts` on top of Task 6 — include it here with its test.)
 
 ---
 
@@ -986,6 +1095,7 @@ command git commit -m "test(studio): assert render-verify digest buffer survives
 ## Self-review notes (author)
 
 - **Spec coverage:** Piece 1 (digest) = Task 1 + Task 2 (emit) + Task 3 (buffer/forward); Piece 2 (extract from USER prompt) = Task 4; Piece 3 (reconcile, unanimous, computed-not-attr) = Task 4; Piece 4 (corrective route + trigger + banner, shared one-fire guard, own state) = Task 5 + Task 6; crux turn-persistence = Task 7; manual gate = Task 8.
-- **The rev-3 review fixes are all in tasks:** turn-persistent buffer → Task 6 `digestByFrame` explicitly NOT reset + Task 7 guard; digest once-per-mount (not per-render) → Task 2 folds into the `useEffect([])` fingerprint effect; verify against ORIGINATING prompt not `lastPrompt` → Task 6 `originating` ref captured at new-turn, `extractRequestedProperties(originating.current.prompt)`; minimal VN touch (own route/state/one-shot, shared only `correctiveFiredForTurn`) → Task 5 (own route, own Set, no VN edit) + Task 6 (own banner state, shared guard); compare COMPUTED flexDirection not attribute → Task 4 `directionOf(styles.flexDirection)`, candidates identified by `dataOrientation` but judged by computed; unanimous-only → Task 4 `allContradict`; satisfiable corrective (`flex-col`) → Task 4 prompt; no-edit target-frame → Task 6 per-frame loop, first unanimous mismatch.
-- **Type consistency:** `DigestElement`/`RenderDigest`/`digestElements`/`isDigestCandidate`/`handleDigestMessage`/`DIGEST_ELEMENT_CAP` (Task 1/3) in `frameDigest.ts`. `RequestedProperty`/`Mismatch`/`extractRequestedProperties`/`reconcile`/`RENDER_VERIFY_RETRY_PROMPT`/`renderVerifyAlreadyRan`/`markRenderVerifyRan` (Task 4) in `renderVerify.ts`. `RENDER_MISMATCH_SENTINEL`/`splitRenderMismatchTrailer`/`RenderMismatchBanner` (Task 6) in `RenderMismatchBanner.tsx`. `onRenderDigest`/`renderMismatchBannerForFrame` added to `ProjectShellSource`. Message string `arcade-studio:frame-digest` consistent Task 2 emit ↔ Task 3 handle.
-- **Known implementer judgment calls (flagged, not placeholders):** Task 6 Step 4 — the exact interleave of render-verify with VN's existing turn-end effect (both mutually exclusive via `correctiveFiredForTurn`); Task 7 Step 1 — whether the persistence guard is a pure-helper test or a code-review + comment (stated). Both name the shipped VN pattern to mirror.
+- **The rev-3 spec fixes are all in tasks:** turn-persistent buffer → Task 6 `digestByFrame` never reset + Task 7 mandatory `resetPerTurn` test; digest once-per-mount → Task 2 folds into the `useEffect([])` fingerprint effect; verify against ORIGINATING prompt not `lastPrompt` → Task 6 `originating` ref captured in the reset effect; minimal VN touch → Task 5 (own route/Set, no VN edit) + Task 6 (own banner state); compare COMPUTED flexDirection → Task 4 `directionOf(styles.flexDirection)`; unanimous-only → Task 4; satisfiable corrective (`flex-col`) → Task 4 prompt; no-edit target-frame → Task 6 per-frame loop.
+- **The PLAN-review fixes are in tasks:** (Critical) render-verify was "dead code after VN's early return" → Task 6 gives it its OWN `useEffect` declared AFTER VN's, serialized by the shared `handledTurn` ref (VN priority), no append to VN's guard chain; (Important) RV banner swallowed by VN's corrective-end branch → Task 6 gives RV its OWN `awaitingRvCorrective` flag + own corrective-end branch that sets the RV banner; (Important) `extractRequestedProperties` false-fire on "the vertical scrollbar"/"don't make it vertical" → Task 4 `NEGATION` + `ADJECTIVE_NOUN` guards + tests both directions; (Important) persistence test was optional → Task 7 mandates the `resetPerTurn` extract + test. Dropped `correctiveFiredForTurn` (redundant — `handledTurn` is the shared guard).
+- **Type consistency:** `DigestElement`/`RenderDigest`/`digestElements`/`isDigestCandidate`/`handleDigestMessage`/`DIGEST_ELEMENT_CAP` (Task 1/3) in `frameDigest.ts`. `RequestedProperty`/`Mismatch`/`extractRequestedProperties`/`reconcile`/`RENDER_VERIFY_RETRY_PROMPT`/`renderVerifyAlreadyRan`/`markRenderVerifyRan` (Task 4) in `renderVerify.ts`. `RENDER_MISMATCH_SENTINEL`/`splitRenderMismatchTrailer`/`RenderMismatchBanner` (Task 6) in `RenderMismatchBanner.tsx`. `resetPerTurn`/`PerTurnRefs` + `onRenderDigest`/`renderMismatchBannerForFrame` (Task 6/7) in `useProjectFromHost.ts` / `ProjectShellSource`. Message string `arcade-studio:frame-digest` consistent Task 2 emit ↔ Task 3 handle.
+- **Shared guard is `handledTurn` (VN's existing one-shot ref), NOT a new `correctiveFiredForTurn`:** whichever turn-end effect runs first and sets `handledTurn.current = turnId` blocks the other; VN's effect is declared first → edit-noop priority. One corrective per turn, structurally.
