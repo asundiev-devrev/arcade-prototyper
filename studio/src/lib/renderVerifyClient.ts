@@ -6,6 +6,22 @@
  */
 import { computeFingerprint, productionMeasure } from "../frame/renderFingerprint";
 
+/**
+ * The corrective prompt for a confirmed render no-op. Lives HERE (a browser-safe
+ * module, zero node imports) — NOT in server/renderVerifyIsolation.ts, which
+ * transitively pulls esbuild + a native tailwind .node addon. The client sends
+ * this as the POST body prompt to the existing /api/chat/render-verify-retry
+ * route; renderVerifyIsolation.ts re-exports it for server use.
+ */
+export const RENDER_VERIFY_CORRECTIVE_PROMPT =
+  "Your last change did not alter the rendered result at all — the page renders " +
+  "identically to before your edit. The property you set is being ignored by the " +
+  "component. Achieve the intent a different way — a wrapper with real layout/utility " +
+  "classes, or a different component — so it ACTUALLY renders. If the kit genuinely " +
+  "can't do it, tell the user plainly what you couldn't do and why. Never report a " +
+  "visual result the render doesn't show. Keep the response shape: a one-sentence " +
+  "summary plus a ### Deviations section.";
+
 /** Pure decision — extracted so it's unit-testable without a browser. */
 export function decideNoOp(beforeFp: string | null, afterFp: string | null): "no-op" | "changed" | "skip" {
   if (!beforeFp || !afterFp) return "skip"; // fail open

@@ -11,11 +11,12 @@ import {
   reconcile,
   RENDER_VERIFY_RETRY_PROMPT,
 } from "../../server/renderVerify";
-import { verifyRenderNoOp } from "../lib/renderVerifyClient";
-// A pure string const exported from a server file — safe to import client-side
-// (same pattern as narrationClaimsVisualChange above). The server route is
-// unchanged; the client sends this as the corrective's POST body prompt.
-import { RENDER_VERIFY_CORRECTIVE_PROMPT } from "../../server/renderVerifyIsolation";
+// BOTH from the browser-safe client module (zero node imports). Do NOT import
+// the prompt from server/renderVerifyIsolation — that module transitively pulls
+// esbuild + a native tailwind .node addon and white-screens the shell (Vite dev
+// serves untree-shaken). The server route is unchanged; the client sends this
+// const as the corrective's POST body prompt.
+import { verifyRenderNoOp, RENDER_VERIFY_CORRECTIVE_PROMPT } from "../lib/renderVerifyClient";
 import { shouldRunRenderVerify } from "./renderVerifyGate";
 import type { RenderDigest } from "../frame/frameDigest";
 
@@ -370,38 +371,42 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
     // that superseded the one we started verifying.
     rvV3LiveTurnId.current = chat.turnId;
 
-    if (chat.phase !== "done") return;
-    const turnId = chat.turnId;
-    if (!turnId) return;
-
-    let cancelled = false;
-
-    // The v3 corrective turn ended → re-verify ONCE, then banner-only. Never
-    // POST again (hard stop — one corrective per originating user turn). Clear
-    // awaitingRvV3 + the frame/page refs SYNCHRONOUSLY now (capturing them into
-    // locals first) — NOT after the async re-verify. If cleared only after the
-    // ~1.2s re-verify, a new user turn landing in that window would hit the
-    // reset effect's `awaitingRvV3` early-return and never reset → stuck state.
-    if (awaitingRvV3.current) {
+    // The corrective turn reached a TERMINAL phase. Clear awaitingRvV3 + the
+    // frame/page refs SYNCHRONOUSLY on ANY terminal end (done/error/cancelled) —
+    // NOT just "done". If the corrective ERRORS (Bedrock throttle/auth lapse)
+    // and we only cleared on "done", awaitingRvV3 would stay set → the reset
+    // effect's `if (awaitingRvV3.current) return` skips the next user turn's
+    // reset → RV3 stuck + a stale banner mis-fires on an unrelated frame.
+    // Re-verify (→ banner) only on a clean "done"; on error/cancelled just clear.
+    if (awaitingRvV3.current && (chat.phase === "done" || chat.phase === "error" || chat.phase === "cancelled")) {
       const frame = rvV3Frame.current;
       const targetPage = rvV3TargetPage.current;
+      const wasClean = chat.phase === "done";
+      const cTurnId = chat.turnId;
       awaitingRvV3.current = false;
       rvV3Frame.current = null;
       rvV3TargetPage.current = null;
-      if (!frame || !targetPage) return;
+      if (!wasClean || !frame || !targetPage || !cTurnId) return; // errored/cancelled → cleared, no banner
+      let cCancelled = false;
       void (async () => {
         const outcome = await verifyRenderNoOp(slug, frame, targetPage);
         // Async guard: a new user turn may have landed during the ~1.2s verify.
-        // Bail if this effect was torn down (cancelled) OR chat.turnId advanced
+        // Bail if this effect was torn down (cCancelled) OR chat.turnId advanced
         // past the corrective turn we were re-verifying (superseded) — never
         // banner a stale frame for a turn the user has moved past.
-        if (cancelled || rvV3LiveTurnId.current !== turnId) return;
+        if (cCancelled || rvV3LiveTurnId.current !== cTurnId) return;
         if (outcome === "no-op") setRenderMismatchBannerForFrame(frame);
       })();
       return () => {
-        cancelled = true;
+        cCancelled = true;
       };
     }
+
+    // Fire path — only on a clean user-turn end.
+    if (chat.phase !== "done") return;
+    const turnId = chat.turnId;
+    if (!turnId) return;
+    let cancelled = false;
 
     // Not the corrective turn → maybe fire v3 on this user turn. Fetch the
     // post-turn meta the server published (turnType + edited frame + page).

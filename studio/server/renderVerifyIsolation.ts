@@ -63,14 +63,15 @@ export async function buildIsolationHtml(
   }
 }
 
-export const RENDER_VERIFY_CORRECTIVE_PROMPT =
-  "Your last change did not alter the rendered result at all — the page renders " +
-  "identically to before your edit. The property you set is being ignored by the " +
-  "component. Achieve the intent a different way — a wrapper with real layout/utility " +
-  "classes, or a different component — so it ACTUALLY renders. If the kit genuinely " +
-  "can't do it, tell the user plainly what you couldn't do and why. Never report a " +
-  "visual result the render doesn't show. Keep the response shape: a one-sentence " +
-  "summary plus a ### Deviations section.";
+// The corrective prompt lives in the BROWSER-SAFE client module
+// (src/lib/renderVerifyClient.ts) — re-exported here for any server use. It
+// must NOT be defined in this file: this module transitively imports packFromDir
+// → esbuild + @tailwindcss/oxide (a native .node addon), so a CLIENT importing
+// anything from here white-screens the app (Vite dev serves the shell untree-
+// shaken → the browser eagerly loads the node-only graph). The client imports
+// the const from renderVerifyClient.ts directly. See render-measurement blocker
+// memory + the 0.42.0 devdep-runtime-crash lesson.
+export { RENDER_VERIFY_CORRECTIVE_PROMPT } from "../src/lib/renderVerifyClient";
 
 // NOTE: no one-shot Set here. The corrective reuses the EXISTING route
 // (chat.ts handleRenderVerifyRetry), whose one-shot lives in server/renderVerify.ts.
