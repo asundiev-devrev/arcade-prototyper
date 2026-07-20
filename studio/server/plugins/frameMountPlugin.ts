@@ -353,9 +353,12 @@ export function buildFrameBootstrapSource(opts: {
             window.parent && window.parent.postMessage(
               { type: "arcade-studio:frame-fingerprint", slug: ${JSON.stringify(slug)}, frame: ${JSON.stringify(frame)}, n: __N, fp: fp }, "*");
             const digest = digestElements(document.body, productionMeasure);
+            var __rvCarriers = digest.elements.filter(function (e) { return e.dataOrientation !== null; });
+            console.log("[RV-DIAG] frame pushing digest frame=" + ${JSON.stringify(frame)} + " n=" + __N + " elements=" + digest.elements.length + " carriers=" + __rvCarriers.length,
+              __rvCarriers.map(function (c) { return c.dataOrientation + "/" + c.styles.flexDirection; }));
             window.parent && window.parent.postMessage(
               { type: "arcade-studio:frame-digest", slug: ${JSON.stringify(slug)}, frame: ${JSON.stringify(frame)}, n: __N, digest: digest }, "*");
-          } catch (_) { /* fingerprint is best-effort; never break the frame */ }
+          } catch (e) { console.log("[RV-DIAG] frame digest push FAILED", e); /* best-effort; never break the frame */ }
         };
         const afterLayout = () => requestAnimationFrame(() => requestAnimationFrame(post));
         const fonts = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();

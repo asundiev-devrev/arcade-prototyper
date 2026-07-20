@@ -120,6 +120,12 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
 
   const onRenderDigest = useCallback((frameSlug: string, digest: RenderDigest) => {
     digestByFrame.current.set(frameSlug, digest);
+    // [RV-DIAG] temporary — how many orientation carriers did this render expose?
+    const carriers = digest.elements.filter((e) => e.dataOrientation !== null);
+    console.log(
+      `[RV-DIAG] digest buffered frame=${frameSlug} elements=${digest.elements.length} carriers=${carriers.length}`,
+      carriers.map((c) => `${c.dataOrientation}/${c.styles.flexDirection}`),
+    );
   }, []);
 
   // Reset per-turn state when a genuinely NEW user turn starts. Keyed on the
@@ -245,26 +251,36 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
       return;
     }
 
+    // [RV-DIAG] temporary — trace why RV does/doesn't fire on this turn end.
+    console.log(
+      `[RV-DIAG] turn-end phase=done turnId=${turnId} handledByVN=${handledTurn.current === turnId}` +
+        ` originatingTurn=${originating.current?.turnId ?? "null"} originatingPrompt=${JSON.stringify(originating.current?.prompt ?? null)}` +
+        ` bufferedFrames=${[...digestByFrame.current.keys()].join(",") || "none"}`,
+    );
+
     // Shared one-fire guard: VN's effect (declared first) sets handledTurn when
     // it fires → RV skips this turn. If VN didn't claim the turn, RV may.
-    if (handledTurn.current === turnId) return;
-    if (!originating.current || originating.current.turnId !== turnId) return;
+    if (handledTurn.current === turnId) { console.log("[RV-DIAG] skip: VN claimed this turn"); return; }
+    if (!originating.current || originating.current.turnId !== turnId) { console.log("[RV-DIAG] skip: no originating prompt for this turn"); return; }
 
     const requested = extractRequestedProperties(originating.current.prompt);
-    if (requested.length === 0) return;
+    console.log("[RV-DIAG] requested =", JSON.stringify(requested));
+    if (requested.length === 0) { console.log("[RV-DIAG] skip: prompt requested no mappable property"); return; }
 
     // v1 target-frame resolution: first frame whose digest unanimously contradicts.
     let target: string | null = null;
     let mismatchPrompt = "";
     for (const [frameSlug, digest] of digestByFrame.current) {
       const mismatches = reconcile(requested, digest);
+      console.log(`[RV-DIAG] reconcile frame=${frameSlug} carriers=${digest.elements.filter((e) => e.dataOrientation !== null).length} mismatches=${mismatches.length}`);
       if (mismatches.length > 0) {
         target = frameSlug;
         mismatchPrompt = RENDER_VERIFY_RETRY_PROMPT(mismatches[0]);
         break;
       }
     }
-    if (!target) return;
+    if (!target) { console.log("[RV-DIAG] skip: no frame unanimously contradicts the ask"); return; }
+    console.log(`[RV-DIAG] FIRING render-verify corrective for frame=${target}`);
 
     handledTurn.current = turnId; // claim the turn (blocks a late VN fire too)
     awaitingRvCorrective.current = true;

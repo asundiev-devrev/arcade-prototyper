@@ -209,6 +209,15 @@ export function FrameCard({
         return;
       }
       if (d.type === "arcade-studio:frame-digest") {
+        // [RV-DIAG] temporary — did the shell receive the digest + will the
+        // liveNonce gate in handleDigestMessage accept it?
+        const dn = String((d as { n?: unknown }).n ?? "");
+        const live =
+          dn === String(committedNonce) || dn === String(reloadNonce) ||
+          (dn === "" && (committedNonce === 0 || reloadNonce === 0));
+        console.log(
+          `[RV-DIAG] FrameCard rx digest frame=${(d as { frame?: unknown }).frame} n=${dn} committed=${committedNonce} reload=${reloadNonce} liveNonce=${live}`,
+        );
         handleDigestMessage(d as Parameters<typeof handleDigestMessage>[0], {
           projectSlug,
           frameSlug: frame.slug,
