@@ -5,6 +5,7 @@ import { useEditSession } from "../../hooks/editSessionContext";
 import type { TurnPhase } from "../../hooks/chatStreamReducer";
 import { SaveComponentModal } from "../assets/SaveComponentModal";
 import { observeFingerprint, type FpTracker } from "./visualNoOp";
+import { handleDigestMessage, type RenderDigest } from "../../frame/frameDigest";
 
 const FRAME_WIDTH_MIN = 320;
 const FRAME_WIDTH_MAX = 2560;
@@ -43,6 +44,7 @@ export function FrameCard({
   phase = "idle",
   onDelete,
   onVisualNoOp,
+  onRenderDigest,
   refineTimeoutMs = 90_000,
 }: {
   projectSlug: string;
@@ -60,6 +62,11 @@ export function FrameCard({
    *  prior committed render (a visual no-op candidate — a valid prop the
    *  component silently ignored). See visualNoOp.ts + the spec. */
   onVisualNoOp?: (frameSlug: string) => void;
+  /** Fired once per mount with the frame's render digest (candidate elements +
+   *  computed styles), forwarded from a LIVE iframe only. Render-verify buffers
+   *  it in the shell to reconcile the user's requested property against the real
+   *  render. See frameDigest.ts + the spec. */
+  onRenderDigest?: (frameSlug: string, digest: RenderDigest) => void;
   /** Wall-clock budget (ms) for a failed edit to be auto-repaired before the
    *  "Refining…" chip flips to the terminal "couldn't fix it" state. Floor must
    *  exceed real repair latency (a claude turn + 60s rate-limit) — default 90s;
@@ -99,6 +106,10 @@ export function FrameCard({
   // when the parent passes an inline callback (identity changes each render).
   const onVisualNoOpRef = useRef(onVisualNoOp);
   onVisualNoOpRef.current = onVisualNoOp;
+  // Same ref-read pattern for onRenderDigest so the message listener's effect
+  // does not re-subscribe on an inline-callback identity change (VN precedent).
+  const onRenderDigestRef = useRef(onRenderDigest);
+  onRenderDigestRef.current = onRenderDigest;
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const wipeWrapperRef = useRef<HTMLDivElement | null>(null);
@@ -195,6 +206,16 @@ export function FrameCard({
           const outcome = observeFingerprint(fpTracker.current, fp, n);
           if (outcome === "no-op") onVisualNoOpRef.current?.(frame.slug);
         }
+        return;
+      }
+      if (d.type === "arcade-studio:frame-digest") {
+        handleDigestMessage(d as Parameters<typeof handleDigestMessage>[0], {
+          projectSlug,
+          frameSlug: frame.slug,
+          committedNonce,
+          reloadNonce,
+          onRenderDigest: onRenderDigestRef.current,
+        });
         return;
       }
       if (String(d.n ?? "") !== String(reloadNonce)) return; // stale iframe — ignore

@@ -72,3 +72,30 @@ export function digestElements(
   walk(root);
   return { elements, truncated };
 }
+
+export interface DigestMessageCtx {
+  projectSlug: string;
+  frameSlug: string;
+  committedNonce: number;
+  reloadNonce: number;
+  onRenderDigest?: (frameSlug: string, digest: RenderDigest) => void;
+}
+
+/** Fold a `frame-digest` message: forward it for THIS frame only, and only from
+ *  a LIVE iframe (committed or in-flight nonce, 0↔"" normalized) — a stale
+ *  outgoing-iframe post is dropped, same guard as the fingerprint fold. */
+export function handleDigestMessage(
+  msg: { type?: string; slug?: string; frame?: string; n?: unknown; digest?: unknown },
+  ctx: DigestMessageCtx,
+): void {
+  if (msg.type !== "arcade-studio:frame-digest") return;
+  if (msg.slug !== ctx.projectSlug || msg.frame !== ctx.frameSlug) return;
+  const n = String(msg.n ?? "");
+  const liveNonce =
+    n === String(ctx.committedNonce) ||
+    n === String(ctx.reloadNonce) ||
+    (n === "" && (ctx.committedNonce === 0 || ctx.reloadNonce === 0));
+  if (!liveNonce) return;
+  const digest = msg.digest as RenderDigest | undefined;
+  if (digest && Array.isArray(digest.elements)) ctx.onRenderDigest?.(ctx.frameSlug, digest);
+}
