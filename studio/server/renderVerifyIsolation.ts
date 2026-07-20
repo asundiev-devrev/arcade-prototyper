@@ -10,7 +10,14 @@
 import path from "node:path";
 import fs from "node:fs/promises";
 import os from "node:os";
-import { packFromDir } from "./sidecar/packFromSource";
+// packFromDir is imported LAZILY inside buildIsolationHtml (dynamic import) —
+// NOT at module top. It transitively loads esbuild + @tailwindcss/oxide, and
+// esbuild runs an env invariant check AT MODULE INIT that throws under the
+// jsdom test environment ("TextEncoder … incorrectly false"). chat.ts imports
+// this module eagerly, so a top-level packFromDir import made every jsdom-env
+// server test that touches chat.ts fail at import. Lazy-loading it keeps this
+// module (and chat.ts) import-cheap; the bundler only loads when a render is
+// actually requested at runtime.
 
 /** The isolation index.tsx: render ONLY the target page, no sidebar/router. */
 export function SYNTHETIC_ENTRY(targetRelPath: string): string {
@@ -57,6 +64,7 @@ export async function buildIsolationHtml(
     await fs.mkdir(path.dirname(target), { recursive: true });
     await fs.writeFile(target, targetSource, "utf-8");
     await fs.writeFile(path.join(tmp, "index.tsx"), SYNTHETIC_ENTRY(targetRelPath), "utf-8");
+    const { packFromDir } = await import("./sidecar/packFromSource"); // lazy — see top-of-file note
     return await packFromDir(tmp);
   } finally {
     await fs.rm(tmp, { recursive: true, force: true }).catch(() => {});
