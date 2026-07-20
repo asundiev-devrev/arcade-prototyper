@@ -182,16 +182,22 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
     const summaryClaimsVisual = narrationClaimsVisualChange(
       firstSummaryLine(chat.narrations),
     );
-    if (
-      !shouldTriggerVisualNoOpRetry({
-        candidateBuffered: candidate != null,
-        phase: chat.phase,
-        summaryClaimsVisual,
-        alreadyTriggeredThisTurn: false,
-      })
-    ) {
+    // [RV-DIAG] temporary — VN turn-end decision. If this FIRES on a turn whose
+    // edit visibly changed the frame, that's the false-fire that churned the edit.
+    const willFire = shouldTriggerVisualNoOpRetry({
+      candidateBuffered: candidate != null,
+      phase: chat.phase,
+      summaryClaimsVisual,
+      alreadyTriggeredThisTurn: false,
+    });
+    console.log(
+      `[RV-DIAG] VN turn-end turnId=${turnId} candidate=${candidate ?? "null"} summaryClaimsVisual=${summaryClaimsVisual}` +
+        ` summary=${JSON.stringify(firstSummaryLine(chat.narrations).slice(0, 80))} willFireCorrective=${willFire}`,
+    );
+    if (!willFire) {
       return;
     }
+    console.log(`[RV-DIAG] VN FIRING corrective (nothing-changed) for frame=${candidate}`);
     handledTurn.current = turnId;
     awaitingCorrective.current = true;
     // Clear the candidate so a fresh onVisualNoOp during the corrective turn is
