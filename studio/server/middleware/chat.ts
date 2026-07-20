@@ -40,6 +40,8 @@ import {
   markVisualNoOpRetryRan,
 } from "../visualNoOpRetry";
 import { renderVerifyAlreadyRan, markRenderVerifyRan } from "../renderVerify";
+import { cachePreTurnSources, getPreTurnSource } from "../editHistory";
+import { buildIsolationHtml } from "../renderVerifyIsolation";
 import type { Frame } from "../types";
 import {
   snapshotProjectFiles,
@@ -125,6 +127,7 @@ const STATUS_URL = /^\/api\/chat\/status\/([a-z0-9][a-z0-9-]{0,62})$/i;
 const CANCEL_URL = /^\/api\/chat\/cancel\/([a-z0-9][a-z0-9-]{0,62})$/i;
 const VISUAL_NOOP_RETRY_URL = /^\/api\/chat\/visual-noop-retry$/;
 const RENDER_VERIFY_RETRY_URL = /^\/api\/chat\/render-verify-retry$/;
+const VERIFY_RENDER_URL = /^\/api\/verify-render$/;
 
 export function chatMiddleware() {
   return async (req: IncomingMessage, res: ServerResponse, next?: () => void) => {
@@ -137,11 +140,12 @@ export function chatMiddleware() {
       if (statusMatch) return handleStatus(res, statusMatch[1].toLowerCase());
     }
 
-    if (req.url.startsWith("/api/chat") && req.method === "POST") {
+    if ((req.url.startsWith("/api/chat") || VERIFY_RENDER_URL.test(req.url)) && req.method === "POST") {
       const cancelMatch = req.url.match(CANCEL_URL);
       if (cancelMatch) return handleCancel(res, cancelMatch[1].toLowerCase());
       if (VISUAL_NOOP_RETRY_URL.test(req.url)) return handleVisualNoOpRetry(req, res);
       if (RENDER_VERIFY_RETRY_URL.test(req.url)) return handleRenderVerifyRetry(req, res);
+      if (VERIFY_RENDER_URL.test(req.url)) return handleVerifyRender(req, res);
       return handleStart(req, res);
     }
 
@@ -421,6 +425,45 @@ async function handleRenderVerifyRetry(req: IncomingMessage, res: ServerResponse
   });
   res.writeHead(202, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ turnId: turn.id, slug }));
+}
+
+// Render-verify (keystone v3): isolation-render one edited page BEFORE or AFTER
+// the edit. `which:"before"` reads the pre-turn source cache; `which:"after"`
+// reads the current on-disk page. Both bundle via buildIsolationHtml (synthetic
+// entry → packFromDir). 404 (no before-source) / 422 (bundle failed) both mean
+// the client FAILS OPEN (skips the verify, no corrective).
+async function handleVerifyRender(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  let buf = ""; for await (const c of req) buf += c;
+  let body: { slug?: string; frame?: string; targetPage?: string; which?: string };
+  try { body = JSON.parse(buf); } catch {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "bad_request" } })); return;
+  }
+  const { slug, frame, targetPage, which } = body;
+  if (typeof slug !== "string" || typeof frame !== "string" || typeof targetPage !== "string" ||
+      (which !== "before" && which !== "after")) {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "bad_request" } })); return;
+  }
+  const frameDir = path.join(projectDir(slug), "frames", frame);
+  let source: string | null;
+  if (which === "before") {
+    source = getPreTurnSource(slug, frame, targetPage);
+  } else {
+    source = await fs.readFile(path.join(frameDir, targetPage), "utf-8").catch(() => null);
+  }
+  if (source == null) { // no before-source (first gen) / file gone → fail open
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "no_source" } })); return;
+  }
+  try {
+    const html = await buildIsolationHtml(frameDir, targetPage, source);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ html }));
+  } catch {
+    res.writeHead(422, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "bundle_failed" } })); // fail open
+  }
 }
 
 async function handleStream(req: IncomingMessage, res: ServerResponse, slug: string): Promise<void> {
@@ -864,6 +907,27 @@ async function runClaudeBranch(ctx: {
   // agent that hallucinates a clean "Deviations: None" turn passes both
   // the contract and the user.
   const beforeSnapshot = await snapshotProjectFiles(projectDir(slug));
+
+  // Render-verify (keystone v3): cache pre-edit page sources so turn-end can
+  // isolation-render the BEFORE state of whatever page the agent edits. Best-effort.
+  try {
+    const framesRoot = path.join(projectDir(slug), "frames");
+    const frameDirs = await fs.readdir(framesRoot, { withFileTypes: true }).catch(() => []);
+    for (const fd of frameDirs) {
+      if (!fd.isDirectory()) continue;
+      const sources: Record<string, string> = {};
+      for (const rel of ["index.tsx"]) {
+        try { sources[rel] = await fs.readFile(path.join(framesRoot, fd.name, rel), "utf-8"); } catch {}
+      }
+      const pagesDir = path.join(framesRoot, fd.name, "pages");
+      const pages = await fs.readdir(pagesDir).catch(() => []);
+      for (const pf of pages) {
+        if (!pf.endsWith(".tsx")) continue;
+        try { sources[`pages/${pf}`] = await fs.readFile(path.join(pagesDir, pf), "utf-8"); } catch {}
+      }
+      if (Object.keys(sources).length) cachePreTurnSources(slug, fd.name, sources);
+    }
+  } catch { /* best-effort — render-verify just skips if before-source missing */ }
 
   let model: string | undefined;
   try {
