@@ -36,6 +36,31 @@
   --smart-h: 256;
   --smart-s: 94%;
 
+  /* ------------------------------------------------------------------
+     CONTROL tokens (DevRev App). Same public token names as the Arcade
+     theme, mapped onto this theme's own interactive semantics so the
+     shared arcade-components.css renders correctly in blue-indigo instead
+     of Arcade black. Complete color values (hsl-wrapped) — component CSS
+     uses --control-* directly, no wrapper. Resolves within whichever
+     .force-light / .force-dark mode scope applies at use time.
+     DevRev App has no yellow-plastic "expressive"; it maps to the smart
+     (AI) accent instead. ------------------------------------------------ */
+  --control-bg-primary-idle: hsl(var(--bg-interactive-primary-resting));
+  --control-bg-primary-hover: hsl(var(--bg-interactive-primary-hovered));
+  --control-fg-primary-idle: hsl(var(--text-interactive-primary-resting));
+  --control-fg-primary-active: hsl(var(--text-color-primary));
+  --control-bg-secondary-idle: hsl(var(--bg-interactive-secondary-resting));
+  --control-bg-secondary-hover: hsl(var(--bg-interactive-secondary-hovered));
+  --control-fg-secondary-idle: hsl(var(--text-color-primary));
+  --control-bg-tertiary-hover: hsl(var(--bg-interactive-tertiary-hovered));
+  --control-fg-tertiary-idle: hsl(var(--text-color-primary));
+  --control-bg-destructive-idle: hsl(var(--bg-interactive-destructive-resting));
+  --control-bg-destructive-hover: hsl(var(--bg-interactive-destructive-hovered));
+  --control-fg-destructive-idle: hsl(var(--text-static-white));
+  --control-bg-expressive-idle: hsl(var(--bg-interactive-smart-resting));
+  --control-fg-expressive-idle: hsl(var(--color-on-fill));
+  --control-stroke-focus: hsl(var(--text-color-primary));
+
   --accent-100: var(--accent-h) var(--accent-s) calc(var(--accent-l) - 19%);
   --accent-200: var(--accent-h) var(--accent-s) calc(var(--accent-l) - 14%);
   --accent-300: var(--accent-h) var(--accent-s) calc(var(--accent-l) - 9%);

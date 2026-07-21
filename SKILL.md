@@ -108,7 +108,7 @@ These rules apply to every prototype, whether you start from a sentence, a templ
 
 ### Only use components that actually exist
 
-The prototype's look comes entirely from the CSS bundled with this skill. The component classes are exactly those defined in `arcade-components.css` (all named `.arcade-*` — button, input, badge, card, tab, table, dialog, menu, avatar, toggle, checkbox, alert, skeleton, empty state, sidebar, tooltip, and their variants). **If a class isn't defined in that file, it doesn't exist** — inventing a plausible-sounding class like `.arcade-accordion` produces an unstyled element that looks broken. Before you deliver, sanity-check that every `.arcade-*` class you used is one the CSS actually defines. If you need something the system doesn't have, build it from plain HTML + tokens and flag the gap (see below) — don't fabricate a class name.
+The prototype's look comes entirely from the CSS bundled with this skill. The component classes are exactly those defined in `arcade-components.css` (all named `.arcade-*` — button, icon-btn, split, input, select, textarea, badge, chip, counter, link, card, popover, menu-item, avatar, toggle, checkbox, radio, segmented, breadcrumbs, divider, tooltip, alert, banner, toast, skeleton, spinner, progress, tabs, table, accordion, stepper, slider, kbd, overlay, dialog, sidebar, empty state, and their variants). **If a class isn't defined in that file, it doesn't exist** — inventing a plausible-sounding class like `.arcade-carousel` produces an unstyled element that looks broken. Before you deliver, sanity-check that every `.arcade-*` class you used is one the CSS actually defines. If you need something the system doesn't have, build it from plain HTML + tokens and flag the gap (see below) — don't fabricate a class name.
 
 ### Leave visible gaps, never fabricate
 
@@ -336,10 +336,41 @@ Tell the user: "Here's your prototype — it should be open in your browser now.
 <button class="arcade-btn arcade-btn--secondary">Secondary</button>
 <button class="arcade-btn arcade-btn--tertiary">Tertiary</button>
 <button class="arcade-btn arcade-btn--destructive">Delete</button>
+<button class="arcade-btn arcade-btn--expressive">Expressive</button>
 
-<!-- Sizes: --S, --M (default), --L -->
+<!-- Sizes: --S (20px tall), --M (28px, default), --L (40px) -->
 <button class="arcade-btn arcade-btn--primary arcade-btn--S">Small</button>
 <button class="arcade-btn arcade-btn--primary arcade-btn--L">Large</button>
+```
+
+**Button shape is per-variant** (Figma-verified — the CSS already handles it, don't override):
+- **Primary** and **Expressive** are fully rounded **pills**.
+- **Secondary**, **Tertiary**, **Destructive** are **square** (4px corners, 6px at Large).
+Never make a secondary/tertiary button a pill — that's the #1 tell of a fake Arcade UI.
+
+### Icon buttons
+```html
+<button class="arcade-icon-btn" aria-label="Settings"><svg>…</svg></button>
+<button class="arcade-icon-btn arcade-icon-btn--secondary arcade-icon-btn--L" aria-label="Add"><svg>…</svg></button>
+```
+
+### Chips (dismissible tags)
+```html
+<span class="arcade-chip">Filter</span>
+<span class="arcade-chip arcade-chip--intelligence">AI</span>
+<span class="arcade-chip arcade-chip--filled">Selected<span class="arcade-chip__close">✕</span></span>
+```
+
+### Counter
+```html
+<span class="arcade-counter">3</span>
+<span class="arcade-counter arcade-counter--emphasis">12</span>
+```
+
+### Links
+```html
+<a class="arcade-link" href="#">Learn more</a>
+<a class="arcade-link arcade-link--muted" href="#">Secondary link</a>
 ```
 
 ### Input fields
@@ -423,6 +454,59 @@ Tell the user: "Here's your prototype — it should be open in your browser now.
   <button class="arcade-tab">Details</button>
   <button class="arcade-tab">Activity</button>
 </div>
+```
+
+### Select / dropdown field
+```html
+<select class="arcade-select">
+  <option>Option one</option>
+  <option>Option two</option>
+</select>
+```
+
+### Segmented control
+```html
+<div class="arcade-segmented">
+  <button class="arcade-segmented__item arcade-segmented__item--active">Day</button>
+  <button class="arcade-segmented__item">Week</button>
+  <button class="arcade-segmented__item">Month</button>
+</div>
+```
+
+### Breadcrumbs
+```html
+<nav class="arcade-breadcrumbs">
+  <a class="arcade-breadcrumb" href="#">Workspace</a>
+  <span class="arcade-breadcrumbs__sep">/</span>
+  <a class="arcade-breadcrumb" href="#">Projects</a>
+  <span class="arcade-breadcrumbs__sep">/</span>
+  <span class="arcade-breadcrumb arcade-breadcrumb--current">Settings</span>
+</nav>
+```
+
+### Accordion (native details/summary)
+```html
+<details class="arcade-accordion">
+  <summary>Advanced options</summary>
+  <div class="arcade-accordion__content">Hidden content revealed on expand.</div>
+</details>
+```
+
+### Radio
+```html
+<div class="arcade-radio"></div>
+<div class="arcade-radio arcade-radio--checked"></div>
+```
+
+### Loader / progress
+```html
+<div class="arcade-spinner"></div>
+<div class="arcade-progress"><div class="arcade-progress__fill" style="width: 60%;"></div></div>
+```
+
+### Toast
+```html
+<div class="arcade-toast">Changes saved</div>
 ```
 
 ### Table
