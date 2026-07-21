@@ -130,6 +130,19 @@ const RENDER_VERIFY_RETRY_URL = /^\/api\/chat\/render-verify-retry$/;
 const VERIFY_RENDER_URL = /^\/api\/verify-render$/;
 const LAST_TURN_META_URL = /^\/api\/chat\/last-turn-meta\/([a-z0-9][a-z0-9-]{0,62})$/i;
 
+// Server-side mirror of the client's disabled render-measurement features
+// (RENDER_MEASUREMENT_FEATURES_ENABLED + RENDER_VERIFY_V3_ENABLED in
+// useProjectFromHost.ts). Those two flags disable the CLIENT effects that CALL
+// the render-verify routes and CONSUME the per-turn capture — but the server
+// half kept running regardless: the retry routes still spawned real claude
+// turns from a localhost POST, the isolation route still ran esbuild on demand,
+// and every generation turn still read the whole frame tree into an unevicted
+// cache to feed a feature nothing reads. This flag switches the PRODUCTION half
+// off too, so a disabled feature does no per-turn I/O and exposes no
+// turn-spawning surface. Flip true (with the client flags) when the keystone
+// lands. See render-measurement-multipage-blocker memory + the whole-branch review.
+const RENDER_VERIFY_SERVER_ENABLED = false;
+
 // Render-verify (keystone v3): the post-turn channel to the client. The SSE
 // `end` event is a closed `{kind:"end", ok}` type with no metadata slot, so the
 // client reads this per-slug store via GET after `phase==="done"`. Populated in
@@ -151,15 +164,30 @@ export function chatMiddleware() {
       const statusMatch = req.url.match(STATUS_URL);
       if (statusMatch) return handleStatus(res, statusMatch[1].toLowerCase());
       const metaMatch = req.url.match(LAST_TURN_META_URL);
-      if (metaMatch) return handleLastTurnMeta(res, metaMatch[1].toLowerCase());
+      if (metaMatch && RENDER_VERIFY_SERVER_ENABLED) return handleLastTurnMeta(res, metaMatch[1].toLowerCase());
     }
 
     if ((req.url.startsWith("/api/chat") || VERIFY_RENDER_URL.test(req.url)) && req.method === "POST") {
       const cancelMatch = req.url.match(CANCEL_URL);
       if (cancelMatch) return handleCancel(res, cancelMatch[1].toLowerCase());
-      if (VISUAL_NOOP_RETRY_URL.test(req.url)) return handleVisualNoOpRetry(req, res);
-      if (RENDER_VERIFY_RETRY_URL.test(req.url)) return handleRenderVerifyRetry(req, res);
-      if (VERIFY_RENDER_URL.test(req.url)) return handleVerifyRender(req, res);
+      // Render-verify routes are gated OFF server-side (feature disabled). They
+      // otherwise spawn a real claude turn / run esbuild from an unauthenticated
+      // localhost POST — a live surface for a feature the client never calls.
+      // 404 so nothing is spawned; flip the flag to re-enable with the client.
+      const isRenderVerifyRoute =
+        VISUAL_NOOP_RETRY_URL.test(req.url) ||
+        RENDER_VERIFY_RETRY_URL.test(req.url) ||
+        VERIFY_RENDER_URL.test(req.url);
+      if (isRenderVerifyRoute) {
+        if (!RENDER_VERIFY_SERVER_ENABLED) {
+          res.writeHead(404, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: { code: "not_found", message: "Render-verify is disabled." } }));
+          return;
+        }
+        if (VISUAL_NOOP_RETRY_URL.test(req.url)) return handleVisualNoOpRetry(req, res);
+        if (RENDER_VERIFY_RETRY_URL.test(req.url)) return handleRenderVerifyRetry(req, res);
+        return handleVerifyRender(req, res);
+      }
       return handleStart(req, res);
     }
 
@@ -932,25 +960,30 @@ async function runClaudeBranch(ctx: {
   const beforeSnapshot = await snapshotProjectFiles(projectDir(slug));
 
   // Render-verify (keystone v3): cache pre-edit page sources so turn-end can
-  // isolation-render the BEFORE state of whatever page the agent edits. Best-effort.
-  try {
-    const framesRoot = path.join(projectDir(slug), "frames");
-    const frameDirs = await fs.readdir(framesRoot, { withFileTypes: true }).catch(() => []);
-    for (const fd of frameDirs) {
-      if (!fd.isDirectory()) continue;
-      const sources: Record<string, string> = {};
-      for (const rel of ["index.tsx"]) {
-        try { sources[rel] = await fs.readFile(path.join(framesRoot, fd.name, rel), "utf-8"); } catch {}
+  // isolation-render the BEFORE state of whatever page the agent edits.
+  // Best-effort. GATED: skipped entirely while render-verify is disabled — else
+  // every generation turn re-reads the whole frame tree into an unevicted cache
+  // to feed a feature nothing consumes (whole-branch review finding).
+  if (RENDER_VERIFY_SERVER_ENABLED) {
+    try {
+      const framesRoot = path.join(projectDir(slug), "frames");
+      const frameDirs = await fs.readdir(framesRoot, { withFileTypes: true }).catch(() => []);
+      for (const fd of frameDirs) {
+        if (!fd.isDirectory()) continue;
+        const sources: Record<string, string> = {};
+        for (const rel of ["index.tsx"]) {
+          try { sources[rel] = await fs.readFile(path.join(framesRoot, fd.name, rel), "utf-8"); } catch {}
+        }
+        const pagesDir = path.join(framesRoot, fd.name, "pages");
+        const pages = await fs.readdir(pagesDir).catch(() => []);
+        for (const pf of pages) {
+          if (!pf.endsWith(".tsx")) continue;
+          try { sources[`pages/${pf}`] = await fs.readFile(path.join(pagesDir, pf), "utf-8"); } catch {}
+        }
+        if (Object.keys(sources).length) cachePreTurnSources(slug, fd.name, sources);
       }
-      const pagesDir = path.join(framesRoot, fd.name, "pages");
-      const pages = await fs.readdir(pagesDir).catch(() => []);
-      for (const pf of pages) {
-        if (!pf.endsWith(".tsx")) continue;
-        try { sources[`pages/${pf}`] = await fs.readFile(path.join(pagesDir, pf), "utf-8"); } catch {}
-      }
-      if (Object.keys(sources).length) cachePreTurnSources(slug, fd.name, sources);
-    }
-  } catch { /* best-effort — render-verify just skips if before-source missing */ }
+    } catch { /* best-effort — render-verify just skips if before-source missing */ }
+  }
 
   let model: string | undefined;
   try {
@@ -1107,8 +1140,9 @@ async function runClaudeBranch(ctx: {
   // phase==="done" fetch of GET /api/chat/last-turn-meta never races an empty
   // store. frame = the touched frame's dir slug (frames/<frame>/...); targetPage
   // = the edited page resolved from the diff. Best-effort — a miss reads
-  // turnType:"none" → client skips (fail open).
-  {
+  // turnType:"none" → client skips (fail open). GATED: no write while the
+  // feature is disabled (the GET route is gated too, so the store is dead).
+  if (RENDER_VERIFY_SERVER_ENABLED) {
     const changedFrame =
       afterDiff?.changed.find((p) => /^frames\//.test(p)) ??
       afterDiff?.added.find((p) => /^frames\//.test(p)) ??
