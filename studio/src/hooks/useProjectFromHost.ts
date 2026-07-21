@@ -395,6 +395,10 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
         // past the corrective turn we were re-verifying (superseded) — never
         // banner a stale frame for a turn the user has moved past.
         if (cCancelled || rvV3LiveTurnId.current !== cTurnId) return;
+        // [RV3-DIAG] post-corrective re-verify verdict — "no-op" here = the
+        // yellow banner fires. If the corrective DID fix the render, a "no-op"
+        // verdict is the FALSE banner we're hunting.
+        console.log(`[RV3-DIAG] corrective-end re-verify frame=${frame} → ${outcome} (no-op ⇒ banner)`);
         if (outcome === "no-op") setRenderMismatchBannerForFrame(frame);
       })();
       return () => {
@@ -447,6 +451,10 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
       // down (cancelled) OR a new user turn landed (chat.turnId advanced past
       // the turn we verified) — a corrective for a superseded turn is wrong.
       if (cancelled || rvV3LiveTurnId.current !== turnId) return;
+      // [RV3-DIAG] initial fire decision. "no-op" here fires the corrective. On
+      // a turn where the agent's FIRST reply already made a real visible change,
+      // a "no-op" verdict is the spurious fire that caused the churn.
+      console.log(`[RV3-DIAG] initial verify frame=${frame} → ${outcome} (no-op ⇒ fires corrective)`);
       if (outcome !== "no-op") return; // "changed"/"skip" → silent (fail open)
 
       // Confirmed no-op → claim the turn, fire ONE corrective via the EXISTING

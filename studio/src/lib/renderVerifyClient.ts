@@ -84,10 +84,19 @@ export async function verifyRenderNoOp(slug: string, frame: string, targetPage: 
     fetchHtml(slug, frame, targetPage, "before"),
     fetchHtml(slug, frame, targetPage, "after"),
   ]);
-  if (!beforeHtml || !afterHtml) return "skip";
+  // [RV3-DIAG] temporary — did we even get both HTML variants, and are they
+  // ALREADY identical (before-source == after-source → a snapshot bug)?
+  console.log(
+    `[RV3-DIAG] verify frame=${frame} page=${targetPage} beforeHtmlLen=${beforeHtml?.length ?? "null"} afterHtmlLen=${afterHtml?.length ?? "null"} htmlIdentical=${beforeHtml != null && beforeHtml === afterHtml}`,
+  );
+  if (!beforeHtml || !afterHtml) { console.log("[RV3-DIAG] → skip (missing HTML)"); return "skip"; }
   const [beforeFp, afterFp] = await Promise.all([
     renderIsolatedFingerprint(beforeHtml),
     renderIsolatedFingerprint(afterHtml),
   ]);
-  return decideNoOp(beforeFp, afterFp);
+  const verdict = decideNoOp(beforeFp, afterFp);
+  // [RV3-DIAG] the crux — fingerprints of each isolated render + verdict. null fp
+  // = blank/failed render (below floor). Equal fp on different HTML = fp blind.
+  console.log(`[RV3-DIAG] beforeFp=${beforeFp} afterFp=${afterFp} → ${verdict}`);
+  return verdict;
 }
