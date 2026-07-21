@@ -519,11 +519,18 @@ export function FrameCard({
           }}
         >
           {/* Committed (last-good) iframe — the one the designer sees and the
-              picker/inspector target. `key={projectMode}` is preserved so a
-              light/dark switch still force-remounts it (integration hazard #1). */}
+              picker/inspector target. Keyed on `projectMode` AND `committedNonce`:
+              a light/dark switch force-remounts it (integration hazard #1), AND
+              — the fix — the double-buffer SWAP (which bumps committedNonce) now
+              force-remounts it too. Without the nonce in the key, a swap only
+              mutated the `src` attr on the REUSED node, which does NOT reliably
+              re-navigate an already-loaded iframe → the visible frame stayed on
+              the pre-edit render until a manual refresh (the "nothing happened"
+              illusion). The hidden probe already keys on reloadNonce for exactly
+              this reason; the committed iframe must too. */}
           <iframe
             ref={iframeRef}
-            key={projectMode}
+            key={`${projectMode}-${committedNonce}`}
             data-frame-active="true"
             title={frame.name}
             src={committedUrl}
