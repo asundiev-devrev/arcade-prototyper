@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Viewport } from "../components/viewport/Viewport";
+import { VisualNoOpBanner } from "../components/chat/VisualNoOpBanner";
+import { RenderMismatchBanner } from "../components/chat/RenderMismatchBanner";
 import { LeftPaneTabs, type LeftPaneTab, LEFT_PANE_TAB_KEY } from "../components/shell/LeftPaneTabs";
 import { LeftPaneTabToggle } from "../components/shell/LeftPaneTabToggle";
 import { DevModePanel } from "../components/devmode/DevModePanel";
@@ -448,7 +450,7 @@ function ProjectDetailShell({
             />
           )}
         </aside>
-        <main key={reloadKey} style={{ minWidth: 0, minHeight: 0, overflow: "hidden" }}>
+        <main key={reloadKey} style={{ minWidth: 0, minHeight: 0, overflow: "hidden", position: "relative" }}>
           <Viewport
             project={project}
             frameWidth={frameWidth}
@@ -457,7 +459,19 @@ function ProjectDetailShell({
             onZoomChange={setZoom}
             onSeedChat={(text) => seedChatRef.current?.(text)}
             phase={chatStream.state.phase}
+            onVisualNoOp={source.onVisualNoOp}
+            onRenderDigest={source.onRenderDigest}
           />
+          {source.visualNoOpBannerForFrame && (
+            <div style={{ position: "absolute", left: 16, bottom: 16, maxWidth: 420, zIndex: 20 }}>
+              <VisualNoOpBanner />
+            </div>
+          )}
+          {source.renderMismatchBannerForFrame && (
+            <div style={{ position: "absolute", left: 16, bottom: 16, maxWidth: 420, zIndex: 20 }}>
+              <RenderMismatchBanner />
+            </div>
+          )}
         </main>
         {devOpen && <DevModePanel slug={project.slug} />}
         <InspectorPanel

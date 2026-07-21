@@ -9,6 +9,7 @@
 // any parse/runtime error — a broken hook must not wedge a real generation.
 
 import { readFileSync } from "node:fs";
+import ts from "typescript"; // direct studio dep (package.json); default import yields the module namespace
 
 const TRACKED_SOURCES = ["arcade/components", "arcade-prototypes"];
 
@@ -303,6 +304,102 @@ function isInScope(filePath) {
 }
 
 /**
+ * Valid arcade-namespace import specifiers, mirroring Vite's alias SEMANTICS
+ * (studio/vite.config.ts resolve.alias — the authority for this predicate):
+ *   /^arcade$/            → EXACT: only bare "arcade"
+ *   /^arcade\/components$/ → EXACT: only bare "arcade/components" (so
+ *                           "arcade/components/icons" does NOT resolve — the bug)
+ *   "arcade-studio"       → PREFIX (bare string find): "arcade-studio" AND "arcade-studio/*"
+ *   "arcade-prototypes"   → PREFIX: "arcade-prototypes" AND "arcade-prototypes/*"
+ *   /^arcade-user\/(.+)$/ → requires a non-empty name
+ * If an alias is added/changed in vite.config.ts, update this in lockstep.
+ * (A second alias table for share-time esbuild lives in server/cloudflare/
+ * bundler.ts with different subpath semantics — NOT this hook's concern.)
+ */
+export function isResolvableArcadeSpecifier(spec) {
+  return (
+    spec === "arcade" ||
+    spec === "arcade/components" ||
+    spec === "arcade-studio" ||
+    spec.startsWith("arcade-studio/") ||
+    spec === "arcade-prototypes" ||
+    spec.startsWith("arcade-prototypes/") ||
+    /^arcade-user\/.+/.test(spec)
+  );
+}
+
+/** A specifier in the arcade namespace (the only specifiers the path check judges). */
+export function isArcadeNamespaceSpecifier(spec) {
+  return spec === "arcade" || spec.startsWith("arcade/") || spec.startsWith("arcade-");
+}
+
+/**
+ * Every import/export module SPECIFIER in the source, via the TypeScript
+ * parser. Using a real parser (not regex) is deliberate: the word `import`
+ * inside a string literal, JSX text, a template literal, or a comment is NOT a
+ * real import, and only an AST walk reliably tells them apart. Three prior
+ * regex/hand-lexer attempts each closed one phantom-match corner and opened
+ * another (multi-line template, stray backtick in a string dropping a real
+ * import). The AST is immune to all of them by construction.
+ * Covers: import decl (named/default/namespace/side-effect/type) and
+ * export-from (`export {…} from`, `export * from`). Returns [] on parse
+ * failure (fail open — never block on our own inability to parse).
+ */
+export function extractImportSpecifiers(source) {
+  if (typeof source !== "string" || !source) return [];
+  try {
+    const sf = ts.createSourceFile("frame.tsx", source, ts.ScriptTarget.Latest, false, ts.ScriptKind.TSX);
+    const out = [];
+    const walk = (node) => {
+      if (
+        (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+        node.moduleSpecifier &&
+        ts.isStringLiteral(node.moduleSpecifier)
+      ) {
+        out.push(node.moduleSpecifier.text);
+      }
+      ts.forEachChild(node, walk);
+    };
+    walk(sf);
+    return out;
+  } catch {
+    return []; // fail open
+  }
+}
+
+/**
+ * In-scope (arcade-namespace) specifiers that fail the resolvability predicate.
+ * Each carries a correct-path suggestion. An `arcade/<subpath>` → suggest
+ * `arcade/components` (the barrel re-exports all arcade-gen icons+components);
+ * anything else → list the valid forms.
+ */
+export function detectInvalidArcadePaths(source) {
+  const out = [];
+  const seen = new Set();
+  for (const spec of extractImportSpecifiers(source)) {
+    if (seen.has(spec)) continue;
+    seen.add(spec);
+    if (!isArcadeNamespaceSpecifier(spec)) continue;
+    if (isResolvableArcadeSpecifier(spec)) continue;
+    const suggestion = spec.startsWith("arcade/")
+      ? '`arcade/components` (it re-exports all arcade-gen icons and components) or `arcade`'
+      : "one of: `arcade`, `arcade/components`, `arcade-studio[/…]`, `arcade-prototypes[/…]`, `arcade-user/<name>`";
+    out.push({ specifier: spec, suggestion });
+  }
+  return out;
+}
+
+export function formatInvalidPathError(violations) {
+  if (!violations.length) return "";
+  const lines = ["Blocked: some imports use an arcade path that doesn't resolve", "(the symbols are real, but the path is not aliased → they'd be undefined at render).", ""];
+  for (const v of violations) {
+    lines.push(`  - \`${v.specifier}\` is not a valid import path. Import from ${v.suggestion}.`);
+  }
+  lines.push("", "Fix the import path(s) and re-Write. This hook runs on every Write/Edit.");
+  return lines.join("\n");
+}
+
+/**
  * Strip line comments and block comments. Strings and template literals
  * are left intact — downstream callers that need strings removed should
  * use `stripCommentsAndStrings` on top.
@@ -556,35 +653,41 @@ async function main() {
   if (toolName !== "Write" && toolName !== "Edit") process.exit(0);
   const filePath = toolInput?.file_path;
   if (!isInScope(filePath)) process.exit(0);
-  const content = extractContent(toolName, toolInput);
+
+  // For Edit, the hook fires POST-write so the file at toolInput.file_path is
+  // already the post-edit file on disk. Read it to validate the whole file for
+  // imports (not just the new_string snippet, which could miss a bad import
+  // elsewhere in the file). Fall back to extractContent on read error (new-file/race).
+  let content = extractContent(toolName, toolInput);
+  if (toolName === "Edit" && filePath) {
+    try {
+      content = readFileSync(filePath, "utf-8");
+    } catch {
+      // new-file/race: fall back to new_string (already in `content`)
+    }
+  }
   if (!content) process.exit(0);
 
   const { barrels, barrelPaths } = loadAllBarrels();
 
+  // Import validation uses parseImports (import-statement regex anchored on
+  // `from "..."`), so `.ts` type-casts like `x = <Foo>y` are not mistaken for
+  // bad imports. No JSX parsing remains post-removal of validateJsxReferences.
   const imports = parseImports(content);
   const importViolations = imports.length ? validateImports(imports, barrels) : [];
+  const pathViolations = detectInvalidArcadePaths(content);   // needs no barrels
 
-  // JSX-reference check only for .tsx — .ts files use `<Foo>x` as type casts.
-  let jsxViolations = [];
-  if (filePath.endsWith(".tsx")) {
-    const merged = new Set();
-    for (const s of Object.values(barrels)) for (const n of s) merged.add(n);
-    jsxViolations = validateJsxReferences(content, merged);
-  }
+  // JSX-reference check REMOVED: whole-file scope false-blocks valid React
+  // (as-props, render-props, multi-binding const). The import check is robust;
+  // undefined-JSX crashes are now handled by resilient render, not this gate.
 
-  if (importViolations.length === 0 && jsxViolations.length === 0) process.exit(0);
+  if (importViolations.length === 0 && pathViolations.length === 0) process.exit(0);
 
-  const chunks = [];
-  if (importViolations.length) {
-    chunks.push(formatErrorMessage(importViolations, barrels, barrelPaths));
-  }
-  if (jsxViolations.length) {
-    if (chunks.length === 0) {
-      chunks.push("Blocked: some JSX tags don't resolve to an import or a local declaration.\n");
-    }
-    chunks.push(formatJsxErrorMessage(jsxViolations, barrelPaths));
-  }
-  process.stderr.write(chunks.join("\n"));
+  const message = [
+    importViolations.length ? formatErrorMessage(importViolations, barrels, barrelPaths) : "",
+    pathViolations.length ? formatInvalidPathError(pathViolations) : "",
+  ].filter(Boolean).join("\n\n");
+  process.stderr.write(message);
   process.exit(2);
 }
 

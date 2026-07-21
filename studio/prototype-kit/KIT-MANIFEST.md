@@ -8,6 +8,27 @@
 
 _37 entries — 33 composites, 4 templates._
 
+## Primitive capabilities
+
+> Real prop/value facts for common arcade-gen primitives — check BEFORE
+> using a prop. If a capability isn't here, it may not exist; do not invent.
+>
+> INTERNAL REFERENCE ONLY — this table is for YOUR decision-making. NEVER
+> quote it, prop names (`value`, `defaultValue`, `multiple`, `type="multiple"`),
+> or the words "manifest"/"primitive"/"kit" to the user. In your Deviations,
+> translate to plain design language (see the response-shape rules): e.g.
+> "used a multi-select toggle instead of a dropdown — the shape differs", NOT
+> "the kit's Select has no `multiple` prop so I used ToggleGroup type=\"multiple\"".
+
+- **Select** — single-value. `value`/`defaultValue` are STRINGS. NO `multiple` prop — the kit has no multi-select Select. (react-select index.d.ts: defaultValue?: string)
+- **Tabs** — `value`/`defaultValue` are STRINGS. No multi-value. (react-tabs index.d.ts: defaultValue?: string)
+- **ToggleGroup** — supports BOTH `type="single"` (`value`/`defaultValue`: string) and `type="multiple"` (`value`/`defaultValue`: string[]). Multi-select IS supported — via `type="multiple"`, NOT a `multiple` prop. (react-toggle-group index.d.ts: union on `type`)
+- **Accordion** — same `type` union as ToggleGroup: `type="single"` (`value`/`defaultValue`: string) or `type="multiple"` (`value`/`defaultValue`: string[]). Multiple open panels IS supported — via `type="multiple"`, NOT a `multiple` prop. (react-accordion index.d.ts: union on `type`)
+- **Switch** — boolean toggle. `checked`/`defaultChecked` (booleans); `onCheckedChange`. Not a multi-value control.
+- **Input** — single-line text control. `value`/`defaultValue` are STRINGS; `onChange`. (It spreads native input attributes, so file-input props like `multiple` type-check but do nothing useful on a text field — don't reach for them for multi-value.)
+- **Button** — `variant`/`size`/`disabled`/`onClick`. Not a form-value control (no `value`/`defaultValue`).
+
+
 ## Templates
 
 

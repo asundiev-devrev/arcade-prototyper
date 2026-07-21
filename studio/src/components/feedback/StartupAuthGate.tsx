@@ -116,7 +116,14 @@ export function StartupAuthGate({ children }: StartupAuthGateProps) {
             width: "90%",
             padding: 24,
             borderRadius: 12,
-            background: "var(--surface-default, #fff)",
+            // `--surface-default` was never defined by the token set, so the
+            // #fff fallback ALWAYS fired — a white card in both themes. In dark
+            // theme the headings (which set no color) inherit a light root text
+            // color → white-on-white (the reported bug). Use the real
+            // theme-aware overlay surface + its paired foreground so the card
+            // and its text always contrast, light or dark.
+            background: "var(--surface-overlay, #fff)",
+            color: "var(--fg-neutral-prominent, #111)",
             boxShadow: "0 24px 48px rgba(0,0,0,0.2)",
             display: "flex",
             flexDirection: "column",

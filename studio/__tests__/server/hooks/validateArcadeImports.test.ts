@@ -1,7 +1,13 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 // @ts-expect-error — .mjs import of a pure-JS module with no types
-import { parseImports } from "../../../server/hooks/validateArcadeImports.mjs";
+import {
+  parseImports,
+  isResolvableArcadeSpecifier,
+  isArcadeNamespaceSpecifier,
+  extractImportSpecifiers,
+  detectInvalidArcadePaths,
+} from "../../../server/hooks/validateArcadeImports.mjs";
 
 describe("parseImports", () => {
   it("extracts named imports from arcade/components", () => {
@@ -289,6 +295,7 @@ describe("formatErrorMessage", () => {
 });
 
 import { spawnSync } from "node:child_process";
+import os from "node:os";
 
 const HOOK = path.resolve(__dirname, "../../../server/hooks/validateArcadeImports.mjs");
 
@@ -303,6 +310,13 @@ function runHook(payload, envOverrides = {}) {
     },
     encoding: "utf-8",
   });
+}
+
+function tmpFrame(content: string): string {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "validate-hook-"));
+  const filePath = path.join(tmpDir, "test-frame.tsx");
+  fs.writeFileSync(filePath, content, "utf-8");
+  return filePath;
 }
 
 describe("validateArcadeImports hook (integration)", () => {
@@ -354,17 +368,19 @@ describe("validateArcadeImports hook (integration)", () => {
     expect(proc.stderr).toMatch(/ArrowDownSmall/);
   });
 
-  it("validates the new_string field for Edit tool calls", () => {
-    const proc = runHook({
-      tool_name: "Edit",
-      tool_input: {
-        file_path: "/tmp/frame.tsx",
-        old_string: `import { Button } from "arcade/components";`,
-        new_string: `import { Button, ArrowsUpDownSmall } from "arcade/components";`,
-      },
-    });
+  it("validates the whole post-edit FILE for imports on an Edit (not just new_string)", () => {
+    // write a file whose FULL content has a bad arcade import, but whose
+    // new_string snippet alone looks clean
+    const file = tmpFrame(`import { NotAThing } from "arcade/components";\nexport default () => <div/>;`);
+    const proc = runHook({ tool_name: "Edit", tool_input: { file_path: file, old_string: "<div/>", new_string: "<div />" } });
     expect(proc.status).toBe(2);
-    expect(proc.stderr).toMatch(/ArrowsUpDownSmall/);
+    expect(proc.stderr).toMatch(/NotAThing/);
+  });
+
+  it("does NOT block a valid render-prop / multi-binding component on edit (JSX-ref check removed)", () => {
+    const file = tmpFrame(`import { Button } from "arcade/components";\nconst A = 1, B = 2;\nexport default ({ as: C }) => <C><Button/></C>;`);
+    const proc = runHook({ tool_name: "Edit", tool_input: { file_path: file, old_string: "<Button/>", new_string: "<Button />" } });
+    expect(proc.status).toBe(0);
   });
 
   it("still validates when the dev arcade-gen source path is gone (resolves the shipped npm package)", () => {
@@ -425,6 +441,42 @@ describe("validateArcadeImports hook (integration)", () => {
       encoding: "utf-8",
     });
     expect(proc.status).toBe(0);
+  });
+
+  it("exit 0 on a resolving prefix-alias subpath (Critical regression guard)", () => {
+    const f = tmpFrame(`import { FrameErrorBoundary } from "arcade-studio/frame/FrameErrorBoundary";\nexport default () => <div/>;`);
+    const p = runHook({ tool_name: "Write", tool_input: { file_path: f, content: fs.readFileSync(f, "utf-8") } });
+    expect(p.status).toBe(0);
+  });
+  it("exit 0 on valid arcade/components + relative + npm imports", () => {
+    const f = tmpFrame(`import { Button } from "arcade/components";\nimport X from "./pages/X";\nimport React from "react";\nexport default () => <Button/>;`);
+    const p = runHook({ tool_name: "Write", tool_input: { file_path: f, content: fs.readFileSync(f, "utf-8") } });
+    expect(p.status).toBe(0);
+  });
+  it("exit 0 on a docs-style frame with the keyword in JSX text (no false alarm)", () => {
+    const f = tmpFrame(`export default () => <p>To import icons, do: import Cog from "arcade/components/icons"</p>;`);
+    const p = runHook({ tool_name: "Write", tool_input: { file_path: f, content: fs.readFileSync(f, "utf-8") } });
+    expect(p.status).toBe(0);
+  });
+  it("exit 0 on a docs frame that RENDERS a MULTI-LINE code sample in a backtick template (round-2 Critical, no false alarm)", () => {
+    // The displayed import lives inside a template-literal body. The AST parser
+    // sees it as string content, never an import declaration, so a perfectly
+    // valid gallery/docs frame is not phantom-blocked.
+    const f = tmpFrame(`export default () => (
+  <pre>{\`
+import { ChevronDownSmall } from "arcade/components/icons";
+import { Button } from "arcade/components";
+\`}</pre>
+);`);
+    const p = runHook({ tool_name: "Write", tool_input: { file_path: f, content: fs.readFileSync(f, "utf-8") } });
+    expect(p.status).toBe(0);
+  });
+  it("exit 2 on the bug path arcade/components/icons (real bad import, not phantom)", () => {
+    const f = tmpFrame(`import { ChevronDownSmall } from "arcade/components/icons";\nexport default () => <ChevronDownSmall/>;`);
+    const p = runHook({ tool_name: "Write", tool_input: { file_path: f, content: fs.readFileSync(f, "utf-8") } });
+    expect(p.status).toBe(2);
+    expect(p.stderr).toMatch(/arcade\/components\/icons/);
+    expect(p.stderr).toMatch(/arcade\/components\b/);
   });
 });
 
@@ -509,6 +561,125 @@ describe("collectDefinedIdentifiers", () => {
   });
 });
 
+describe("isResolvableArcadeSpecifier", () => {
+  it("exact aliases resolve", () => {
+    for (const s of ["arcade", "arcade/components", "arcade-studio", "arcade-prototypes"])
+      expect(isResolvableArcadeSpecifier(s)).toBe(true);
+  });
+  it("PREFIX aliases resolve with a subpath (the Critical regression guard)", () => {
+    expect(isResolvableArcadeSpecifier("arcade-studio/frame/FrameErrorBoundary")).toBe(true);
+    expect(isResolvableArcadeSpecifier("arcade-prototypes/examples/Foo")).toBe(true);
+  });
+  it("arcade-user requires a non-empty name", () => {
+    expect(isResolvableArcadeSpecifier("arcade-user/Foo")).toBe(true);
+    expect(isResolvableArcadeSpecifier("arcade-user")).toBe(false);
+  });
+  it("EXACT aliases do NOT resolve a subpath", () => {
+    expect(isResolvableArcadeSpecifier("arcade/components/icons")).toBe(false);
+    expect(isResolvableArcadeSpecifier("arcade/nope")).toBe(false);
+  });
+});
+
+// Parser-era matrix. extractImportSpecifiers now walks the TypeScript AST, so
+// the REAL/PHANTOM split is decided by lexical structure — not regex anchors.
+// Every REAL specifier is extracted; every PHANTOM (import-looking text inside
+// a string, template, JSX text, or comment) is invisible to the parser.
+describe("extractImportSpecifiers (real vs phantom, AST parser)", () => {
+  // --- REAL: each form's specifier MUST be returned ---
+  it("named import", () => {
+    expect(extractImportSpecifiers(`import { ChevronDownSmall } from "arcade/components/icons";`))
+      .toContain("arcade/components/icons");
+  });
+  it("multi-line block: named + default + export-from (3 specifiers)", () => {
+    const src = [
+      'import {',
+      '  A,',
+      '  B,',
+      '} from "arcade/a";',
+      'import Def from "arcade/b";',
+      'export { C } from "arcade/c";',
+    ].join("\n");
+    const specs = extractImportSpecifiers(src);
+    expect(specs).toContain("arcade/a");
+    expect(specs).toContain("arcade/b");
+    expect(specs).toContain("arcade/c");
+    expect(specs).toHaveLength(3);
+  });
+  it("side-effect import", () => {
+    expect(extractImportSpecifiers(`import "arcade/x";`)).toContain("arcade/x");
+  });
+  it("export * from", () => {
+    expect(extractImportSpecifiers(`export * from "arcade/x";`)).toContain("arcade/x");
+  });
+  it("import type", () => {
+    expect(extractImportSpecifiers(`import type { T } from "arcade/x";`)).toContain("arcade/x");
+  });
+  it("no space after `import` (parser handles it; old regex could not)", () => {
+    expect(extractImportSpecifiers(`import{Foo} from "arcade/x";`)).toContain("arcade/x");
+  });
+  it("default + named on one statement", () => {
+    expect(extractImportSpecifiers(`import D, { E } from "arcade/x";`)).toContain("arcade/x");
+  });
+
+  // --- PHANTOM: import-looking text the parser never treats as an import ---
+  it("multi-line template code sample → []", () => {
+    const src = 'export default () => (<pre>{`\nimport { X } from "arcade/PHANTOM";\n`}</pre>);';
+    const specs = extractImportSpecifiers(src);
+    expect(specs).not.toContain("arcade/PHANTOM");
+    expect(specs).toEqual([]);
+  });
+  it("string code-sample → []", () => {
+    const src = `const e = "import { C } from 'arcade/PHANTOM'";`;
+    const specs = extractImportSpecifiers(src);
+    expect(specs).not.toContain("arcade/PHANTOM");
+    expect(specs).toEqual([]);
+  });
+  it("JSX prose → []", () => {
+    const src = `export default () => <p>import them from "arcade/PHANTOM"</p>;`;
+    const specs = extractImportSpecifiers(src);
+    expect(specs).not.toContain("arcade/PHANTOM");
+    expect(specs).toEqual([]);
+  });
+  it("prose-backtick-then-pre → []", () => {
+    const src = 'export default () => (<><p>press ` key</p><pre>{`\nimport {X} from "arcade/PHANTOM";\n`}</pre></>);';
+    const specs = extractImportSpecifiers(src);
+    expect(specs).not.toContain("arcade/PHANTOM");
+    expect(specs).toEqual([]);
+  });
+  it("stray backtick in a string then a REAL import — the round-2 regression the parser fixes", () => {
+    // A string containing a lone backtick used to desync the hand-lexer's
+    // template tracking and swallow the REAL import that followed. The AST is
+    // immune: the string is a string, and the import that follows is parsed.
+    const src = 'const h = "press ` key";\nimport { Bad } from "arcade/components/icons";';
+    const specs = extractImportSpecifiers(src);
+    expect(specs).toContain("arcade/components/icons");
+  });
+});
+
+describe("detectInvalidArcadePaths", () => {
+  it("flags the bug path, suggests arcade/components", () => {
+    const v = detectInvalidArcadePaths(`import { ChevronDownSmall } from "arcade/components/icons";`);
+    expect(v.map((x) => x.specifier)).toEqual(["arcade/components/icons"]);
+    expect(v[0].suggestion).toMatch(/arcade\/components/);
+  });
+  it("does NOT flag prefix-alias subpaths (no false alarm)", () => {
+    const src = `import { FrameErrorBoundary } from "arcade-studio/frame/FrameErrorBoundary";
+                 import example from "arcade-prototypes/examples/Foo";`;
+    expect(detectInvalidArcadePaths(src)).toEqual([]);
+  });
+  it("does NOT flag non-arcade specifiers", () => {
+    const src = `import React from "react";
+                 import { X } from "@xorkavi/arcade-gen";
+                 import { Y } from "./pages/Foo";`;
+    expect(detectInvalidArcadePaths(src)).toEqual([]);
+  });
+  it("flags a bad path in default and namespace and side-effect forms", () => {
+    expect(detectInvalidArcadePaths(`import Foo from "arcade/bad";`)).toHaveLength(1);
+    expect(detectInvalidArcadePaths(`import * as Foo from "arcade/bad";`)).toHaveLength(1);
+    expect(detectInvalidArcadePaths(`import "arcade/bad";`)).toHaveLength(1);
+  });
+});
+
 describe("validateJsxReferences", () => {
   const barrel = new Set([
     "AppShell", "NavSidebar", "Button", "IconButton", "VistaPage",
@@ -573,60 +744,3 @@ describe("validateJsxReferences", () => {
   });
 });
 
-describe("validateArcadeImports hook — JSX reference integration", () => {
-  it("blocks a frame that uses <WindowWithGrid /> without importing it", () => {
-    // The exact shape from the beta-tester crash: import looks valid, but
-    // the generator dropped an invented composite name into the JSX.
-    const proc = runHook({
-      tool_name: "Write",
-      tool_input: {
-        file_path: "/tmp/frame.tsx",
-        content: [
-          `import { AppShell, NavSidebar } from "arcade-prototypes";`,
-          `export default function MyWorkPage() {`,
-          `  return (`,
-          `    <AppShell sidebar={<NavSidebar />}>`,
-          `      <WindowWithGrid />`,
-          `    </AppShell>`,
-          `  );`,
-          `}`,
-        ].join("\n"),
-      },
-    });
-    expect(proc.status).toBe(2);
-    expect(proc.stderr).toMatch(/WindowWithGrid/);
-    expect(proc.stderr).toMatch(/JSX/i);
-  });
-
-  it("allows a frame whose JSX names all resolve to imports", () => {
-    const proc = runHook({
-      tool_name: "Write",
-      tool_input: {
-        file_path: "/tmp/frame.tsx",
-        content: [
-          `import { AppShell, NavSidebar } from "arcade-prototypes";`,
-          `import { Button } from "arcade/components";`,
-          `export default function Page() {`,
-          `  return (`,
-          `    <AppShell sidebar={<NavSidebar />}>`,
-          `      <Button>click</Button>`,
-          `    </AppShell>`,
-          `  );`,
-          `}`,
-        ].join("\n"),
-      },
-    });
-    expect(proc.status).toBe(0);
-  });
-
-  it("does not run the JSX check on .ts files (type casts look like JSX)", () => {
-    const proc = runHook({
-      tool_name: "Write",
-      tool_input: {
-        file_path: "/tmp/helper.ts",
-        content: `export const asNode = (x: unknown) => x as { foo: string };`,
-      },
-    });
-    expect(proc.status).toBe(0);
-  });
-});

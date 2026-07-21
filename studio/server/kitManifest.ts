@@ -27,6 +27,51 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
+/**
+ * Real capability/prop facts for the props-bearing arcade-gen primitives the
+ * agent commonly reaches for. Type-accurate against the installed Radix types
+ * (see the `.d.ts` line cited per fact) — do NOT lump: Select/Tabs are
+ * string-only; ToggleGroup/Accordion are `type` single|multiple unions.
+ * Rendered into the manifest as reference so the agent knows a capability
+ * exists (or doesn't) BEFORE inventing a prop.
+ */
+export const PRIMITIVE_CAPABILITIES: Record<string, string> = {
+  Select:
+    "single-value. `value`/`defaultValue` are STRINGS. NO `multiple` prop — the kit has no multi-select Select. (react-select index.d.ts: defaultValue?: string)",
+  Tabs:
+    "`value`/`defaultValue` are STRINGS. No multi-value. (react-tabs index.d.ts: defaultValue?: string)",
+  ToggleGroup:
+    "supports BOTH `type=\"single\"` (`value`/`defaultValue`: string) and `type=\"multiple\"` (`value`/`defaultValue`: string[]). Multi-select IS supported — via `type=\"multiple\"`, NOT a `multiple` prop. (react-toggle-group index.d.ts: union on `type`)",
+  Accordion:
+    "same `type` union as ToggleGroup: `type=\"single\"` (`value`/`defaultValue`: string) or `type=\"multiple\"` (`value`/`defaultValue`: string[]). Multiple open panels IS supported — via `type=\"multiple\"`, NOT a `multiple` prop. (react-accordion index.d.ts: union on `type`)",
+  Switch: "boolean toggle. `checked`/`defaultChecked` (booleans); `onCheckedChange`. Not a multi-value control.",
+  Input:
+    "single-line text control. `value`/`defaultValue` are STRINGS; `onChange`. (It spreads native input attributes, so file-input props like `multiple` type-check but do nothing useful on a text field — don't reach for them for multi-value.)",
+  Button: "`variant`/`size`/`disabled`/`onClick`. Not a form-value control (no `value`/`defaultValue`).",
+};
+
+/** Render the capability table as a manifest markdown section. */
+export function renderPrimitiveCapabilities(): string {
+  const lines = [
+    "## Primitive capabilities",
+    "",
+    "> Real prop/value facts for common arcade-gen primitives — check BEFORE",
+    "> using a prop. If a capability isn't here, it may not exist; do not invent.",
+    ">",
+    "> INTERNAL REFERENCE ONLY — this table is for YOUR decision-making. NEVER",
+    "> quote it, prop names (`value`, `defaultValue`, `multiple`, `type=\"multiple\"`),",
+    "> or the words \"manifest\"/\"primitive\"/\"kit\" to the user. In your Deviations,",
+    "> translate to plain design language (see the response-shape rules): e.g.",
+    "> \"used a multi-select toggle instead of a dropdown — the shape differs\", NOT",
+    "> \"the kit's Select has no `multiple` prop so I used ToggleGroup type=\\\"multiple\\\"\".",
+    "",
+  ];
+  for (const [name, desc] of Object.entries(PRIMITIVE_CAPABILITIES)) {
+    lines.push(`- **${name}** — ${desc}`);
+  }
+  return lines.join("\n");
+}
+
 export interface KitManifestEntry {
   kind: "composite" | "template";
   name: string;
@@ -291,7 +336,8 @@ export function renderManifestIndex(entries: KitManifestEntry[]): string {
       .join("\n") + compound;
   };
   const body = [
-    "## Templates\n",
+    renderPrimitiveCapabilities(),
+    "\n## Templates\n",
     ...templates.map(line),
     "\n## Composites\n",
     ...composites.map(line),
@@ -315,7 +361,8 @@ export function renderManifestMarkdown(entries: KitManifestEntry[]): string {
     "",
   ].join("\n");
   const body = [
-    "## Templates\n",
+    renderPrimitiveCapabilities(),
+    "\n## Templates\n",
     ...templates.map(renderEntry),
     "\n## Composites\n",
     ...composites.map(renderEntry),

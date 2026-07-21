@@ -13,6 +13,16 @@ import { render, cleanup } from "@testing-library/react";
 // representative root that forwards data-* to the rendered DOM.
 vi.mock("@xorkavi/arcade-gen", () => {
   const React = require("react");
+  // ToggleGroup mock mirrors the real compound shape (Root + Item). Root
+  // forwards className + all props to a <div> exactly as arcade-gen does, so
+  // the shim's injected vertical class is observable on the rendered root.
+  const ToggleGroupRoot = React.forwardRef<HTMLDivElement, any>((props, ref) => {
+    const { className, children, ...rest } = props;
+    return React.createElement("div", { ...rest, ref, className }, children);
+  });
+  const ToggleGroupItem = React.forwardRef<HTMLButtonElement, any>((props, ref) => {
+    return React.createElement("button", { ...props, ref });
+  });
   return {
     Button: React.forwardRef<HTMLButtonElement, any>((props, ref) => {
       return React.createElement("button", { ...props, ref });
@@ -29,6 +39,7 @@ vi.mock("@xorkavi/arcade-gen", () => {
         timestamp ? React.createElement("time", null, timestamp) : null,
       );
     }),
+    ToggleGroup: Object.assign({}, { Root: ToggleGroupRoot, Item: ToggleGroupItem }),
   };
 });
 
@@ -36,6 +47,7 @@ import {
   Button,
   IconButton,
   ChatBubble,
+  ToggleGroup,
 } from "../../prototype-kit/arcade-components";
 
 /**
@@ -202,6 +214,55 @@ describe("arcade-components shim — type narrowing", () => {
     const b2 = <IconButton size="sm" aria-label="x">×</IconButton>;
     expect(b1).toBeTruthy();
     expect(b2).toBeTruthy();
+  });
+});
+
+describe("arcade-components shim — ToggleGroup orientation", () => {
+  afterEach(() => cleanup());
+
+  it("adds a column layout class to the root when orientation=\"vertical\"", () => {
+    const { container } = render(
+      <ToggleGroup.Root type="single" orientation="vertical">
+        <ToggleGroup.Item value="a">A</ToggleGroup.Item>
+        <ToggleGroup.Item value="b">B</ToggleGroup.Item>
+      </ToggleGroup.Root>,
+    );
+    // The root is the mock's first div; the shim must have injected flex-col.
+    const root = container.firstElementChild as HTMLElement;
+    expect(root.className).toContain("flex-col");
+    // Radix orientation still forwarded (arrow-key + a11y contract).
+    expect(root.getAttribute("orientation")).toBe("vertical");
+  });
+
+  it("does NOT add the column class for horizontal (default)", () => {
+    const { container } = render(
+      <ToggleGroup.Root type="single" orientation="horizontal">
+        <ToggleGroup.Item value="a">A</ToggleGroup.Item>
+      </ToggleGroup.Root>,
+    );
+    const root = container.firstElementChild as HTMLElement;
+    expect(root.className ?? "").not.toContain("flex-col");
+  });
+
+  it("does NOT add the column class when orientation is omitted", () => {
+    const { container } = render(
+      <ToggleGroup.Root type="single">
+        <ToggleGroup.Item value="a">A</ToggleGroup.Item>
+      </ToggleGroup.Root>,
+    );
+    const root = container.firstElementChild as HTMLElement;
+    expect(root.className ?? "").not.toContain("flex-col");
+  });
+
+  it("preserves a caller-supplied className alongside the vertical class", () => {
+    const { container } = render(
+      <ToggleGroup.Root type="single" orientation="vertical" className="custom-x">
+        <ToggleGroup.Item value="a">A</ToggleGroup.Item>
+      </ToggleGroup.Root>,
+    );
+    const root = container.firstElementChild as HTMLElement;
+    expect(root.className).toContain("flex-col");
+    expect(root.className).toContain("custom-x");
   });
 });
 

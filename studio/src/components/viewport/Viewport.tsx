@@ -11,6 +11,7 @@ import { LoadingShow } from "./LoadingShow";
 import { useEditSession } from "../../hooks/editSessionContext";
 import { useDialogs } from "../feedback/Dialogs";
 import type { TurnPhase } from "../../hooks/chatStreamReducer";
+import type { RenderDigest } from "../../frame/frameDigest";
 
 export function Viewport({
   project,
@@ -20,6 +21,8 @@ export function Viewport({
   onZoomChange,
   onSeedChat,
   phase = "idle",
+  onVisualNoOp,
+  onRenderDigest,
 }: {
   project: Project;
   frameWidth: number;
@@ -28,6 +31,8 @@ export function Viewport({
   onZoomChange: (next: number) => void;
   onSeedChat: (text: string) => void;
   phase?: TurnPhase;
+  onVisualNoOp?: (frameSlug: string) => void;
+  onRenderDigest?: (frameSlug: string, digest: RenderDigest) => void;
 }) {
   const { frames, refresh } = useFrames(project);
   const [creatingFrame, setCreatingFrame] = useState(false);
@@ -198,6 +203,8 @@ export function Viewport({
             highlighted={highlight?.slug === f.slug ? highlight.kind : null}
             phase={phase}
             onDelete={handleDeleteFrame}
+            onVisualNoOp={onVisualNoOp}
+            onRenderDigest={onRenderDigest}
           />
         ))}
         <NewFrameCard onClick={handleCreateFrame} busy={creatingFrame} />

@@ -27,4 +27,14 @@ async function boot() {
   );
 }
 
+// Targeted per-frame reload: the server sends `arcade-studio:frame-changed`
+// over Vite's custom-HMR channel instead of a shell-wide full-reload. Re-emit
+// it as a window CustomEvent so the matching FrameCard can reload just its own
+// iframe. import.meta.hot exists because the packaged app runs the dev server.
+if (import.meta.hot) {
+  import.meta.hot.on("arcade-studio:frame-changed", (data: { slug: string; frameId: string }) => {
+    window.dispatchEvent(new CustomEvent("arcade-studio:frame-changed", { detail: data }));
+  });
+}
+
 void boot();

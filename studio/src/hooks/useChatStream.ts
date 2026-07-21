@@ -200,6 +200,7 @@ export function useChatStream(
                 ...INITIAL_STATE,
                 busy: header.status === "running",
                 phase: header.status,
+                turnId: header.turnId,
                 lastPrompt: header.prompt,
                 turnStartedAt: header.startedAt,
                 turnEndedAt: header.endedAt ?? null,
@@ -358,5 +359,5 @@ export function useChatStream(
     }
   }, [slug]);
 
-  return { state, send, retry, cancel };
+  return { state, send, retry, cancel, reconnect };
 }

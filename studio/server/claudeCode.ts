@@ -83,6 +83,13 @@ const VALIDATE_ARCADE_IMPORTS_HOOK = path.resolve(MODULE_DIR, "hooks", "validate
 // named form → unstyled frame. Emits a paren-form did-you-mean so the model
 // self-corrects in the same turn.
 const VALIDATE_TOKEN_CLASSES_HOOK = path.resolve(MODULE_DIR, "hooks", "validateTokenClasses.mjs");
+// PostToolUse hook that blocks Write/Edit writing a BOUNDED denylist of
+// invented props / wrong value shapes on kit components (e.g. `<Select.Root
+// multiple>` — the kit has no multi-select Select; an array `defaultValue`
+// where a string is required). Those are silently ignored / break the control
+// at runtime while the agent reports "Deviations: None" — a false success.
+// Emits a component-specific self-correct so the model fixes it in the turn.
+const VALIDATE_COMPONENT_PROPS_HOOK = path.resolve(MODULE_DIR, "hooks", "validateComponentProps.mjs");
 // Arcade-gen clone: contains src/components (stories, icons barrel) the agent
 // consults for component APIs. Overridable via env for non-default checkouts;
 // falls back to ~/arcade-gen when HOME is set, and to an unresolvable sentinel
@@ -281,6 +288,10 @@ export async function runClaudeTurn(opts: RunTurnOptions): Promise<void> {
         {
           matcher: "Write|Edit",
           hooks: [{ type: "command", command: hookCommand(VALIDATE_TOKEN_CLASSES_HOOK) }],
+        },
+        {
+          matcher: "Write|Edit",
+          hooks: [{ type: "command", command: hookCommand(VALIDATE_COMPONENT_PROPS_HOOK) }],
         },
       ],
     },

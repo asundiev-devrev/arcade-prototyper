@@ -40,6 +40,7 @@ import { turnsMiddleware } from "./server/middleware/turns";
 import { updateMiddleware } from "./server/middleware/update";
 import { frameMountPlugin } from "./server/plugins/frameMountPlugin";
 import { projectWatchPlugin } from "./server/plugins/projectWatchPlugin";
+import { suppressFrameHmrPlugin } from "./server/plugins/suppressFrameHmrPlugin";
 import { injectStudioSourcePlugin } from "./server/plugins/injectStudioSourcePlugin";
 import { kitManifestPlugin } from "./server/plugins/kitManifestPlugin";
 import { liftEmitPlugin } from "./server/plugins/liftEmitPlugin";
@@ -141,7 +142,11 @@ export default defineConfig({
   cacheDir: process.env.ARCADE_STUDIO_ROOT
     ? path.join(process.env.ARCADE_STUDIO_ROOT, `.vite-cache-${process.env.ARCADE_APP_VERSION || "dev"}`)
     : undefined,
-  plugins: [injectStudioSourcePlugin(), kitManifestPlugin(), react(), tailwindcss(), frameMountPlugin(), projectWatchPlugin(), liftEmitPlugin(), apiPlugin()],
+  // HMR suppressor runs enforce:"post" (last) so its [] return is the final
+  // word on frame-source files, keeping the resilient-render double-buffer's
+  // hold-last-good from being defeated by an in-place HMR swap. Position in
+  // this array is moot (post plugins sort last regardless).
+  plugins: [suppressFrameHmrPlugin(), injectStudioSourcePlugin(), kitManifestPlugin(), react(), tailwindcss(), frameMountPlugin(), projectWatchPlugin(), liftEmitPlugin(), apiPlugin()],
   resolve: {
     alias: [
       { find: /^arcade\/components$/, replacement: path.resolve(__dirname, "prototype-kit/arcade-components.tsx") },
@@ -174,6 +179,15 @@ export default defineConfig({
     open: process.env.ARCADE_STUDIO_OPEN_BROWSER !== "0",
     fs: {
       allow: [path.resolve(__dirname, ".."), studioRoot()],
+    },
+    hmr: {
+      // Disable the global error overlay: a frame parse error broadcasts
+      // `vite:error` to ALL connected clients and would red-wall the shell even
+      // though the resilient-render feature now holds broken frames off-screen
+      // while auto-repair runs. The overlay is global-only with no per-scope
+      // config. Parse-error auto-repair (buildErrorReporter, server-side) is
+      // unaffected. The packaged app has no dev overlay anyway.
+      overlay: false,
     },
   },
 });

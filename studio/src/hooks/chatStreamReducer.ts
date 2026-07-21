@@ -38,6 +38,10 @@ export interface StreamState {
   /** True while a turn is in flight. Alias for `phase === "running"`. */
   busy: boolean;
   phase: TurnPhase;
+  /** Server turn id of the current/last turn, from the SSE `turn` header.
+   *  Null until a header arrives. Keys the visual-no-op one-shot on the
+   *  originating user-turn lineage (see useProjectFromHost). */
+  turnId: string | null;
   error: string | null;
   errorKind?: ErrorKind;
   narrations: string[];
@@ -83,6 +87,7 @@ export function classifyError(message: string): ErrorKind {
 export const INITIAL_STREAM_STATE: StreamState = {
   busy: false,
   phase: "idle",
+  turnId: null,
   error: null,
   errorKind: undefined,
   narrations: [],

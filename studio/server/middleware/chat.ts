@@ -34,6 +34,14 @@ import {
   isMemoryOnlyPrompt,
   PHANTOM_EDIT_RETRY_PROMPT,
 } from "../phantomEditRetry";
+import {
+  VISUAL_NOOP_RETRY_PROMPT,
+  visualNoOpRetryAlreadyRan,
+  markVisualNoOpRetryRan,
+} from "../visualNoOpRetry";
+import { renderVerifyAlreadyRan, markRenderVerifyRan } from "../renderVerify";
+import { cachePreTurnSources, getPreTurnSource } from "../editHistory";
+import { buildIsolationHtml, resolveTargetPage } from "../renderVerifyIsolation";
 import type { Frame } from "../types";
 import {
   snapshotProjectFiles,
@@ -117,6 +125,34 @@ export function frameSlugFromDiff(diff: { added: string[]; changed: string[]; re
 const STREAM_URL = /^\/api\/chat\/stream\/([a-z0-9][a-z0-9-]{0,62})$/i;
 const STATUS_URL = /^\/api\/chat\/status\/([a-z0-9][a-z0-9-]{0,62})$/i;
 const CANCEL_URL = /^\/api\/chat\/cancel\/([a-z0-9][a-z0-9-]{0,62})$/i;
+const VISUAL_NOOP_RETRY_URL = /^\/api\/chat\/visual-noop-retry$/;
+const RENDER_VERIFY_RETRY_URL = /^\/api\/chat\/render-verify-retry$/;
+const VERIFY_RENDER_URL = /^\/api\/verify-render$/;
+const LAST_TURN_META_URL = /^\/api\/chat\/last-turn-meta\/([a-z0-9][a-z0-9-]{0,62})$/i;
+
+// Server-side mirror of the client's disabled render-measurement features
+// (RENDER_MEASUREMENT_FEATURES_ENABLED + RENDER_VERIFY_V3_ENABLED in
+// useProjectFromHost.ts). Those two flags disable the CLIENT effects that CALL
+// the render-verify routes and CONSUME the per-turn capture — but the server
+// half kept running regardless: the retry routes still spawned real claude
+// turns from a localhost POST, the isolation route still ran esbuild on demand,
+// and every generation turn still read the whole frame tree into an unevicted
+// cache to feed a feature nothing reads. This flag switches the PRODUCTION half
+// off too, so a disabled feature does no per-turn I/O and exposes no
+// turn-spawning surface. Flip true (with the client flags) when the keystone
+// lands. See render-measurement-multipage-blocker memory + the whole-branch review.
+const RENDER_VERIFY_SERVER_ENABLED = false;
+
+// Render-verify (keystone v3): the post-turn channel to the client. The SSE
+// `end` event is a closed `{kind:"end", ok}` type with no metadata slot, so the
+// client reads this per-slug store via GET after `phase==="done"`. Populated in
+// runClaudeBranch at turn-end (from turnType + the frame diff) BEFORE end()
+// fires, so the client's fetch never races an empty store. Best-effort: a miss
+// reads `turnType:"none"` → client skips (fail open).
+const lastTurnMeta = new Map<
+  string,
+  { turnType: string; frame: string | null; targetPage: string | null }
+>();
 
 export function chatMiddleware() {
   return async (req: IncomingMessage, res: ServerResponse, next?: () => void) => {
@@ -127,11 +163,31 @@ export function chatMiddleware() {
       if (streamMatch) return handleStream(req, res, streamMatch[1].toLowerCase());
       const statusMatch = req.url.match(STATUS_URL);
       if (statusMatch) return handleStatus(res, statusMatch[1].toLowerCase());
+      const metaMatch = req.url.match(LAST_TURN_META_URL);
+      if (metaMatch && RENDER_VERIFY_SERVER_ENABLED) return handleLastTurnMeta(res, metaMatch[1].toLowerCase());
     }
 
-    if (req.url.startsWith("/api/chat") && req.method === "POST") {
+    if ((req.url.startsWith("/api/chat") || VERIFY_RENDER_URL.test(req.url)) && req.method === "POST") {
       const cancelMatch = req.url.match(CANCEL_URL);
       if (cancelMatch) return handleCancel(res, cancelMatch[1].toLowerCase());
+      // Render-verify routes are gated OFF server-side (feature disabled). They
+      // otherwise spawn a real claude turn / run esbuild from an unauthenticated
+      // localhost POST — a live surface for a feature the client never calls.
+      // 404 so nothing is spawned; flip the flag to re-enable with the client.
+      const isRenderVerifyRoute =
+        VISUAL_NOOP_RETRY_URL.test(req.url) ||
+        RENDER_VERIFY_RETRY_URL.test(req.url) ||
+        VERIFY_RENDER_URL.test(req.url);
+      if (isRenderVerifyRoute) {
+        if (!RENDER_VERIFY_SERVER_ENABLED) {
+          res.writeHead(404, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: { code: "not_found", message: "Render-verify is disabled." } }));
+          return;
+        }
+        if (VISUAL_NOOP_RETRY_URL.test(req.url)) return handleVisualNoOpRetry(req, res);
+        if (RENDER_VERIFY_RETRY_URL.test(req.url)) return handleRenderVerifyRetry(req, res);
+        return handleVerifyRender(req, res);
+      }
       return handleStart(req, res);
     }
 
@@ -307,6 +363,151 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
   res.end(JSON.stringify({ turnId: turn.id, slug }));
 }
 
+async function handleVisualNoOpRetry(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  let buf = "";
+  for await (const chunk of req) buf += chunk;
+  let body: { slug?: string; frame?: string; userTurnId?: string };
+  try { body = JSON.parse(buf); } catch {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "bad_request", message: "Invalid JSON" } }));
+    return;
+  }
+  const { slug, frame, userTurnId } = body;
+  if (typeof slug !== "string" || !slug || typeof frame !== "string" || !frame || typeof userTurnId !== "string" || !userTurnId) {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "bad_request", message: "slug, frame, userTurnId required" } }));
+    return;
+  }
+  const project = await getProject(slug);
+  if (!project) {
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "not_found", message: "Project not found" } }));
+    return;
+  }
+  // One-shot per originating user-turn (stable across session rotation).
+  if (visualNoOpRetryAlreadyRan(userTurnId)) {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true, skipped: "already_ran" }));
+    return;
+  }
+  const running = getTurn(slug);
+  if (running && running.status === "running") {
+    res.writeHead(409, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "turn_in_progress", message: "A turn is already running." } }));
+    return;
+  }
+  markVisualNoOpRetryRan(userTurnId);
+
+  // Register the corrective as a REAL turn — SAME shape as handleStart (:275),
+  // reusing runClaudeBranch so session-resume + narration + appendHistory +
+  // the frame-change contract all work. NO user-message appendHistory (no
+  // fake user bubble). Respond 202 AFTER startTurn so the reconnecting client
+  // finds the registered turn to replay (proven ordering: startTurn is sync).
+  const turn = startTurn(slug, {
+    prompt: VISUAL_NOOP_RETRY_PROMPT,
+    run: ({ emit, end, signal }) => {
+      runClaudeBranch({ emit, slug, prompt: VISUAL_NOOP_RETRY_PROMPT, project, signal }).then(
+        (result) => end(result),
+        (err) => end({ ok: false, error: err?.message ?? String(err) }),
+      );
+    },
+  });
+  res.writeHead(202, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ turnId: turn.id, slug }));
+}
+
+// Render-verify corrective: the client detected that the render CONTRADICTS the
+// user's requested visual property (own reconcile), and passes the corrective
+// PROMPT it computed via RENDER_VERIFY_RETRY_PROMPT. Mirrors handleVisualNoOpRetry
+// exactly (session-resumed turn via runClaudeBranch, 202 after startTurn) but with
+// its OWN one-shot Set and the prompt from the request body rather than a const —
+// the server does not re-derive the mismatch. Do NOT fold into VN's handler.
+async function handleRenderVerifyRetry(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  let buf = "";
+  for await (const chunk of req) buf += chunk;
+  let body: { slug?: string; frame?: string; userTurnId?: string; prompt?: string };
+  try { body = JSON.parse(buf); } catch {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "bad_request", message: "Invalid JSON" } }));
+    return;
+  }
+  const { slug, frame, userTurnId, prompt } = body;
+  if (typeof slug !== "string" || !slug || typeof frame !== "string" || !frame ||
+      typeof userTurnId !== "string" || !userTurnId || typeof prompt !== "string" || !prompt) {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "bad_request", message: "slug, frame, userTurnId, prompt required" } }));
+    return;
+  }
+  const project = await getProject(slug);
+  if (!project) {
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "not_found", message: "Project not found" } }));
+    return;
+  }
+  if (renderVerifyAlreadyRan(userTurnId)) {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true, skipped: "already_ran" }));
+    return;
+  }
+  const running = getTurn(slug);
+  if (running && running.status === "running") {
+    res.writeHead(409, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "turn_in_progress", message: "A turn is already running." } }));
+    return;
+  }
+  markRenderVerifyRan(userTurnId);
+  const turn = startTurn(slug, {
+    prompt,
+    run: ({ emit, end, signal }) => {
+      runClaudeBranch({ emit, slug, prompt, project, signal }).then(
+        (result) => end(result),
+        (err) => end({ ok: false, error: err?.message ?? String(err) }),
+      );
+    },
+  });
+  res.writeHead(202, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ turnId: turn.id, slug }));
+}
+
+// Render-verify (keystone v3): isolation-render one edited page BEFORE or AFTER
+// the edit. `which:"before"` reads the pre-turn source cache; `which:"after"`
+// reads the current on-disk page. Both bundle via buildIsolationHtml (synthetic
+// entry → packFromDir). 404 (no before-source) / 422 (bundle failed) both mean
+// the client FAILS OPEN (skips the verify, no corrective).
+async function handleVerifyRender(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  let buf = ""; for await (const c of req) buf += c;
+  let body: { slug?: string; frame?: string; targetPage?: string; which?: string };
+  try { body = JSON.parse(buf); } catch {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "bad_request" } })); return;
+  }
+  const { slug, frame, targetPage, which } = body;
+  if (typeof slug !== "string" || typeof frame !== "string" || typeof targetPage !== "string" ||
+      (which !== "before" && which !== "after")) {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "bad_request" } })); return;
+  }
+  const frameDir = path.join(projectDir(slug), "frames", frame);
+  let source: string | null;
+  if (which === "before") {
+    source = getPreTurnSource(slug, frame, targetPage);
+  } else {
+    source = await fs.readFile(path.join(frameDir, targetPage), "utf-8").catch(() => null);
+  }
+  if (source == null) { // no before-source (first gen) / file gone → fail open
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "no_source" } })); return;
+  }
+  try {
+    const html = await buildIsolationHtml(frameDir, targetPage, source);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ html }));
+  } catch {
+    res.writeHead(422, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "bundle_failed" } })); // fail open
+  }
+}
+
 async function handleStream(req: IncomingMessage, res: ServerResponse, slug: string): Promise<void> {
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
@@ -403,6 +604,15 @@ function handleStatus(res: ServerResponse, slug: string): void {
       error: turn.error,
     }),
   );
+}
+
+// Render-verify (keystone v3): the post-turn meta channel. Returns the last
+// turn's classification for this slug so the client can decide whether to run
+// the isolation render-verify. A miss → `turnType:"none"` → client skips.
+function handleLastTurnMeta(res: ServerResponse, slug: string): void {
+  const meta = lastTurnMeta.get(slug) ?? { turnType: "none", frame: null, targetPage: null };
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify(meta));
 }
 
 function handleCancel(res: ServerResponse, slug: string): void {
@@ -749,6 +959,32 @@ async function runClaudeBranch(ctx: {
   // the contract and the user.
   const beforeSnapshot = await snapshotProjectFiles(projectDir(slug));
 
+  // Render-verify (keystone v3): cache pre-edit page sources so turn-end can
+  // isolation-render the BEFORE state of whatever page the agent edits.
+  // Best-effort. GATED: skipped entirely while render-verify is disabled — else
+  // every generation turn re-reads the whole frame tree into an unevicted cache
+  // to feed a feature nothing consumes (whole-branch review finding).
+  if (RENDER_VERIFY_SERVER_ENABLED) {
+    try {
+      const framesRoot = path.join(projectDir(slug), "frames");
+      const frameDirs = await fs.readdir(framesRoot, { withFileTypes: true }).catch(() => []);
+      for (const fd of frameDirs) {
+        if (!fd.isDirectory()) continue;
+        const sources: Record<string, string> = {};
+        for (const rel of ["index.tsx"]) {
+          try { sources[rel] = await fs.readFile(path.join(framesRoot, fd.name, rel), "utf-8"); } catch {}
+        }
+        const pagesDir = path.join(framesRoot, fd.name, "pages");
+        const pages = await fs.readdir(pagesDir).catch(() => []);
+        for (const pf of pages) {
+          if (!pf.endsWith(".tsx")) continue;
+          try { sources[`pages/${pf}`] = await fs.readFile(path.join(pagesDir, pf), "utf-8"); } catch {}
+        }
+        if (Object.keys(sources).length) cachePreTurnSources(slug, fd.name, sources);
+      }
+    } catch { /* best-effort — render-verify just skips if before-source missing */ }
+  }
+
   let model: string | undefined;
   try {
     model = (await readGlobalSettings()).studio?.model;
@@ -898,6 +1134,22 @@ async function runClaudeBranch(ctx: {
         } catch { /* frame vanished — leave frameLines undefined */ }
       }
     } catch { /* metrics classification is best-effort */ }
+  }
+  // Render-verify (keystone v3): publish the post-turn meta channel BEFORE this
+  // function returns (its result drives end() in the caller), so the client's
+  // phase==="done" fetch of GET /api/chat/last-turn-meta never races an empty
+  // store. frame = the touched frame's dir slug (frames/<frame>/...); targetPage
+  // = the edited page resolved from the diff. Best-effort — a miss reads
+  // turnType:"none" → client skips (fail open). GATED: no write while the
+  // feature is disabled (the GET route is gated too, so the store is dead).
+  if (RENDER_VERIFY_SERVER_ENABLED) {
+    const changedFrame =
+      afterDiff?.changed.find((p) => /^frames\//.test(p)) ??
+      afterDiff?.added.find((p) => /^frames\//.test(p)) ??
+      null;
+    const rvFrame = changedFrame ? changedFrame.split("/")[1] : null; // frames/<frame>/...
+    const rvTargetPage = afterDiff ? resolveTargetPage(afterDiff.changed) : null;
+    lastTurnMeta.set(slug, { turnType, frame: rvFrame, targetPage: rvTargetPage });
   }
   void recordTurnMetric({
     at: new Date().toISOString(),

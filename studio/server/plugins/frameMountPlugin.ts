@@ -38,7 +38,7 @@ function escapeHtml(s: string): string {
  * arcade-gen styles + error shim; the `bootstrapUrl` decides which virtual TSX
  * module Vite compiles.
  */
-function renderFrameShellHtml(opts: {
+export function renderFrameShellHtml(opts: {
   title: string;
   mode: "light" | "dark";
   overridesUrl: string | null;
@@ -55,6 +55,7 @@ function renderFrameShellHtml(opts: {
     (function () {
       var SLUG = ${slugJson};
       var FRAME = ${frameJson};
+      var NONCE = new URLSearchParams(location.search).get("n") || "";
       function isViteClientNoise(err) {
         var stack = String((err && err.stack) || "");
         if (!stack) return false;
@@ -77,50 +78,100 @@ function renderFrameShellHtml(opts: {
             slug: SLUG,
             frame: FRAME,
             message: msg,
-            stack: stack
+            stack: stack,
+            n: NONCE
           }, "*");
         } catch (e) {}
-        var root = document.getElementById("root") || document.body;
-        if (!root) return;
-        // Calm "auto-repairing" overlay. The previous behaviour was a wall
-        // of red stack-trace text — accurate but designed for a developer,
-        // not a designer/PM looking at their canvas. The studio dispatches
-        // an auto-fix turn server-side on every postMessage above, so the
-        // honest read is "we noticed, we're fixing it" — surface that, hide
-        // the gore behind a disclosure. Chat pane carries the durable
-        // record (system messages on dispatch + completion).
-        root.innerHTML = "";
-        var wrap = document.createElement("div");
-        wrap.style.cssText = "padding:24px;font:13px/1.5 system-ui,-apple-system,sans-serif;color:#374151;background:#fafafa;min-height:100vh;box-sizing:border-box;display:flex;flex-direction:column;align-items:flex-start;gap:8px;";
-        var head = document.createElement("div");
-        head.style.cssText = "display:flex;align-items:center;gap:10px;";
-        var dot = document.createElement("span");
-        dot.style.cssText = "display:inline-block;width:8px;height:8px;border-radius:50%;background:#a78bfa;animation:arcade-frame-pulse 1.4s ease-in-out infinite;";
-        var title = document.createElement("strong");
-        title.textContent = "Auto-repairing this frame";
-        title.style.cssText = "font-weight:600;color:#111827;";
-        head.appendChild(dot);
-        head.appendChild(title);
-        var sub = document.createElement("div");
-        sub.style.cssText = "color:#6b7280;font-size:12.5px;";
-        sub.textContent = "We caught a " + (label === "Frame failed to load" ? "load" : "runtime") + " error and asked the agent to fix it. Watch the chat for an update.";
-        var details = document.createElement("details");
-        details.style.cssText = "margin-top:12px;color:#6b7280;font-size:12px;max-width:100%;";
-        var summary = document.createElement("summary");
-        summary.textContent = "Show technical details";
-        summary.style.cssText = "cursor:pointer;color:#6b7280;";
-        details.appendChild(summary);
-        var pre = document.createElement("pre");
-        pre.style.cssText = "margin-top:8px;padding:10px;background:#f3f4f6;border-radius:6px;font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#7f1d1d;white-space:pre-wrap;overflow:auto;max-height:60vh;";
-        pre.textContent = label + "\\n\\n" + msg + (stack ? "\\n\\n" + stack : "");
-        details.appendChild(pre);
+        // Never blank a rendered frame
+        // This shim fires for BOTH an interaction/async error (React tree
+        // mounted, #root has children, we must NOT destroy it) AND a
+        // module-load crash before React mounts (#root empty, the panel is
+        // the only content). Branch accordingly.
+        var root = document.getElementById("root");
+        // "Rendered" = #root has element children, OR the app painted via a
+        // body portal that leaves #root empty. Real kit markers (verified
+        // against the radix dist): a modal renders [role='dialog']; popover /
+        // select / dropdown / tooltip content renders
+        // [data-radix-popper-content-wrapper]. (There is NO data-radix-portal
+        // attribute - the Portal wrapper is an unmarked div, so don't rely on it.)
+        var rendered = !!root && (
+          root.childElementCount > 0 ||
+          !!document.body.querySelector("[data-radix-popper-content-wrapper],[role='dialog']")
+        );
+        // Idempotent: never stack overlays/panels on a second error.
+        if (document.querySelector("[data-arcade-status-overlay]")) return;
+
+        // Shared calm content (dot + title + sub + details) - built once.
+        function buildCalm(container, isOverlay) {
+          var head = document.createElement("div");
+          head.style.cssText = "display:flex;align-items:center;gap:10px;";
+          var dot = document.createElement("span");
+          dot.style.cssText = "display:inline-block;width:8px;height:8px;border-radius:50%;background:#a78bfa;animation:arcade-frame-pulse 1.4s ease-in-out infinite;";
+          var title = document.createElement("strong");
+          title.textContent = isOverlay ? "Refining your change…" : "Auto-repairing this frame";
+          title.style.cssText = "font-weight:600;color:#111827;";
+          head.appendChild(dot); head.appendChild(title);
+          var sub = document.createElement("div");
+          sub.setAttribute("data-arcade-status-sub", "");   // targeted by the softener via this marker - a bare-div lookup would grab the head row (dot+title) instead
+          sub.style.cssText = "color:#6b7280;font-size:12.5px;";
+          sub.textContent = "We caught a " + (label === "Frame failed to load" ? "load" : "runtime") + " error and asked the agent to fix it. Watch the chat for an update.";
+          var details = document.createElement("details");
+          details.style.cssText = "margin-top:12px;color:#6b7280;font-size:12px;max-width:100%;";
+          var summary = document.createElement("summary");
+          summary.textContent = "Show technical details";
+          summary.style.cssText = "cursor:pointer;color:#6b7280;";
+          details.appendChild(summary);
+          var pre = document.createElement("pre");
+          pre.style.cssText = "margin-top:8px;padding:10px;background:#f3f4f6;border-radius:6px;font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#7f1d1d;white-space:pre-wrap;overflow:auto;max-height:60vh;";
+          pre.textContent = label + "\\n\\n" + msg + (stack ? "\\n\\n" + stack : "");
+          details.appendChild(pre);
+          container.appendChild(head); container.appendChild(sub); container.appendChild(details);
+        }
+
         var keyframes = document.createElement("style");
         keyframes.textContent = "@keyframes arcade-frame-pulse { 0%, 100% { opacity: 0.4; transform: scale(0.9); } 50% { opacity: 1; transform: scale(1.1); } }";
-        wrap.appendChild(keyframes);
-        wrap.appendChild(head);
-        wrap.appendChild(sub);
-        wrap.appendChild(details);
-        root.appendChild(wrap);
+        document.head.appendChild(keyframes);
+
+        if (rendered) {
+          // KEEP the frame's DOM. Lay a calm status banner on top, pinned to a
+          // corner, at max z-index so the frame's own fixed chrome / modals
+          // cannot hide it. Appended to <body> (shares the top stacking
+          // context) so no descendant z-index can cover it.
+          var overlay = document.createElement("div");
+          overlay.setAttribute("data-arcade-status-overlay", "");
+          overlay.style.cssText = "position:fixed;left:12px;bottom:12px;max-width:calc(100% - 24px);z-index:2147483647;padding:10px 12px;border-radius:10px;background:#fafafa;border:1px solid rgba(0,0,0,0.08);box-shadow:0 4px 16px rgba(0,0,0,0.12);font:12.5px/1.45 system-ui,-apple-system,sans-serif;color:#374151;display:flex;flex-direction:column;gap:6px;";
+          buildCalm(overlay, true);
+          document.body.appendChild(overlay);
+          // Bounded resting-state (spec constraint 5): repair may have nothing
+          // to fix (a pure interaction error, no file change, no swap, this
+          // overlay would otherwise promise "Refining..." forever). After a
+          // bounded wait with no swap, soften to tell the user what to DO. If a
+          // real repair lands first, the committed iframe reloads and this whole
+          // document (overlay + timer) is gone - so blindly softening is safe.
+          // Self-contained in the shim: does NOT touch the parent chip / timer.
+          setTimeout(function () {
+            var live = document.querySelector("[data-arcade-status-overlay]");
+            if (!live) return; // document already swapped/reloaded, nothing to do
+            // Target elements EXPLICITLY via markers. A bare-div lookup would
+            // hit the head flex-row (dot+title) - the FIRST div - and
+            // .textContent on it would DESTROY the dot+title children. Use the
+            // sub's marker attr and the title strong element (no element children).
+            var t = live.querySelector("strong");
+            var s = live.querySelector("[data-arcade-status-sub]");
+            if (t) t.textContent = "Couldn't apply that change automatically";
+            if (s) s.textContent = "Tell the agent what you'd like instead, or reload.";
+          }, 90000);
+        } else {
+          // Empty frame (module-load crash, nothing rendered) - the panel IS
+          // the content. Keep today's full-panel behavior.
+          var host = root || document.body;
+          host.innerHTML = "";
+          var wrap = document.createElement("div");
+          wrap.setAttribute("data-arcade-status-overlay", "");
+          wrap.style.cssText = "padding:24px;font:13px/1.5 system-ui,-apple-system,sans-serif;color:#374151;background:#fafafa;min-height:100vh;box-sizing:border-box;display:flex;flex-direction:column;align-items:flex-start;gap:8px;";
+          buildCalm(wrap, false);
+          host.appendChild(wrap);
+        }
       }
       window.addEventListener("error", function (e) {
         showFatal("Frame failed to load", e.error || e.message);
@@ -272,7 +323,47 @@ export function buildFrameBootstrapSource(opts: {
     import "arcade-studio/frame/picker";
     import "arcade-studio/frame/inspector";
     import "arcade-studio/frame/gestureForwarder";
+    import { computeFingerprint, productionMeasure } from "arcade-studio/frame/renderFingerprint";
+    import { digestElements } from "arcade-studio/frame/frameDigest";
     import Frame from "${absFrame}";
+
+    const __N = new URLSearchParams(location.search).get("n") || "";
+    let __arcadeFrameReadyPosted = false;
+    function ArcadeFrameReady() {
+      React.useEffect(() => {
+        if (__arcadeFrameReadyPosted) return;      // StrictMode double-invoke guard
+        __arcadeFrameReadyPosted = true;
+        window.parent && window.parent.postMessage(
+          { type: "arcade-studio:frame-ready", slug: ${JSON.stringify(slug)}, frame: ${JSON.stringify(frame)}, n: __N }, "*");
+      }, []);
+      return null;
+    }
+
+    // Rides its OWN message — never folded into frame-ready (which must fire
+    // instantly to drive the double-buffer swap). Awaits fonts + double-rAF so
+    // the fingerprint reflects the AT-REST rendered layout. Best-effort: any
+    // failure is swallowed so it can never break the frame.
+    function ArcadeFrameFingerprint() {
+      React.useEffect(() => {
+        let cancelled = false;
+        const post = () => {
+          if (cancelled) return;
+          try {
+            const fp = computeFingerprint(document.body, productionMeasure);
+            window.parent && window.parent.postMessage(
+              { type: "arcade-studio:frame-fingerprint", slug: ${JSON.stringify(slug)}, frame: ${JSON.stringify(frame)}, n: __N, fp: fp }, "*");
+            const digest = digestElements(document.body, productionMeasure);
+            window.parent && window.parent.postMessage(
+              { type: "arcade-studio:frame-digest", slug: ${JSON.stringify(slug)}, frame: ${JSON.stringify(frame)}, n: __N, digest: digest }, "*");
+          } catch (_) { /* fingerprint is best-effort; never break the frame */ }
+        };
+        const afterLayout = () => requestAnimationFrame(() => requestAnimationFrame(post));
+        const fonts = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+        fonts.then(afterLayout, afterLayout);
+        return () => { cancelled = true; };
+      }, []);
+      return null;
+    }
 
     ReactDOM.createRoot(document.getElementById("root")).render(
       <React.StrictMode>
@@ -280,6 +371,8 @@ export function buildFrameBootstrapSource(opts: {
           <FrameFontProxy />
           <FrameErrorBoundary slug=${JSON.stringify(slug)} frame=${JSON.stringify(frame)}>
             <Frame />
+            <ArcadeFrameReady />
+            <ArcadeFrameFingerprint />
           </FrameErrorBoundary>
         </DevRevThemeProvider>
       </React.StrictMode>

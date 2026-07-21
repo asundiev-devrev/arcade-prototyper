@@ -1,16 +1,15 @@
 // Regression for 0.23.6 (second-pass): the projectWatchPlugin file watcher
-// used to broadcast `full-reload` on every .tsx/.ts/.css change under
-// `projects/`. createProject scaffolding writes `theme-overrides.css` +
-// `shared/devrev.ts` as the user navigates into the new project from the
-// home hero — those writes raced the route's `POST /api/chat` and the
-// reload tore the request down before the server had registered the turn.
-// Symptom: dead chat window, "Working…" never paints, frame eventually
-// appears via independent reconcile.
+// used to broadcast on every .tsx/.ts/.css change under `projects/`.
+// createProject scaffolding writes `theme-overrides.css` + `shared/devrev.ts`
+// as the user navigates into the new project from the home hero — those writes
+// raced the route's `POST /api/chat` and the reload tore the request down
+// before the server had registered the turn. Symptom: dead chat window,
+// "Working…" never paints, frame eventually appears via independent reconcile.
 //
-// This test pins the post-fix scope: full-reload fires ONLY for
-// `<slug>/frames/<frameId>/index.tsx` writes; scaffold-time writes
-// (theme-overrides.css, shared/*.ts, CLAUDE.md, project.json,
-// chat-history.json) do not broadcast a reload.
+// This test pins the post-fix scope: a targeted frame-changed event fires ONLY
+// for `<slug>/frames/<frameId>/` source writes (index.tsx and ejected siblings);
+// scaffold-time writes (theme-overrides.css, shared/*.ts, CLAUDE.md,
+// project.json, chat-history.json) do not broadcast any reload.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import path from "node:path";
@@ -66,10 +65,10 @@ afterEach(async () => {
 });
 
 function setupServerStub() {
-  const sent: Array<{ type: string; path: string }> = [];
+  const sent: Array<Record<string, unknown>> = [];
   const server = {
     ws: {
-      send: (msg: { type: string; path: string }) => {
+      send: (msg: Record<string, unknown>) => {
         sent.push(msg);
       },
     },
@@ -83,14 +82,14 @@ function setupServerStub() {
  * test assert importers are invalidated too (the index.tsx → ./sibling case).
  */
 function setupServerStubWithModuleGraph(importedBy: Record<string, string[]> = {}) {
-  const sent: Array<{ type: string; path: string }> = [];
+  const sent: Array<Record<string, unknown>> = [];
   const invalidated: string[] = [];
   const nodeFor = (file: string): any => ({
     file,
     importers: new Set((importedBy[file] ?? []).map((f) => nodeFor(f))),
   });
   const server = {
-    ws: { send: (msg: { type: string; path: string }) => sent.push(msg) },
+    ws: { send: (msg: Record<string, unknown>) => sent.push(msg) },
     moduleGraph: {
       getModulesByFile: (file: string) => new Set([nodeFor(file)]),
       invalidateModule: (mod: { file: string }) => invalidated.push(mod.file),
@@ -99,8 +98,8 @@ function setupServerStubWithModuleGraph(importedBy: Record<string, string[]> = {
   return { server, sent, invalidated };
 }
 
-describe("projectWatchPlugin full-reload scope", () => {
-  it("broadcasts full-reload for frame-dir source writes, not scaffold writes", async () => {
+describe("projectWatchPlugin reload scope", () => {
+  it("broadcasts targeted frame-changed for frame-dir source writes, not scaffold writes", async () => {
     const { server, sent } = setupServerStub();
     const plugin = projectWatchPlugin();
     plugin.configureServer!.call({} as never, server as never);
@@ -112,7 +111,7 @@ describe("projectWatchPlugin full-reload scope", () => {
       recursive: true,
     });
 
-    // Scaffold writes — must NOT trigger full-reload (they raced the chat POST
+    // Scaffold writes — must NOT trigger any reload (they raced the chat POST
     // in the 0.23.6 regression; theme-overrides.css HMRs on its own).
     const scaffoldPaths = [
       path.join(TMP_ROOT, slug, "theme-overrides.css"),
@@ -126,22 +125,28 @@ describe("projectWatchPlugin full-reload scope", () => {
     }
     expect(sent).toEqual([]);
 
-    // Frame index write — MUST trigger full-reload.
+    // Frame index write — MUST trigger targeted frame-changed event.
     await fakeWatcher.handler!(
       "add",
       path.join(TMP_ROOT, slug, "frames", "f1", "index.tsx"),
     );
-    expect(sent).toEqual([{ type: "full-reload", path: "*" }]);
+    expect(sent).toEqual([
+      {
+        type: "custom",
+        event: "arcade-studio:frame-changed",
+        data: { slug: "p-handoff", frameId: "f1" },
+      },
+    ]);
   });
 
-  it("broadcasts full-reload when an ejected sibling module is written to a frame dir", async () => {
+  it("broadcasts targeted frame-changed when an ejected sibling module is written to a frame dir", async () => {
     // Regression for the eject workflow: the agent writes index.tsx (with
     // `import { ComputerScene } from "./ComputerScene"`) a beat BEFORE it copies
     // ComputerScene.tsx next to it. index.tsx's resolution of ./ComputerScene
     // failed and Vite cached the miss; reloading only on index.tsx left the
     // "[vite:import-analysis] Failed to resolve ./ComputerScene" overlay stuck
-    // until a manual restart. A sibling .tsx write must also reload so the
-    // arrival re-runs resolution.
+    // until a manual restart. A sibling .tsx write must also trigger a reload so
+    // the arrival re-runs resolution.
     const { server, sent } = setupServerStub();
     const plugin = projectWatchPlugin();
     plugin.configureServer!.call({} as never, server as never);
@@ -153,7 +158,13 @@ describe("projectWatchPlugin full-reload scope", () => {
       "add",
       path.join(TMP_ROOT, slug, "frames", "f1", "ComputerScene.tsx"),
     );
-    expect(sent).toEqual([{ type: "full-reload", path: "*" }]);
+    expect(sent).toEqual([
+      {
+        type: "custom",
+        event: "arcade-studio:frame-changed",
+        data: { slug: "p-eject", frameId: "f1" },
+      },
+    ]);
   });
 
   it("invalidates the written file AND its importer (index.tsx) in the module graph", async () => {
