@@ -174,13 +174,14 @@ Total skill size: ~470 KB. All CSS is embedded inline — prototypes have zero e
 
 ## Figma integration
 
-The skill supports pulling designs directly from Figma Desktop via [figma-cli](https://github.com/silships/figma-cli) (no API token needed — connects locally via CDP). The agent can:
+The skill supports pulling designs directly from Figma via **figmanage** — a command-line tool that reads Figma files using a Personal Access Token over Figma's own servers (no Figma Desktop, plugin, or local connection required). The agent can:
 
-- Export any Figma frame as a screenshot for reference
+- Export any Figma frame as a reference image
 - Read the node tree to understand component structure
+- Export icons as SVG and map colors to design-system tokens
 - Translate Figma designs into working prototypes using the component classes
 
-Setup is automatic and silent — the agent handles it on first use. See the Figma section in `SKILL.md` for the full command reference.
+The agent asks for a Figma access token once (Settings → Security → Personal access tokens in Figma) and stores it silently. See the Figma section in `SKILL.md` for the full command reference and the fast-sketch vs. precise-implementation modes.
 
 ## Common components
 

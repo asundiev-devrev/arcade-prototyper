@@ -316,6 +316,25 @@
   --color-feedback-accent: var(--action-600);
   --color-feedback-neutral: var(--husk-400);
 
+  /* CONTROL tokens (Arcade — dark). Primary inverts (white bg, black fg);
+     expressive yellow is constant across modes. Borrowed from arcade-gen +
+     Figma-verified. Complete color values — no hsl() wrapper. */
+  --control-bg-primary-idle: #ffffff;
+  --control-bg-primary-hover: #f2f1f2;
+  --control-fg-primary-idle: #000000;
+  --control-fg-primary-active: #faf9f9;
+  --control-bg-secondary-idle: #c7c3c557;
+  --control-bg-secondary-hover: #a5a0a35b;
+  --control-fg-secondary-idle: #faf9f9;
+  --control-bg-tertiary-hover: #333132;
+  --control-fg-tertiary-idle: #faf9f9;
+  --control-bg-destructive-idle: #650008;
+  --control-bg-destructive-hover: #94030a;
+  --control-fg-destructive-idle: #ffab99;
+  --control-bg-expressive-idle: #ffe000;
+  --control-fg-expressive-idle: #211e20;
+  --control-stroke-focus: #ffffff;
+
   --color-object-developer: var(--shuiguo-400);
   --color-object-customer: var(--hardy-400);
   --color-object-mention: var(--persimmon-400);
@@ -600,6 +619,32 @@
   --color-feedback-inverted: var(--husk-1000);
   --color-feedback-accent: var(--action-400);
   --color-feedback-neutral: var(--text-color-tertiary);
+
+  /* ------------------------------------------------------------------
+     CONTROL tokens (Arcade — light). Dedicated per-variant button/control
+     colors, mirroring production's `Control/*` Figma collection (borrowed
+     from @xorkavi/arcade-gen dist/tokens.css, hex verified against the live
+     Arcade DS 2026-07-21). These are COMPLETE color values — use them
+     directly in component CSS WITHOUT an hsl() wrapper.
+     Primary/Expressive are the only pills; primary hover is dark grey
+     (#4a4748) — NOT the action-yellow the generic --bg-interactive-* tokens
+     resolve to. That mismatch was the source of the wrong button colors.
+     ------------------------------------------------------------------ */
+  --control-bg-primary-idle: #211e20;
+  --control-bg-primary-hover: #4a4748;
+  --control-fg-primary-idle: #ffffff;
+  --control-fg-primary-active: #211e20;
+  --control-bg-secondary-idle: #c7c3c557;
+  --control-bg-secondary-hover: #a5a0a35b;
+  --control-fg-secondary-idle: #211e20;
+  --control-bg-tertiary-hover: #f2f1f2;
+  --control-fg-tertiary-idle: #211e20;
+  --control-bg-destructive-idle: #ffe5db;
+  --control-bg-destructive-hover: #ffccbb;
+  --control-fg-destructive-idle: #d10000;
+  --control-bg-expressive-idle: #ffe000;
+  --control-fg-expressive-idle: #211e20;
+  --control-stroke-focus: #211e20;
 
   /* object */
   --color-object-developer: var(--shuiguo-500);

@@ -1,12 +1,51 @@
 /*
  * Arcade Design System — Component Patterns
  * Pure CSS component classes matching the Arcade theme config.
- * Requires arcade-tokens.css to be loaded first.
+ * Requires arcade-tokens.css (or devrev-app-tokens.css) to be loaded first.
  *
  * Naming: .arcade-{component}  with --{variant}, --{size}, --{state} modifiers
+ *
+ * Sizing, radii and per-variant button shape are Figma-verified against the
+ * live Arcade Design System (2026-07-21). Do not "round" these to generic
+ * values — they are the real control scale.
  */
 
 :root {
+  /* ----------------------------------------------------------------
+     Type-scale compatibility variables.
+     The component rules below reference --fontSize-*, --leading-* and
+     --tracking-* tokens. typography-spacing.css only ships `.text-*`
+     utility CLASSES, not these variables — so without this block the
+     font-size/line-height declarations resolve to nothing and every
+     control inherits raw 16px body text. Values mirror the real
+     `.text-*` classes verbatim (rem = monorepo values).
+     ---------------------------------------------------------------- */
+  --fontSize-body:          1rem;      /* .text-body */
+  --fontSize-body-large:    1.125rem;  /* .text-body-large */
+  --fontSize-subtitle-1:    1.125rem;
+  --fontSize-title-3:       1.25rem;   /* .text-title-3 */
+  --fontSize-system:        0.875rem;  /* .text-system — buttons, inputs */
+  --fontSize-system-small:  0.75rem;   /* .text-system-small */
+  --fontSize-caption:       0.6875rem; /* .text-caption */
+  --fontSize-footnote:      0.6875rem;
+
+  --leading-body:           1.5rem;
+  --leading-system:         1.25rem;
+  --leading-system-small:   1rem;
+  --leading-caption:        1rem;
+
+  /* Letter-spacing wasn't extracted from the source; system text is ~0. */
+  --tracking-body:          normal;
+  --tracking-system:        normal;
+  --tracking-system-small:  normal;
+  --tracking-caption:       normal;
+  --tracking-title-3:       normal;
+
+  /* Phi spacing has no "md" step (sm 0.7rem → base 1rem → lg 1.41rem).
+     Components use --spacing-global-md for card/dialog padding; without
+     this alias that padding resolves to 0 (flat, generic cards). */
+  --spacing-global-md: var(--spacing-global-base);
+
   /* Component shadows — not in the base token files */
   --shadow-depth-01: 0 1px 2px hsla(var(--night) / 0.06);
   --shadow-depth-02: 0 2px 8px hsla(var(--night) / 0.08), 0 1px 2px hsla(var(--night) / 0.06);
@@ -14,19 +53,58 @@
   --shadow-depth-04: 0 16px 48px hsla(var(--night) / 0.16), 0 4px 16px hsla(var(--night) / 0.08);
   --shadow-button: 0 1px 3px hsla(var(--night) / 0.1), 0 1px 2px hsla(var(--night) / 0.06);
   --shadow-interactive-focused: 0 0 0 3px hsla(var(--action-400) / 0.3);
+
+  /* ----------------------------------------------------------------
+     Control scale — Figma _Experiment/Components/Control (Desktop mode)
+     Heights that every interactive control (button, input, select…) shares.
+     ---------------------------------------------------------------- */
+  --control-size-small: 20px;
+  --control-size-default: 28px;
+  --control-size-large: 40px;
+
+  /* Internal gap (icon ↔ label) inside a control */
+  --control-gap-small: 4px;
+  --control-gap-medium: 6px;
+  --control-gap-large: 8px;
+
+  /* ----------------------------------------------------------------
+     Icon sizes — Figma _Experiment/Components/Icon (Desktop mode)
+     ---------------------------------------------------------------- */
+  --icon-small: 12px;
+  --icon-default: 16px;
+  --icon-medium: 20px;
+  --icon-large: 24px;
+  --icon-x-large: 32px;
+
+  /* ----------------------------------------------------------------
+     Corner radii — Figma _Experiment/Corners (Desktop mode)
+     Square = default control corner; Circle = pill radius at each height.
+     ---------------------------------------------------------------- */
+  --corner-square: 4px;
+  --corner-square-x2: 6px;   /* large controls */
+  --corner-circle: 14px;
+  --corner-circle-x2: 20px;
+  --corner-bubble: 20px;
+  --corner-pill: 9999px;     /* fully rounded (Primary / Expressive buttons) */
 }
 
 /* ============================================================
    BUTTON
+   Figma-verified: only Primary and Expressive are pills.
+   Secondary / Tertiary / Destructive are square (4px, 6px at Large).
+   Heights: Small 20 · Default 28 · Large 40.
    ============================================================ */
 
 .arcade-btn {
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--spacing-dynamic-3xs);
-  border: none;
-  border-radius: 9999px;
+  gap: var(--control-gap-medium);
+  height: var(--control-size-default);
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--corner-square);   /* square by default; pill variants override */
   cursor: pointer;
   font-family: var(--font-text);
   font-weight: 540;
@@ -34,7 +112,7 @@
   white-space: nowrap;
   position: relative;
   flex-shrink: 0;
-  transition: all 0.2s ease;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
   outline: none;
 }
 
@@ -45,79 +123,81 @@
 }
 
 /* Sizes */
-.arcade-btn--L {
-  font-size: var(--fontSize-body);
-  letter-spacing: var(--tracking-body);
-  line-height: var(--leading-body);
-  padding: var(--spacing-dynamic-xs) var(--spacing-dynamic-base);
-  gap: var(--spacing-dynamic-5xs);
+.arcade-btn--S {
+  height: var(--control-size-small);
+  padding: 0 8px;
+  gap: var(--control-gap-small);
+  font-size: var(--fontSize-system-small);
+  letter-spacing: var(--tracking-system-small);
+  line-height: var(--leading-system-small);
 }
 
 .arcade-btn--M, .arcade-btn {
   font-size: var(--fontSize-system);
   letter-spacing: var(--tracking-system);
   line-height: var(--leading-system);
-  padding: var(--spacing-dynamic-xs) var(--spacing-dynamic-base);
-  gap: var(--spacing-dynamic-3xs);
 }
 
-.arcade-btn--S {
-  font-size: var(--fontSize-system-small);
-  letter-spacing: var(--tracking-system-small);
-  line-height: var(--leading-system-small);
-  padding: var(--spacing-dynamic-3xs) var(--spacing-dynamic-sm);
-  gap: var(--spacing-dynamic-4xs);
+.arcade-btn--L {
+  height: var(--control-size-large);
+  padding: 0 14px;
+  gap: var(--control-gap-large);
+  font-size: var(--fontSize-body);
+  letter-spacing: var(--tracking-body);
+  line-height: var(--leading-body);
 }
 
-/* Variants */
+/* Variants — bound to the dedicated --control-* tokens (complete color
+   values, NO hsl() wrapper). These carry the real per-variant Arcade colors;
+   the generic --bg-interactive-* tokens resolve primary-hover to yellow,
+   which is wrong. Do not swap these back. */
 .arcade-btn--primary {
-  color: hsl(var(--color-on-fill));
-  background: hsl(var(--bg-interactive-primary-resting));
-  min-width: 60px;
-  box-shadow: var(--shadow-button);
+  color: var(--control-fg-primary-idle);
+  background: var(--control-bg-primary-idle);
+  border-color: var(--control-bg-primary-idle);
+  border-radius: var(--corner-pill);
 }
 .arcade-btn--primary:hover {
-  background: hsl(var(--bg-interactive-primary-hovered));
-  transform: scale(1.05);
+  background: var(--control-bg-primary-hover);
+  border-color: var(--control-bg-primary-hover);
 }
-.arcade-btn--primary:active {
-  background: hsl(var(--bg-interactive-primary-pressed));
-  transform: scale(1);
+.arcade-btn--primary:active {   /* pressed inverts to outline */
+  background: transparent;
+  color: var(--control-fg-primary-active);
 }
 
 .arcade-btn--secondary {
-  color: hsl(var(--text-interactive-primary-resting));
-  background: hsl(var(--bg-interactive-secondary-resting));
-  min-width: 60px;
+  color: var(--control-fg-secondary-idle);
+  background: var(--control-bg-secondary-idle);
 }
-.arcade-btn--secondary:hover {
-  background: hsl(var(--bg-interactive-secondary-hovered));
-}
-.arcade-btn--secondary:active {
-  background: hsl(var(--bg-interactive-secondary-pressed));
-}
+.arcade-btn--secondary:hover { background: var(--control-bg-secondary-hover); }
 
 .arcade-btn--tertiary {
-  color: hsl(var(--text-interactive-primary-resting));
+  color: var(--control-fg-tertiary-idle);
   background: transparent;
-  min-width: 60px;
 }
-.arcade-btn--tertiary:hover {
-  background: hsl(var(--bg-interactive-tertiary-hovered));
-}
-.arcade-btn--tertiary:active {
-  background: hsl(var(--bg-interactive-tertiary-pressed));
-}
+.arcade-btn--tertiary:hover { background: var(--control-bg-tertiary-hover); }
 
 .arcade-btn--destructive {
-  color: hsl(var(--text-static-white));
-  background: hsl(var(--bg-interactive-destructive-resting));
+  color: var(--control-fg-destructive-idle);
+  background: var(--control-bg-destructive-idle);
 }
-.arcade-btn--destructive:hover {
-  background: hsl(var(--bg-interactive-destructive-hovered));
+.arcade-btn--destructive:hover { background: var(--control-bg-destructive-hover); }
+
+/* Expressive = yellow plastic pill (Arcade) / smart accent (DevRev App) */
+.arcade-btn--expressive {
+  color: var(--control-fg-expressive-idle);
+  background: var(--control-bg-expressive-idle);
+  border: 1px solid #fff;
+  border-radius: var(--corner-pill);
+  box-shadow: var(--shadow-button);
 }
-.arcade-btn--destructive:active {
-  background: hsl(var(--bg-interactive-destructive-pressed));
+
+/* Large square buttons bump to the x2 corner (Figma: 6px) */
+.arcade-btn--secondary.arcade-btn--L,
+.arcade-btn--tertiary.arcade-btn--L,
+.arcade-btn--destructive.arcade-btn--L {
+  border-radius: var(--corner-square-x2);
 }
 
 /* States */
@@ -138,8 +218,70 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 1em;
-  height: 1em;
+  width: var(--icon-default);
+  height: var(--icon-default);
+}
+.arcade-btn--S .icon { width: var(--icon-small); height: var(--icon-small); }
+.arcade-btn--L .icon { width: var(--icon-medium); height: var(--icon-medium); }
+
+/* ============================================================
+   ICON BUTTON — square, icon-only control
+   ============================================================ */
+
+.arcade-icon-btn {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-size-default);
+  height: var(--control-size-default);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--corner-square);
+  background: transparent;
+  color: hsl(var(--text-color-secondary));
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.arcade-icon-btn:hover {
+  background: var(--control-bg-tertiary-hover);
+  color: hsl(var(--text-color-primary));
+}
+.arcade-icon-btn:active { background: var(--control-bg-tertiary-hover); }
+.arcade-icon-btn:focus-visible { box-shadow: var(--shadow-interactive-focused); }
+
+.arcade-icon-btn--S { width: var(--control-size-small); height: var(--control-size-small); }
+.arcade-icon-btn--L { width: var(--control-size-large); height: var(--control-size-large); border-radius: var(--corner-square-x2); }
+
+.arcade-icon-btn--secondary {
+  background: var(--control-bg-secondary-idle);
+  color: hsl(var(--text-color-primary));
+}
+.arcade-icon-btn--secondary:hover { background: var(--control-bg-secondary-hover); }
+
+.arcade-icon-btn .icon,
+.arcade-icon-btn svg { width: var(--icon-default); height: var(--icon-default); }
+.arcade-icon-btn--S .icon, .arcade-icon-btn--S svg { width: var(--icon-small); height: var(--icon-small); }
+.arcade-icon-btn--L .icon, .arcade-icon-btn--L svg { width: var(--icon-medium); height: var(--icon-medium); }
+
+/* ============================================================
+   SPLIT BUTTON — primary action + attached menu trigger
+   ============================================================ */
+
+.arcade-split {
+  display: inline-flex;
+  align-items: stretch;
+}
+.arcade-split > .arcade-btn:first-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.arcade-split > .arcade-btn:last-child {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  padding: 0 8px;
+  border-left: 1px solid hsla(var(--night) / 0.15);
 }
 
 /* ============================================================
@@ -147,9 +289,11 @@
    ============================================================ */
 
 .arcade-input {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   width: 100%;
+  height: var(--control-size-default);
   font-family: var(--font-text);
   font-size: var(--fontSize-system);
   letter-spacing: var(--tracking-system);
@@ -158,8 +302,8 @@
   color: hsl(var(--text-color-primary));
   background: hsl(var(--bg-input-text-resting));
   border: 1px solid hsl(var(--border-field-idle));
-  border-radius: 8px;
-  padding: var(--spacing-dynamic-xs) var(--spacing-dynamic-sm);
+  border-radius: var(--corner-square);   /* Figma fields = 4px */
+  padding: 0 var(--spacing-dynamic-sm);
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
@@ -170,7 +314,6 @@
 
 .arcade-input:hover {
   border-color: hsl(var(--border-field-hovered));
-  background: hsl(var(--bg-input-text-resting));
 }
 
 .arcade-input:focus {
@@ -186,12 +329,16 @@
   cursor: not-allowed;
 }
 
+/* Sizes */
+.arcade-input--S { height: var(--control-size-small); font-size: var(--fontSize-system-small); padding: 0 var(--spacing-dynamic-3xs); }
+.arcade-input--L { height: var(--control-size-large); font-size: var(--fontSize-body); }
+
 .arcade-input--error {
   border-color: hsl(var(--color-stroke-destructive));
 }
 .arcade-input--error:focus {
   border-color: hsl(var(--color-stroke-destructive));
-  box-shadow: 0px 0px 0px 4px hsl(var(--persimmon-400) / 0.15);
+  box-shadow: 0 0 0 3px hsl(var(--persimmon-400) / 0.15);
 }
 
 /* Input with label wrapper */
@@ -221,10 +368,44 @@
 }
 
 /* ============================================================
+   SELECT / DROPDOWN FIELD
+   ============================================================ */
+
+.arcade-select {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: var(--control-size-default);
+  font-family: var(--font-text);
+  font-size: var(--fontSize-system);
+  color: hsl(var(--text-color-primary));
+  background-color: hsl(var(--bg-input-text-resting));
+  border: 1px solid hsl(var(--border-field-idle));
+  border-radius: var(--corner-square);
+  padding: 0 32px 0 var(--spacing-dynamic-sm);
+  outline: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  /* chevron */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M4 6l4 4 4-4' stroke='%237B7B7B' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.arcade-select:hover { border-color: hsl(var(--border-field-hovered)); }
+.arcade-select:focus {
+  border-color: hsl(var(--border-input-text-pressed));
+  box-shadow: var(--shadow-interactive-focused);
+}
+
+/* ============================================================
    TEXTAREA
    ============================================================ */
 
 .arcade-textarea {
+  box-sizing: border-box;
   display: block;
   width: 100%;
   min-height: 80px;
@@ -236,7 +417,7 @@
   color: hsl(var(--text-color-primary));
   background: hsl(var(--bg-input-text-resting));
   border: 1px solid hsl(var(--border-field-idle));
-  border-radius: 8px;
+  border-radius: var(--corner-square);
   padding: var(--spacing-dynamic-xs) var(--spacing-dynamic-sm);
   outline: none;
   resize: vertical;
@@ -250,7 +431,7 @@
 }
 
 /* ============================================================
-   BADGE / TAG
+   BADGE / STATUS PILL
    ============================================================ */
 
 .arcade-badge {
@@ -263,44 +444,22 @@
   line-height: var(--leading-caption);
   font-weight: 540;
   padding: var(--spacing-dynamic-5xs) var(--spacing-dynamic-3xs);
-  border-radius: 9999px;
+  border-radius: var(--corner-pill);
   white-space: nowrap;
 }
 
 .arcade-badge--default {
   color: hsl(var(--text-color-secondary));
-  background: hsl(var(--bg-layer-03));
+  background: hsla(var(--husk-600) / 0.18);   /* visible neutral tint in both modes;
+                                                 --bg-layer-03 is white in Arcade light */
 }
 
-.arcade-badge--info {
-  color: hsl(var(--color-stroke-info));
-  background: hsla(var(--shuiguo-100) / 0.5);
-}
-
-.arcade-badge--success {
-  color: hsl(var(--color-feedback-success));
-  background: hsla(var(--hardy-100) / 0.5);
-}
-
-.arcade-badge--warning {
-  color: hsl(var(--color-feedback-warning));
-  background: hsla(var(--banginapalli-100) / 0.5);
-}
-
-.arcade-badge--alert {
-  color: hsl(var(--color-feedback-alert));
-  background: hsla(var(--dragonfruit-100) / 0.5);
-}
-
-.arcade-badge--action {
-  color: hsl(var(--color-action));
-  background: hsla(var(--action-100) / 0.5);
-}
-
-.arcade-badge--intelligence {
-  color: hsl(var(--color-intelligence));
-  background: hsla(var(--intelligence-100) / 0.5);
-}
+.arcade-badge--info { color: hsl(var(--color-stroke-info)); background: hsla(var(--shuiguo-100) / 0.5); }
+.arcade-badge--success { color: hsl(var(--color-feedback-success)); background: hsla(var(--hardy-100) / 0.5); }
+.arcade-badge--warning { color: hsl(var(--color-feedback-warning)); background: hsla(var(--banginapalli-100) / 0.5); }
+.arcade-badge--alert { color: hsl(var(--color-feedback-alert)); background: hsla(var(--dragonfruit-100) / 0.5); }
+.arcade-badge--action { color: hsl(var(--color-action)); background: hsla(var(--action-100) / 0.5); }
+.arcade-badge--intelligence { color: hsl(var(--color-intelligence)); background: hsla(var(--intelligence-100) / 0.5); }
 
 /* Attribute colors (1-8) */
 .arcade-badge--attr-1 { color: hsl(var(--color-object-developer)); background: hsla(var(--shuiguo-100) / 0.5); }
@@ -311,6 +470,112 @@
 .arcade-badge--attr-6 { color: hsl(var(--color-feedback-smart)); background: hsla(var(--jabuticaba-100) / 0.5); }
 .arcade-badge--attr-7 { color: hsl(var(--color-decorative-sky)); background: hsla(var(--maoshigua-100) / 0.5); }
 .arcade-badge--attr-8 { color: hsl(var(--color-decorative-pink)); background: hsla(var(--husk-300) / 0.5); }
+
+/* ============================================================
+   CHIP / TAG — small status/metadata label
+   Figma-verified (Arcade set 4362:38392): SQUARE 4px corners, height 20,
+   11px text. The DEFAULT is filled-neutral BLACK; `--tinted` is the subtle
+   fill. Semantic colors come in filled (default) and tinted flavors.
+   (Distinct from badge, which is a rounded status pill.)
+   ============================================================ */
+
+.arcade-chip {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--control-gap-small);
+  height: var(--control-size-small);
+  padding: 0 var(--control-gap-small);
+  font-family: var(--font-text);
+  font-size: var(--fontSize-system-small);
+  font-weight: 540;
+  line-height: 1;
+  border: none;
+  border-radius: var(--corner-square);   /* square, not 6px */
+  white-space: nowrap;
+  /* default = filled neutral (black in light, inverts in dark) */
+  color: var(--control-fg-primary-idle);
+  background: var(--control-bg-primary-idle);
+}
+.arcade-chip--round { border-radius: var(--corner-pill); }
+
+/* Filled semantic (solid color) */
+.arcade-chip--alert        { color: #fff2eb; background: hsl(var(--color-feedback-alert)); }
+.arcade-chip--success      { color: #eeffd6; background: hsl(var(--color-feedback-success)); }
+.arcade-chip--warning      { color: #4f2900; background: hsl(var(--color-feedback-warning)); }
+.arcade-chip--info         { color: #cff4ff; background: hsl(var(--color-stroke-info)); }
+.arcade-chip--intelligence { color: #f6e5ff; background: hsl(var(--color-intelligence)); }
+
+/* Tinted (subtle fill) — neutral + semantic. Adaptive palette tints so
+   both themes read correctly. */
+.arcade-chip--tinted              { color: hsl(var(--text-color-primary));    background: hsla(var(--husk-600) / 0.15); }
+.arcade-chip--tinted.arcade-chip--alert        { color: hsl(var(--color-feedback-alert));   background: hsla(var(--dragonfruit-100) / 0.6); }
+.arcade-chip--tinted.arcade-chip--success      { color: hsl(var(--color-feedback-success)); background: hsla(var(--hardy-100) / 0.6); }
+.arcade-chip--tinted.arcade-chip--warning      { color: hsl(var(--color-feedback-warning)); background: hsla(var(--banginapalli-100) / 0.6); }
+.arcade-chip--tinted.arcade-chip--info         { color: hsl(var(--color-stroke-info));      background: hsla(var(--shuiguo-100) / 0.6); }
+.arcade-chip--tinted.arcade-chip--intelligence { color: hsl(var(--color-intelligence));     background: hsla(var(--intelligence-100) / 0.6); }
+
+/* Back-compat: --filled was the old name for the black default. */
+.arcade-chip--filled { color: var(--control-fg-primary-idle); background: var(--control-bg-primary-idle); }
+
+.arcade-chip__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--icon-default);
+  height: var(--icon-default);
+  cursor: pointer;
+  opacity: 0.72;
+}
+.arcade-chip__close:hover { opacity: 1; }
+
+/* ============================================================
+   COUNTER — small numeric indicator
+   ============================================================ */
+
+/* Figma-verified (set 1696:5440): DEFAULT is the black emphasis pill, mono
+   10px, height 18, radius 20. --neutral is the bordered transparent variant. */
+.arcade-counter {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-family: var(--font-mono), var(--font-text);
+  font-size: 10px;
+  font-weight: 540;
+  line-height: 1;
+  border-radius: var(--corner-circle-x2);   /* 20px */
+  color: var(--control-fg-primary-idle);
+  background: var(--control-bg-primary-idle);
+  border: 1px solid transparent;
+}
+.arcade-counter--neutral {
+  color: hsl(var(--text-color-primary));
+  background: transparent;
+  border-color: hsl(var(--border-outline-01));
+}
+/* Back-compat: --emphasis was the explicit name for the black default. */
+.arcade-counter--emphasis { color: var(--control-fg-primary-idle); background: var(--control-bg-primary-idle); border-color: transparent; }
+
+/* ============================================================
+   LINK
+   ============================================================ */
+
+.arcade-link {
+  color: hsl(var(--text-interactive-link-resting));
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.1s ease;
+}
+.arcade-link:hover {
+  color: hsl(var(--text-interactive-link-hovered));
+  text-decoration: underline;
+}
+.arcade-link--muted { color: hsl(var(--text-color-secondary)); }
+.arcade-link--muted:hover { color: hsl(var(--text-color-primary)); }
 
 /* ============================================================
    CARD / SURFACE
@@ -324,13 +589,8 @@
   box-shadow: var(--shadow-depth-01);
 }
 
-.arcade-card--elevated {
-  box-shadow: var(--shadow-depth-02);
-}
-
-.arcade-card--prominent {
-  box-shadow: var(--shadow-depth-03);
-}
+.arcade-card--elevated { box-shadow: var(--shadow-depth-02); }
+.arcade-card--prominent { box-shadow: var(--shadow-depth-03); }
 
 .arcade-card--interactive {
   cursor: pointer;
@@ -342,27 +602,32 @@
 }
 
 /* ============================================================
-   POPOVER / DROPDOWN
+   POPOVER / DROPDOWN SURFACE
    ============================================================ */
 
+/* Figma-verified radius 6 (square-x2). */
 .arcade-popover {
   background: hsl(var(--bg-layer-02));
   border: 1px solid hsl(var(--border-outline-01));
-  border-radius: 12px;
-  padding: var(--spacing-global-3xs);
+  border-radius: var(--corner-square-x2);
+  padding: var(--spacing-global-3xs) 0;
   box-shadow: var(--shadow-depth-03);
 }
 
 /* ============================================================
-   MENU ITEM (for dropdowns, lists, nav)
+   MENU ITEM (dropdowns, lists, nav)
+   Figma-verified (set 886:6081): radius 4, min-height 28, 10px side padding,
+   hover = soft neutral fill.
    ============================================================ */
 
 .arcade-menu-item {
   display: flex;
   align-items: center;
-  gap: var(--spacing-dynamic-3xs);
-  padding: var(--spacing-dynamic-3xs) var(--spacing-dynamic-sm);
-  border-radius: 8px;
+  gap: var(--control-gap-large);
+  min-height: var(--control-size-default);
+  padding: 2px 10px;
+  margin: 1px 4px;
+  border-radius: var(--corner-square);
   font-size: var(--fontSize-system);
   letter-spacing: var(--tracking-system);
   line-height: var(--leading-system);
@@ -371,19 +636,14 @@
   transition: background-color 0.1s ease;
   border: none;
   background: transparent;
-  width: 100%;
+  width: calc(100% - 8px);
   text-align: left;
   font-family: var(--font-text);
 }
 
-.arcade-menu-item:hover {
-  background: hsl(var(--bg-interactive-tertiary-hovered));
-}
-
+.arcade-menu-item:hover { background: hsla(var(--husk-600) / 0.34); }
 .arcade-menu-item:active,
-.arcade-menu-item--selected {
-  background: hsl(var(--bg-interactive-tertiary-hovered));
-}
+.arcade-menu-item--selected { background: hsla(var(--husk-600) / 0.34); }
 
 .arcade-menu-item--disabled {
   color: hsl(var(--text-color-muted));
@@ -397,30 +657,26 @@
 }
 
 /* ============================================================
-   AVATAR
+   AVATAR — Figma sizes: 20 / 28 / 36 / 48 (Default / Medium / Large / X-Large)
    ============================================================ */
 
 .arcade-avatar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 9999px;
+  border-radius: var(--corner-pill);
   overflow: hidden;
   flex-shrink: 0;
   font-weight: 540;
   color: hsl(var(--color-on-fill));
 }
 
-.arcade-avatar--S  { width: 24px; height: 24px; font-size: var(--fontSize-footnote); }
-.arcade-avatar--M  { width: 32px; height: 32px; font-size: var(--fontSize-caption); }
-.arcade-avatar--L  { width: 40px; height: 40px; font-size: var(--fontSize-system-small); }
-.arcade-avatar--XL { width: 56px; height: 56px; font-size: var(--fontSize-body); }
+.arcade-avatar--S  { width: 20px; height: 20px; font-size: var(--fontSize-footnote); }
+.arcade-avatar--M  { width: 28px; height: 28px; font-size: var(--fontSize-caption); }
+.arcade-avatar--L  { width: 36px; height: 36px; font-size: var(--fontSize-system-small); }
+.arcade-avatar--XL { width: 48px; height: 48px; font-size: var(--fontSize-body); }
 
-.arcade-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
+.arcade-avatar img { width: 100%; height: 100%; object-fit: cover; }
 
 /* Color rotation for initials */
 .arcade-avatar--1 { background: hsl(var(--color-object-developer)); }
@@ -434,13 +690,15 @@
 
 /* ============================================================
    TOGGLE / SWITCH
+   On-state is intentionally BLACK (Figma Toggle/Track/Active = #211E20).
+   Do NOT change this to a brand/action color.
    ============================================================ */
 
 .arcade-toggle {
   position: relative;
   width: 36px;
   height: 20px;
-  border-radius: 9999px;
+  border-radius: var(--corner-pill);
   background: hsl(var(--bg-layer-03));
   border: 1px solid hsl(var(--border-field-idle));
   cursor: pointer;
@@ -455,23 +713,23 @@
   left: 2px;
   width: 14px;
   height: 14px;
-  border-radius: 9999px;
+  border-radius: var(--corner-pill);
   background: hsl(var(--text-color-secondary));
   transition: transform 0.2s ease, background-color 0.2s ease;
 }
 
 .arcade-toggle--on {
-  background: hsl(var(--bg-interactive-primary-resting));
-  border-color: hsl(var(--border-interactive-primary-resting));
+  background: var(--control-bg-primary-idle);   /* #211e20 — Figma-exact black */
+  border-color: var(--control-bg-primary-idle);
 }
 
 .arcade-toggle--on::after {
   transform: translateX(16px);
-  background: hsl(var(--color-on-fill));
+  background: var(--control-fg-primary-idle);   /* white knob */
 }
 
 /* ============================================================
-   CHECKBOX
+   CHECKBOX — active fill is black (Figma Checkbox/Box/Active = #211E20)
    ============================================================ */
 
 .arcade-checkbox {
@@ -481,29 +739,132 @@
   width: 16px;
   height: 16px;
   border: 1px solid hsl(var(--border-field-idle));
-  border-radius: 4px;
+  border-radius: var(--corner-square);
   background: hsl(var(--bg-input-text-resting));
   cursor: pointer;
   flex-shrink: 0;
   transition: all 0.15s ease;
 }
 
-.arcade-checkbox:hover {
-  border-color: hsl(var(--border-field-hovered));
-}
+.arcade-checkbox:hover { border-color: hsl(var(--border-field-hovered)); }
 
 .arcade-checkbox--checked {
-  background: hsl(var(--bg-interactive-primary-resting));
-  border-color: hsl(var(--border-interactive-primary-resting));
+  background: var(--control-bg-primary-idle);   /* #211e20 */
+  border-color: var(--control-bg-primary-idle);
 }
 
-/* Use a pseudo-element or SVG for the checkmark */
 .arcade-checkbox--checked::after {
   content: '\2713';
-  color: hsl(var(--color-on-fill));
+  color: var(--control-fg-primary-idle);
   font-size: 11px;
   font-weight: 660;
   line-height: 1;
+}
+
+/* ============================================================
+   RADIO — active dot is black (matches checkbox on-state)
+   ============================================================ */
+
+.arcade-radio {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid hsl(var(--border-field-idle));
+  border-radius: var(--corner-pill);
+  background: hsl(var(--bg-input-text-resting));
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+.arcade-radio:hover { border-color: hsl(var(--border-field-hovered)); }
+
+.arcade-radio--checked {
+  border-color: var(--control-bg-primary-idle);
+}
+.arcade-radio--checked::after {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: var(--corner-pill);
+  background: var(--control-bg-primary-idle);   /* #211e20 */
+}
+
+/* ============================================================
+   SEGMENTED CONTROL
+   ============================================================ */
+
+/* Figma-verified geometry (Arcade set 1774:555): square 4px corners (NOT a
+   pill), 1px soft border, height 28. Inactive items carry the soft fill;
+   the ACTIVE item is transparent so the container background reads as
+   "selected". This inverted pattern is the real Arcade look — don't swap it
+   for a macOS-style elevated card. */
+.arcade-segmented {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  height: var(--control-size-default);
+  padding: 1px;
+  border: 1px solid hsla(var(--husk-600) / 0.34);
+  border-radius: var(--corner-square);
+  overflow: clip;
+}
+.arcade-segmented__item {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--control-gap-small);
+  height: 100%;
+  padding: 0 var(--control-gap-medium);
+  font-family: var(--font-text);
+  font-size: var(--fontSize-system);
+  font-weight: 540;
+  color: hsl(var(--text-color-primary));
+  background: hsla(var(--husk-600) / 0.34);
+  border: none;
+  border-radius: 3px;   /* container 4px − 1px border */
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.arcade-segmented__item:hover { color: hsl(var(--text-color-primary)); }
+.arcade-segmented__item--active {
+  background: transparent;   /* container shows through = selected */
+  color: hsl(var(--text-color-primary));
+}
+
+/* ============================================================
+   BREADCRUMBS
+   ============================================================ */
+
+/* Figma-verified (page 1706:8840): each crumb is a 28px-tall hover-fill
+   target (4px radius, 13px text); active crumb darkens to prominent. */
+.arcade-breadcrumbs {
+  display: flex;
+  align-items: center;
+  font-family: var(--font-text);
+}
+.arcade-breadcrumb {
+  display: inline-flex;
+  align-items: center;
+  height: var(--control-size-default);
+  padding: 0 var(--control-gap-small);
+  border-radius: var(--corner-square);
+  font-size: var(--fontSize-system);
+  color: hsl(var(--text-color-secondary));
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.1s ease, color 0.1s ease;
+}
+.arcade-breadcrumb:hover { background: hsla(var(--husk-600) / 0.34); }
+.arcade-breadcrumb--current { color: hsl(var(--text-color-primary)); font-weight: 540; cursor: default; }
+.arcade-breadcrumbs__sep {
+  display: inline-flex;
+  align-items: center;
+  color: hsl(var(--text-color-tertiary));
+  user-select: none;
 }
 
 /* ============================================================
@@ -517,29 +878,29 @@
   border: none;
   margin: var(--spacing-global-xs) 0;
 }
-
-.arcade-divider--subtle {
-  background: hsl(var(--border-outline-00));
-}
+.arcade-divider--subtle { background: hsl(var(--border-outline-00)); }
 
 /* ============================================================
    TOOLTIP
    ============================================================ */
 
+/* Figma-verified (set 4592:40566): DARK surface (near-black, ~0.91 alpha),
+   white text, radius 12, 11px medium. Not a light-surface tooltip. */
 .arcade-tooltip {
-  background: hsl(var(--bg-layer-04));
-  color: hsl(var(--text-color-primary));
-  font-size: var(--fontSize-caption);
-  letter-spacing: var(--tracking-caption);
-  line-height: var(--leading-caption);
-  padding: var(--spacing-global-4xs) var(--spacing-global-3xs);
-  border-radius: 6px;
+  background: rgba(33, 30, 32, 0.91);
+  color: #fff;
+  font-family: var(--font-text);
+  font-size: var(--fontSize-system-small);
+  font-weight: 540;
+  line-height: var(--leading-system-small);
+  padding: 4px 10px;
+  border-radius: 12px;
   box-shadow: var(--shadow-depth-02);
   max-width: 240px;
 }
 
 /* ============================================================
-   FEEDBACK / ALERT BANNER
+   FEEDBACK / ALERT BANNER (semantic, inline)
    ============================================================ */
 
 .arcade-alert {
@@ -547,34 +908,60 @@
   align-items: flex-start;
   gap: var(--spacing-global-xs);
   padding: var(--spacing-global-sm) var(--spacing-global-base);
-  border-radius: 8px;
+  border-radius: var(--corner-square-x2);
   font-size: var(--fontSize-system);
   letter-spacing: var(--tracking-system);
   line-height: var(--leading-system);
 }
 
-.arcade-alert--info {
-  background: hsla(var(--shuiguo-100) / 0.5);
-  color: hsl(var(--color-stroke-info));
-  border: 1px solid hsl(var(--color-stroke-info));
+.arcade-alert--info { background: hsla(var(--shuiguo-100) / 0.5); color: hsl(var(--color-stroke-info)); border: 1px solid hsl(var(--color-stroke-info)); }
+.arcade-alert--success { background: hsla(var(--hardy-100) / 0.5); color: hsl(var(--color-feedback-success)); border: 1px solid hsl(var(--color-stroke-success)); }
+.arcade-alert--warning { background: hsla(var(--banginapalli-100) / 0.5); color: hsl(var(--color-feedback-warning)); border: 1px solid hsl(var(--color-stroke-warning)); }
+.arcade-alert--error { background: hsla(var(--dragonfruit-100) / 0.5); color: hsl(var(--color-feedback-alert)); border: 1px solid hsl(var(--color-stroke-destructive)); }
+
+/* ============================================================
+   BANNER — inline notice strip with optional actions
+   Figma-verified (page 7785:17563): radius 4, neutral soft fill by default,
+   semantic subtle-fill variants (no border). Section/spot/expressive banner
+   types exist in Figma too; this is the common Inline banner.
+   ============================================================ */
+
+.arcade-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--control-gap-medium);
+  padding: var(--spacing-global-xs) var(--spacing-global-sm);
+  border-radius: var(--corner-square);
+  background: hsla(var(--husk-600) / 0.34);
+  color: hsl(var(--text-color-primary));
+  border: none;
+}
+.arcade-banner__body { flex: 1; font-size: var(--fontSize-system); }
+.arcade-banner--info         { background: hsla(var(--shuiguo-100) / 0.6); }
+.arcade-banner--success      { background: hsla(var(--hardy-100) / 0.6); }
+.arcade-banner--warning      { background: hsla(var(--banginapalli-100) / 0.6); }
+.arcade-banner--alert        { background: hsla(var(--dragonfruit-100) / 0.6); }
+.arcade-banner--intelligence { background: hsla(var(--intelligence-100) / 0.6); }
+.arcade-banner--neutral {
+  background: hsl(var(--bg-layer-02));
+  border: 1px solid hsl(var(--border-outline-01));
 }
 
-.arcade-alert--success {
-  background: hsla(var(--hardy-100) / 0.5);
-  color: hsl(var(--color-feedback-success));
-  border: 1px solid hsl(var(--color-stroke-success));
-}
+/* ============================================================
+   TOAST — floating notification (dark surface in light mode)
+   ============================================================ */
 
-.arcade-alert--warning {
-  background: hsla(var(--banginapalli-100) / 0.5);
-  color: hsl(var(--color-feedback-warning));
-  border: 1px solid hsl(var(--color-stroke-warning));
-}
-
-.arcade-alert--error {
-  background: hsla(var(--dragonfruit-100) / 0.5);
-  color: hsl(var(--color-feedback-alert));
-  border: 1px solid hsl(var(--color-stroke-destructive));
+.arcade-toast {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-global-xs);
+  padding: var(--spacing-global-sm) var(--spacing-global-base);
+  border-radius: var(--corner-circle);
+  background: hsl(var(--color-night));
+  color: hsl(var(--text-color-inverted));
+  font-size: var(--fontSize-system);
+  box-shadow: var(--shadow-depth-03);
+  max-width: 420px;
 }
 
 /* ============================================================
@@ -583,23 +970,48 @@
 
 .arcade-skeleton {
   background: hsl(var(--color-skeleton));
-  border-radius: 4px;
+  border-radius: var(--corner-square);
   animation: arcade-pulse 1.5s ease-in-out infinite;
 }
-
-.arcade-skeleton--text {
-  height: 1em;
-  width: 80%;
-  border-radius: 4px;
-}
-
-.arcade-skeleton--circle {
-  border-radius: 9999px;
-}
+.arcade-skeleton--text { height: 1em; width: 80%; border-radius: var(--corner-square); }
+.arcade-skeleton--circle { border-radius: var(--corner-pill); }
 
 @keyframes arcade-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
+}
+
+/* ============================================================
+   LOADER / SPINNER
+   ============================================================ */
+
+.arcade-spinner {
+  display: inline-block;
+  width: var(--icon-medium);
+  height: var(--icon-medium);
+  border: 2px solid hsl(var(--border-outline-02));
+  border-top-color: hsl(var(--text-color-primary));
+  border-radius: var(--corner-pill);
+  animation: arcade-spin 0.7s linear infinite;
+}
+.arcade-spinner--S { width: var(--icon-default); height: var(--icon-default); border-width: 2px; }
+.arcade-spinner--L { width: var(--icon-x-large); height: var(--icon-x-large); border-width: 3px; }
+
+@keyframes arcade-spin { to { transform: rotate(360deg); } }
+
+/* Indeterminate progress bar */
+.arcade-progress {
+  width: 100%;
+  height: 6px;
+  border-radius: var(--corner-pill);
+  background: hsl(var(--bg-layer-03));
+  overflow: hidden;
+}
+.arcade-progress__fill {
+  height: 100%;
+  border-radius: var(--corner-pill);
+  background: var(--control-bg-primary-idle);
+  transition: width 0.3s ease;
 }
 
 /* ============================================================
@@ -615,12 +1027,12 @@
 .arcade-tab {
   display: inline-flex;
   align-items: center;
-  gap: var(--spacing-dynamic-4xs);
+  gap: var(--control-gap-small);
   padding: var(--spacing-global-xs) var(--spacing-global-sm);
   font-family: var(--font-text);
   font-size: var(--fontSize-system);
   font-weight: 540;
-  color: hsl(var(--text-color-secondary));
+  color: hsl(var(--text-interactive-tab-resting));
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
@@ -629,12 +1041,9 @@
   margin-bottom: -1px;
 }
 
-.arcade-tab:hover {
-  color: hsl(var(--text-color-primary));
-}
-
+.arcade-tab:hover { color: hsl(var(--text-interactive-tab-hovered)); }
 .arcade-tab--active {
-  color: hsl(var(--text-interactive-primary-resting));
+  color: hsl(var(--text-color-primary));
   border-bottom-color: hsl(var(--border-interactive-primary-resting));
 }
 
@@ -664,8 +1073,114 @@
   color: hsl(var(--text-color-primary));
 }
 
-.arcade-table tr:hover td {
-  background: hsl(var(--bg-interactive-tertiary-hovered));
+.arcade-table tr:hover td { background: hsl(var(--bg-interactive-tertiary-hovered)); }
+
+/* ============================================================
+   ACCORDION — style native <details>/<summary>
+   ============================================================ */
+
+.arcade-accordion {
+  border: 1px solid hsl(var(--border-outline-01));
+  border-radius: var(--corner-square-x2);   /* Figma: 6px, not 14 */
+  overflow: hidden;
+  background: hsl(var(--bg-layer-01));
+}
+.arcade-accordion + .arcade-accordion { margin-top: var(--spacing-global-4xs); }
+.arcade-accordion > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-global-xs);
+  padding: var(--spacing-global-sm) var(--spacing-global-base);
+  font-family: var(--font-text);
+  font-size: var(--fontSize-system);
+  font-weight: 540;
+  color: hsl(var(--text-color-primary));
+  cursor: pointer;
+  list-style: none;
+}
+.arcade-accordion > summary::-webkit-details-marker { display: none; }
+.arcade-accordion > summary::after {
+  content: '';
+  width: 8px; height: 8px;
+  border-right: 1.5px solid hsl(var(--text-color-tertiary));
+  border-bottom: 1.5px solid hsl(var(--text-color-tertiary));
+  transform: rotate(45deg);
+  transition: transform 0.2s ease;
+}
+.arcade-accordion[open] > summary::after { transform: rotate(-135deg); }
+.arcade-accordion__content {
+  padding: 0 var(--spacing-global-base) var(--spacing-global-sm);
+  font-size: var(--fontSize-system);
+  color: hsl(var(--text-color-secondary));
+}
+
+/* ============================================================
+   STEPPER — numeric +/- control
+   ============================================================ */
+
+.arcade-stepper {
+  display: inline-flex;
+  align-items: center;
+  height: var(--control-size-default);
+  border: 1px solid hsl(var(--border-field-idle));
+  border-radius: var(--corner-square-x2);
+  overflow: hidden;
+}
+.arcade-stepper__btn {
+  width: var(--control-size-default);
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: hsl(var(--text-color-secondary));
+  cursor: pointer;
+  font-size: var(--fontSize-body);
+}
+.arcade-stepper__btn:hover { background: hsl(var(--bg-interactive-tertiary-hovered)); }
+.arcade-stepper__value {
+  min-width: 40px;
+  text-align: center;
+  font-family: var(--font-text);
+  font-size: var(--fontSize-system);
+  color: hsl(var(--text-color-primary));
+  border-left: 1px solid hsl(var(--border-outline-01));
+  border-right: 1px solid hsl(var(--border-outline-01));
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ============================================================
+   SLIDER — styled range input
+   ============================================================ */
+
+.arcade-slider {
+  width: 100%;
+  accent-color: var(--control-bg-primary-idle);
+  cursor: pointer;
+}
+
+/* ============================================================
+   KEYBOARD SHORTCUT
+   ============================================================ */
+
+.arcade-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  font-family: var(--font-mono);
+  font-size: var(--fontSize-system-small);
+  color: hsl(var(--text-color-secondary));
+  background: hsl(var(--bg-layer-03));
+  border: 1px solid hsl(var(--border-outline-01));
+  border-radius: var(--corner-square);
 }
 
 /* ============================================================
@@ -686,15 +1201,19 @@
    DIALOG / MODAL
    ============================================================ */
 
+/* Figma-verified (set 4602:43787): radius 6 (not 16), title in the display
+   font, small (480) / medium (720) / large (1080) widths. */
 .arcade-dialog {
   background: hsl(var(--bg-layer-01));
   border: 1px solid hsl(var(--border-outline-01));
-  border-radius: 16px;
+  border-radius: var(--corner-square-x2);
   padding: var(--spacing-global-lg);
   box-shadow: var(--shadow-depth-04);
   max-width: 480px;
   width: 100%;
 }
+.arcade-dialog--M { max-width: 720px; }
+.arcade-dialog--L { max-width: 1080px; }
 
 .arcade-dialog__header {
   display: flex;
@@ -704,6 +1223,7 @@
 }
 
 .arcade-dialog__title {
+  font-family: var(--font-display), var(--font-text);
   font-size: var(--fontSize-title-3);
   font-weight: 660;
   letter-spacing: var(--tracking-title-3);
