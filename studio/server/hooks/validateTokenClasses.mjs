@@ -106,7 +106,18 @@ export function detectTokenClassViolations(classes, tokenNames) {
     // (e.g., bg-intelligence-prominent where --bg-intelligence-prominent is the token).
     // This ensures we don't flag built-in utilities like bg-gradient-to-r when a token
     // happens to have that name.
+    //
+    // EXCEPT when the base is a Tailwind v4 built-in theme var: `text-sm` /
+    // `text-xs` / `text-base` / `text-lg` are the standard font-size utilities,
+    // and arcade-gen's @theme defines `--text-sm` etc. — so baseIsToken is true
+    // for a class that COMPILES PERFECTLY. Flagging it churned the frame and the
+    // agent's "fix" (`text-(--text-sm)`) is worse: it drops the paired
+    // `--text-sm--line-height` the real utility applies. The sibling dead-ref
+    // lane already skips these framework namespaces (TAILWIND_DEFAULT_PREFIXES);
+    // apply the same skip here. The tailIsToken branch above is untouched, so a
+    // real DS-token collision like `text-fg-neutral-medium` still flags.
     if (baseIsToken && !tailIsToken) {
+      if (TAILWIND_DEFAULT_PREFIXES.some((p) => base.startsWith(p))) continue;
       out.push({
         badClass: cls,
         suggestion: `${variants}${prefix}-(--${base})`,

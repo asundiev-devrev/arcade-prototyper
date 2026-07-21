@@ -121,6 +121,27 @@ describe("detectTokenClassViolations", () => {
     expect(v[0]?.badClass).toBe("bg-intelligence-prominent");
     expect(v[0]?.suggestion).toBe("bg-(--bg-intelligence-prominent)");
   });
+
+  it("does NOT flag standard Tailwind v4 text-size utilities (text-sm/xs/base/lg)", () => {
+    // arcade-gen's @theme defines --text-sm / --text-xs / --text-base / --text-lg
+    // (font-size vars), so baseIsToken is true for these — but they are the
+    // STANDARD Tailwind font-size utilities that compile perfectly. Flagging them
+    // churned every frame and the agent's "fix" (text-(--text-sm)) is worse: it
+    // drops the paired --text-sm--line-height. The TAILWIND_DEFAULT_PREFIXES skip
+    // must exempt them. (Real tokens loaded from arcade-gen's styles.css.)
+    const v = detectTokenClassViolations(
+      ["text-sm", "text-xs", "text-base", "text-lg", "md:text-sm"], tokens);
+    expect(v).toEqual([]);
+  });
+
+  it("STILL flags a real DS-token color collision written without the paren form", () => {
+    // The Tailwind-default skip must NOT weaken the real catch: text-fg-neutral-medium
+    // (tail = a real DS token) and hover:text-fg-neutral-medium still flag.
+    const v = detectTokenClassViolations(
+      ["text-fg-neutral-medium", "hover:text-fg-neutral-medium"], tokens);
+    expect(v.map((x) => x.badClass).sort()).toEqual(
+      ["hover:text-fg-neutral-medium", "text-fg-neutral-medium"]);
+  });
 });
 
 describe("loadTokenNames (real arcade-gen styles.css)", () => {
