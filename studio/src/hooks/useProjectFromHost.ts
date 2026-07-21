@@ -90,6 +90,27 @@ export function resetPerTurn(refs: PerTurnRefs, clearBanners: () => void): void 
 const RENDER_MEASUREMENT_FEATURES_ENABLED = false;
 
 /**
+ * Render-verify v3 (isolation before/after) auto-corrective + banner.
+ *
+ * DISABLED (2026-07-21) after the live manual gate. The isolation render itself
+ * works (spike-proven, and the fix that made edits show live — committed-iframe
+ * nonce key — was the real win of this effort). But the before/after comparison
+ * is structurally false-fire-prone: it CANNOT distinguish "no visible change
+ * because the component SWALLOWED the prop" (the bug we wanted) from "no change
+ * because the page was ALREADY in the requested state" (a legitimate correct
+ * no-op). Live diag proved it: asking for vertical toggles on a page that was
+ * ALREADY vertical toggles → before===after (identical bundle, fp 37bef529) →
+ * "no-op" → a spurious corrective turn + a false "doesn't match your request"
+ * banner over a page that matched perfectly.
+ *
+ * Telling those two apart needs claim-vs-render (RV v2's direction, which hit
+ * the multi-page-measurement wall). Left as the unsolved keystone. The isolation
+ * render + verify code is kept behind this flag for that future effort; the
+ * SHIPPED win is the live-refresh fix (committed iframe keyed on committedNonce).
+ */
+const RENDER_VERIFY_V3_ENABLED = false;
+
+/**
  * Aggregate the host-side data sources that `ProjectDetail` needs:
  *
  *   - `GET /api/projects/:slug` for the `Project` record (header title,
@@ -366,6 +387,7 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
   // v3 corrective prompt in the body). The corrective turn's end is re-verified
   // ONCE → still no-op → honest banner. One corrective per user turn (hard stop).
   useEffect(() => {
+    if (!RENDER_VERIFY_V3_ENABLED) return; // DISABLED — see the flag comment above
     // Keep the live-turnId mirror current on EVERY turnId change (before any
     // phase guard) — this is what the post-await guard reads to detect a turn
     // that superseded the one we started verifying.
@@ -395,10 +417,6 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
         // past the corrective turn we were re-verifying (superseded) — never
         // banner a stale frame for a turn the user has moved past.
         if (cCancelled || rvV3LiveTurnId.current !== cTurnId) return;
-        // [RV3-DIAG] post-corrective re-verify verdict — "no-op" here = the
-        // yellow banner fires. If the corrective DID fix the render, a "no-op"
-        // verdict is the FALSE banner we're hunting.
-        console.log(`[RV3-DIAG] corrective-end re-verify frame=${frame} → ${outcome} (no-op ⇒ banner)`);
         if (outcome === "no-op") setRenderMismatchBannerForFrame(frame);
       })();
       return () => {
@@ -451,10 +469,6 @@ export function useProjectFromHost(slug: string): ProjectShellSource {
       // down (cancelled) OR a new user turn landed (chat.turnId advanced past
       // the turn we verified) — a corrective for a superseded turn is wrong.
       if (cancelled || rvV3LiveTurnId.current !== turnId) return;
-      // [RV3-DIAG] initial fire decision. "no-op" here fires the corrective. On
-      // a turn where the agent's FIRST reply already made a real visible change,
-      // a "no-op" verdict is the spurious fire that caused the churn.
-      console.log(`[RV3-DIAG] initial verify frame=${frame} → ${outcome} (no-op ⇒ fires corrective)`);
       if (outcome !== "no-op") return; // "changed"/"skip" → silent (fail open)
 
       // Confirmed no-op → claim the turn, fire ONE corrective via the EXISTING
