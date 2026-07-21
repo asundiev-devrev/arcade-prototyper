@@ -6,6 +6,7 @@ import type { TurnPhase } from "../../hooks/chatStreamReducer";
 import { SaveComponentModal } from "../assets/SaveComponentModal";
 import { observeFingerprint, type FpTracker } from "./visualNoOp";
 import { handleDigestMessage, type RenderDigest } from "../../frame/frameDigest";
+import { currentPageLabel, findRestoreTarget } from "../../lib/framePageRestore";
 
 const FRAME_WIDTH_MIN = 320;
 const FRAME_WIDTH_MAX = 2560;
@@ -112,6 +113,12 @@ export function FrameCard({
   onRenderDigestRef.current = onRenderDigest;
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  // Return-to-your-page: the label of the sub-page the user was viewing when an
+  // edit signal arrived, captured from the still-visible last-good iframe BEFORE
+  // the swap remounts (which resets a multi-page frame to its default page).
+  // After the remount's onLoad, we click the matching nav control to restore it.
+  // Null when there's nothing to restore (no heading / not a sub-page).
+  const pendingRestoreLabel = useRef<string | null>(null);
   const wipeWrapperRef = useRef<HTMLDivElement | null>(null);
   const { batch, frameSlug: sessionFrameSlug, addOrFocus, setInspectorOpen, clear, frameWindow } = useEditSession();
   const { toast } = useToast();
@@ -151,6 +158,13 @@ export function FrameCard({
     function onFrameChanged(e: Event) {
       const detail = (e as CustomEvent).detail as { slug?: string; frameId?: string };
       if (detail?.slug !== projectSlug || detail?.frameId !== frame.slug) return;
+      // Return-to-your-page: capture the sub-page the user is currently viewing
+      // from the STILL-VISIBLE last-good iframe, before the swap remounts and
+      // resets a multi-page frame to its default page. Best-effort; same-origin
+      // read only. Restored after the remount's onLoad.
+      try {
+        pendingRestoreLabel.current = currentPageLabel(iframeRef.current?.contentDocument);
+      } catch { pendingRestoreLabel.current = null; }
       // This frame's DOM is about to be rebuilt. Any active edit batch on THIS
       // frame holds element-ids + line/cols bound to the old DOM — stale after
       // the agent edit that triggered the reload. Keeping them risks silent
@@ -328,6 +342,25 @@ export function FrameCard({
   }, [picking, frame.slug, addOrFocus, setInspectorOpen, clear, frameWindow, sessionFrameSlug, toast]);
 
   function onIframeLoad() {
+    // Return-to-your-page: if a swap just remounted this iframe (which reset a
+    // multi-page frame to its default page), click the nav control matching the
+    // page the user was on. Consume the label so it fires at most once per swap.
+    // React mounts the nav shortly AFTER document load, so poll briefly for the
+    // target (up to ~1s) instead of assuming it's present on the load tick.
+    const restoreLabel = pendingRestoreLabel.current;
+    pendingRestoreLabel.current = null;
+    if (restoreLabel) {
+      let tries = 0;
+      const tryRestore = () => {
+        const doc = iframeRef.current?.contentDocument;
+        // Already on the wanted page (default happened to match) → done.
+        if (currentPageLabel(doc) === restoreLabel) return;
+        const target = findRestoreTarget(doc, restoreLabel);
+        if (target) { target.click(); return; }
+        if (++tries < 10) setTimeout(tryRestore, 100); // ~1s budget, then give up (stays on default)
+      };
+      tryRestore();
+    }
     // Re-arm the picker if it was active before the reload. Posting
     // frame-pick-start immediately on the nonce bump would fire before the new
     // document is ready — do it here once the iframe's onLoad guarantees the
