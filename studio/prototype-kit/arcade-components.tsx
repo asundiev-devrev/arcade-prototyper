@@ -31,6 +31,7 @@ import {
   Button as RawButton,
   IconButton as RawIconButton,
   ChatBubble as RawChatBubble,
+  ToggleGroup as RawToggleGroup,
   type ButtonProps as RawButtonProps,
   type IconButtonProps as RawIconButtonProps,
   type ChatBubbleProps as RawChatBubbleProps,
@@ -109,3 +110,49 @@ export const ChatBubble = React.forwardRef<HTMLDivElement, RawChatBubbleProps>(
     );
   },
 );
+
+// ToggleGroup.Root — honor `orientation="vertical"` with a real column layout.
+//
+// arcade-gen's ToggleGroup.Root hardcodes `inline-flex items-center` (a row)
+// and spreads `orientation` only to headless Radix, which sets data-orientation
+// + arrow-key direction but does NO layout. So `orientation="vertical"` reaches
+// the DOM yet renders horizontal — a real prop that is visually inert. The
+// generator reaches for the obvious prop, honestly reports success, and the
+// pixels never move. That is exactly the "claimed done, didn't render" class.
+//
+// We inject `flex-col` in the vertical case. The kit uses clsx (NOT
+// tailwind-merge), so classes are concatenated, not deduped — this works
+// BECAUSE `flex-col` and the kit's hardcoded `inline-flex` set DIFFERENT CSS
+// properties: `inline-flex` is `display`, `flex-col` is `flex-direction:
+// column`. Together they make an inline-flex container that stacks children
+// vertically. We deliberately DON'T touch align-items (the kit hardcodes
+// `items-center`): both `items-*` set the same property, clsx wouldn't dedupe,
+// and the winner would depend on stylesheet rule order — fragile. Centered
+// content-width pills stacked vertically is the correct vertical look anyway.
+// Horizontal (default) is untouched — pass-through, kit renders as before.
+type ToggleGroupRootProps = React.ComponentProps<typeof RawToggleGroup.Root>;
+
+const VerticalToggleGroupRoot: React.ForwardRefExoticComponent<
+  ToggleGroupRootProps & React.RefAttributes<HTMLDivElement>
+> = React.forwardRef<HTMLDivElement, ToggleGroupRootProps>(
+  function ToggleGroupRoot({ orientation, className, ...props }, ref) {
+    const verticalClass = orientation === "vertical" ? "flex-col" : undefined;
+    return (
+      <RawToggleGroup.Root
+        ref={ref}
+        orientation={orientation}
+        className={[verticalClass, className].filter(Boolean).join(" ") || undefined}
+        {...props}
+      />
+    );
+  },
+);
+
+// Explicit type: the inferred Object.assign type references Radix's internal
+// package path (non-portable, TS2742). We only override Root; Item and any
+// other sub-parts pass through from the raw compound unchanged.
+export const ToggleGroup: Omit<typeof RawToggleGroup, "Root"> & {
+  Root: typeof VerticalToggleGroupRoot;
+} = Object.assign({}, RawToggleGroup, {
+  Root: VerticalToggleGroupRoot,
+});
