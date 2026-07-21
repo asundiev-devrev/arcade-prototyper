@@ -8,6 +8,22 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.45.0] — 2026-07-21
+
+This release is about **edit reliability** — making a change land, show up, and be reported honestly, so "I asked for something and nothing happened" stops happening.
+
+### Added
+- **Edits now show without a manual refresh.** When the assistant changes a frame, the preview updates on its own — you no longer have to reload the studio to see it. (This was the #1 "nothing happened" complaint; the change was already being made, you just couldn't see it.)
+- **The preview stays on the page you were editing.** In a multi-page prototype, making a change used to bounce the preview back to the prototype's opening page — so your edit was live but off-screen. It now returns you to the page you were on. (Best-effort: if it can't tell which page you were on, it stays on the opening page, same as before.)
+- **Broken edits no longer blank the screen.** If a change temporarily breaks a frame, the studio keeps showing the last good version with a calm "Refining your change…" note while it auto-repairs, instead of flashing a white screen or an error wall.
+- **The assistant is held to what it actually did.** It now knows the real capabilities of each design-system component, so it stops claiming it set a property the component doesn't support — and when it genuinely can't do something, it says so plainly instead of reporting a success that didn't render.
+
+### Fixed
+- **Vertical toggle groups actually stack vertically.** Asking for a vertical toggle group used to leave it horizontal (the component silently ignored the request). It now stacks as asked.
+- **The AWS sign-in card is readable in dark mode.** The "Checking AWS sign-in…" card showed white text on a white background; it now uses theme-aware colours.
+- **Common text sizes no longer trigger a needless retry.** Standard text-size utilities (small/base/large) were being wrongly flagged as broken, causing the assistant to churn on a change that was already fine.
+- **Silent dead-ends self-correct.** When an edit referenced a design token or an import path that doesn't exist — which would render as nothing or crash the frame — the studio now catches it and the assistant fixes it in the same turn instead of confidently reporting success.
+
 ## [0.44.0] — 2026-07-13
 
 ### Added
