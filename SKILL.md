@@ -49,33 +49,33 @@ brew install node
 
 If Homebrew installation requires a password, tell the user in plain language: "I need to install a small helper tool. Your Mac might ask for your password — just type it in and hit Enter." Do NOT mention Node.js, Homebrew, npm, or any technical names.
 
-### 2. Check for figma-cli
+### 2. Check for figmanage
+
+Figma access goes through **figmanage** — a command-line tool that talks to Figma's own servers using a Personal Access Token. It does NOT need Figma Desktop to be open, a plugin, or any local connection. Check silently:
 
 ```bash
-FIGMA_CLI=$(find ~ -maxdepth 2 -type d -name "figma-cli" 2>/dev/null | head -1)
+figmanage whoami 2>/dev/null || echo "MISSING"
 ```
 
-If not found, install it silently:
+If the command isn't found, install it silently (Node.js is available from Step 1):
 
 ```bash
-cd ~ && git clone https://github.com/silships/figma-cli.git && cd figma-cli && npm install
+npm install -g figmanage
 ```
 
-If `git` is missing, install it: `brew install git` (Homebrew should already be available from Step 1).
+If `git` is ever needed elsewhere, install it with `brew install git` (Homebrew is available from Step 1).
 
 ### 3. Check Figma connection
 
-```bash
-cd $FIGMA_CLI && node src/index.js daemon status
-```
+`figmanage whoami` prints the signed-in user and exits 0 when connected. A non-zero exit means no token is stored yet.
 
-If not connected and Figma Desktop is running:
+If not connected, ask the user for a Figma Personal Access Token in plain language — never call it a token in a scary way: "To pull your Figma designs I need a quick access key from your Figma account. In Figma, go to Settings → Security → Personal access tokens, create one, and paste it here." Then store it silently:
 
 ```bash
-cd $FIGMA_CLI && node src/index.js connect
+figmanage login --pat-only   # paste the token on stdin
 ```
 
-If Figma Desktop isn't running, tell the user: "Open Figma on your Mac and I'll connect to it."
+Do NOT ask for a token if `whoami` already succeeds. Never use the Figma REST API directly, never suggest a Figma plugin, and never use any other Figma tool — figmanage is the only path.
 
 ### 4. Ready
 
@@ -94,6 +94,42 @@ Use when a designer asks you to:
 ## How it works
 
 Every prototype is a **single HTML file** that includes the token CSS and component CSS inline. The file opens directly in any browser.
+
+**This skill builds prototypes in plain HTML, CSS, and vanilla JavaScript — always.** It never produces a React app, a component library, TypeScript, or anything with a build step or dependencies. If a request seems to call for a "real app" or reusable components, that's a different tool — here, the answer is still one self-contained HTML file. Do not reach for React, JSX, npm packages, or a framework.
+
+## How to build well
+
+These rules apply to every prototype, whether you start from a sentence, a template, or a Figma file. They're what separate a prototype that feels right from one that's subtly off.
+
+### What's law, and what bends
+
+- **When the designer didn't specify something, the design system is law.** Colors, spacing, type, component shapes — default to the tokens and component classes. Don't invent a spacing value or a color when the system already has one.
+- **When the designer explicitly asks for something, their request is law — even if it breaks the system.** If they ask for an off-palette purple or a button bigger than any size the system defines, build it literally. Don't silently "snap to the nearest token", don't substitute the system's version, and never refuse. Build exactly what they asked, then mention the one thing you did differently in plain language ("I used a custom purple you asked for — it's outside the standard palette") so they know it won't match production automatically.
+
+### Only use components that actually exist
+
+The prototype's look comes entirely from the CSS bundled with this skill. The component classes are exactly those defined in `arcade-components.css` (all named `.arcade-*` — button, input, badge, card, tab, table, dialog, menu, avatar, toggle, checkbox, alert, skeleton, empty state, sidebar, tooltip, and their variants). **If a class isn't defined in that file, it doesn't exist** — inventing a plausible-sounding class like `.arcade-accordion` produces an unstyled element that looks broken. Before you deliver, sanity-check that every `.arcade-*` class you used is one the CSS actually defines. If you need something the system doesn't have, build it from plain HTML + tokens and flag the gap (see below) — don't fabricate a class name.
+
+### Leave visible gaps, never fabricate
+
+If something is genuinely missing — an icon the design uses but you can't export, a component the system doesn't have, a label you can't read in the reference — **leave a visible hole, not a plausible guess.** Drop an HTML comment right where it belongs: `<!-- GAP: could not read the metric label under the chart -->`. A visible hole gets noticed and fixed; a confident fabrication ships and misleads. This applies to icons, component substitutes, and content alike.
+
+### Editing an existing prototype
+
+- **Make the smallest change that satisfies the request.** Edit only the lines that need to change — don't rewrite or re-emit the whole file for a one-word tweak. Small edits are faster and less likely to break something that was working.
+- **Preserve everything you're not changing.** When you adjust one property on an element, carry every other attribute through untouched — especially fonts and inline styles.
+- **A reply that claims a change but edits nothing is a failed turn.** If you say "done" you must have actually written the change to the file. After editing, confirm the change is in the file before telling the user it's done.
+
+### Check your work before delivering
+
+A file that opens without an obvious crash can still be silently broken. Before you open a prototype for the user, do a quick pass:
+
+- **Every `<script>` block is valid JavaScript** — run `node --check` against each one (extract it to a temp file if needed). A syntax error anywhere in a script silently kills all the interactivity after it.
+- **Braces and tags balance** — in every `<style>` block, and in any HTML subtree you just edited. **Never delete an HTML element with a regex or a broad find-replace** — a match that runs to the next `</div>` doesn't respect nesting and will eat a closing tag that belonged to something else. Delete by reading the structure, not by pattern.
+- **The things you depend on still exist** — if your JavaScript targets `.zero-caret` or a CSS rule positions it, confirm that class and rule are still present after your edits.
+- **Stamp the build.** Put a short timestamp or version in the `<title>` (e.g. `Prototype — Settings · build 14:32`). A stale cached file that looks unchanged has cost real debugging time; a visible stamp tells you at a glance whether the browser is showing your latest save.
+
+These are best-effort checks you run yourself — there's no tooling enforcing them, so actually do them rather than assuming the file is fine.
 
 ## Templates
 
@@ -192,7 +228,7 @@ The `chip-fonts.css` file contains base64-encoded font data, so prototypes rende
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Prototype — [Name]</title>
+  <title>Prototype — [Name] · build [HH:MM]</title>
   <style>
     /* Paste contents of chip-fonts.css here */
     /* Paste contents of arcade-tokens.css here */
@@ -216,7 +252,7 @@ The `chip-fonts.css` file contains base64-encoded font data, so prototypes rende
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Prototype — [Name]</title>
+  <title>Prototype — [Name] · build [HH:MM]</title>
   <style>
     /* Paste contents of chip-fonts.css here */
     /* Paste contents of devrev-app-tokens.css here */
@@ -611,323 +647,93 @@ Shadow tokens are **complete CSS values** — use them directly without `hsl()` 
 
 ## Figma integration
 
-You have direct access to Figma Desktop via a LOCAL command-line tool called **figma-cli** (`silships/figma-cli` on GitHub). It connects directly to the running Figma Desktop app on the user's Mac over a local socket. No API token, no Figma REST API, no Figma plugins, no third-party services.
+You have access to Figma through **figmanage** — a command-line tool that reads Figma files using the designer's Personal Access Token (PAT) over Figma's own servers. It does NOT need Figma Desktop open, a plugin, a local socket, or any third-party service.
 
 **ABSOLUTE RULES — VIOLATION OF THESE IS A CRITICAL FAILURE:**
-- **NEVER ask the user for a Figma API token.** You do not need one. figma-cli connects locally.
-- **NEVER use the Figma REST API** (`api.figma.com`). It will not work.
-- **NEVER suggest installing a Figma plugin.** There is no "FigmaCli plugin", no "Figma to Code plugin", no plugin of any kind. This is a LOCAL CLI tool that runs in the terminal.
-- **NEVER use `npx figma-cli`** or any npm package by that name. Use the LOCAL CLONE at `~/figma-cli`.
-- **NEVER use `figma-use`** directly. Use figma-cli commands instead.
-- **NEVER tell the user you can't access Figma.** You CAN — via figma-cli. Just use it.
-- **NEVER invent alternative Figma access methods.** The ONLY way to access Figma is through the local figma-cli clone described below.
+- **The ONLY way to access Figma is `figmanage`.** Never use the Figma REST API (`api.figma.com`) directly, never suggest a Figma plugin, never use `figma-cli`, `figma-use`, `npx` anything, or any other tool.
+- **Never tell the user you can't access Figma.** You can — via figmanage. Use it.
+- **A token is required once.** If `figmanage whoami` fails, ask the user for a Figma Personal Access Token in plain, calm language (Settings → Security → Personal access tokens in Figma) and store it with `figmanage login --pat-only`. If `whoami` already succeeds, never ask again.
 
-If you find yourself about to suggest a Figma plugin, API token, or any method other than the local figma-cli — STOP. Re-read this section. The answer is always: use `~/figma-cli` with `node src/index.js`.
+If you're about to reach for any other Figma method — STOP. The answer is always figmanage.
 
-### Locating figma-cli
+### Node IDs
 
-figma-cli is a git repo cloned to `~/figma-cli`. To find it:
+Figma URLs show node ids with a dash (`node-id=1038-14518`); figmanage wants a colon (`1038:14518`). Always convert. The file key is the string after `/design/` or `/file/` in the URL.
 
-```bash
-FIGMA_CLI=$(find ~ -maxdepth 2 -type d -name "figma-cli" 2>/dev/null | head -1)
-```
+### Key commands
 
-If not found, install it silently (Node.js should already be available from the first-run setup):
-
-```bash
-cd ~ && git clone https://github.com/silships/figma-cli.git && cd figma-cli && npm install
-```
-
-### Setup
-
-Before first use, ensure the daemon is connected:
-
-```bash
-cd $FIGMA_CLI && node src/index.js daemon status
-```
-
-If not connected:
-
-```bash
-cd $FIGMA_CLI && node src/index.js connect
-```
-
-### Key commands for prototyping
-
-All commands run from the figma-cli directory.
+All commands run from anywhere (figmanage is on PATH). Add `--json` for machine-readable output.
 
 | Task | Command |
 |------|---------|
-| Check connection | `node src/index.js daemon status` |
-| List open files | `node src/index.js files` |
-| Find a node by name | `node src/index.js find "Button"` |
-| Get node properties | `node src/index.js get "1038:14518"` |
-| Get node tree | `node src/index.js node tree "1038:14518" -d 3` |
-| Export node as PNG | `node src/index.js export node "1038:14518" -o /tmp/frame.png -s 2` |
-| Export screenshot | `node src/index.js export screenshot -o /tmp/screen.png -s 2` |
-| Select a node | `node src/index.js select "1038:14518"` |
-| What's on canvas | `node src/index.js canvas info` |
+| Check connection / who's signed in | `figmanage whoami` |
+| Read a node's tree | `figmanage reading get-nodes <fileKey> <nodeId> --depth 2 --json` |
+| Export a node as PNG (reference) | `figmanage export nodes <fileKey> <nodeId> --format png --scale 2 --json` |
+| Export a node as SVG (icons) | `figmanage export nodes <fileKey> <nodeId> --format svg --scale 1 --json` |
+| List local variables (tokens) | `figmanage variables list-local <fileKey> --json` |
+| List published styles | `figmanage components list-file-styles <fileKey> --json` |
+| List published components | `figmanage components list-file-components <fileKey> --json` |
 
-**Node ID format**: Use colon format (`1038:14518`), not dash format (`1038-14518`). Figma URLs show dashes in `node-id=` params — convert them to colons.
+Export commands return a temporary URL (shape `[{ node_id, url }]`); fetch that URL with `curl` to download the actual PNG/SVG, then read it. Use `--scale 1` for large frames — a full-scale export can exceed the export timeout.
 
-### Reading Figma annotations
+Note: `variables list-local` requires a Figma Enterprise plan. On standard plans it returns an error — that's fine, fall back to mapping colors from the node tree's fills.
 
-Designers use Figma annotations (Dev Mode notes) to document behavior, specifications, and design intent on frames and components. **You MUST read annotations when they exist** — they contain critical context for building accurate prototypes.
+### Two speeds: fast sketch vs. precise implementation
 
-figma-cli does not have a built-in annotations command, but the `eval` command gives full access to the Figma Plugin API, which exposes `node.annotations`.
+Read the designer's intent before building. There are two modes, and picking the wrong one is the main cause of bad Figma builds.
 
-**Read annotations on a specific node:**
+**Fast sketch (default).** Most prompts — "prototype a settings page", "sketch a dashboard" — want a quick, close-enough starting point they'll iterate on. Move fast: use the reference image and the summary of the frame, build with components, don't agonize over pixel accuracy.
 
-```bash
-cd $FIGMA_CLI && node src/index.js eval "(function() {
-  var node = figma.getNodeById('NODE_ID');
-  if (!node) return 'Node not found';
-  if (!node.annotations || node.annotations.length === 0) return 'No annotations';
-  return JSON.stringify(node.annotations.map(function(a) {
-    return { label: a.label || '', labelMarkdown: a.labelMarkdown || '', properties: a.properties || [] };
-  }), null, 2);
-})()"
-```
+**Precise implementation (hi-fi).** When the prompt asks for an exact match — words like *pixel-perfect, precise(ly), exactly, 1:1, faithful, implement this as shown, match the design exactly* — or when it's a brand-new design with no close template to lean on, switch to hi-fi mode and suspend the speed shortcuts for that build:
 
-**Read annotations on the current selection:**
-
-```bash
-cd $FIGMA_CLI && node src/index.js eval "(function() {
-  var node = figma.currentPage.selection[0];
-  if (!node) return 'Nothing selected';
-  if (!node.annotations || node.annotations.length === 0) return 'No annotations';
-  return JSON.stringify(node.annotations.map(function(a) {
-    return { label: a.label || '', labelMarkdown: a.labelMarkdown || '', properties: a.properties || [] };
-  }), null, 2);
-})()"
-```
-
-**Find ALL annotated nodes on the current page:**
-
-```bash
-cd $FIGMA_CLI && node src/index.js eval "(function() {
-  var results = [];
-  function walk(n) {
-    if (n.annotations && n.annotations.length > 0) {
-      results.push({ id: n.id, name: n.name, type: n.type, annotations: n.annotations.map(function(a) {
-        return { label: a.label || '', labelMarkdown: a.labelMarkdown || '', properties: a.properties || [] };
-      })});
-    }
-    if (n.children) n.children.forEach(walk);
-  }
-  walk(figma.currentPage);
-  return JSON.stringify(results, null, 2);
-})()"
-```
-
-**What annotations contain:**
-- `label` — plain text note from the designer
-- `labelMarkdown` — rich text note (Markdown format)
-- `properties` — pinned style properties (fills, strokes, spacing, etc.)
-
-**When to read annotations:**
-- **Always** when prototyping a Figma frame — check for annotations as part of the standard workflow (Step 3 below).
-- If annotations describe behavior (e.g., "opens a modal on click", "shows loading state for 2 seconds"), implement that behavior in the prototype.
-- If annotations describe content (e.g., "this text comes from the ticket title"), use realistic sample data that matches.
-- If annotations specify states (e.g., "hover state", "error state", "empty state"), include those states in the prototype with appropriate interactivity.
+- **Read the real node tree this build** (`get-nodes`). A summary or a thumbnail is lossy and is the number-one cause of wrong frames. If the tree output is large, read it in chunks or drill into just the subtree you need — don't try to read a huge dump in one go.
+- **The reference PNG is ground truth for layout and color; the node tree is ground truth for text.** When they disagree, the PNG wins for where things sit and what color they are. Take the exact words from the tree's text fields — never read body copy off the PNG.
+- **Build only what's actually visible.** Hidden or zero-size nodes show up in the tree but not in the render — omit them. If the tree lists a row or icon the PNG doesn't show, leave it out.
+- **Match structure exactly** (see the fidelity rules below).
+- **Self-review before delivering:** put the reference PNG and your prototype side by side and check section by section — same number of rows, icons only where the PNG shows them and at the right size, header/wordmark rendered (not a stand-in glyph), footer correct. Fix every mismatch in the same build.
+- **If a fetch fails, don't invent the UI.** Retry shallower and build from whatever you did read. A faithful partial beats a confident fabrication.
 
 ### Figma-to-prototype workflow
 
-When the user shares a Figma URL or asks to prototype a frame, follow ALL of these steps. Steps 1-6 gather data from Figma. Steps 7-8 build the prototype. Step 9 validates accuracy. Do not skip any step.
+1. **Parse the URL** → file key + node id (convert the dash to a colon).
+2. **Export the frame as a reference PNG** (`--format png --scale 2`), fetch the URL, and look at it. This is what "looks right" means.
+3. **Read the node tree** (`get-nodes --depth 2`, drilling deeper into subtrees as needed) — in hi-fi mode this is mandatory; in fast mode it's optional but helps for structure.
+4. **Export every icon, logo, and illustration as SVG** — never hand-draw or approximate an icon. Walk the tree for small vector/instance nodes, export each as SVG, fetch it, and inline it in the HTML. Set `fill="currentColor"` where the icon should inherit text color.
+5. **Map colors to tokens.** Every color you see must trace back to a design-system token (`hsl(var(--token))`), never a raw hex or rgb. Build a small element → color → token mapping in your head (or a scratch note) before writing HTML, so nothing drifts.
+6. **Build the HTML** using the bundled component classes and the token mapping. Match the tree's structure as your layout blueprint.
+7. **Save and open** (`open ~/Desktop/prototype-name.html`).
 
-#### Phase 1: Extract everything from Figma
+### Match the reference structure exactly
 
-1. **Extract the node ID** from the URL. Convert `node-id=1038-14518` → `1038:14518`.
+These come from real designer complaints — they matter even in fast mode, and are non-negotiable in hi-fi mode:
 
-2. **Export the full frame as a reference image** (2x for clarity):
-   ```bash
-   node src/index.js export node "1038:14518" -o /tmp/figma-ref.png -s 2
-   ```
+- **Count controls and render exactly that many.** If a toolbar has five buttons, build five — not "a few". Tabs, toggles, and filter rows are content, not optional chrome to drop.
+- **Don't reformat the designer's strings.** `165.1K` stays `165.1K`; don't round it, re-case it, or "tidy" it.
+- **Don't invent labels or content.** Every heading, label, and placeholder must come from something you actually read in the tree or clearly see in the PNG. If you can't read it, leave a visible gap (see the GAPS rule) — don't guess a plausible field name.
+- **Icons at their intrinsic size.** A 16px icon in a 20px slot is 16px — never stretch, crop, or set an icon to `width: 100%`.
 
-3. **Read annotations** on the node and its children — these contain behavioral specs from the designer:
-   ```bash
-   node src/index.js eval "(function() {
-     var results = [];
-     var root = figma.getNodeById('1038:14518');
-     if (!root) return 'Node not found';
-     function walk(n) {
-       if (n.annotations && n.annotations.length > 0) {
-         results.push({ id: n.id, name: n.name, annotations: n.annotations.map(function(a) {
-           return { label: a.label || '', labelMarkdown: a.labelMarkdown || '' };
-         })});
-       }
-       if (n.children) n.children.forEach(walk);
-     }
-     walk(root);
-     return results.length ? JSON.stringify(results, null, 2) : 'No annotations found';
-   })()"
-   ```
+### Images are input, not clay
 
-4. **Get the full node tree** to understand the design's layer structure and hierarchy:
-   ```bash
-   node src/index.js node tree "1038:14518" -d 5
-   ```
-   Use depth 5+ to capture nested icon groups and small components. Read this tree carefully — every named layer is intentional.
+When you have a reference screenshot or exported PNG, **look at it and build from it — do not crop, zoom, resample, or slice it into sub-images** with image tools. The pixels are already in front of you; reprocessing them wastes time and produces nothing. If a detail is genuinely too small to read, leave a `<!-- GAP: … -->` marker rather than manipulating the image.
 
-5. **Export icons and small components as SVGs.** Walk the node tree and identify all VECTOR, BOOLEAN_OPERATION, and small FRAME/GROUP nodes that represent icons, logos, or illustrations. Export each one as SVG using the Figma Plugin API:
+### Working from a screenshot instead of a file link
 
-   ```bash
-   # Export a single icon node as SVG
-   node src/index.js eval "(function() {
-     var node = figma.getNodeById('NODE_ID');
-     if (!node) return 'Node not found';
-     return node.exportAsync({ format: 'SVG' }).then(function(data) {
-       return String.fromCharCode.apply(null, data);
-     });
-   })()"
-   ```
-
-   Save each SVG to `/tmp/figma-icons/` with a descriptive filename based on the layer name (e.g., `search-icon.svg`, `clock-icon.svg`, `home-icon.svg`).
-
-   **Rules for icon export:**
-   - Export every icon, logo mark, and illustration — never hand-draw SVGs or approximate them.
-   - If a node has `type: 'INSTANCE'`, it's a component instance — export the whole instance as one SVG.
-   - If an icon is inside a wrapper frame, export the inner vector/group, not the padding frame.
-   - After export, inspect each SVG briefly: remove unnecessary wrapping `<g>` tags, and ensure `fill="currentColor"` is set (or the correct fill) so the icon inherits text color in HTML.
-
-   **Batch export** — when there are many icons, export them all at once:
-   ```bash
-   node src/index.js eval "(function() {
-     var root = figma.getNodeById('ROOT_NODE_ID');
-     var icons = [];
-     function walk(n) {
-       var isIcon = (n.type === 'VECTOR' || n.type === 'BOOLEAN_OPERATION' || n.type === 'INSTANCE')
-         && n.width <= 32 && n.height <= 32;
-       var isSmallGroup = (n.type === 'FRAME' || n.type === 'GROUP')
-         && n.width <= 32 && n.height <= 32
-         && n.children && n.children.some(function(c) { return c.type === 'VECTOR' || c.type === 'BOOLEAN_OPERATION'; });
-       if (isIcon || isSmallGroup) {
-         icons.push({ id: n.id, name: n.name, type: n.type, width: n.width, height: n.height });
-       }
-       if (n.children && !isIcon && !isSmallGroup) n.children.forEach(walk);
-     }
-     walk(root);
-     return JSON.stringify(icons, null, 2);
-   })()"
-   ```
-   Then export each identified icon node individually using the SVG export snippet above.
-
-6. **Extract color and style values from key nodes** and map them to design system tokens.
-
-   For each visually distinct element (backgrounds, text layers, borders, shadows), get its fill/stroke values:
-   ```bash
-   node src/index.js eval "(function() {
-     var node = figma.getNodeById('NODE_ID');
-     if (!node) return 'Node not found';
-     var result = { name: node.name, type: node.type };
-     if (node.fills) result.fills = node.fills.filter(function(f) { return f.visible !== false; });
-     if (node.strokes) result.strokes = node.strokes;
-     if (node.effects) result.effects = node.effects;
-     if (node.opacity !== undefined) result.opacity = node.opacity;
-     if (node.cornerRadius !== undefined) result.cornerRadius = node.cornerRadius;
-     if (node.paddingLeft !== undefined) result.padding = { left: node.paddingLeft, right: node.paddingRight, top: node.paddingTop, bottom: node.paddingBottom };
-     if (node.itemSpacing !== undefined) result.itemSpacing = node.itemSpacing;
-     if (node.fontSize !== undefined) { result.fontSize = node.fontSize; result.fontWeight = node.fontWeight; result.lineHeight = node.lineHeight; result.letterSpacing = node.letterSpacing; }
-     return JSON.stringify(result, null, 2);
-   })()"
-   ```
-
-   **Then map every extracted value to a design system token.** This is critical — never hardcode hex or RGB values in the prototype.
-
-#### Phase 2: Map Figma values to design system tokens
-
-This is the most important accuracy step. Every color in the prototype MUST come from the token files (`arcade-tokens.css` or `devrev-app-tokens.css`), never from hardcoded hex values.
-
-**How to map a Figma color to a token:**
-
-1. Figma gives you fills as `{ r, g, b, a }` in 0-1 range. Convert to HSL:
-   - Multiply r, g, b by 255 to get 0-255 range
-   - Convert RGB to HSL using standard conversion
-   - Round to the nearest integer values
-
-2. Look up the resulting HSL values in the token file. Token values are stored as `H S% L%` triplets (e.g., `0 0% 100%` for white, `330 2% 18%` for `--husk-1000`).
-
-3. Find the closest match. The palette tokens in `arcade-tokens.css` cover the full range:
-   - Grays/neutrals → `--husk-*` scale (100-1300)
-   - Extremes → `--day` (white) and `--night` (near-black)
-   - Blues → `--shuiguo-*` or `--maoshigua-*`
-   - Greens → `--hardy-*`
-   - Reds/pinks → `--dragonfruit-*`
-   - Orange → `--persimmon-*`
-   - Purple → `--jabuticaba-*`
-   - Yellow/gold → `--banginapalli-*`
-
-4. Prefer semantic tokens over palette tokens when available. If a color maps to `--husk-1000`, but the element is a surface background, use `--bg-layer-01` (which resolves to `--husk-1000` in dark mode). Semantic tokens adapt correctly across light/dark modes. Key semantic tokens:
-   - Text: `--text-color-primary`, `--text-color-secondary`, `--text-color-tertiary`, `--text-color-muted`
-   - Surfaces: `--bg-layer-00` through `--bg-layer-04`
-   - Borders: `--border-outline-00`, `--border-outline-01`
-   - Interactive: `--bg-interactive-*-resting`, `--bg-interactive-*-hovered`
-
-5. For typography, extract `fontSize`, `fontWeight`, `lineHeight`, and `letterSpacing` from Figma nodes and match them to the typography utility classes in `typography-spacing.css` (e.g., `.text-body`, `.text-subtitle-1`, `.text-system`). Don't hardcode font sizes — use the closest matching class.
-
-**Build a token mapping table** before writing any HTML. For example:
-
-| Element | Figma fill (RGB) | HSL | Token | CSS usage |
-|---------|-----------------|-----|-------|-----------|
-| Sidebar bg | rgb(22,22,22) | 0 0% 9% | `--husk-1300` / `--bg-layer-00` | `background: hsl(var(--bg-layer-00))` |
-| Card bg | rgb(46,44,44) | 330 2% 18% | `--husk-1000` / `--bg-layer-01` | `background: hsl(var(--bg-layer-01))` |
-| Primary text | rgb(244,244,246) | 240 14% 96% | `--husk-300` / `--text-color-primary` | `color: hsl(var(--text-color-primary))` |
-| Muted text | rgb(123,123,123) | 0 0% 48% | `--husk-700` / `--text-color-tertiary` | `color: hsl(var(--text-color-tertiary))` |
-
-Every color in the prototype must trace back to this table.
-
-#### Phase 3: Build the prototype
-
-7. **Build the HTML prototype.** Use the token mapping table from Phase 2 to write all styles. Use the exported SVGs from Step 5 for all icons — inline them directly in the HTML. Follow these rules:
-   - Every `color`, `background`, `border-color`, and `fill` property MUST use a `hsl(var(--token-name))` value. Zero exceptions.
-   - Every icon and illustration MUST come from the Figma SVG exports. Never draw SVGs by hand or approximate icon shapes.
-   - Use typography utility classes (`.text-body`, `.text-subtitle-1`, etc.) for text styling. Don't hardcode `font-size` or `font-weight`.
-   - Use spacing variables (`var(--spacing-global-*)`) for padding and gaps where possible.
-   - Match the Figma layout structure: use the node tree from Step 4 as a blueprint for your HTML hierarchy.
-
-8. **Save and open the prototype:**
-   ```bash
-   open ~/Desktop/prototype-name.html
-   ```
-
-#### Phase 4: Validate accuracy
-
-9. **Visual validation — compare prototype against Figma reference.** This step is mandatory. After opening the prototype:
-
-   a. **Take a screenshot of the prototype** in the browser at the same dimensions as the Figma export. Use the browser's screenshot capabilities or a tool.
-
-   b. **View the Figma reference** (`/tmp/figma-ref.png`) and the prototype screenshot side by side. Compare:
-      - Layout and spacing — are elements positioned correctly relative to each other?
-      - Colors — do backgrounds, text, and borders match? (They should, since you used tokens.)
-      - Icons — do they match the originals exactly? (They should, since you exported SVGs.)
-      - Typography — are sizes, weights, and line heights correct?
-      - Corner radii, shadows, borders — are they present and correct?
-
-   c. **Fix any deviations** before showing the result to the user. If you spot differences:
-      - Check your token mapping table — did you pick the wrong token?
-      - Check your SVG exports — did you export the right node?
-      - Check spacing — did you use the right spacing variable?
-
-   d. **Only deliver the prototype to the user after validation passes.** The goal is that the user sees no visible differences between the Figma design and the prototype.
-
-### Full reference
-
-See `$FIGMA_CLI/CLAUDE.md` for quick start and `$FIGMA_CLI/REFERENCE.md` for the complete command reference.
+If the user gives you only a screenshot (no Figma file), you won't have the node tree or exportable SVGs. Map what you see to the closest component classes and tokens, and tell the user plainly that accuracy is higher when they share the Figma file so you can pull real icons and exact values.
 
 ## Tips
 
 ### Accuracy principles
 
 - **Never hardcode colors.** Every `color`, `background`, `border-color`, `fill`, and `box-shadow` in the prototype MUST use a design system token (`hsl(var(--token-name))`). If you find yourself typing a hex code like `#615E5F` or an rgb value, stop — find the matching token instead.
-- **Never hand-draw icons.** Always export SVGs from Figma using the Plugin API (`node.exportAsync({ format: 'SVG' })`). Even simple shapes like a search icon or a chevron should come from Figma, not from your imagination. The designer chose specific icons for a reason.
-- **Always validate before delivery.** After building the prototype, compare it against the Figma reference image. Fix any visible deviations before showing it to the user.
+- **Never hand-draw icons.** Always export SVGs from Figma (`figmanage export nodes <fileKey> <nodeId> --format svg`), fetch the URL, and inline the real SVG. Even simple shapes like a search icon or a chevron should come from Figma, not from your imagination. The designer chose specific icons for a reason.
+- **Validate precise builds before delivery.** For a hi-fi / exact-match build, compare the prototype against the Figma reference image and fix visible deviations before showing it. Fast sketches don't need this — the designer will iterate.
 - **Map values systematically.** Build a token mapping table (element → Figma fill → HSL → token → CSS) before writing HTML. This prevents drift and makes it easy to verify every color choice.
 
 ### CSS and tokens
 
 - **Always embed all four CSS files inline** — `chip-fonts.css` + theme tokens + `typography-spacing.css` + `arcade-components.css`. This makes prototypes fully self-contained.
 - **Embed order matters**: fonts → tokens → typography/spacing → components. Components depend on tokens; typography classes are standalone utilities.
-- **Always wrap color tokens in `hsl()`** — token values are raw HSL triplets (e.g., `0 0% 100%`), NOT complete `hsl()` calls. Write `color: hsl(var(--text-color-primary))` not `color: var(--text-color-primary)`.
+- **Always wrap color tokens in `hsl()`** — token values are raw HSL triplets (e.g., `0 0% 100%`), NOT complete `hsl()` calls. Write `color: hsl(var(--text-color-primary))` not `color: var(--text-color-primary)`. **Why this matters:** a bare `color: var(--token)` resolves to `color: 0 0% 100%`, which is not a valid color, so the browser silently falls back to inherited near-black — the element renders wrong with no error. This is the single most common silent failure in these prototypes. Before delivering, scan your styles for any `color`, `background`, `border-color`, or `fill` that references a `var(--…)` token without an `hsl(`/`hsla(` wrapper, and fix it.
 - **Shadows are different** — shadow tokens are complete values, use them directly: `box-shadow: var(--shadow-depth-02)`.
 - **Prefer semantic tokens over palette tokens** — use `--bg-layer-01` instead of `--husk-1000` when the element is a surface. Semantic tokens adapt across light/dark modes.
 - **Tokens are real production tokens** — extracted verbatim from the DevRev product monorepo. If something looks wrong, it may be a component CSS mapping issue, not a token issue.
