@@ -450,7 +450,8 @@
 
 .arcade-badge--default {
   color: hsl(var(--text-color-secondary));
-  background: hsl(var(--bg-layer-03));
+  background: hsla(var(--husk-600) / 0.18);   /* visible neutral tint in both modes;
+                                                 --bg-layer-03 is white in Arcade light */
 }
 
 .arcade-badge--info { color: hsl(var(--color-stroke-info)); background: hsla(var(--shuiguo-100) / 0.5); }

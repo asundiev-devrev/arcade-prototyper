@@ -598,7 +598,7 @@ Never make a secondary/tertiary button a pill — that's the #1 tell of a fake A
 ### Header bar
 ```html
 <header style="display: flex; align-items: center; justify-content: space-between; padding: var(--spacing-global-xs) var(--spacing-global-md); border-bottom: 1px solid hsl(var(--border-outline-01)); background: hsl(var(--bg-layer-01));">
-  <span class="text-subtitle-1 font-bold">Page Title</span>
+  <span class="text-body-bold">Page Title</span>
   <div style="display: flex; gap: var(--spacing-global-xs);">
     <button class="arcade-btn arcade-btn--tertiary arcade-btn--S">Cancel</button>
     <button class="arcade-btn arcade-btn--primary arcade-btn--S">Save</button>
@@ -608,28 +608,26 @@ Never make a secondary/tertiary button a pill — that's the #1 tell of a fake A
 
 ## Typography classes
 
-Use these classes for text styling (same in both themes):
+Use these classes for text styling (same in both themes). **This table is the exact set shipped in `typography-spacing.css` — if a `.text-*` class isn't listed here, it doesn't exist and will silently render as default body text. Don't invent `.text-subtitle-*`, `.text-footnote`, etc.**
 
-| Class | Usage |
-|-------|-------|
-| `.text-title-large` | Hero headings (34px, bold) |
-| `.text-title-1` | Page titles (29px, bold) |
-| `.text-title-2` | Section headings (24px, bold) |
-| `.text-title-3` | Card titles (20px, bold) |
-| `.text-subtitle-1` | Emphasized labels (16px, bold) |
-| `.text-subtitle-2` | Sub-labels (14px, bold) |
-| `.text-body` | Default body text (14px) |
-| `.text-body-large` | Large body text (16px) |
-| `.text-body-small` | Compact body (13px) |
-| `.text-system` | UI text — buttons, inputs (13px, medium) |
-| `.text-system-small` | Smaller UI text (12px, medium) |
-| `.text-system-xsmall` | Extra small UI text (11px, medium) |
-| `.text-caption` | Captions, hints (12px) |
-| `.text-footnote` | Fine print (11px) |
-| `.text-code` | Monospace code (13px) |
-| `.text-code-small` | Small monospace (12px) |
+Weight is baked into the class name via `-medium` (540) and `-bold` (660) suffixes — e.g. `.text-body-bold`, `.text-system-small-medium`. The base class is regular (440). Every row below also has those suffix variants unless noted.
 
-Font weights: `.font-normal` (440), `.font-medium` (540), `.font-bold` (660)
+| Class | Size / line-height | Usage |
+|-------|--------------------|-------|
+| `.text-title-large` | 34 / 38, bold | Hero headings |
+| `.text-title-1` | 29 / 32, bold | Page titles |
+| `.text-title-2` | 24 / 32, bold | Section headings |
+| `.text-title-3` | 20 / 28, bold | Card titles (no weight variants) |
+| `.text-body-large` | 18 / 26 | Large body text |
+| `.text-body` | 16 / 24 | Default body text |
+| `.text-body-small` | 14 / 22 | Compact body |
+| `.text-system` | 14 / 20 | UI text — buttons, inputs, labels |
+| `.text-system-small` | 12 / 16 | Smaller UI text |
+| `.text-callout` | 13 / 20 | Emphasized caption / callout |
+| `.text-caption` | 11 / 16 | Captions, hints, fine print |
+| `.text-code` | 14 / 20, mono | Monospace code (no weight variants) |
+
+For an emphasized label use `.text-system-medium` or `.text-body-bold` — not a `subtitle` class. Standalone weight utilities `.font-normal` / `.font-medium` / `.font-bold` also exist for one-off tweaks.
 
 ## Spacing classes
 
@@ -825,7 +823,7 @@ If the user gives you only a screenshot (no Figma file), you won't have the node
 ### Typography and fonts
 
 - **Chip fonts are mandatory** — never use Inter, system fonts, or Google Fonts as the primary typeface. Chip is DevRev's design system font.
-- **Use typography utility classes** (`.text-body`, `.text-subtitle-1`, `.text-system`, etc.) instead of hardcoding `font-size` and `font-weight`. Match the Figma text node's size and weight to the closest class.
+- **Use typography utility classes** (`.text-body`, `.text-system`, `.text-title-2`, etc. — see the Typography table for the exact shipped set) instead of hardcoding `font-size` and `font-weight`. Match the Figma text node's size and weight to the closest class. Don't use a class that isn't in that table.
 
 ### General
 
