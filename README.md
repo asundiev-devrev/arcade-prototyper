@@ -19,10 +19,22 @@ mkdir -p .claude/skills
 git clone https://github.com/asundiev-devrev/arcade-prototyper.git .claude/skills/arcade-prototyper
 ```
 
+### Contributors (symlink — edit and use in one place)
+
+If you're changing the skill, clone it somewhere you develop and symlink it into
+your global skills dir. Then `git pull` alone keeps the installed skill current —
+no copy step:
+
+```bash
+git clone https://github.com/asundiev-devrev/arcade-prototyper.git ~/arcade-prototyper
+ln -s ~/arcade-prototyper ~/.claude/skills/arcade-prototyper
+```
+
 ### Update
 
 ```bash
-cd ~/.claude/skills/arcade-prototyper && git pull
+# clone-install:  cd ~/.claude/skills/arcade-prototyper && git pull
+# symlink-install: cd ~/arcade-prototyper && git pull
 ```
 
 ## Usage
@@ -97,7 +109,7 @@ Set `class="light"` for light mode (default). Remove it for dark mode.
 
 ### 3. Build with components
 
-All component classes follow the pattern `.arcade-{component}--{variant}--{size}`:
+Variant and size are **separate** modifier classes (not combined): `.arcade-{component} .arcade-{component}--{variant} .arcade-{component}--{size}`:
 
 ```html
 <button class="arcade-btn arcade-btn--primary">Save</button>
@@ -107,7 +119,9 @@ All component classes follow the pattern `.arcade-{component}--{variant}--{size}
 <input class="arcade-input" placeholder="Search...">
 ```
 
-Full component reference (buttons, inputs, badges, cards, tabs, tables, dialogs, menus, avatars, toggles, checkboxes, alerts, skeletons, empty states) is in `SKILL.md`.
+Button shape is per-variant (Figma-verified): **primary** and **expressive** are pills; **secondary**, **tertiary**, **destructive** are square. Don't override it.
+
+Full component reference is in `SKILL.md` — and it's a **closed set**: if a `.arcade-*` or `.text-*` class isn't defined in the CSS, it doesn't exist and renders unstyled. Don't invent class names.
 
 ### 4. Save and deliver
 
@@ -187,18 +201,28 @@ The agent asks for a Figma access token once (Settings → Security → Personal
 
 A quick cheat sheet of what's available (see `SKILL.md` for full HTML examples):
 
-- **Buttons** — primary, secondary, tertiary, destructive, smart. Sizes: S, M, L.
-- **Inputs** — text fields, textareas, error states, hints, labels.
+- **Buttons** — primary, secondary, tertiary, destructive, expressive. Sizes: S, M, L. (primary/expressive = pills; rest = square)
+- **Icon buttons** — square icon-only control; S/M/L, secondary variant.
+- **Inputs** — text fields, select, textareas, error states, hints, labels.
 - **Badges** — default, info, success, warning, alert, action, intelligence, attribute colors 1-8.
+- **Chips** — square status/tag; black-filled default, tinted + semantic variants, dismissible.
+- **Counters** — small numeric indicator; black default, neutral bordered.
+- **Links** — inline link, muted variant.
 - **Cards** — basic, elevated, prominent, interactive.
 - **Tabs** — tab bar with active state.
+- **Segmented control** — inline single-select strip.
+- **Breadcrumbs** — hover-fill path trail.
 - **Tables** — styled with header and body rows.
 - **Menus** — popover with menu items, dividers, keyboard shortcuts.
-- **Dialogs** — overlay + dialog with header, body, footer.
-- **Alerts** — info, success, warning, error banners.
-- **Avatars** — sizes S/M/L, 8 color variants, image support.
-- **Toggles & checkboxes** — on/off states.
+- **Dialogs** — overlay + dialog (S/M/L) with header, body, footer.
+- **Accordion** — expandable native `<details>` section.
+- **Alerts / banners** — info, success, warning, error; inline banner + semantic variants.
+- **Tooltip** — dark floating label. **Toast** — dark notification pill.
+- **Avatars** — sizes S/M/L/XL, 8 color variants, image support.
+- **Toggles, checkboxes & radios** — on/off states (on-state is Arcade black).
+- **Stepper, slider, kbd** — numeric control, range, keyboard key.
 - **Sidebar** — navigation with section titles and menu items.
+- **Loaders** — spinner + indeterminate progress bar.
 - **Skeletons** — loading placeholders (text, circle, rectangle).
 - **Empty states** — icon, title, description, action button.
 
