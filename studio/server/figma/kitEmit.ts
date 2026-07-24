@@ -739,18 +739,27 @@ export interface EmitContext {
 
 /** A subtree that is pure vector content at icon scale collapses into one
  *  exported SVG. Bigger containers recurse so mappable instances inside are
- *  never swallowed into a flat image. */
-function isGraphic(n: RawNode, broken: Set<string>): boolean {
+ *  never swallowed into a flat image.
+ *
+ *  Guarded by containsKitMatch (same as isUnmappedGlyph): a small all-vector
+ *  subtree that nonetheless HOLDS a kit-mappable instance must NOT flatten —
+ *  the walk has to descend to that instance. This is what a CHECKED checkbox
+ *  looks like: its glyph is an `Icons/Checkmark.Filled` VECTOR, so the whole
+ *  16×16 Checkbox subtree reads as "all vector" and used to rasterize to a
+ *  static SVG before the mappable `Checkbox` INSTANCE inside was ever reached
+ *  (an UNCHECKED box has a plain RECTANGLE stroke, so it dodged this path). */
+function isGraphic(n: RawNode, broken: Set<string>, ctx?: EmitContext): boolean {
   if (hidden(n)) return false;
   if (broken.has(n.id)) return false;
   if (GRAPHIC_TYPES.has(n.type)) return true;
   if (n.type === "TEXT") return false;
   if (hasImageFill(n)) return false;
+  if (ctx && containsKitMatch(n, ctx)) return false;
   const kids = n.children ?? [];
   if (["GROUP", "INSTANCE", "FRAME", "COMPONENT"].includes(n.type) && kids.length) {
     const b = n.absoluteBoundingBox ?? {};
     if ((b.width ?? 0) > 48 || (b.height ?? 0) > 48) return false;
-    return kids.every((k: RawNode) => isGraphic(k, broken) || hidden(k));
+    return kids.every((k: RawNode) => isGraphic(k, broken, ctx) || hidden(k));
   }
   if (n.type === "ELLIPSE") {
     return (n.fills ?? []).some((f: any) => f.type !== "SOLID");
@@ -793,7 +802,7 @@ export function planAssets(doc: RawNode, ctx: EmitContext): AssetPlan {
       }
       return; // kit component absorbs its subtree
     }
-    if (isGraphic(n, broken) && n.type !== "ELLIPSE") {
+    if (isGraphic(n, broken, ctx) && n.type !== "ELLIPSE") {
       svgIds.push(n.id);
       return;
     }
@@ -1243,7 +1252,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
       }
     }
 
-    if (isGraphic(n, broken) && n.type !== "ELLIPSE") {
+    if (isGraphic(n, broken, ctx) && n.type !== "ELLIPSE") {
       const v = assetRef(n.id);
       if (v) {
         const s = nodeBox(n, px, py, flex);

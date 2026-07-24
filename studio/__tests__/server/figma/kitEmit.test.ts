@@ -123,6 +123,32 @@ describe("planAssets", () => {
     expect(plan.pngIds).toEqual([]);
   });
 
+  // A CHECKED checkbox is an all-vector subtree (its glyph is a checkmark
+  // VECTOR), wrapped in a plain "Container" frame — exactly the shape isGraphic
+  // greedily flattened to one SVG before the walk could reach the mappable
+  // Checkbox INSTANCE inside. (An UNCHECKED box has a RECTANGLE stroke, so it
+  // wasn't all-vector and dodged this path — hence "unchecked worked, checked
+  // became a static asset".) isGraphic must decline via containsKitMatch and
+  // let recursion reach the component.
+  it("does NOT flatten a Container that wraps a kit Checkbox whose glyph is a vector (checked state)", () => {
+    const { components, componentSets } = checkboxMaps();
+    const doc = frameNode("0", [{
+      id: "container", type: "FRAME", absoluteBoundingBox: bbox(0, 0, 16, 16),
+      children: [checkboxInstance("cb-checked", true)],
+    }]);
+    const plan = planAssets(doc, { components, componentSets });
+    // The Container is NOT rasterized (it holds a mappable Checkbox); nothing
+    // inside exports as an asset.
+    expect(plan.svgIds).not.toContain("container");
+    expect(plan.svgIds).toEqual([]);
+
+    const r = emitKitFrame(doc, {
+      components, componentSets, assetFiles: new Map(),
+    });
+    expect(r.source).toContain("<Checkbox size=\"sm\" defaultChecked />");
+    expect(r.kitInstanceCount).toBe(1);
+  });
+
   it("recurses past broken ids into children", () => {
     const doc = frameNode("0", [
       {
