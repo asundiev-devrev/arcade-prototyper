@@ -83,6 +83,81 @@ export function shouldUseHiFi(prompt: string, ctx: HiFiGateContext): boolean {
   return ctx.classified && !ctx.hasHighConfidenceComposite;
 }
 
+/**
+ * Directive for a SCOPED EDIT that references one or more Figma designs.
+ *
+ * The whole-frame `buildHiFiDirective` is wrong here: it tells the agent to
+ * reproduce "every section of the frame, same number of rows as the PNG",
+ * which assumes each reference IS a full frame. On a scoped edit the references
+ * are PARTS — a popover, a menu, a panel, a state — that the request wires into
+ * an EXISTING frame. Observed failure (implement-this-precisely-3): asked to
+ * add a filter popover whose design shows 4 items (Created Date / Created By /
+ * Brand / Team), the agent instead duplicated the frame body's own 8-row
+ * knowledge list into the popover. It had the correct 4 labels in both the
+ * reference tree and PNG and ignored them.
+ *
+ * This directive reframes the references as source-of-truth for the specific
+ * parts they depict and forbids copying the existing frame's content into them.
+ *
+ * It also forbids the OTHER failure family we saw on the same flow
+ * (implement-this-precisely): with the labels finally correct, the agent then
+ * EMBELLISHED beyond the reference and RESTRUCTURED the host frame. It added
+ * leading "+" icons to every menu row, a "ChevronRight" marker on selected
+ * rows, and an invented "Apply Filters" button + separator — none of which are
+ * in the reference (the popover is four plain text rows). It hand-rolled the
+ * multi-select marker instead of using the kit's Menu.CheckboxItem (which
+ * renders the standard checkmark). And to fit the new filter pills it recomputed
+ * the toolbar's absolute offsets, sliding the existing search / sort / trigger
+ * controls to the centre and shoving the dropdown off-screen. So the directive
+ * now also says: invent nothing the reference doesn't show, match the exact
+ * state marker, prefer the kit's purpose-built primitive, and don't reposition
+ * the host frame's existing controls.
+ */
+export function buildScopedEditReferenceDirective(): string {
+  return [
+    "<edit_reference_designs>",
+    "The Figma design(s) attached above are REFERENCE for the specific PART(s) of this",
+    "element the request describes — a popover, menu, panel, dropdown, or state. They are",
+    "NOT whole frames to reproduce, and this is an EDIT of an existing frame, not a fresh build.",
+    "",
+    "- Each <figma_context url=\"…\"> block is the SOURCE OF TRUTH for the part the request",
+    "  ties to that SAME url (\"the popover looks like <urlA>\", \"the menu like <urlB>\").",
+    "  Build that part's contents — its items, their labels, their order, and HOW MANY there",
+    "  are — from that reference, NOT from the frame you are editing.",
+    "- Do NOT duplicate the existing frame's rows / list / content to fill a referenced part.",
+    "  A menu that repeats the list already on the frame is WRONG — the reference shows what",
+    "  the menu actually contains, which is usually different and shorter (e.g. a filter menu",
+    "  lists filter DIMENSIONS like \"Created Date / Created By / Brand\", not the frame's data rows).",
+    "- Take the exact item text from the reference's node-tree `text=` fields; use its PNG for",
+    "  layout, spacing, and which items exist. If the reference shows 4 items, build exactly 4 —",
+    "  do not pad it to match the frame's count.",
+    "",
+    "BUILD ONLY WHAT THE REFERENCE SHOWS — invent NOTHING extra:",
+    "- Do NOT add icons, markers, buttons, separators, headers, or footers that the reference",
+    "  does not contain. If the popover is four plain text rows, build four plain text rows — no",
+    "  leading \"+\" glyph on each row, no trailing chevron, no invented \"Apply\" / \"Done\" / \"Clear\"",
+    "  button, no separator. Extra chrome the design doesn't have is a hallucination, not a nicety.",
+    "- Match the EXACT state indicator the reference uses. If selecting an item shows a CHECKMARK,",
+    "  render a checkmark — never substitute a different glyph (a chevron, a plus, a dot) for it.",
+    "- Use the kit's PURPOSE-BUILT primitive for the pattern rather than hand-rolling it. A",
+    "  multi-select menu is Menu.CheckboxItem (it renders the standard checkmark on selection) —",
+    "  not Menu.Item with your own icon bolted on. A single-select menu is Menu.RadioItem. Reach",
+    "  for the component whose name matches the behaviour before assembling one from atoms.",
+    "",
+    "DON'T RESTRUCTURE THE HOST FRAME. You are inserting a part, not re-laying-out the toolbar:",
+    "- Leave every EXISTING control where it already sits. Do NOT recompute or shift the absolute",
+    "  positions of sibling elements (search, sort, the trigger button) to make room for new",
+    "  content. Sliding the existing controls to the centre, or pushing the trigger/dropdown",
+    "  off-screen, is a regression even if the new part itself looks right.",
+    "- Add new elements (e.g. filter pills) in the location the reference shows them, without",
+    "  moving what was already there. If they genuinely don't fit, keep the existing layout and",
+    "  note it under ### Deviations — do not silently reflow the frame.",
+    "",
+    "- Everything else about the frame stays as-is. Change only what the request asks.",
+    "</edit_reference_designs>",
+  ].join("\n");
+}
+
 export interface HiFiDirectiveContext {
   /** Figma file key, already parsed from the URL. */
   fileKey: string;

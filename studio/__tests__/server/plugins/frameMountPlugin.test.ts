@@ -82,6 +82,18 @@ describe("frameMountPlugin", () => {
     expect(src).toMatch(/__arcadeFrameReadyPosted|readyPosted/); // idempotency guard
   });
 
+  it("frame-height producer uses a jitter threshold, not exact-equal dedup", () => {
+    // Regression: the height post guard was `h === last`, which only skipped
+    // EXACT repeats — a 1px oscillation (899<->900) posted on every tick
+    // forever. It must gate on a small absolute delta so sub-2px jitter stops.
+    const src = buildFrameBootstrapSource({ absFrame: "/x/index.tsx", absOverrides: "/x/o.css", mode: "light", slug: "p", frame: "01" });
+    expect(src).toContain("arcade-studio:frame-height");
+    // Strip comments so we assert against CODE, not the explanatory prose.
+    const code = src.replace(/\/\/[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(code).toMatch(/Math\.abs\(h - last\)\s*<\s*2/);
+    expect(code).not.toMatch(/h === last/);
+  });
+
   it("errorShim frame-error carries the nonce", () => {
     // renderFrameShellHtml embeds the errorShim; assert it reads the nonce + includes it
     const html = renderFrameShellHtml({ title: "t", mode: "light", overridesUrl: "", bootstrapUrl: "/b", errorScopeJson: { slug: "proj", frame: "01" } });

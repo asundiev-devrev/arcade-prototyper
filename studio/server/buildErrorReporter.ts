@@ -11,7 +11,133 @@ import type { ChatMessage } from "./types";
  * to fix that frame. Exported for tests; a single-process map is fine since
  * Vite's dev server is also single-process.
  */
-export const lastAttempt = new Map<string, number>();
+export const lastAttempt = new Map<string, AutoFixState>();
+
+/**
+ * Per-frame auto-repair bookkeeping. `at` drives the 60s rate-limit; `count`
+ * and `fingerprint` drive the consecutive-attempt cap (below) so a frame whose
+ * error never resolves stops re-dispatching forever.
+ */
+interface AutoFixState {
+  /** Timestamp of the last dispatch (or capped hit) for this frame. */
+  at: number;
+  /** How many times we've auto-repaired this frame for the SAME error in a row. */
+  count: number;
+  /** Normalized identity of the error the streak is for; a DIFFERENT one resets it. */
+  fingerprint: string;
+}
+
+/** Raw error messages are capped to this length before entering a prompt or history. */
+export const MAX_ERROR_MESSAGE_LEN = 500;
+
+/**
+ * Max consecutive auto-repairs for the SAME error on one frame before we stop
+ * and hand off to the user. Without this, a frame that the agent can't fix
+ * re-dispatches every AUTO_RETRY_WINDOW_MS forever, burning tokens and spamming
+ * the chat. A DIFFERENT error (by fingerprint) resets the streak (progress made).
+ */
+export const MAX_AUTO_FIX_ATTEMPTS = 3;
+
+/**
+ * If the same error returns after this long a quiet gap, the frame was healthy
+ * in between — a genuinely-unfixable error re-fires every AUTO_RETRY_WINDOW_MS,
+ * so a return after minutes of silence is a FRESH episode, not more of the same
+ * unconverging loop. Age the streak out so the cap can never wedge a frame out
+ * of auto-repair for the whole session. Comfortably larger than the retry
+ * window (a loop caps within ~3× the window).
+ */
+export const STREAK_RESET_MS = 5 * 60_000;
+
+/**
+ * Reduce an error message to a stable IDENTITY for the attempt-cap streak.
+ *
+ * The streak must recognise "the same error again" across repair attempts. The
+ * raw message is a bad key on two fronts:
+ *  - oxc/esbuild code frames embed the surrounding source lines and a `line:col`
+ *    that SHIFT after each failed edit, so the raw string differs every round →
+ *    the streak resets forever and the cap never fires (the loop it exists to
+ *    stop keeps running);
+ *  - two DIFFERENT errors that share a long prefix (e.g. the same deep absolute
+ *    frame path + banner) collapse to one streak when keyed on a length-capped
+ *    prefix → a premature cap.
+ * So key on the first non-empty line (the error CLASS/summary — the code frame
+ * and stack context live on later lines), with digit runs (line:col, addresses)
+ * and whitespace normalized, bounded short. Same class → same key across
+ * attempts; different class → different key even when later context matches.
+ * Pure + exported so the normalization is unit-testable.
+ */
+export function errorFingerprint(message: string): string {
+  const firstLine =
+    message
+      .split("\n")
+      .map((s) => s.trim())
+      .find(Boolean) ?? message.trim();
+  return firstLine
+    .replace(/\d+/g, "#") // line:col, byte offsets, hex/addr digits — all volatile
+    .replace(/\s+/g, " ")
+    .slice(0, 200);
+}
+
+/**
+ * Build the auto-fix prompt handed to the agent when a frame breaks.
+ *
+ * The old prompt was one line — "Fix the smallest thing that resolves it; do
+ * not restructure." — and it back-fired on the most common crash class. An
+ * `Element type is invalid … got: undefined` crash means a component/icon
+ * reference evaluated to undefined (a hallucinated icon name, a default-vs-named
+ * import mix-up, or a `Foo.Bar` member that doesn't exist on a real import).
+ * The LITERALLY smallest change that makes such a crash go away is to DELETE the
+ * broken reference — so the agent replaced an IconButton's icon with an empty
+ * <span/> and a checkmark with a "+" character, quietly dropping UI the user
+ * asked for. "Smallest change" rewarded vandalize-to-green.
+ *
+ * So the prompt now (a) forbids deleting/placeholder-swapping UI to silence the
+ * error, and (b) for the undefined-element class, tells the agent the cause is
+ * an import/name problem and to fix the NAME so the intended element renders.
+ * Kept as a pure function so the wording is unit-testable.
+ */
+export function buildAutoFixPrompt(
+  kind: "build" | "runtime",
+  frameName: string,
+  message: string,
+): string {
+  const lead =
+    kind === "build"
+      ? `The frame ${frameName} is failing to build with: ${message}.`
+      : `The frame ${frameName} threw a runtime error: ${message}.`;
+
+  const lines = [
+    lead,
+    "",
+    "Fix the ROOT CAUSE with the smallest change that addresses it — do NOT restructure the frame.",
+    "",
+    "PRESERVE THE INTENDED UI. The frame rendered what the user asked for before this error;",
+    "your job is to make that same UI work, not to make the error disappear by removing UI.",
+    "Do NOT delete an element, empty out a component, or swap an icon/component for a placeholder",
+    "(an empty <span/>, a text character like \"+\" or \"×\", a raw emoji, or a bare <div/>) to get",
+    "past the error. Dropping the broken thing silences the crash but loses UI — that is a FAILURE,",
+    "not a fix. If you cannot preserve an element, say so in your reply rather than quietly removing it.",
+  ];
+
+  // The undefined-element class is almost always an import problem; point the
+  // agent at the cause so it corrects the name instead of stripping the JSX.
+  // Anchor to the React invariant text ("Element type is invalid …") — the bare
+  // `got: undefined` alt used to fire on ANY unrelated error mentioning that
+  // phrase (e.g. a fetch/network message), mis-labelling it an import bug.
+  if (/Element type is invalid/i.test(message)) {
+    lines.push(
+      "",
+      '"Element type is invalid … got: undefined" means a component or icon reference evaluated to',
+      "undefined — almost always a WRONG or MISSING import: a hallucinated icon/component name, a",
+      "default-vs-named import mix-up, or a `Foo.Bar` member that doesn't exist on a real import.",
+      "Find the reference that is undefined and FIX THE IMPORT/NAME so the intended element renders:",
+      "correct it to a real export (read the arcade/components barrel if unsure of the exact name) and",
+      "import it. Removing the JSX or subbing a placeholder is the wrong fix.",
+    );
+  }
+
+  return lines.join("\n");
+}
 
 /** Minimum ms between auto-prompts for the same frame. */
 export const AUTO_RETRY_WINDOW_MS = 60_000;
@@ -79,7 +205,7 @@ export interface BuildErrorReporterDeps {
 export async function handleViteError(
   payload: unknown,
   deps: BuildErrorReporterDeps = {},
-): Promise<"skipped:not-frame" | "skipped:rate-limited" | "skipped:no-project" | "skipped:error" | "dispatched"> {
+): Promise<"skipped:not-frame" | "skipped:rate-limited" | "skipped:attempt-cap" | "skipped:no-project" | "skipped:error" | "dispatched"> {
   const runTurn = deps.runTurn ?? runClaudeTurn;
   const now = deps.now ?? Date.now;
   const loadProject = deps.loadProject ?? getProject;
@@ -90,14 +216,18 @@ export async function handleViteError(
   const parsed = parseBuildError(payload, root);
   if (!parsed) return "skipped:not-frame";
 
-  const { slug, frameName, message } = parsed;
+  const { slug, frameName } = parsed;
+  // Cap the build message the same way runtime errors are capped: an oxc code
+  // frame or a long stack can run to thousands of chars, and it lands BOTH in
+  // the agent prompt and in persisted chat history verbatim.
+  const message = parsed.message.slice(0, MAX_ERROR_MESSAGE_LEN) || "unknown build error";
   return dispatchAutoFix({
     slug,
     frameName,
     root,
     kind: "build",
     rawMessage: message,
-    prompt: `The frame ${frameName} is failing to build with: ${message}. Fix the smallest thing that resolves it; do not restructure.`,
+    prompt: buildAutoFixPrompt("build", frameName, message),
     runTurn,
     now,
     loadProject,
@@ -115,7 +245,7 @@ export async function handleRuntimeError(
   frameName: string,
   message: string,
   deps: BuildErrorReporterDeps = {},
-): Promise<"skipped:rate-limited" | "skipped:no-project" | "skipped:error" | "dispatched"> {
+): Promise<"skipped:rate-limited" | "skipped:attempt-cap" | "skipped:no-project" | "skipped:error" | "dispatched"> {
   const slugOk = /^[a-z0-9][a-z0-9-]{0,62}$/i.test(slug);
   const frameOk = /^[a-z0-9][a-z0-9-]{0,62}$/i.test(frameName);
   if (!slugOk || !frameOk) return "skipped:error";
@@ -127,14 +257,14 @@ export async function handleRuntimeError(
   const writeHistory = deps.appendHistory ?? appendHistory;
 
   const root = projectsRoot();
-  const clean = String(message ?? "").slice(0, 500) || "unknown runtime error";
+  const clean = String(message ?? "").slice(0, MAX_ERROR_MESSAGE_LEN) || "unknown runtime error";
   return dispatchAutoFix({
     slug,
     frameName,
     root,
     kind: "runtime",
     rawMessage: clean,
-    prompt: `The frame ${frameName} threw a runtime error: ${clean}. Fix the smallest thing that resolves it; do not restructure.`,
+    prompt: buildAutoFixPrompt("runtime", frameName, clean),
     runTurn,
     now,
     loadProject,
@@ -162,7 +292,7 @@ async function dispatchAutoFix(args: {
   loadProject: typeof getProject;
   resolveBin: () => string;
   appendHistory: typeof appendHistory;
-}): Promise<"skipped:rate-limited" | "skipped:no-project" | "skipped:error" | "dispatched"> {
+}): Promise<"skipped:rate-limited" | "skipped:attempt-cap" | "skipped:no-project" | "skipped:error" | "dispatched"> {
   const {
     slug,
     frameName,
@@ -178,9 +308,35 @@ async function dispatchAutoFix(args: {
   } = args;
   const key = `${slug}/${frameName}`;
   const t = now();
-  const prev = lastAttempt.get(key) ?? 0;
-  if (prev > t - AUTO_RETRY_WINDOW_MS) return "skipped:rate-limited";
-  lastAttempt.set(key, t);
+  const fingerprint = errorFingerprint(rawMessage);
+  const prev = lastAttempt.get(key);
+  if (prev && prev.at > t - AUTO_RETRY_WINDOW_MS) return "skipped:rate-limited";
+
+  // Consecutive-same-error cap. The streak continues only when the SAME error
+  // (by normalized fingerprint) recurs SOON after the last attempt — that's the
+  // agent failing to converge in a tight loop. It resets when:
+  //   - the fingerprint changes → the previous repair changed something (progress);
+  //   - the error returns after a long quiet gap (> STREAK_RESET_MS) → the frame
+  //     was healthy in between, so this is a fresh episode, not the same loop.
+  // The gap reset is what stops the cap from wedging a frame out of auto-repair
+  // for the whole session after a since-recovered error eventually recurs.
+  const continues =
+    prev != null &&
+    prev.fingerprint === fingerprint &&
+    prev.at > t - STREAK_RESET_MS;
+  const streak = continues ? prev.count + 1 : 1;
+  if (streak > MAX_AUTO_FIX_ATTEMPTS) {
+    // Pin the state so the rate-limit still holds and the streak doesn't reset.
+    lastAttempt.set(key, { at: t, count: streak, fingerprint });
+    await writeHistory(slug, {
+      id: `auto-fix-capped:${key}:${t}`,
+      role: "system",
+      content: `Stopped auto-repairing **${frameName}** after ${MAX_AUTO_FIX_ATTEMPTS} tries — the same error keeps coming back. Tell the agent directly what to change.`,
+      createdAt: new Date(t).toISOString(),
+    }).catch(() => {});
+    return "skipped:attempt-cap";
+  }
+  lastAttempt.set(key, { at: t, count: streak, fingerprint });
 
   let project;
   try {

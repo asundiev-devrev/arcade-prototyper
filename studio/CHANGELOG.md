@@ -8,6 +8,22 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.45.1] — 2026-07-24
+
+Follow-up fixes for **selective (right-click) editing** and **Figma-referenced edits** — the flow where you generate a frame from a Figma design, then right-click an element and ask for a change. A round of adversarial testing surfaced a cluster of ways that flow could go wrong; this cleans them up.
+
+### Fixed
+- **Your chat message stays clean.** When you right-click an element to edit it, the studio quietly attaches targeting instructions ("change only this button…") so the assistant edits the right thing. That machine text used to show up inside your chat bubble — now you see only the sentence you actually typed. (The instructions still reach the assistant; they're just hidden from view and from history.)
+- **Referenced Figma designs are treated as references, not new screens.** Asking "make this open a popover like [Figma link]" during an edit no longer stamps the linked design out as a separate new frame — the interaction gets wired into the frame you're editing, using the link as a visual reference.
+- **All the Figma links in one request are read, not just the first.** If an edit references two designs (e.g. a popover *and* a toolbar), the assistant now sees both. Before, it only saw the first and invented the rest — which is what broke layouts with wrapping menus and overflowing chips.
+- **A referenced design no longer gets filled with the wrong content.** When a link points at a *part* of a screen (a popover, a menu), the assistant stopped copying the whole frame's contents into it — so a 4-item filter menu stays a 4-item filter menu instead of duplicating the frame's list.
+- **Edits stick to the design instead of inventing chrome.** On "implement this precisely" edits, the assistant stopped adding stray "+" glyphs, chevrons, and extra buttons the design didn't have, and stopped shoving the surrounding layout around to make room.
+- **Auto-repair no longer deletes your UI to hide a crash.** When a change temporarily broke a frame, the auto-fixer would sometimes make the error go away by *removing* the thing that broke (an icon, a checkmark). It now fixes the actual cause (usually a wrong import name) and is explicitly forbidden from deleting or blanking elements to go green.
+- **Repeated auto-repair is bounded.** The same error can no longer trigger an endless repair loop within a session; a recovered error is also no longer locked out of repair for the rest of the session.
+- **Figma imports honor single-side borders and hairline dividers.** A row with only a bottom rule renders with just that rule (not a full box), and thin divider lines now show up instead of vanishing.
+- **Checked checkboxes import as real checkboxes.** A checked checkbox from Figma now becomes a real component (like the unchecked ones already did) instead of a flat image.
+- **Frames hug their content.** A short design (a modal, a card) no longer leaves a tall band of empty space beneath it; the container shrinks to fit while full-screen layouts stay full-height.
+
 ## [0.45.0] — 2026-07-21
 
 This release is about **edit reliability** — making a change land, show up, and be reported honestly, so "I asked for something and nothing happened" stops happening.

@@ -39,18 +39,23 @@ export function ChatPane({
   const { state, send, retry, cancel } = useChatStreamContext();
   const { blocks } = useEditBlocks();
 
-  const enhancedSend = (prompt: string, images: string[] = []) => {
+  const enhancedSend = (prompt: string, images: string[] = [], displayPrompt?: string) => {
     const url = extractFigmaUrl(prompt);
     const decorated = url ? decoratePromptWithFigma(prompt, url) : prompt;
-    return send(decorated, images);
+    // `displayPrompt` (the preamble-stripped visible text) passes straight
+    // through — the Figma decoration only ever touches the agent-bound prompt.
+    return send(decorated, images, displayPrompt);
   };
 
   // Optimistically show the user's prompt bubble if the latest turn's
-  // prompt hasn't landed in persisted history yet. `state.lastPrompt` is
-  // set either by the local optimistic update in `send()` or by the server
-  // turn header on reconnect — both cases paint immediately.
+  // prompt hasn't landed in persisted history yet. `state.lastDisplayPrompt`
+  // is set either by the local optimistic update in `send()` or by the server
+  // turn header on reconnect — both cases paint immediately. We match on the
+  // VISIBLE text (what the server persists) so a scoped edit — whose full
+  // prompt carries a hidden preamble — still de-dupes against history and the
+  // optimistic bubble drops the moment the real message lands.
   const historyHasPrompt = history.some(
-    (m) => m.role === "user" && m.content === state.lastPrompt,
+    (m) => m.role === "user" && m.content === state.lastDisplayPrompt,
   );
   // Hero handoff: when the user submits from HomePage we redirect to the
   // project route before the chat stream has any state. Peek (don't take —
@@ -61,8 +66,8 @@ export function ChatPane({
       ? peekPendingPrompt(projectSlug)?.prompt
       : undefined;
   const pendingPrompt =
-    state.lastPrompt && !historyHasPrompt && state.phase !== "idle"
-      ? state.lastPrompt
+    state.lastDisplayPrompt && !historyHasPrompt && state.phase !== "idle"
+      ? state.lastDisplayPrompt
       : heroPending;
   const optimisticBusy = !!heroPending;
   const phase = optimisticBusy ? "running" : state.phase;

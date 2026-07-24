@@ -1,0 +1,155 @@
+// @vitest-environment node
+//
+// A scoped edit can reference MORE THAN ONE Figma design ("make this open a
+// popover <url A> and show selected chips in the toolbar <url B>"). The earlier
+// enrichment read only the FIRST url, so the agent never saw design B and
+// invented it — the "chips break the layout" bug. This pins that every
+// referenced node gets its own <figma_context> block + reference PNG.
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import * as ingestModule from "../../../server/figmaIngest";
+import { enrichPromptWithFigmaContext } from "../../../server/middleware/chat";
+import type { IngestResult } from "../../../server/figma/types";
+import { SCOPED_EDIT_MARKER } from "../../../src/lib/scopedEdit";
+
+const URL_A = "https://www.figma.com/design/kJc/AS?node-id=8172-33651";
+const URL_B = "https://www.figma.com/design/kJc/AS?node-id=8140-33699";
+
+function fakeResult(nodeId: string, pngPath: string): IngestResult {
+  return {
+    source: { fileKey: "kJc", nodeId, url: `u:${nodeId}`, fetchedAt: "t" } as any,
+    png: { path: pngPath, widthPx: 100, heightPx: 100 },
+    tree: { id: nodeId, type: "frame", name: `node-${nodeId}` } as any,
+    tokens: { colors: {}, typography: {}, spacing: {} },
+    composites: [],
+    classified: true,
+    diagnostics: { warnings: [] },
+  };
+}
+
+// getCached is keyed by (fileId, nodeId) — return a distinct result per node so
+// we can prove BOTH designs were pulled in.
+function mockIngestPerNode() {
+  const byNode: Record<string, IngestResult> = {
+    "8172:33651": fakeResult("8172:33651", "/tmp/popover.png"),
+    "8140:33699": fakeResult("8140:33699", "/tmp/toolbar.png"),
+  };
+  vi.spyOn(ingestModule, "getFigmaIngest").mockResolvedValue({
+    getCached: (_fileId: string, nodeId: string) => byNode[nodeId],
+    getPhase1Pending: () => undefined,
+    ingestPhase1: async () => ({ ok: false, reason: "unused" }),
+    ingest: async () => ({ ok: false, reason: "unused" }),
+    getRawNode: () => undefined,
+  } as any);
+}
+
+beforeEach(() => mockIngestPerNode());
+afterEach(() => vi.restoreAllMocks());
+
+describe("enrichPromptWithFigmaContext — multiple reference URLs", () => {
+  it("attaches a <figma_context> block for EACH referenced node", async () => {
+    const prompt =
+      'Make "All Knowledge" open a popover ' + URL_A +
+      " and show selected chips in the toolbar " + URL_B;
+    const { prompt: out } = await enrichPromptWithFigmaContext(prompt, []);
+    const blocks = out.match(/<figma_context url=/g) ?? [];
+    expect(blocks.length).toBe(2);
+    // Each design's own url is present in its block (buildFigmaContextBlock
+    // stamps r.source.url).
+    expect(out).toContain("u:8172:33651");
+    expect(out).toContain("u:8140:33699");
+  });
+
+  it("attaches the reference PNG for EVERY design, not just the first", async () => {
+    const prompt = "open " + URL_A + " and also " + URL_B;
+    const { images } = await enrichPromptWithFigmaContext(prompt, []);
+    expect(images).toContain("/tmp/popover.png");
+    expect(images).toContain("/tmp/toolbar.png");
+    expect(images.length).toBe(2);
+  });
+
+  it("is unchanged for a single-URL prompt (one block, one PNG)", async () => {
+    const { prompt: out, images } = await enrichPromptWithFigmaContext("open " + URL_A, []);
+    expect((out.match(/<figma_context url=/g) ?? []).length).toBe(1);
+    expect(images).toEqual(["/tmp/popover.png"]);
+  });
+
+  it("dedups aliased forms of the SAME node (dash/colon + &t= share token) to one block + PNG", async () => {
+    // Regression: extractFigmaUrls dedups on the raw string, but one node has
+    // many string forms. All of these parse to fileId=kJc, nodeId=8172:33651.
+    const dashForm = "https://www.figma.com/design/kJc/AS?node-id=8172-33651";
+    const colonForm = "https://www.figma.com/design/kJc/AS?node-id=8172:33651";
+    const shareToken = "https://www.figma.com/design/kJc/AS?node-id=8172-33651&t=Ab9xYz-0";
+    const prompt = `restyle this to ${dashForm} (also ${colonForm} and ${shareToken})`;
+    const { prompt: out, images } = await enrichPromptWithFigmaContext(prompt, []);
+    // One node → exactly one context block and one reference PNG, not three.
+    expect((out.match(/<figma_context url=/g) ?? []).length).toBe(1);
+    expect(images).toEqual(["/tmp/popover.png"]);
+  });
+
+  it("caps the number of distinct references and narrates what was skipped", async () => {
+    // Five distinct nodes; only the first MAX_FIGMA_REFS (4) resolve so a
+    // paste-heavy prompt can't stall turn-start on serial cold ingests.
+    const nodes = ["8172-33651", "8140-33699", "1-1", "2-2", "3-3"];
+    const prompt = "reference " + nodes.map((n) => `https://www.figma.com/design/kJc/AS?node-id=${n}`).join(" ");
+    const narrations: string[] = [];
+    const { images } = await enrichPromptWithFigmaContext(prompt, [], (t) => narrations.push(t));
+    // Only the two mocked nodes return a PNG; the other kept refs miss gracefully.
+    // The cap is proven by the skip narration naming exactly one dropped ref.
+    expect(narrations.some((t) => /skipping 1 more/.test(t))).toBe(true);
+    void images;
+  });
+
+  it("is a no-op when the prompt has no Figma URL", async () => {
+    const { prompt: out, images } = await enrichPromptWithFigmaContext("make the title red", ["x.png"]);
+    expect(out).toBe("make the title red");
+    expect(images).toEqual(["x.png"]);
+  });
+
+  it("on a SCOPED EDIT, appends the reframe directive and NOT the whole-frame hi-fi directive", async () => {
+    // implement-this-precisely-3: a right-click scoped edit ("Target element:")
+    // that references a popover design + a toolbar design. The references are
+    // PARTS wired into the existing frame, so the per-reference whole-frame
+    // hi-fi directive (which drove the agent to reproduce the frame's rows into
+    // the popover) must be suppressed, and the scoped-edit reframe appended once.
+    const prompt =
+      SCOPED_EDIT_MARKER + "\n\n" +
+      'Target element: <Button> "All Knowledge"\n' +
+      "Placed at frames/01-figma-8139-41293/index.tsx:39:247\n\n" +
+      '"All Knowledge" should open a popover ' + URL_A +
+      " and show selected filter blocks in the toolbar " + URL_B;
+    const { prompt: out } = await enrichPromptWithFigmaContext(prompt, []);
+    // Both designs still attached. Match the real block openings (stamped with
+    // the result url `u:<node>`) — the reframe directive's prose also mentions
+    // a `<figma_context url="…">` literal, which is not a real block.
+    expect((out.match(/<figma_context url="u:/g) ?? []).length).toBe(2);
+    // The scoped-edit reframe is appended exactly once…
+    expect((out.match(/<edit_reference_designs>/g) ?? []).length).toBe(1);
+    // …and the whole-frame hi-fi directive is NOT injected per reference.
+    expect(out).not.toContain("<high_fidelity_mode>");
+  });
+
+  it("a MULTI-SELECT scoped edit (plural preamble) is also treated as an edit — reframe, no hi-fi", async () => {
+    // Regression: the old detector matched only "Target element:" (singular), so
+    // a shift-click multi-select edit ("Target elements:") slipped past and got
+    // the whole-frame hi-fi directive + no reframe. The sentinel leads every
+    // preamble shape, so plural is recognised identically to singular.
+    const prompt =
+      SCOPED_EDIT_MARKER + "\n\n" +
+      "Target elements:\n" +
+      '- <Button> "All Knowledge"\n' +
+      "- <Button> Sort\n\n" +
+      "make these open popovers " + URL_A + " and " + URL_B;
+    const { prompt: out } = await enrichPromptWithFigmaContext(prompt, []);
+    expect((out.match(/<edit_reference_designs>/g) ?? []).length).toBe(1);
+    expect(out).not.toContain("<high_fidelity_mode>");
+  });
+
+  it("a NON-edit multi-URL prompt keeps the per-reference hi-fi directive (no reframe)", async () => {
+    // A typed (non-right-click) precise build still gets the whole-frame
+    // directive — the reframe is scoped-edit only.
+    const prompt = "Implement this precisely " + URL_A + " and " + URL_B;
+    const { prompt: out } = await enrichPromptWithFigmaContext(prompt, []);
+    expect(out).not.toContain("<edit_reference_designs>");
+    expect(out).toContain("<high_fidelity_mode>");
+  });
+});

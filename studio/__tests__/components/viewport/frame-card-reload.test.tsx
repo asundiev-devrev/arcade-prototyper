@@ -233,6 +233,38 @@ describe("FrameCard double-buffer render (hold last-good)", () => {
     vi.useRealTimers();
   });
 
+  it("hugs the container to the committed frame's reported natural height (no dead white space)", () => {
+    const { container } = render(<FrameCard {...baseProps({ projectSlug: "proj", frame: F })} />);
+    // The height-bearing box is the iframe wrapper (has willChange:width).
+    const box = container.querySelector<HTMLElement>('div[style*="will-change"]')!;
+    expect(box).toBeTruthy();
+    // Before any measurement: full-viewport fallback (app shells never flash short).
+    expect(box.style.height).toBe("calc(100vh - 180px)");
+    // Committed render (nonce 0 → n:"") reports a short natural height.
+    act(() => {
+      window.dispatchEvent(new MessageEvent("message", { data: { type: "arcade-studio:frame-height", slug: "proj", frame: "01", n: "", height: 660 } }));
+    });
+    // Container hugs it, capped at the viewport via min(). (jsdom re-serializes
+    // the min() expression, so assert on its parts, not an exact string.)
+    expect(box.style.height).toMatch(/min\(/);
+    expect(box.style.height).toContain("660px");
+    expect(box.style.height).toContain("calc(100vh - 180px)");
+  });
+
+  it("ignores a frame-height from the hidden in-flight probe (only the committed render resizes the container)", () => {
+    const { container } = render(<FrameCard {...baseProps({ projectSlug: "proj", frame: F })} />);
+    const box = container.querySelector<HTMLElement>('div[style*="will-change"]')!;
+    // Start an edit cycle → reloadNonce becomes 1 (committed still 0).
+    act(() => {
+      window.dispatchEvent(new CustomEvent("arcade-studio:frame-changed", { detail: { slug: "proj", frameId: "01" } }));
+    });
+    // The probe (n:"1") reports a height — must NOT resize the visible container.
+    act(() => {
+      window.dispatchEvent(new MessageEvent("message", { data: { type: "arcade-studio:frame-height", slug: "proj", frame: "01", n: "1", height: 300 } }));
+    });
+    expect(box.style.height).toBe("calc(100vh - 180px)");
+  });
+
   it("refetches with the new mode when projectMode switches (committedUrl derives from current projectMode)", () => {
     const props = baseProps({ projectSlug: "proj", frame: F });
     const { container, rerender } = render(<FrameCard {...props} />);

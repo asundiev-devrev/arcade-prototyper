@@ -24,6 +24,7 @@ import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { createProject } from "../../../server/projects";
 import { __resetTurnRegistryForTests, getTurn } from "../../../server/turnRegistry";
+import { SCOPED_EDIT_MARKER } from "../../../src/lib/scopedEdit";
 
 const kitEmitSpy = vi.hoisted(() =>
   vi.fn(async (input: any) => {
@@ -148,6 +149,31 @@ describe("/api/chat Figma-URL routing (kit-emit branch)", () => {
     await drainStream(p.slug);
 
     // Importer never ran; the claude subprocess did (wrote its argv out).
+    expect(kitEmitSpy).not.toHaveBeenCalled();
+    expect(fs.existsSync(process.env.ARCADE_TEST_PROMPT_OUT!)).toBe(true);
+  });
+
+  it("a SCOPED EDIT that references Figma URLs stays an in-place edit — no new frame", async () => {
+    // The regression: the user right-clicked an element (so the client prepended
+    // the "Target element:" preamble), then asked to make it open a popover,
+    // referencing two Figma nodes. That has interaction intent + 2 URLs, which
+    // used to route to the wire branch → imported url[0] as a SEPARATE frame.
+    // A scoped edit must reach the claude edit branch instead: the URLs are
+    // reference, the change happens in the picked frame. So the importer must
+    // NOT run, and claude must (writes its argv out).
+    const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
+    const prompt =
+      SCOPED_EDIT_MARKER + "\n\n" +
+      'Target element: <Button> "All Knowledge"\n' +
+      "Placed at frames/01-figma-8139-41293/index.tsx:39:247\n\n" +
+      'Make "All Knowledge" work as a filter that opens a popover menu when clicked. ' +
+      "Popover looks like https://www.figma.com/design/k/x?node-id=8172-33651 " +
+      "and the menu like https://www.figma.com/design/k/x?node-id=8140-33699";
+    const res = await post(p.slug, prompt);
+    expect(res.status).toBe(202);
+    await drainStream(p.slug);
+
+    // Importer never ran (no separate frame stamped); the claude edit branch did.
     expect(kitEmitSpy).not.toHaveBeenCalled();
     expect(fs.existsSync(process.env.ARCADE_TEST_PROMPT_OUT!)).toBe(true);
   });

@@ -27,3 +27,16 @@ describe("frame bootstrap fingerprint emit", () => {
     expect(src).toMatch(/computeFingerprint\(\s*document\.body/);
   });
 });
+
+describe("frame bootstrap natural-height emit", () => {
+  it("posts a frame-height message so the parent can hug short designs", () => {
+    expect(src).toContain("arcade-studio:frame-height");
+  });
+  it("measures #root's box (not documentElement.scrollHeight, which floors at the viewport)", () => {
+    expect(src).toMatch(/getElementById\("root"\)/);
+    expect(src).toMatch(/getBoundingClientRect\(\)\.height/);
+  });
+  it("re-measures on layout change via ResizeObserver", () => {
+    expect(src).toContain("ResizeObserver");
+  });
+});

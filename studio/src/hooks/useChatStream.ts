@@ -34,6 +34,9 @@ interface TurnHeader {
   kind: "turn";
   turnId: string;
   prompt: string;
+  /** User-visible text (preamble-stripped). Absent on older servers → falls
+   *  back to `prompt` so a mixed-version reconnect still paints something. */
+  displayPrompt?: string;
   startedAt: number;
   status: "running" | "done" | "error";
   endedAt?: number;
@@ -202,6 +205,7 @@ export function useChatStream(
                 phase: header.status,
                 turnId: header.turnId,
                 lastPrompt: header.prompt,
+                lastDisplayPrompt: header.displayPrompt ?? header.prompt,
                 turnStartedAt: header.startedAt,
                 turnEndedAt: header.endedAt ?? null,
                 error: header.status === "error" ? header.error ?? "Turn failed." : null,
@@ -276,13 +280,24 @@ export function useChatStream(
     wakeRef.current?.();
   }, []);
 
-  const send = useCallback(async (prompt: string, images?: string[]): Promise<SendResult> => {
+  const send = useCallback(async (
+    prompt: string,
+    images?: string[],
+    // The user-visible text when it differs from `prompt` — i.e. `prompt`
+    // carries a hidden scoped-edit preamble the agent needs but the chat must
+    // NOT show. Defaults to `prompt` (no preamble). The FULL `prompt` still
+    // drives the agent, retry, and the 409 compare; only the bubble/history
+    // read `displayPrompt`.
+    displayPrompt?: string,
+  ): Promise<SendResult> => {
     if (phaseRef.current === "running") return { ok: false, reason: "busy" };
+    const visible = displayPrompt ?? prompt;
     // Optimistic local state so the prompt bubble paints immediately, before
     // the server's turn header arrives over SSE.
     safeSetState((s) => ({
       ...INITIAL_STATE,
       lastPrompt: prompt,
+      lastDisplayPrompt: visible,
       source: s.source,
       busy: true,
       phase: "running",
@@ -293,7 +308,7 @@ export function useChatStream(
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug, prompt, images }),
+        body: JSON.stringify({ slug, prompt, images, displayPrompt: visible }),
       });
       if (res.status === 409) {
         // A turn is already running for this slug. Two very different cases:
@@ -345,8 +360,11 @@ export function useChatStream(
     if (phaseRef.current === "running") return;
     const prompt = state.lastPrompt;
     if (!prompt) return;
-    void send(prompt);
-  }, [send, state.lastPrompt]);
+    // Resend the FULL prompt (a scoped edit must keep its hidden preamble on
+    // retry, or it degrades to editing the wrong element) but keep the retry
+    // bubble showing only the visible text.
+    void send(prompt, undefined, state.lastDisplayPrompt || prompt);
+  }, [send, state.lastPrompt, state.lastDisplayPrompt]);
 
   const cancel = useCallback(async () => {
     try {

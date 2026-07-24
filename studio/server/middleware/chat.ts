@@ -15,11 +15,18 @@ import { pendingObjections, markStaleByFrame } from "../chimeIns";
 import type { ChatMessage, ChimeIn } from "../types";
 import type { StudioEvent } from "../../src/lib/streamJson";
 import { extractFigmaUrl, extractFigmaUrls, detectInteractionIntent } from "../../src/lib/figmaUrl";
-import { parseFigmaUrl } from "../figmaCli";
+import { parseFigmaUrl, type ParsedFigmaUrl } from "../figmaCli";
+import { classifyFigmaTurn, isScopedEditTurn } from "../figma/turnRouting";
+import type { IngestResult } from "../figma/types";
 import { frameDir } from "../paths";
 import { getFigmaIngest } from "../figmaIngest";
 import { buildFigmaContextBlock } from "../figma/promptBlock";
-import { shouldUseHiFi, detectHiFiIntent, buildHiFiDirective } from "../figma/fidelityDirective";
+import {
+  shouldUseHiFi,
+  detectHiFiIntent,
+  buildHiFiDirective,
+  buildScopedEditReferenceDirective,
+} from "../figma/fidelityDirective";
 import { shouldGenerateFromFigma, detectComposeBaseIntent, extractComposeBaseComposite } from "../figma/generationIntent";
 import { runFigmaKitEmitBranch } from "../figma/kitEmitBranch";
 import { ejectComposite } from "../figma/ejectComposite";
@@ -198,7 +205,7 @@ export function chatMiddleware() {
 async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<void> {
   let buf = "";
   for await (const chunk of req) buf += chunk;
-  let body: { slug: string; prompt: string; images?: string[] };
+  let body: { slug: string; prompt: string; images?: string[]; displayPrompt?: string };
   try {
     body = JSON.parse(buf);
   } catch {
@@ -206,7 +213,7 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
     res.end(JSON.stringify({ error: { code: "bad_request", message: "Invalid JSON" } }));
     return;
   }
-  const { slug, prompt, images } = body;
+  const { slug, prompt, images, displayPrompt } = body;
 
   // Validate the body shape before any field is read (track() touches
   // prompt.length below). A valid-JSON POST missing/mistyping these fields
@@ -227,6 +234,17 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
     res.end(JSON.stringify({ error: { code: "bad_request", message: "images must be an array of strings" } }));
     return;
   }
+  if (displayPrompt !== undefined && typeof displayPrompt !== "string") {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "bad_request", message: "displayPrompt must be a string" } }));
+    return;
+  }
+  // The user-VISIBLE text. `prompt` may carry a hidden scoped-edit preamble the
+  // agent needs; `displayPrompt` is what the user actually typed. Everything the
+  // user reads back (persisted history, the SSE turn header) uses this; the
+  // full `prompt` still drives routing + the agent. Falls back to `prompt` for
+  // an ordinary turn (and for an older client that doesn't send displayPrompt).
+  const visiblePrompt = displayPrompt && displayPrompt.trim() ? displayPrompt : prompt;
 
   const project = await getProject(slug);
   if (!project) {
@@ -282,19 +300,26 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
   // ground-truth PNG + hi-fi directive) and builds to the brief.
   const figmaUrl = isComputerTurn ? null : extractFigmaUrl(prompt);
   const figmaParsed = figmaUrl ? parseFigmaUrl(figmaUrl) : null;
-  const wantsGeneration = figmaParsed ? shouldGenerateFromFigma(prompt) : false;
-  const isKitEmitTurn = Boolean(figmaParsed) && !wantsGeneration;
-
-  // Wire-an-interaction turn: a Figma-import prompt that ALSO asks for behavior
-  // ("when you click X this modal appears <2nd url>"). The deterministic
-  // importer can't produce interactivity and silently dropped both the prose
-  // and any 2nd URL, so the interaction never got wired (and a re-ask imported
-  // the modal as a separate frame). We import the screen + overlay
-  // deterministically, then run ONE scoped LLM pass that only wires state.
-  // Needs the LLM, so it's gated on Bedrock auth like a Claude turn.
   const figmaUrls = isComputerTurn ? [] : extractFigmaUrls(prompt);
-  const isWireTurn =
-    Boolean(figmaParsed) && detectInteractionIntent(prompt) && figmaUrls.length >= 2;
+
+  // Route a Figma-referencing turn to one of three branches. A bare import →
+  // deterministic kit-emit; an import + interaction + 2nd URL → wire; anything
+  // else → Claude. CRUCIALLY, a SCOPED EDIT (the user right-clicked an element,
+  // so the client prepended the "Target element:" preamble) is ALWAYS a Claude
+  // edit — the Figma links are reference material for how the result should
+  // look, NOT screens to stamp out as separate frames. Without this guard, an
+  // edit like "make this filter open a popover <figma url> <figma url>" got
+  // misrouted to the wire branch, which imported url[0] as a whole new frame.
+  // See server/figma/turnRouting.ts.
+  const figmaKind = classifyFigmaTurn({
+    hasFigmaNode: Boolean(figmaParsed),
+    wantsGeneration: figmaParsed ? shouldGenerateFromFigma(prompt) : false,
+    hasInteractionIntent: detectInteractionIntent(prompt),
+    figmaUrlCount: figmaUrls.length,
+    prompt,
+  });
+  const isKitEmitTurn = figmaKind === "kit-emit";
+  const isWireTurn = figmaKind === "wire";
 
   // Bedrock-auth pre-check applies only to Claude (Bedrock) turns; the
   // Computer agent uses the DevRev PAT, and kit-emit turns use no LLM at all.
@@ -305,6 +330,7 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
     track({ name: "generation_failed", props: { project_slug_hash: hashSlug(slug), error_kind: "bedrock_auth" } });
     const turn = startTurn(slug, {
       prompt,
+      displayPrompt: visiblePrompt,
       run: ({ end }) => {
         end({
           ok: false,
@@ -318,18 +344,20 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
     return;
   }
 
-  // Persist the user message verbatim (with @Computer prefix intact) so
-  // chat history reflects what the user actually typed.
+  // Persist the user message as the user SAW it (with @Computer prefix intact,
+  // but WITHOUT the hidden scoped-edit preamble) so chat history reflects what
+  // the user actually typed — not the machine targeting block.
   await appendHistory(slug, {
     id: `u-${Date.now()}`,
     role: "user",
-    content: prompt,
+    content: visiblePrompt,
     images,
     createdAt: new Date().toISOString(),
   });
 
   const turn = startTurn(slug, {
     prompt,
+    displayPrompt: visiblePrompt,
     run: ({ emit, end, signal }) => {
       const task = isWireTurn
         ? runFigmaWireBranch({
@@ -559,6 +587,7 @@ async function handleStream(req: IncomingMessage, res: ServerResponse, slug: str
       kind: "turn",
       turnId: turn.id,
       prompt: turn.prompt,
+      displayPrompt: turn.displayPrompt,
       startedAt: turn.startedAt,
       status: turn.status,
       endedAt: turn.endedAt,
@@ -697,15 +726,19 @@ export function digestRaceBudgetMs(isHiFi: boolean): number {
   return isHiFi ? HIFI_DIGEST_BUDGET_MS : FAST_DIGEST_BUDGET_MS;
 }
 
-async function enrichPromptWithFigmaContext(
+export async function enrichPromptWithFigmaContext(
   prompt: string,
   images: string[],
   onNarration?: (text: string) => void,
 ): Promise<{ prompt: string; images: string[] }> {
-  const url = extractFigmaUrl(prompt);
-  if (!url) return { prompt, images };
-  const parsed = parseFigmaUrl(url);
-  if (!parsed) return { prompt, images };
+  // EVERY Figma node URL in the prompt is reference material, not just the
+  // first. A scoped edit like "make this a filter that opens <popover url> and
+  // shows selected chips <toolbar url>" references TWO designs — the earlier
+  // single-URL enrichment ingested only the popover, so the agent invented the
+  // toolbar chips it never saw (the "chips break the layout" bug). We resolve a
+  // context block + reference PNG for each URL, in document order.
+  const urls = extractFigmaUrls(prompt);
+  if (!urls.length) return { prompt, images };
 
   // Directive decision is CONTEXT-FREE: it depends only on the prompt + URL,
   // both of which we have even when the digest missed. This is the fix for the
@@ -715,9 +748,95 @@ async function enrichPromptWithFigmaContext(
   // absent on a miss. shouldUseHiFi stays only as a digest-SUCCESS upgrade.
   // Computed up front because it also picks the digest-race budget below.
   const explicitHiFi = detectHiFiIntent(prompt);
-
+  // On a SCOPED EDIT the references are PARTS wired into an existing frame, not
+  // whole frames to reproduce. Suppress the per-reference whole-frame hi-fi
+  // directive (it drove the agent to duplicate the frame's rows into a
+  // referenced popover) and append ONE reframe directive after all blocks.
+  const scopedEdit = isScopedEditTurn(prompt);
   const ingest = await getFigmaIngest();
-  let result = ingest.getCached(parsed.fileId, parsed.nodeId);
+
+  // Dedup by the PARSED node identity, not the raw URL string. extractFigmaUrls
+  // dedups on the literal string, but one node has many string forms — dash vs
+  // colon node-id, and the `&t=<share token>` Figma appends on copy — so pasting
+  // the same node from the browser and the desktop app yielded 3 "distinct" URLs
+  // that all parse to one (fileId, nodeId). Without this we pushed 3 identical
+  // <figma_context> blocks + 3 copies of the same PNG (token waste + a reference
+  // the agent over-weights). parseFigmaUrl normalises both, so the key collapses.
+  const seenNodes = new Set<string>();
+  const refs: { url: string; parsed: ParsedFigmaUrl }[] = [];
+  for (const url of urls) {
+    const parsed = parseFigmaUrl(url);
+    if (!parsed) continue;
+    const key = `${parsed.fileId}:${parsed.nodeId}`;
+    if (seenNodes.has(key)) continue;
+    seenNodes.add(key);
+    refs.push({ url, parsed });
+  }
+
+  // Cap the number of distinct references resolved per turn. The loop is serial
+  // and each cold miss can burn the full digest budget (up to 65s on a precise
+  // edit), so an unbounded paste-heavy prompt could block turn-start for minutes.
+  // Real edits reference one or two designs; keep the first few and tell the user
+  // what was skipped rather than silently dropping or stalling.
+  const MAX_FIGMA_REFS = 4;
+  const dropped = refs.length - MAX_FIGMA_REFS;
+  const kept = dropped > 0 ? refs.slice(0, MAX_FIGMA_REFS) : refs;
+  if (dropped > 0) {
+    onNarration?.(`Using the first ${MAX_FIGMA_REFS} Figma references; skipping ${dropped} more.`);
+  }
+
+  const blocks: string[] = [];
+  let outImages = images;
+
+  for (let i = 0; i < kept.length; i++) {
+    const { url, parsed } = kept[i];
+    // Only the first URL narrates the "loading…" line; extra references narrate
+    // their own "reference N" line so the chat pane doesn't repeat identically.
+    const isPrimary = i === 0;
+    const label = isPrimary ? undefined : `Loading reference design ${i + 1}…`;
+    // Isolate each reference: a single URL whose ingest throws (malformed node
+    // tree, token resolver blowing up) must not discard the references already
+    // resolved and fail the whole turn. A per-URL MISS is already handled inside
+    // resolveFigmaReference (returns {block:null}); this catches a per-URL THROW.
+    try {
+      const resolved = await resolveFigmaReference({
+        url, parsed, ingest, explicitHiFi, prompt, suppressHiFiDirective: scopedEdit,
+        onNarration: (text) => onNarration?.(label ?? text),
+      });
+      if (resolved.block) blocks.push(resolved.block);
+      if (resolved.png) outImages = [...outImages, resolved.png];
+    } catch (err) {
+      console.warn(`[studio] figma reference ${parsed.fileId}:${parsed.nodeId} failed to resolve:`, err);
+    }
+  }
+
+  if (!blocks.length) return { prompt: prompt, images };
+  if (scopedEdit) blocks.push(buildScopedEditReferenceDirective());
+  return { prompt: `${prompt}\n\n${blocks.join("\n\n")}`, images: outImages };
+}
+
+/**
+ * Resolve ONE Figma reference URL into a prompt block (+ optional reference PNG
+ * path). Extracted from enrichPromptWithFigmaContext so a multi-reference edit
+ * prompt gets every design, not just the first. Returns an empty block only
+ * when the digest missed AND the turn isn't a precise build.
+ */
+async function resolveFigmaReference(ctx: {
+  url: string;
+  parsed: ParsedFigmaUrl;
+  ingest: Awaited<ReturnType<typeof getFigmaIngest>>;
+  explicitHiFi: boolean;
+  prompt: string;
+  /** On a scoped edit the caller appends buildScopedEditReferenceDirective once
+   *  after all blocks, so the per-reference whole-frame hi-fi directive (which
+   *  tells the agent to reproduce every section as a full frame) is wrong here
+   *  and must be suppressed. */
+  suppressHiFiDirective?: boolean;
+  onNarration?: (text: string) => void;
+}): Promise<{ block: string | null; png: string | null }> {
+  const { url, parsed, ingest, explicitHiFi, prompt, suppressHiFiDirective, onNarration } = ctx;
+
+  let result: IngestResult | undefined = ingest.getCached(parsed.fileId, parsed.nodeId);
   if (!result) {
     // Digest-race budget: fast (15s) for ordinary turns, phase-1-ceiling (65s)
     // for precise turns that need the design context to be faithful. See
@@ -749,7 +868,9 @@ async function enrichPromptWithFigmaContext(
 
   if (!result) {
     console.warn("[studio] figma ingest miss; proceeding without structured context");
-    if (!explicitHiFi) return { prompt, images };
+    // On a scoped edit, the whole-frame directive is wrong even on a miss; the
+    // caller appends the scoped-edit reframe once. Nothing to add per-reference.
+    if (!explicitHiFi || suppressHiFiDirective) return { block: null, png: null };
     // No digest, but the designer asked for a precise build: append the
     // directive with hasReferencePng:false so it tells the agent to export +
     // read its own (cap-safe) PNG.
@@ -759,11 +880,10 @@ async function enrichPromptWithFigmaContext(
       nodeId: parsed.nodeId,
       hasReferencePng: false,
     });
-    return { prompt: `${prompt}\n\n${directive}`, images };
+    return { block: directive, png: null };
   }
 
   const block = buildFigmaContextBlock(result);
-  const nextImages = result.png ? [...images, result.png.path] : images;
 
   const parts = [`Figma context: ${result.composites.length} composites suggested`];
   if (result.diagnostics.warnings.length) {
@@ -774,7 +894,8 @@ async function enrichPromptWithFigmaContext(
   // novel-design upgrade (classifier ran, no high-confidence template) fires.
   const hasHighConfidenceComposite = result.composites.some((c) => c.confidence === "high");
   let block2 = block;
-  if (explicitHiFi || shouldUseHiFi(prompt, { classified: result.classified, hasHighConfidenceComposite })) {
+  if (!suppressHiFiDirective &&
+      (explicitHiFi || shouldUseHiFi(prompt, { classified: result.classified, hasHighConfidenceComposite }))) {
     parts.push("high-fidelity mode");
     block2 = `${block}\n\n${buildHiFiDirective({
       fileKey: parsed.fileId,
@@ -785,7 +906,7 @@ async function enrichPromptWithFigmaContext(
 
   onNarration?.(parts.join(" · "));
 
-  return { prompt: `${prompt}\n\n${block2}`, images: nextImages };
+  return { block: block2, png: result.png ? result.png.path : null };
 }
 
 export interface SeedDesignMdInput {
