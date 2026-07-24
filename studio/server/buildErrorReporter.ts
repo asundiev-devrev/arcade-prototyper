@@ -13,6 +13,64 @@ import type { ChatMessage } from "./types";
  */
 export const lastAttempt = new Map<string, number>();
 
+/**
+ * Build the auto-fix prompt handed to the agent when a frame breaks.
+ *
+ * The old prompt was one line — "Fix the smallest thing that resolves it; do
+ * not restructure." — and it back-fired on the most common crash class. An
+ * `Element type is invalid … got: undefined` crash means a component/icon
+ * reference evaluated to undefined (a hallucinated icon name, a default-vs-named
+ * import mix-up, or a `Foo.Bar` member that doesn't exist on a real import).
+ * The LITERALLY smallest change that makes such a crash go away is to DELETE the
+ * broken reference — so the agent replaced an IconButton's icon with an empty
+ * <span/> and a checkmark with a "+" character, quietly dropping UI the user
+ * asked for. "Smallest change" rewarded vandalize-to-green.
+ *
+ * So the prompt now (a) forbids deleting/placeholder-swapping UI to silence the
+ * error, and (b) for the undefined-element class, tells the agent the cause is
+ * an import/name problem and to fix the NAME so the intended element renders.
+ * Kept as a pure function so the wording is unit-testable.
+ */
+export function buildAutoFixPrompt(
+  kind: "build" | "runtime",
+  frameName: string,
+  message: string,
+): string {
+  const lead =
+    kind === "build"
+      ? `The frame ${frameName} is failing to build with: ${message}.`
+      : `The frame ${frameName} threw a runtime error: ${message}.`;
+
+  const lines = [
+    lead,
+    "",
+    "Fix the ROOT CAUSE with the smallest change that addresses it — do NOT restructure the frame.",
+    "",
+    "PRESERVE THE INTENDED UI. The frame rendered what the user asked for before this error;",
+    "your job is to make that same UI work, not to make the error disappear by removing UI.",
+    "Do NOT delete an element, empty out a component, or swap an icon/component for a placeholder",
+    "(an empty <span/>, a text character like \"+\" or \"×\", a raw emoji, or a bare <div/>) to get",
+    "past the error. Dropping the broken thing silences the crash but loses UI — that is a FAILURE,",
+    "not a fix. If you cannot preserve an element, say so in your reply rather than quietly removing it.",
+  ];
+
+  // The undefined-element class is almost always an import problem; point the
+  // agent at the cause so it corrects the name instead of stripping the JSX.
+  if (/Element type is invalid|got:\s*undefined/i.test(message)) {
+    lines.push(
+      "",
+      '"Element type is invalid … got: undefined" means a component or icon reference evaluated to',
+      "undefined — almost always a WRONG or MISSING import: a hallucinated icon/component name, a",
+      "default-vs-named import mix-up, or a `Foo.Bar` member that doesn't exist on a real import.",
+      "Find the reference that is undefined and FIX THE IMPORT/NAME so the intended element renders:",
+      "correct it to a real export (read the arcade/components barrel if unsure of the exact name) and",
+      "import it. Removing the JSX or subbing a placeholder is the wrong fix.",
+    );
+  }
+
+  return lines.join("\n");
+}
+
 /** Minimum ms between auto-prompts for the same frame. */
 export const AUTO_RETRY_WINDOW_MS = 60_000;
 
@@ -97,7 +155,7 @@ export async function handleViteError(
     root,
     kind: "build",
     rawMessage: message,
-    prompt: `The frame ${frameName} is failing to build with: ${message}. Fix the smallest thing that resolves it; do not restructure.`,
+    prompt: buildAutoFixPrompt("build", frameName, message),
     runTurn,
     now,
     loadProject,
@@ -134,7 +192,7 @@ export async function handleRuntimeError(
     root,
     kind: "runtime",
     rawMessage: clean,
-    prompt: `The frame ${frameName} threw a runtime error: ${clean}. Fix the smallest thing that resolves it; do not restructure.`,
+    prompt: buildAutoFixPrompt("runtime", frameName, clean),
     runTurn,
     now,
     loadProject,

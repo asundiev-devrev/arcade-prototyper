@@ -6,6 +6,7 @@ import path from "node:path";
 import {
   handleViteError,
   parseBuildError,
+  buildAutoFixPrompt,
   lastAttempt,
   AUTO_RETRY_WINDOW_MS,
 } from "../../server/buildErrorReporter";
@@ -270,6 +271,58 @@ describe("handleViteError", () => {
     expect(call.cwd).toBe(path.join(tmp, "projects", "demo"));
     expect(call.prompt).toContain("welcome");
     expect(call.prompt).toContain("ReferenceError: x");
-    expect(call.prompt.toLowerCase()).toContain("smallest thing");
+    expect(call.prompt.toLowerCase()).toContain("smallest change");
+  });
+});
+
+describe("buildAutoFixPrompt", () => {
+  // Regression: implement-this-precisely. A scoped edit added a filter menu with
+  // a hallucinated icon reference → the frame crashed with "Element type is
+  // invalid … got: undefined". Auto-repair ran with the old one-liner ("fix the
+  // smallest thing that resolves it") and the agent took the LITERALLY smallest
+  // path: it deleted the broken references — icon → empty <span/>, checkmark →
+  // "+" text. The crash went away but the user lost the UI they asked for.
+  // These pin that the prompt now forbids delete-to-green and, for the
+  // undefined-element class, points the agent at the import/name as the cause.
+  it("forbids deleting UI or swapping in placeholders to silence the error", () => {
+    const prompt = buildAutoFixPrompt("runtime", "welcome", "some error");
+    const lc = prompt.toLowerCase();
+    expect(lc).toContain("preserve");
+    // Names the exact vandalism we observed so the agent recognises it.
+    expect(lc).toContain("placeholder");
+    expect(prompt).toContain("<span/>");
+    expect(lc).toMatch(/do not delete|don't delete|not to delete/);
+    // Still asks for a minimal, non-restructuring change.
+    expect(lc).toContain("smallest change");
+    expect(lc).toContain("do not restructure");
+  });
+
+  it("for an undefined-element crash, tells the agent to fix the import/name (not strip JSX)", () => {
+    const msg =
+      "Element type is invalid: expected a string (for built-in components) or a " +
+      "class/function (for composite components) but got: undefined.";
+    const prompt = buildAutoFixPrompt("runtime", "01-figma-8139-41293", msg);
+    const lc = prompt.toLowerCase();
+    expect(lc).toContain("import");
+    // The frame name and raw message are still carried through.
+    expect(prompt).toContain("01-figma-8139-41293");
+    expect(prompt).toContain("got: undefined");
+    // Directs to the barrel as the source of the correct name.
+    expect(lc).toContain("barrel");
+  });
+
+  it("omits the import-specific guidance for unrelated crash classes", () => {
+    const prompt = buildAutoFixPrompt("runtime", "welcome", "Cannot read properties of null");
+    // The undefined-element paragraph should not fire for a null-deref.
+    expect(prompt).not.toContain("Element type is invalid");
+    // But the preserve-UI rule always applies.
+    expect(prompt.toLowerCase()).toContain("preserve");
+  });
+
+  it("labels build vs runtime errors distinctly", () => {
+    const build = buildAutoFixPrompt("build", "welcome", "boom");
+    const runtime = buildAutoFixPrompt("runtime", "welcome", "boom");
+    expect(build.toLowerCase()).toContain("failing to build");
+    expect(runtime.toLowerCase()).toContain("threw a runtime error");
   });
 });
