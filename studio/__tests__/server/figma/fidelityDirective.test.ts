@@ -177,4 +177,32 @@ describe("buildScopedEditReferenceDirective", () => {
     expect(out).toMatch(/`text=`|node-tree/i);
     expect(out).toMatch(/if the reference shows 4 items, build exactly 4/i);
   });
+
+  // implement-this-precisely (2nd pass): with labels correct, the agent then
+  // embellished beyond the reference — added a "+" glyph to every row, a
+  // trailing chevron on selected rows, and an invented "Apply Filters" button.
+  it("forbids inventing chrome the reference doesn't show", () => {
+    expect(out).toMatch(/invent NOTHING extra|invent nothing/i);
+    expect(out).toMatch(/do NOT add icons, markers, buttons, separators/i);
+    // Calls out the specific hallucinations by shape.
+    expect(out).toMatch(/leading .*\+.* glyph|no trailing chevron/i);
+    expect(out).toMatch(/invented .*(Apply|Done|Clear)/i);
+  });
+
+  it("requires the exact state marker and the kit's purpose-built primitive", () => {
+    // Complaint 3: a ChevronRight was used where the design shows a checkmark.
+    expect(out).toMatch(/if selecting an item shows a CHECKMARK/i);
+    expect(out).toMatch(/never substitute a different glyph/i);
+    // Complaint: Menu.Item + hand-rolled icon instead of Menu.CheckboxItem.
+    expect(out).toContain("Menu.CheckboxItem");
+    expect(out).toMatch(/purpose-built primitive/i);
+  });
+
+  it("forbids restructuring the host frame's existing controls", () => {
+    // Complaint 1 & 4: sibling controls slid to centre and the dropdown was
+    // pushed off-screen when the agent recomputed absolute offsets for the pills.
+    expect(out).toMatch(/DON'T RESTRUCTURE THE HOST FRAME|do not restructure/i);
+    expect(out).toMatch(/do NOT recompute or shift the absolute\s+positions/i);
+    expect(out).toMatch(/off-screen/i);
+  });
 });
