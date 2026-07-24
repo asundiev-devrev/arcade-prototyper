@@ -1327,3 +1327,95 @@ describe("data-figma-id stamping", () => {
     expect(r.source).not.toMatch(/data-figma-id=191/);
   });
 });
+
+describe("stroke fidelity — per-side borders + hairline dividers", () => {
+  const GRAY = { r: 0.925, g: 0.918, b: 0.922, a: 1 }; // ~#eceaeb
+
+  it("renders a bottom-only Figma border (individualStrokeWeights) as a single bottom inset, not a 4-side box", () => {
+    // Regression: a simplified table's header/rows carry
+    // individualStrokeWeights {top:0,right:0,bottom:1,left:0} — a bottom rule.
+    // The old code read only the uniform strokeWeight and boxed all four sides.
+    const doc = frameNode("0", [{
+      id: "row", type: "FRAME",
+      absoluteBoundingBox: bbox(0, 0, 680, 52),
+      strokeWeight: 1,
+      individualStrokeWeights: { top: 0, right: 0, bottom: 1, left: 0 },
+      strokeAlign: "INSIDE",
+      strokes: [{ type: "SOLID", color: GRAY }],
+    }]);
+    const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map() });
+    // Bottom edge only: inset 0 -1px 0 0. Never the full-box inset 0 0 0 1px.
+    expect(r.source).toContain("inset 0 -1px 0 0");
+    expect(r.source).not.toContain("inset 0 0 0 1px");
+  });
+
+  it("still renders a uniform border as the single 4-side inset (unchanged)", () => {
+    const doc = frameNode("0", [{
+      id: "card", type: "FRAME",
+      absoluteBoundingBox: bbox(0, 0, 200, 100),
+      strokeWeight: 1,
+      strokes: [{ type: "SOLID", color: GRAY }],
+    }]);
+    const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map() });
+    expect(r.source).toContain("inset 0 0 0 1px");
+  });
+
+  it("emits every non-zero side when weights differ per edge", () => {
+    const doc = frameNode("0", [{
+      id: "box", type: "FRAME",
+      absoluteBoundingBox: bbox(0, 0, 100, 100),
+      strokeWeight: 1,
+      individualStrokeWeights: { top: 2, right: 0, bottom: 1, left: 3 },
+      strokes: [{ type: "SOLID", color: GRAY }],
+    }]);
+    const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map() });
+    expect(r.source).toContain("inset 0 2px 0 0");   // top
+    expect(r.source).toContain("inset 0 -1px 0 0");  // bottom
+    expect(r.source).toContain("inset 3px 0 0 0");   // left
+    expect(r.source).not.toContain("inset -");       // right weight is 0
+  });
+
+  it("does NOT export a zero-height divider VECTOR as an SVG asset (planAssets)", () => {
+    // A Figma rule/separator is a VECTOR sized WxH = 648x0 whose paint is a
+    // stroke. Exporting it produces a 0-px, invisible <img>. planAssets must
+    // skip it so emit can paint it as a thin CSS box instead.
+    const doc = frameNode("0", [{
+      id: "divider", type: "VECTOR",
+      absoluteBoundingBox: bbox(16, 6, 648, 0),
+      strokeWeight: 1,
+      strokes: [{ type: "SOLID", color: GRAY }],
+    }]);
+    const plan = planAssets(doc, { components: {}, componentSets: {} });
+    expect(plan.svgIds).not.toContain("divider");
+    expect(plan.svgIds).toEqual([]);
+  });
+
+  it("renders a zero-height divider VECTOR as a visible 1px CSS box in the stroke color", () => {
+    const doc = frameNode("0", [{
+      id: "divider", type: "VECTOR",
+      absoluteBoundingBox: bbox(16, 6, 648, 0),
+      strokeWeight: 1,
+      strokes: [{ type: "SOLID", color: GRAY }],
+    }]);
+    const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map() });
+    // A div, not an <img>, sized 648x1, painted with the stroke color.
+    expect(r.source).toMatch(/<div data-figma-id="divider"[^>]*\/>/);
+    expect(r.source).not.toContain("<img");
+    expect(r.source).toContain('height: "1px"');
+    expect(r.source).toContain('width: "648px"');
+    expect(r.source).toContain('background: "#eceaeb"');
+  });
+
+  it("renders a zero-width vertical divider as a 1px-wide CSS box", () => {
+    const doc = frameNode("0", [{
+      id: "vrule", type: "LINE",
+      absoluteBoundingBox: bbox(20, 0, 0, 400),
+      strokeWeight: 1,
+      strokes: [{ type: "SOLID", color: GRAY }],
+    }]);
+    const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map() });
+    expect(r.source).toContain('width: "1px"');
+    expect(r.source).toContain('height: "400px"');
+    expect(r.source).not.toContain("<img");
+  });
+});

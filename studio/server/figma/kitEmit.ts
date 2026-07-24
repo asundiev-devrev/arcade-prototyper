@@ -340,6 +340,77 @@ function makeTokenResolver(variables: any | null): TokenResolver | null {
  * both paths reuse the (subtle, already-debugged) paint logic without
  * duplicating it. (B2)
  */
+/**
+ * Stroke → inset box-shadow(s), honoring per-side weights.
+ *
+ * Figma lets a node carry a different weight on each edge
+ * (`individualStrokeWeights: {top,right,bottom,left}`) — a "bottom-only divider"
+ * is `{top:0, right:0, bottom:1, left:0}`. The old code read only the uniform
+ * `strokeWeight` and painted `inset 0 0 0 Npx` (all four sides), so every
+ * bottom-ruled table row rendered as a fully boxed cell. When per-side weights
+ * differ, emit one inset shadow per non-zero edge instead:
+ *   top    → inset 0  Npx 0 0
+ *   bottom → inset 0 -Npx 0 0
+ *   left   → inset  Npx 0 0 0
+ *   right  → inset -Npx 0 0 0
+ * When all sides are equal (or no per-side weights are given), fall back to the
+ * single uniform 4-side inset — unchanged behavior for bordered boxes.
+ */
+function strokeShadows(n: RawNode, color: string): string[] {
+  const isw = n.individualStrokeWeights;
+  const uniform = n.strokeWeight ?? 1;
+  if (isw && typeof isw === "object") {
+    const top = isw.top ?? 0;
+    const right = isw.right ?? 0;
+    const bottom = isw.bottom ?? 0;
+    const left = isw.left ?? 0;
+    const allEqual = top === right && right === bottom && bottom === left;
+    if (!allEqual) {
+      const out: string[] = [];
+      if (top > 0) out.push(`inset 0 ${top}px 0 0 ${color}`);
+      if (bottom > 0) out.push(`inset 0 -${bottom}px 0 0 ${color}`);
+      if (left > 0) out.push(`inset ${left}px 0 0 0 ${color}`);
+      if (right > 0) out.push(`inset -${right}px 0 0 0 ${color}`);
+      return out;
+    }
+    // allEqual → uniform border at that (possibly per-side) weight.
+    return top > 0 ? [`inset 0 0 0 ${top}px ${color}`] : [];
+  }
+  return [`inset 0 0 0 ${uniform}px ${color}`];
+}
+
+/**
+ * A "hairline" is a stroked graphic node (a `LINE`/`VECTOR` divider) with one
+ * bounding-box dimension effectively zero — a Figma rule/separator has height 0
+ * and its paint lives entirely in the stroke. Exporting it as an SVG produces a
+ * 0-px `<img>` that renders as nothing, which is exactly the "missing bottom
+ * divider under table rows" bug. We instead render it as a thin CSS box painted
+ * with the stroke color (see the hairline branch in emit). Requires a visible
+ * solid stroke so we never turn a genuinely empty node into a stray line. */
+function isHairline(n: RawNode): boolean {
+  if (hidden(n)) return false;
+  if (!GRAPHIC_TYPES.has(n.type)) return false;
+  const b = n.absoluteBoundingBox ?? {};
+  const w = b.width ?? 0;
+  const h = b.height ?? 0;
+  const thin = Math.min(w, h) < 1 && Math.max(w, h) > 0;
+  if (!thin) return false;
+  return (n.strokes ?? []).some(
+    (st: any) => st?.type === "SOLID" && st.visible !== false && paintCss(st),
+  );
+}
+
+/** First visible solid stroke on a node → its resolved color (kit token or hex),
+ *  or null when the node has no solid stroke. Shared by the border and hairline
+ *  paths so both resolve the stroke identically. */
+function strokeColor(n: RawNode, tok?: TokenResolver | null): string | null {
+  for (const st of n.strokes ?? []) {
+    const v = paintCss(st);
+    if (v && st.type === "SOLID") return tok ? tok.colorFor(n.strokes, "stroke", v) : v;
+  }
+  return null;
+}
+
 function paintStyle(n: RawNode, tok?: TokenResolver | null): Style {
   const s: Style = {};
   if (typeof n.opacity === "number" && n.opacity < 1) s.opacity = Math.round(n.opacity * 1000) / 1000;
@@ -354,12 +425,11 @@ function paintStyle(n: RawNode, tok?: TokenResolver | null): Style {
     }
   }
   const shadows: string[] = [];
-  const sw = n.strokeWeight ?? 1;
   for (const st of n.strokes ?? []) {
     const v = paintCss(st);
     if (v && st.type === "SOLID") {
       const color = tok ? tok.colorFor(n.strokes, "stroke", v) : v;
-      shadows.push(`inset 0 0 0 ${sw}px ${color}`);
+      shadows.push(...strokeShadows(n, color));
       break;
     }
   }
@@ -802,6 +872,10 @@ export function planAssets(doc: RawNode, ctx: EmitContext): AssetPlan {
       }
       return; // kit component absorbs its subtree
     }
+    // A zero-dimension stroked rule (LINE/VECTOR divider) is painted as a thin
+    // CSS box in emit, NOT exported — a 0-px SVG <img> renders as nothing (the
+    // "missing table divider" bug). Stop here so it isn't listed for export.
+    if (isHairline(n)) return;
     if (isGraphic(n, broken, ctx) && n.type !== "ELLIPSE") {
       svgIds.push(n.id);
       return;
@@ -1249,6 +1323,25 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
           // matched++ so coverage telemetry doesn't credit a non-kit render.
           if (n.type === "INSTANCE") matchedInstances--;
           break;
+      }
+    }
+
+    // A zero-dimension stroked rule (a divider LINE/VECTOR whose bbox is e.g.
+    // 648×0) can't be an SVG <img> — that renders as a 0-px, invisible element.
+    // Paint it as a thin CSS box in the stroke color instead, so the divider is
+    // actually visible. The thin dimension floors at 1px; the other keeps its
+    // Figma length. (Runs BEFORE the graphic/img path, which would export it.)
+    if (isHairline(n)) {
+      const color = strokeColor(n, tok);
+      if (color) {
+        const s = nodeBox(n, px, py, flex);
+        delete s.boxShadow;
+        const b = n.absoluteBoundingBox ?? {};
+        if ((b.width ?? 0) >= (b.height ?? 0)) s.height = "1px";
+        else s.width = "1px";
+        s.background = color;
+        lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(s)} />`);
+        return;
       }
     }
 
