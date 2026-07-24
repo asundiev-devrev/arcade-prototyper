@@ -77,4 +77,35 @@ describe("enrichPromptWithFigmaContext — multiple reference URLs", () => {
     expect(out).toBe("make the title red");
     expect(images).toEqual(["x.png"]);
   });
+
+  it("on a SCOPED EDIT, appends the reframe directive and NOT the whole-frame hi-fi directive", async () => {
+    // implement-this-precisely-3: a right-click scoped edit ("Target element:")
+    // that references a popover design + a toolbar design. The references are
+    // PARTS wired into the existing frame, so the per-reference whole-frame
+    // hi-fi directive (which drove the agent to reproduce the frame's rows into
+    // the popover) must be suppressed, and the scoped-edit reframe appended once.
+    const prompt =
+      'Target element: <Button> "All Knowledge"\n' +
+      "Placed at frames/01-figma-8139-41293/index.tsx:39:247\n\n" +
+      '"All Knowledge" should open a popover ' + URL_A +
+      " and show selected filter blocks in the toolbar " + URL_B;
+    const { prompt: out } = await enrichPromptWithFigmaContext(prompt, []);
+    // Both designs still attached. Match the real block openings (stamped with
+    // the result url `u:<node>`) — the reframe directive's prose also mentions
+    // a `<figma_context url="…">` literal, which is not a real block.
+    expect((out.match(/<figma_context url="u:/g) ?? []).length).toBe(2);
+    // The scoped-edit reframe is appended exactly once…
+    expect((out.match(/<edit_reference_designs>/g) ?? []).length).toBe(1);
+    // …and the whole-frame hi-fi directive is NOT injected per reference.
+    expect(out).not.toContain("<high_fidelity_mode>");
+  });
+
+  it("a NON-edit multi-URL prompt keeps the per-reference hi-fi directive (no reframe)", async () => {
+    // A typed (non-right-click) precise build still gets the whole-frame
+    // directive — the reframe is scoped-edit only.
+    const prompt = "Implement this precisely " + URL_A + " and " + URL_B;
+    const { prompt: out } = await enrichPromptWithFigmaContext(prompt, []);
+    expect(out).not.toContain("<edit_reference_designs>");
+    expect(out).toContain("<high_fidelity_mode>");
+  });
 });

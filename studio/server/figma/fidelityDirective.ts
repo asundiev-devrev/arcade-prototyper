@@ -83,6 +83,45 @@ export function shouldUseHiFi(prompt: string, ctx: HiFiGateContext): boolean {
   return ctx.classified && !ctx.hasHighConfidenceComposite;
 }
 
+/**
+ * Directive for a SCOPED EDIT that references one or more Figma designs.
+ *
+ * The whole-frame `buildHiFiDirective` is wrong here: it tells the agent to
+ * reproduce "every section of the frame, same number of rows as the PNG",
+ * which assumes each reference IS a full frame. On a scoped edit the references
+ * are PARTS — a popover, a menu, a panel, a state — that the request wires into
+ * an EXISTING frame. Observed failure (implement-this-precisely-3): asked to
+ * add a filter popover whose design shows 4 items (Created Date / Created By /
+ * Brand / Team), the agent instead duplicated the frame body's own 8-row
+ * knowledge list into the popover. It had the correct 4 labels in both the
+ * reference tree and PNG and ignored them.
+ *
+ * This directive reframes the references as source-of-truth for the specific
+ * parts they depict and forbids copying the existing frame's content into them.
+ */
+export function buildScopedEditReferenceDirective(): string {
+  return [
+    "<edit_reference_designs>",
+    "The Figma design(s) attached above are REFERENCE for the specific PART(s) of this",
+    "element the request describes — a popover, menu, panel, dropdown, or state. They are",
+    "NOT whole frames to reproduce, and this is an EDIT of an existing frame, not a fresh build.",
+    "",
+    "- Each <figma_context url=\"…\"> block is the SOURCE OF TRUTH for the part the request",
+    "  ties to that SAME url (\"the popover looks like <urlA>\", \"the menu like <urlB>\").",
+    "  Build that part's contents — its items, their labels, their order, and HOW MANY there",
+    "  are — from that reference, NOT from the frame you are editing.",
+    "- Do NOT duplicate the existing frame's rows / list / content to fill a referenced part.",
+    "  A menu that repeats the list already on the frame is WRONG — the reference shows what",
+    "  the menu actually contains, which is usually different and shorter (e.g. a filter menu",
+    "  lists filter DIMENSIONS like \"Created Date / Created By / Brand\", not the frame's data rows).",
+    "- Take the exact item text from the reference's node-tree `text=` fields; use its PNG for",
+    "  layout, spacing, and which items exist. If the reference shows 4 items, build exactly 4 —",
+    "  do not pad it to match the frame's count.",
+    "- Everything else about the frame stays as-is. Change only what the request asks.",
+    "</edit_reference_designs>",
+  ].join("\n");
+}
+
 export interface HiFiDirectiveContext {
   /** Figma file key, already parsed from the URL. */
   fileKey: string;

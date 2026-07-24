@@ -4,6 +4,7 @@ import {
   detectHiFiIntent,
   buildHiFiDirective,
   shouldUseHiFi,
+  buildScopedEditReferenceDirective,
 } from "../../../server/figma/fidelityDirective";
 
 describe("detectHiFiIntent", () => {
@@ -152,5 +153,28 @@ describe("buildHiFiDirective", () => {
   it("tells the agent not to fabricate on fetch failure", () => {
     const out = buildHiFiDirective({ ...ctx, hasReferencePng: false });
     expect(out).toMatch(/retry shallower|faithful partial|do NOT .*invent/i);
+  });
+});
+
+describe("buildScopedEditReferenceDirective", () => {
+  const out = buildScopedEditReferenceDirective();
+
+  it("frames the references as PARTS wired into an existing frame, not whole frames", () => {
+    expect(out).toContain("<edit_reference_designs>");
+    expect(out).toMatch(/NOT whole frames/i);
+    expect(out).toMatch(/edit of an existing frame/i);
+  });
+
+  it("forbids duplicating the existing frame's rows into a referenced part", () => {
+    // The exact implement-this-precisely-3 failure: the popover was filled with
+    // a copy of the frame body's knowledge list instead of the 4 filter items.
+    expect(out).toMatch(/do NOT duplicate the existing frame'?s/i);
+    expect(out).toMatch(/repeats the list already on the frame is WRONG/i);
+  });
+
+  it("ties each url block to the part the request names and takes text from the tree", () => {
+    expect(out).toMatch(/SOURCE OF TRUTH for the part/i);
+    expect(out).toMatch(/`text=`|node-tree/i);
+    expect(out).toMatch(/if the reference shows 4 items, build exactly 4/i);
   });
 });

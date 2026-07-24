@@ -16,12 +16,17 @@ import type { ChatMessage, ChimeIn } from "../types";
 import type { StudioEvent } from "../../src/lib/streamJson";
 import { extractFigmaUrl, extractFigmaUrls, detectInteractionIntent } from "../../src/lib/figmaUrl";
 import { parseFigmaUrl, type ParsedFigmaUrl } from "../figmaCli";
-import { classifyFigmaTurn } from "../figma/turnRouting";
+import { classifyFigmaTurn, isScopedEditTurn } from "../figma/turnRouting";
 import type { IngestResult } from "../figma/types";
 import { frameDir } from "../paths";
 import { getFigmaIngest } from "../figmaIngest";
 import { buildFigmaContextBlock } from "../figma/promptBlock";
-import { shouldUseHiFi, detectHiFiIntent, buildHiFiDirective } from "../figma/fidelityDirective";
+import {
+  shouldUseHiFi,
+  detectHiFiIntent,
+  buildHiFiDirective,
+  buildScopedEditReferenceDirective,
+} from "../figma/fidelityDirective";
 import { shouldGenerateFromFigma, detectComposeBaseIntent, extractComposeBaseComposite } from "../figma/generationIntent";
 import { runFigmaKitEmitBranch } from "../figma/kitEmitBranch";
 import { ejectComposite } from "../figma/ejectComposite";
@@ -728,6 +733,11 @@ export async function enrichPromptWithFigmaContext(
   // absent on a miss. shouldUseHiFi stays only as a digest-SUCCESS upgrade.
   // Computed up front because it also picks the digest-race budget below.
   const explicitHiFi = detectHiFiIntent(prompt);
+  // On a SCOPED EDIT the references are PARTS wired into an existing frame, not
+  // whole frames to reproduce. Suppress the per-reference whole-frame hi-fi
+  // directive (it drove the agent to duplicate the frame's rows into a
+  // referenced popover) and append ONE reframe directive after all blocks.
+  const scopedEdit = isScopedEditTurn(prompt);
   const ingest = await getFigmaIngest();
 
   const blocks: string[] = [];
@@ -742,7 +752,7 @@ export async function enrichPromptWithFigmaContext(
     const isPrimary = i === 0;
     const label = isPrimary ? undefined : `Loading reference design ${i + 1}…`;
     const resolved = await resolveFigmaReference({
-      url, parsed, ingest, explicitHiFi, prompt,
+      url, parsed, ingest, explicitHiFi, prompt, suppressHiFiDirective: scopedEdit,
       onNarration: (text) => onNarration?.(label ?? text),
     });
     if (resolved.block) blocks.push(resolved.block);
@@ -750,6 +760,7 @@ export async function enrichPromptWithFigmaContext(
   }
 
   if (!blocks.length) return { prompt: prompt, images };
+  if (scopedEdit) blocks.push(buildScopedEditReferenceDirective());
   return { prompt: `${prompt}\n\n${blocks.join("\n\n")}`, images: outImages };
 }
 
@@ -765,9 +776,14 @@ async function resolveFigmaReference(ctx: {
   ingest: Awaited<ReturnType<typeof getFigmaIngest>>;
   explicitHiFi: boolean;
   prompt: string;
+  /** On a scoped edit the caller appends buildScopedEditReferenceDirective once
+   *  after all blocks, so the per-reference whole-frame hi-fi directive (which
+   *  tells the agent to reproduce every section as a full frame) is wrong here
+   *  and must be suppressed. */
+  suppressHiFiDirective?: boolean;
   onNarration?: (text: string) => void;
 }): Promise<{ block: string | null; png: string | null }> {
-  const { url, parsed, ingest, explicitHiFi, prompt, onNarration } = ctx;
+  const { url, parsed, ingest, explicitHiFi, prompt, suppressHiFiDirective, onNarration } = ctx;
 
   let result: IngestResult | undefined = ingest.getCached(parsed.fileId, parsed.nodeId);
   if (!result) {
@@ -801,7 +817,9 @@ async function resolveFigmaReference(ctx: {
 
   if (!result) {
     console.warn("[studio] figma ingest miss; proceeding without structured context");
-    if (!explicitHiFi) return { block: null, png: null };
+    // On a scoped edit, the whole-frame directive is wrong even on a miss; the
+    // caller appends the scoped-edit reframe once. Nothing to add per-reference.
+    if (!explicitHiFi || suppressHiFiDirective) return { block: null, png: null };
     // No digest, but the designer asked for a precise build: append the
     // directive with hasReferencePng:false so it tells the agent to export +
     // read its own (cap-safe) PNG.
@@ -825,7 +843,8 @@ async function resolveFigmaReference(ctx: {
   // novel-design upgrade (classifier ran, no high-confidence template) fires.
   const hasHighConfidenceComposite = result.composites.some((c) => c.confidence === "high");
   let block2 = block;
-  if (explicitHiFi || shouldUseHiFi(prompt, { classified: result.classified, hasHighConfidenceComposite })) {
+  if (!suppressHiFiDirective &&
+      (explicitHiFi || shouldUseHiFi(prompt, { classified: result.classified, hasHighConfidenceComposite }))) {
     parts.push("high-fidelity mode");
     block2 = `${block}\n\n${buildHiFiDirective({
       fileKey: parsed.fileId,
