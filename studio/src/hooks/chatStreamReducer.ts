@@ -47,7 +47,14 @@ export interface StreamState {
   narrations: string[];
   items: ChatTurnItem[];
   lastEvent: StudioEvent | null;
+  /** The FULL prompt sent to the agent (may carry a hidden scoped-edit preamble
+   *  or Figma decoration). Drives retry, render-verify, and the 409 retry-vs-new
+   *  compare — never render this in the chat; it's the machine payload. */
   lastPrompt: string;
+  /** The user-VISIBLE text for the current/last turn — the words they actually
+   *  typed, with any scoped-edit preamble stripped. This is what the chat bubble
+   *  and persisted history show. Equals `lastPrompt` when there was no preamble. */
+  lastDisplayPrompt: string;
   /** Which agent is producing the current/last turn. Defaults to claude. */
   source: "claude" | "computer";
   /** Wall-clock time the current turn started on the server (ms). */
@@ -94,6 +101,7 @@ export const INITIAL_STREAM_STATE: StreamState = {
   items: [],
   lastEvent: null,
   lastPrompt: "",
+  lastDisplayPrompt: "",
   source: "claude",
   turnStartedAt: null,
   turnEndedAt: null,

@@ -25,7 +25,7 @@ import type { SendResult } from "../../hooks/useChatStream";
 interface PromptInputProps {
   busy: boolean;
   projectSlug: string;
-  onSend: (prompt: string, images: string[]) => void | Promise<SendResult>;
+  onSend: (prompt: string, images: string[], displayPrompt?: string) => void | Promise<SendResult>;
   onStop?: () => void;
   seedRef?: MutableRefObject<((text: string) => void) | null>;
 }
@@ -306,10 +306,13 @@ export function PromptInput({ busy, projectSlug, onSend, onStop, seedRef }: Prom
     if (busy) return;
 
     // Prepend the scoped element-context block when elements are picked (chips
-    // present) so the agent edits exactly those targets.
-    const finalPrompt =
-      batch.length > 0 && frameSlug ? `${buildTargetPreamble(batch, frameSlug)}${p}` : p;
-    const result = await onSend(finalPrompt, imagePaths);
+    // present) so the agent edits exactly those targets. The preamble is a
+    // MACHINE instruction — the agent needs it, but the chat must show only the
+    // words the user typed (`p`), so it rides as the hidden full prompt while
+    // `p` is passed as the visible display text.
+    const hasPreamble = batch.length > 0 && !!frameSlug;
+    const finalPrompt = hasPreamble ? `${buildTargetPreamble(batch, frameSlug)}${p}` : p;
+    const result = await onSend(finalPrompt, imagePaths, hasPreamble ? p : undefined);
     // When the stream rejects a NEW prompt because a turn is already running,
     // keep the composer contents (and the picked elements) so the user can
     // resend once it's idle — dropping either silently was the worst failure

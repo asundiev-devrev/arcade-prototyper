@@ -205,7 +205,7 @@ export function chatMiddleware() {
 async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<void> {
   let buf = "";
   for await (const chunk of req) buf += chunk;
-  let body: { slug: string; prompt: string; images?: string[] };
+  let body: { slug: string; prompt: string; images?: string[]; displayPrompt?: string };
   try {
     body = JSON.parse(buf);
   } catch {
@@ -213,7 +213,7 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
     res.end(JSON.stringify({ error: { code: "bad_request", message: "Invalid JSON" } }));
     return;
   }
-  const { slug, prompt, images } = body;
+  const { slug, prompt, images, displayPrompt } = body;
 
   // Validate the body shape before any field is read (track() touches
   // prompt.length below). A valid-JSON POST missing/mistyping these fields
@@ -234,6 +234,17 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
     res.end(JSON.stringify({ error: { code: "bad_request", message: "images must be an array of strings" } }));
     return;
   }
+  if (displayPrompt !== undefined && typeof displayPrompt !== "string") {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "bad_request", message: "displayPrompt must be a string" } }));
+    return;
+  }
+  // The user-VISIBLE text. `prompt` may carry a hidden scoped-edit preamble the
+  // agent needs; `displayPrompt` is what the user actually typed. Everything the
+  // user reads back (persisted history, the SSE turn header) uses this; the
+  // full `prompt` still drives routing + the agent. Falls back to `prompt` for
+  // an ordinary turn (and for an older client that doesn't send displayPrompt).
+  const visiblePrompt = displayPrompt && displayPrompt.trim() ? displayPrompt : prompt;
 
   const project = await getProject(slug);
   if (!project) {
@@ -319,6 +330,7 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
     track({ name: "generation_failed", props: { project_slug_hash: hashSlug(slug), error_kind: "bedrock_auth" } });
     const turn = startTurn(slug, {
       prompt,
+      displayPrompt: visiblePrompt,
       run: ({ end }) => {
         end({
           ok: false,
@@ -332,18 +344,20 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
     return;
   }
 
-  // Persist the user message verbatim (with @Computer prefix intact) so
-  // chat history reflects what the user actually typed.
+  // Persist the user message as the user SAW it (with @Computer prefix intact,
+  // but WITHOUT the hidden scoped-edit preamble) so chat history reflects what
+  // the user actually typed — not the machine targeting block.
   await appendHistory(slug, {
     id: `u-${Date.now()}`,
     role: "user",
-    content: prompt,
+    content: visiblePrompt,
     images,
     createdAt: new Date().toISOString(),
   });
 
   const turn = startTurn(slug, {
     prompt,
+    displayPrompt: visiblePrompt,
     run: ({ emit, end, signal }) => {
       const task = isWireTurn
         ? runFigmaWireBranch({
@@ -573,6 +587,7 @@ async function handleStream(req: IncomingMessage, res: ServerResponse, slug: str
       kind: "turn",
       turnId: turn.id,
       prompt: turn.prompt,
+      displayPrompt: turn.displayPrompt,
       startedAt: turn.startedAt,
       status: turn.status,
       endedAt: turn.endedAt,

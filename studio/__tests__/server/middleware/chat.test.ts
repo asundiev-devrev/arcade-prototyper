@@ -6,8 +6,9 @@ import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { chatMiddleware } from "../../../server/middleware/chat";
-import { createProject } from "../../../server/projects";
+import { createProject, readHistory } from "../../../server/projects";
 import { __resetTurnRegistryForTests } from "../../../server/turnRegistry";
+import { SCOPED_EDIT_MARKER } from "../../../src/lib/scopedEdit";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -106,6 +107,63 @@ describe("POST /api/chat", () => {
       body: JSON.stringify({ slug: p.slug, prompt: "hi", images: [1, 2, 3] }),
     });
     expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when displayPrompt is not a string", async () => {
+    const p = await createProject({ name: "DispVal", theme: "arcade", mode: "light" });
+    const res = await fetch(`http://localhost:${port}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug: p.slug, prompt: "hi", displayPrompt: 42 }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  // The scoped-edit leak fix: the client sends the FULL prompt (hidden targeting
+  // preamble + the words the user typed) plus a separate `displayPrompt` (just
+  // the typed words). The agent must get the full prompt (routing reads the
+  // marker), but the user must NEVER see the preamble — so BOTH the persisted
+  // history and the SSE turn header carry only the clean text.
+  it("persists the clean displayPrompt (not the hidden preamble) and echoes it in the turn header", async () => {
+    const p = await createProject({ name: "Scoped", theme: "arcade", mode: "light" });
+    const typed = "make this button open a filter popover";
+    const fullPrompt = `${SCOPED_EDIT_MARKER}\n\nTarget element:\n- <Button> at frames/x/index.tsx:42\n\n${typed}`;
+    const post = await fetch(`http://localhost:${port}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug: p.slug, prompt: fullPrompt, displayPrompt: typed }),
+    });
+    expect(post.status).toBe(202);
+
+    const stream = await drainStream(p.slug);
+    // The turn header carries the CLEAN text and hides the machine preamble.
+    const header = stream
+      .split("\n")
+      .find((l) => l.startsWith("data:") && l.includes('"kind":"turn"'));
+    expect(header).toBeTruthy();
+    const parsed = JSON.parse(header!.replace(/^data:\s*/, ""));
+    expect(parsed.displayPrompt).toBe(typed);
+    expect(parsed.displayPrompt).not.toContain(SCOPED_EDIT_MARKER);
+    expect(parsed.displayPrompt).not.toContain("Target element:");
+
+    // Persisted history shows only what the user typed.
+    const history = await readHistory(p.slug);
+    const userMsg = history.find((m) => m.role === "user");
+    expect(userMsg?.content).toBe(typed);
+    expect(userMsg?.content).not.toContain(SCOPED_EDIT_MARKER);
+  });
+
+  it("falls back to the full prompt for an ordinary turn (no displayPrompt sent)", async () => {
+    const p = await createProject({ name: "Plain", theme: "arcade", mode: "light" });
+    const post = await fetch(`http://localhost:${port}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug: p.slug, prompt: "build me a dashboard" }),
+    });
+    expect(post.status).toBe(202);
+    await drainStream(p.slug);
+    const history = await readHistory(p.slug);
+    expect(history.find((m) => m.role === "user")?.content).toBe("build me a dashboard");
   });
 });
 

@@ -27,7 +27,7 @@ export interface ProjectShellSource {
   chatHistory: ChatMessage[];
   chat: StreamState;
   chatStream: ChatStream;
-  send: (prompt: string, images?: string[]) => void;
+  send: (prompt: string, images?: string[], displayPrompt?: string) => void;
   refresh: () => Promise<void>;
   /** Buffer a visual-no-op candidate for a frame (called by FrameCard via the
    *  Viewport prop-thread). Only a candidate — the turn-end effect decides. */

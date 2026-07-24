@@ -192,12 +192,15 @@ describe("PromptInput target chips", () => {
   });
 
   it("sending WITHOUT chips does not add a preamble", () => {
-    const onSend = vi.fn((_prompt: string, _images: string[]) => {});
+    const onSend = vi.fn((_prompt: string, _images: string[], _displayPrompt?: string) => {});
     render(<Harness onSend={onSend} />);
     const input = screen.getByLabelText("composer") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "hello" } });
     fireEvent.click(screen.getByLabelText("Send"));
-    expect(onSend).toHaveBeenCalledWith("hello", expect.anything());
+    // No chips → the full prompt IS the visible prompt, so no separate
+    // displayPrompt override is threaded (3rd arg is undefined). If a preamble
+    // WERE wrongly added, the 1st arg would differ from "hello".
+    expect(onSend).toHaveBeenCalledWith("hello", expect.anything(), undefined);
   });
 });
 

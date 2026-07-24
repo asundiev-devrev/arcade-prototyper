@@ -20,7 +20,12 @@ export type TurnStatus = "running" | "done" | "error" | "cancelled";
 export interface Turn {
   slug: string;
   id: string;
+  /** Full prompt sent to the agent (may carry a hidden scoped-edit preamble). */
   prompt: string;
+  /** User-visible text for this turn (preamble-stripped). Defaults to `prompt`.
+   *  Echoed in the SSE `turn` header so a mid-turn reconnect paints the clean
+   *  bubble instead of the machine prompt. */
+  displayPrompt: string;
   startedAt: number;
   endedAt?: number;
   status: TurnStatus;
@@ -45,6 +50,8 @@ const MAX_EVENTS_PER_TURN = 5000;
 
 export interface StartTurnInit {
   prompt: string;
+  /** User-visible text (preamble-stripped). Optional; defaults to `prompt`. */
+  displayPrompt?: string;
   /**
    * Runner callback — called once synchronously. Gets `emit(ev)` to feed the
    * turn, and is expected to call `end({ ok, error? })` when done. The
@@ -80,6 +87,7 @@ export function startTurn(slug: string, init: StartTurnInit): Turn {
     slug,
     id: randomId(),
     prompt: init.prompt,
+    displayPrompt: init.displayPrompt ?? init.prompt,
     startedAt: Date.now(),
     status: "running",
     events: [],
