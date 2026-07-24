@@ -14,8 +14,11 @@
  */
 
 /** Marker the client preamble (PromptInput.tsx) starts with. Its presence
- *  means the discipline is already prepended; we must not double-inject. */
-const CLIENT_PREAMBLE_MARKER = "Target element:";
+ *  means the discipline is already prepended; we must not double-inject.
+ *  Also the ground-truth signal that a turn is a SCOPED EDIT of an existing
+ *  frame — reused by server/figma/turnRouting.ts to keep Figma reference URLs
+ *  from being misrouted into a new-frame import. */
+export const CLIENT_PREAMBLE_MARKER = "Target element:";
 const EDIT_CONTEXT_MARKER = "<edit_context>";
 
 export function buildEditContextBlock(frameSlugs: string[]): string {

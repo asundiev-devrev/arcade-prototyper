@@ -16,6 +16,7 @@ import type { ChatMessage, ChimeIn } from "../types";
 import type { StudioEvent } from "../../src/lib/streamJson";
 import { extractFigmaUrl, extractFigmaUrls, detectInteractionIntent } from "../../src/lib/figmaUrl";
 import { parseFigmaUrl } from "../figmaCli";
+import { classifyFigmaTurn } from "../figma/turnRouting";
 import { frameDir } from "../paths";
 import { getFigmaIngest } from "../figmaIngest";
 import { buildFigmaContextBlock } from "../figma/promptBlock";
@@ -282,19 +283,26 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
   // ground-truth PNG + hi-fi directive) and builds to the brief.
   const figmaUrl = isComputerTurn ? null : extractFigmaUrl(prompt);
   const figmaParsed = figmaUrl ? parseFigmaUrl(figmaUrl) : null;
-  const wantsGeneration = figmaParsed ? shouldGenerateFromFigma(prompt) : false;
-  const isKitEmitTurn = Boolean(figmaParsed) && !wantsGeneration;
-
-  // Wire-an-interaction turn: a Figma-import prompt that ALSO asks for behavior
-  // ("when you click X this modal appears <2nd url>"). The deterministic
-  // importer can't produce interactivity and silently dropped both the prose
-  // and any 2nd URL, so the interaction never got wired (and a re-ask imported
-  // the modal as a separate frame). We import the screen + overlay
-  // deterministically, then run ONE scoped LLM pass that only wires state.
-  // Needs the LLM, so it's gated on Bedrock auth like a Claude turn.
   const figmaUrls = isComputerTurn ? [] : extractFigmaUrls(prompt);
-  const isWireTurn =
-    Boolean(figmaParsed) && detectInteractionIntent(prompt) && figmaUrls.length >= 2;
+
+  // Route a Figma-referencing turn to one of three branches. A bare import →
+  // deterministic kit-emit; an import + interaction + 2nd URL → wire; anything
+  // else → Claude. CRUCIALLY, a SCOPED EDIT (the user right-clicked an element,
+  // so the client prepended the "Target element:" preamble) is ALWAYS a Claude
+  // edit — the Figma links are reference material for how the result should
+  // look, NOT screens to stamp out as separate frames. Without this guard, an
+  // edit like "make this filter open a popover <figma url> <figma url>" got
+  // misrouted to the wire branch, which imported url[0] as a whole new frame.
+  // See server/figma/turnRouting.ts.
+  const figmaKind = classifyFigmaTurn({
+    hasFigmaNode: Boolean(figmaParsed),
+    wantsGeneration: figmaParsed ? shouldGenerateFromFigma(prompt) : false,
+    hasInteractionIntent: detectInteractionIntent(prompt),
+    figmaUrlCount: figmaUrls.length,
+    prompt,
+  });
+  const isKitEmitTurn = figmaKind === "kit-emit";
+  const isWireTurn = figmaKind === "wire";
 
   // Bedrock-auth pre-check applies only to Claude (Bedrock) turns; the
   // Computer agent uses the DevRev PAT, and kit-emit turns use no LLM at all.
