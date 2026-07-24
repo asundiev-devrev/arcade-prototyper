@@ -15,8 +15,9 @@ import { pendingObjections, markStaleByFrame } from "../chimeIns";
 import type { ChatMessage, ChimeIn } from "../types";
 import type { StudioEvent } from "../../src/lib/streamJson";
 import { extractFigmaUrl, extractFigmaUrls, detectInteractionIntent } from "../../src/lib/figmaUrl";
-import { parseFigmaUrl } from "../figmaCli";
+import { parseFigmaUrl, type ParsedFigmaUrl } from "../figmaCli";
 import { classifyFigmaTurn } from "../figma/turnRouting";
+import type { IngestResult } from "../figma/types";
 import { frameDir } from "../paths";
 import { getFigmaIngest } from "../figmaIngest";
 import { buildFigmaContextBlock } from "../figma/promptBlock";
@@ -705,15 +706,19 @@ export function digestRaceBudgetMs(isHiFi: boolean): number {
   return isHiFi ? HIFI_DIGEST_BUDGET_MS : FAST_DIGEST_BUDGET_MS;
 }
 
-async function enrichPromptWithFigmaContext(
+export async function enrichPromptWithFigmaContext(
   prompt: string,
   images: string[],
   onNarration?: (text: string) => void,
 ): Promise<{ prompt: string; images: string[] }> {
-  const url = extractFigmaUrl(prompt);
-  if (!url) return { prompt, images };
-  const parsed = parseFigmaUrl(url);
-  if (!parsed) return { prompt, images };
+  // EVERY Figma node URL in the prompt is reference material, not just the
+  // first. A scoped edit like "make this a filter that opens <popover url> and
+  // shows selected chips <toolbar url>" references TWO designs — the earlier
+  // single-URL enrichment ingested only the popover, so the agent invented the
+  // toolbar chips it never saw (the "chips break the layout" bug). We resolve a
+  // context block + reference PNG for each URL, in document order.
+  const urls = extractFigmaUrls(prompt);
+  if (!urls.length) return { prompt, images };
 
   // Directive decision is CONTEXT-FREE: it depends only on the prompt + URL,
   // both of which we have even when the digest missed. This is the fix for the
@@ -723,9 +728,48 @@ async function enrichPromptWithFigmaContext(
   // absent on a miss. shouldUseHiFi stays only as a digest-SUCCESS upgrade.
   // Computed up front because it also picks the digest-race budget below.
   const explicitHiFi = detectHiFiIntent(prompt);
-
   const ingest = await getFigmaIngest();
-  let result = ingest.getCached(parsed.fileId, parsed.nodeId);
+
+  const blocks: string[] = [];
+  let outImages = images;
+
+  for (let i = 0; i < urls.length; i++) {
+    const url = urls[i];
+    const parsed = parseFigmaUrl(url);
+    if (!parsed) continue;
+    // Only the first URL narrates the "loading…" line; extra references narrate
+    // their own "reference N" line so the chat pane doesn't repeat identically.
+    const isPrimary = i === 0;
+    const label = isPrimary ? undefined : `Loading reference design ${i + 1}…`;
+    const resolved = await resolveFigmaReference({
+      url, parsed, ingest, explicitHiFi, prompt,
+      onNarration: (text) => onNarration?.(label ?? text),
+    });
+    if (resolved.block) blocks.push(resolved.block);
+    if (resolved.png) outImages = [...outImages, resolved.png];
+  }
+
+  if (!blocks.length) return { prompt: prompt, images };
+  return { prompt: `${prompt}\n\n${blocks.join("\n\n")}`, images: outImages };
+}
+
+/**
+ * Resolve ONE Figma reference URL into a prompt block (+ optional reference PNG
+ * path). Extracted from enrichPromptWithFigmaContext so a multi-reference edit
+ * prompt gets every design, not just the first. Returns an empty block only
+ * when the digest missed AND the turn isn't a precise build.
+ */
+async function resolveFigmaReference(ctx: {
+  url: string;
+  parsed: ParsedFigmaUrl;
+  ingest: Awaited<ReturnType<typeof getFigmaIngest>>;
+  explicitHiFi: boolean;
+  prompt: string;
+  onNarration?: (text: string) => void;
+}): Promise<{ block: string | null; png: string | null }> {
+  const { url, parsed, ingest, explicitHiFi, prompt, onNarration } = ctx;
+
+  let result: IngestResult | undefined = ingest.getCached(parsed.fileId, parsed.nodeId);
   if (!result) {
     // Digest-race budget: fast (15s) for ordinary turns, phase-1-ceiling (65s)
     // for precise turns that need the design context to be faithful. See
@@ -757,7 +801,7 @@ async function enrichPromptWithFigmaContext(
 
   if (!result) {
     console.warn("[studio] figma ingest miss; proceeding without structured context");
-    if (!explicitHiFi) return { prompt, images };
+    if (!explicitHiFi) return { block: null, png: null };
     // No digest, but the designer asked for a precise build: append the
     // directive with hasReferencePng:false so it tells the agent to export +
     // read its own (cap-safe) PNG.
@@ -767,11 +811,10 @@ async function enrichPromptWithFigmaContext(
       nodeId: parsed.nodeId,
       hasReferencePng: false,
     });
-    return { prompt: `${prompt}\n\n${directive}`, images };
+    return { block: directive, png: null };
   }
 
   const block = buildFigmaContextBlock(result);
-  const nextImages = result.png ? [...images, result.png.path] : images;
 
   const parts = [`Figma context: ${result.composites.length} composites suggested`];
   if (result.diagnostics.warnings.length) {
@@ -793,7 +836,7 @@ async function enrichPromptWithFigmaContext(
 
   onNarration?.(parts.join(" · "));
 
-  return { prompt: `${prompt}\n\n${block2}`, images: nextImages };
+  return { block: block2, png: result.png ? result.png.path : null };
 }
 
 export interface SeedDesignMdInput {
