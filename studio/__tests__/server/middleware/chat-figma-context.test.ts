@@ -24,6 +24,7 @@ import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { createProject } from "../../../server/projects";
 import { __resetTurnRegistryForTests, getTurn } from "../../../server/turnRegistry";
+import { SCOPED_EDIT_MARKER } from "../../../src/lib/scopedEdit";
 
 const kitEmitSpy = vi.hoisted(() =>
   vi.fn(async (input: any) => {
@@ -162,6 +163,7 @@ describe("/api/chat Figma-URL routing (kit-emit branch)", () => {
     // NOT run, and claude must (writes its argv out).
     const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
     const prompt =
+      SCOPED_EDIT_MARKER + "\n\n" +
       'Target element: <Button> "All Knowledge"\n' +
       "Placed at frames/01-figma-8139-41293/index.tsx:39:247\n\n" +
       'Make "All Knowledge" work as a filter that opens a popover menu when clicked. ' +

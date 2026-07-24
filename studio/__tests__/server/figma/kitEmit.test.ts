@@ -1375,6 +1375,36 @@ describe("stroke fidelity — per-side borders + hairline dividers", () => {
     expect(r.source).not.toContain("inset -");       // right weight is 0
   });
 
+  it("paints NO border for an all-zero individualStrokeWeights, even with a stroke paint (adv-2, kept by design)", () => {
+    // A stroke weight of 0 on every edge is INVISIBLE in Figma even though a
+    // stroke color is present. The emitter must paint nothing — NOT default to a
+    // 1px line, which would invent a border the design doesn't have. Pinned so a
+    // future "add a fallback border" refactor can't silently reintroduce it.
+    const doc = frameNode("0", [{
+      id: "nostroke", type: "FRAME",
+      absoluteBoundingBox: bbox(0, 0, 100, 100),
+      strokeWeight: 0,
+      individualStrokeWeights: { top: 0, right: 0, bottom: 0, left: 0 },
+      strokes: [{ type: "SOLID", color: GRAY }],
+    }]);
+    const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map() });
+    expect(r.source).not.toContain("inset 0 0 0 0px");
+    expect(r.source).not.toMatch(/inset [^,;"]*#eceaeb/);
+  });
+
+  it("paints NO border for a uniform strokeWeight of 0 (invisible stroke)", () => {
+    // Same rule on the uniform path: an explicit 0 weight → no shadow. (A NULLISH
+    // weight still defaults to 1px — that's the hairline-divider case above.)
+    const doc = frameNode("0", [{
+      id: "zerobox", type: "FRAME",
+      absoluteBoundingBox: bbox(0, 0, 200, 100),
+      strokeWeight: 0,
+      strokes: [{ type: "SOLID", color: GRAY }],
+    }]);
+    const r = emitKitFrame(doc, { components: {}, componentSets: {}, assetFiles: new Map() });
+    expect(r.source).not.toContain("inset 0 0 0 0px");
+  });
+
   it("does NOT export a zero-height divider VECTOR as an SVG asset (planAssets)", () => {
     // A Figma rule/separator is a VECTOR sized WxH = 648x0 whose paint is a
     // stroke. Exporting it produces a 0-px, invisible <img>. planAssets must

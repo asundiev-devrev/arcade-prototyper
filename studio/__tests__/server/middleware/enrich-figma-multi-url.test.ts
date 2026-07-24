@@ -9,6 +9,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as ingestModule from "../../../server/figmaIngest";
 import { enrichPromptWithFigmaContext } from "../../../server/middleware/chat";
 import type { IngestResult } from "../../../server/figma/types";
+import { SCOPED_EDIT_MARKER } from "../../../src/lib/scopedEdit";
 
 const URL_A = "https://www.figma.com/design/kJc/AS?node-id=8172-33651";
 const URL_B = "https://www.figma.com/design/kJc/AS?node-id=8140-33699";
@@ -72,6 +73,32 @@ describe("enrichPromptWithFigmaContext — multiple reference URLs", () => {
     expect(images).toEqual(["/tmp/popover.png"]);
   });
 
+  it("dedups aliased forms of the SAME node (dash/colon + &t= share token) to one block + PNG", async () => {
+    // Regression: extractFigmaUrls dedups on the raw string, but one node has
+    // many string forms. All of these parse to fileId=kJc, nodeId=8172:33651.
+    const dashForm = "https://www.figma.com/design/kJc/AS?node-id=8172-33651";
+    const colonForm = "https://www.figma.com/design/kJc/AS?node-id=8172:33651";
+    const shareToken = "https://www.figma.com/design/kJc/AS?node-id=8172-33651&t=Ab9xYz-0";
+    const prompt = `restyle this to ${dashForm} (also ${colonForm} and ${shareToken})`;
+    const { prompt: out, images } = await enrichPromptWithFigmaContext(prompt, []);
+    // One node → exactly one context block and one reference PNG, not three.
+    expect((out.match(/<figma_context url=/g) ?? []).length).toBe(1);
+    expect(images).toEqual(["/tmp/popover.png"]);
+  });
+
+  it("caps the number of distinct references and narrates what was skipped", async () => {
+    // Five distinct nodes; only the first MAX_FIGMA_REFS (4) resolve so a
+    // paste-heavy prompt can't stall turn-start on serial cold ingests.
+    const nodes = ["8172-33651", "8140-33699", "1-1", "2-2", "3-3"];
+    const prompt = "reference " + nodes.map((n) => `https://www.figma.com/design/kJc/AS?node-id=${n}`).join(" ");
+    const narrations: string[] = [];
+    const { images } = await enrichPromptWithFigmaContext(prompt, [], (t) => narrations.push(t));
+    // Only the two mocked nodes return a PNG; the other kept refs miss gracefully.
+    // The cap is proven by the skip narration naming exactly one dropped ref.
+    expect(narrations.some((t) => /skipping 1 more/.test(t))).toBe(true);
+    void images;
+  });
+
   it("is a no-op when the prompt has no Figma URL", async () => {
     const { prompt: out, images } = await enrichPromptWithFigmaContext("make the title red", ["x.png"]);
     expect(out).toBe("make the title red");
@@ -85,6 +112,7 @@ describe("enrichPromptWithFigmaContext — multiple reference URLs", () => {
     // hi-fi directive (which drove the agent to reproduce the frame's rows into
     // the popover) must be suppressed, and the scoped-edit reframe appended once.
     const prompt =
+      SCOPED_EDIT_MARKER + "\n\n" +
       'Target element: <Button> "All Knowledge"\n' +
       "Placed at frames/01-figma-8139-41293/index.tsx:39:247\n\n" +
       '"All Knowledge" should open a popover ' + URL_A +
@@ -97,6 +125,22 @@ describe("enrichPromptWithFigmaContext — multiple reference URLs", () => {
     // The scoped-edit reframe is appended exactly once…
     expect((out.match(/<edit_reference_designs>/g) ?? []).length).toBe(1);
     // …and the whole-frame hi-fi directive is NOT injected per reference.
+    expect(out).not.toContain("<high_fidelity_mode>");
+  });
+
+  it("a MULTI-SELECT scoped edit (plural preamble) is also treated as an edit — reframe, no hi-fi", async () => {
+    // Regression: the old detector matched only "Target element:" (singular), so
+    // a shift-click multi-select edit ("Target elements:") slipped past and got
+    // the whole-frame hi-fi directive + no reframe. The sentinel leads every
+    // preamble shape, so plural is recognised identically to singular.
+    const prompt =
+      SCOPED_EDIT_MARKER + "\n\n" +
+      "Target elements:\n" +
+      '- <Button> "All Knowledge"\n' +
+      "- <Button> Sort\n\n" +
+      "make these open popovers " + URL_A + " and " + URL_B;
+    const { prompt: out } = await enrichPromptWithFigmaContext(prompt, []);
+    expect((out.match(/<edit_reference_designs>/g) ?? []).length).toBe(1);
     expect(out).not.toContain("<high_fidelity_mode>");
   });
 

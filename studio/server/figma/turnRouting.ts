@@ -12,16 +12,18 @@
  * an element and is editing it; the Figma links are reference material for what
  * the result should look like, not screens to stamp out as separate frames.
  *
- * The ground-truth signal for case 3 is the client edit preamble that
- * PromptInput.tsx prepends when the user picks an element (CLIENT_PREAMBLE_MARKER,
- * "Target element:"). Its presence forces the Claude edit branch, which already
- * pulls the referenced design in as reference context (geometry + component
- * identities + ground-truth PNG). Reference stays reference.
+ * The ground-truth signal for case 3 is the machine sentinel the client edit
+ * preamble prepends when the user picks element(s) (SCOPED_EDIT_MARKER). Its
+ * presence forces the Claude edit branch, which already pulls the referenced
+ * design in as reference context (geometry + component identities + ground-truth
+ * PNG). Reference stays reference. The sentinel replaces the old
+ * "Target element:" substring, which missed the plural + baked preamble shapes
+ * and so misrouted multi-select / baked-element edits into a new-frame import.
  *
  * Pure — no I/O, no subprocess. Unit-tested in
  * __tests__/server/figma/turnRouting.test.ts.
  */
-import { CLIENT_PREAMBLE_MARKER } from "../editContext";
+import { isScopedEditPrompt } from "../../src/lib/scopedEdit";
 
 export type FigmaTurnKind = "wire" | "kit-emit" | "claude";
 
@@ -38,9 +40,10 @@ export interface FigmaTurnInputs {
   prompt: string;
 }
 
-/** True when the prompt is a scoped edit of an already-picked element. */
+/** True when the prompt is a scoped edit of an already-picked element. Thin
+ *  re-export of the shared detector, kept for the existing call sites/tests. */
 export function isScopedEditTurn(prompt: string): boolean {
-  return typeof prompt === "string" && prompt.includes(CLIENT_PREAMBLE_MARKER);
+  return isScopedEditPrompt(prompt);
 }
 
 /**

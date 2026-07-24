@@ -13,12 +13,16 @@
  * Pure — no I/O.
  */
 
-/** Marker the client preamble (PromptInput.tsx) starts with. Its presence
- *  means the discipline is already prepended; we must not double-inject.
+/** Machine sentinel the client preamble (PromptInput.tsx) starts with. Its
+ *  presence means the discipline is already prepended; we must not double-inject.
  *  Also the ground-truth signal that a turn is a SCOPED EDIT of an existing
  *  frame — reused by server/figma/turnRouting.ts to keep Figma reference URLs
- *  from being misrouted into a new-frame import. */
-export const CLIENT_PREAMBLE_MARKER = "Target element:";
+ *  from being misrouted into a new-frame import. Single source of truth lives in
+ *  src/lib/scopedEdit.ts so the producer and both detectors cannot drift; the
+ *  old human-readable "Target element:" string missed the plural + baked
+ *  preamble shapes. Re-exported under the historical name for call sites. */
+export { SCOPED_EDIT_MARKER as CLIENT_PREAMBLE_MARKER } from "../src/lib/scopedEdit";
+import { isScopedEditPrompt } from "../src/lib/scopedEdit";
 const EDIT_CONTEXT_MARKER = "<edit_context>";
 
 export function buildEditContextBlock(frameSlugs: string[]): string {
@@ -46,7 +50,11 @@ export function buildEditContextBlock(frameSlugs: string[]): string {
 
 export function prependEditContext(prompt: string, frameSlugs: string[]): string {
   if (!frameSlugs.length) return prompt;
-  if (prompt.includes(CLIENT_PREAMBLE_MARKER)) return prompt;
+  // A scoped edit (any preamble shape) already carries the discipline — don't
+  // double-inject. Uses the shared detector so plural/baked preambles are also
+  // recognised (they previously slipped past the singular-string check and got
+  // a second <edit_context> block stacked on top of the client preamble).
+  if (isScopedEditPrompt(prompt)) return prompt;
   if (prompt.includes(EDIT_CONTEXT_MARKER)) return prompt;
   return `${buildEditContextBlock(frameSlugs)}\n\n${prompt}`;
 }

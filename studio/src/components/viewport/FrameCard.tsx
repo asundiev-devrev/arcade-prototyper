@@ -5,6 +5,7 @@ import { useEditSession } from "../../hooks/editSessionContext";
 import type { TurnPhase } from "../../hooks/chatStreamReducer";
 import { SaveComponentModal } from "../assets/SaveComponentModal";
 import { observeFingerprint, type FpTracker } from "./visualNoOp";
+import { reduceHeight, initialHeightState, type HeightState } from "./frameHeight";
 import { handleDigestMessage, type RenderDigest } from "../../frame/frameDigest";
 import { currentPageLabel, findRestoreTarget } from "../../lib/framePageRestore";
 
@@ -94,6 +95,10 @@ export function FrameCard({
   // frame never flashes short. Capped at the viewport via CSS min() so tall /
   // h-screen frames stay full.
   const [contentHeight, setContentHeight] = useState<number | null>(null);
+  // Damping state for the content-height hug (see frameHeight.ts). Held in a ref
+  // — it's read/written inside the message handler and must not re-subscribe the
+  // listener. Reset to full-fallback whenever a new render is committed (below).
+  const heightState = useRef<HeightState>(initialHeightState());
   const [chip, setChip] = useState<"none" | "refining" | "terminal">("none");
   const [chipDetailOpen, setChipDetailOpen] = useState(false);
   const refineTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -238,7 +243,14 @@ export function FrameCard({
         // successful swap the committed iframe remounts and re-measures.
         const isCommitted =
           n === String(committedNonce) || (n === "" && committedNonce === 0);
-        if (typeof h === "number" && h > 0 && isCommitted) setContentHeight(h);
+        if (typeof h === "number" && isCommitted) {
+          // Damp the hug: hysteresis + runaway-decay freeze + floor. Without
+          // this a fractional-vh frame collapses to a 1px sliver by feeding its
+          // own shrinking height back in each round. See frameHeight.ts.
+          const decision = reduceHeight(heightState.current, h, Date.now());
+          heightState.current = decision.state;
+          if (decision.changed) setContentHeight(decision.height);
+        }
         return;
       }
       if (d.type === "arcade-studio:frame-digest") {
@@ -299,6 +311,27 @@ export function FrameCard({
       }
     };
   }, []);
+
+  // Reset the hug whenever the committed iframe REMOUNTS and re-measures from
+  // scratch. That happens on two triggers, and the key on the committed iframe
+  // (`${projectMode}-${committedNonce}`) is keyed on BOTH:
+  //   - a committed edit swap (committedNonce) — the new render may be TALLER, so
+  //     a stale hug would flash it short and a frozen runaway state would suppress
+  //     its growth;
+  //   - a light/dark toggle (projectMode) — the re-fetched render can lay out at a
+  //     different height (wrapped banner, denser chrome), so the old applied/frozen
+  //     height must not carry over.
+  // Reset to the full-viewport fallback + fresh damping state on either. Skips the
+  // initial mount — nothing to reset yet.
+  const didMountHeight = useRef(false);
+  useEffect(() => {
+    if (!didMountHeight.current) {
+      didMountHeight.current = true;
+      return;
+    }
+    heightState.current = initialHeightState();
+    setContentHeight(null);
+  }, [committedNonce, projectMode]);
 
   // Picking-gated effect: manages picker lifecycle in the iframe.
   useEffect(() => {

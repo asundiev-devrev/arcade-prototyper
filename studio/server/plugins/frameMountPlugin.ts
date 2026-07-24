@@ -358,7 +358,11 @@ export function buildFrameBootstrapSource(opts: {
             const root = document.getElementById("root");
             if (!root) return;
             const h = Math.ceil(root.getBoundingClientRect().height);
-            if (h <= 0 || h === last) return;   // ignore pre-render 0s + no-op repeats
+            // Ignore pre-render 0s and sub-2px jitter. A 1px oscillation
+            // (899<->900) would otherwise post on every ResizeObserver tick
+            // forever; the exact-equal check alone never caught it. The parent
+            // applies its own larger hysteresis + runaway freeze (frameHeight.ts).
+            if (h <= 0 || Math.abs(h - last) < 2) return;
             last = h;
             window.parent && window.parent.postMessage(
               { type: "arcade-studio:frame-height", slug: ${JSON.stringify(slug)}, frame: ${JSON.stringify(frame)}, n: __N, height: h }, "*");

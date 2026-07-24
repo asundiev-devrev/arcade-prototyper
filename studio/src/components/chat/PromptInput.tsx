@@ -10,6 +10,7 @@ import {
 import { useToast } from "@xorkavi/arcade-gen";
 import { ChatInput } from "../../../prototype-kit/composites/ChatInput";
 import { extractFigmaUrl } from "../../lib/figmaUrl";
+import { SCOPED_EDIT_MARKER } from "../../lib/scopedEdit";
 import { attachmentKind } from "../../lib/attachmentKind";
 import {
   MentionPopover,
@@ -140,7 +141,11 @@ export function buildTargetPreamble(batch: EditedElement[], frameSlug: string): 
   }
 
   if (sections.length === 0) return "";
+  // Lead with the machine sentinel so the server recognises EVERY preamble shape
+  // (single / multi-select / baked) as a scoped edit — not just the singular
+  // "Target element:" header. See src/lib/scopedEdit.ts for why.
   return [
+    SCOPED_EDIT_MARKER,
     ...sections,
     "",
     "A reply without a corresponding Edit or Write tool call is a failed turn. If your Edit reports zero or multiple matches, widen the surrounding context and retry — or fall back to Write with the full new file contents. Do not paraphrase the change in narration as a substitute for editing.",

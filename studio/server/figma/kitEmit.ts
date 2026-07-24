@@ -373,10 +373,16 @@ function strokeShadows(n: RawNode, color: string): string[] {
       if (right > 0) out.push(`inset -${right}px 0 0 0 ${color}`);
       return out;
     }
-    // allEqual → uniform border at that (possibly per-side) weight.
+    // allEqual → uniform border at that weight. A weight of 0 is an INVISIBLE
+    // stroke in Figma even when a stroke paint is present — so paint nothing.
+    // Do NOT "fix" this by defaulting to a 1px line: that invents a border the
+    // design doesn't have (the adv-2 all-zero-stroke finding — kept by design).
     return top > 0 ? [`inset 0 0 0 ${top}px ${color}`] : [];
   }
-  return [`inset 0 0 0 ${uniform}px ${color}`];
+  // Same rule on the uniform path: a 0 weight paints nothing (an `inset … 0px`
+  // shadow is invisible anyway — just don't emit it). Only default to 1px when
+  // the weight is truly UNSPECIFIED (nullish), which reads as "hairline stroke".
+  return uniform > 0 ? [`inset 0 0 0 ${uniform}px ${color}`] : [];
 }
 
 /**

@@ -740,23 +740,59 @@ export async function enrichPromptWithFigmaContext(
   const scopedEdit = isScopedEditTurn(prompt);
   const ingest = await getFigmaIngest();
 
+  // Dedup by the PARSED node identity, not the raw URL string. extractFigmaUrls
+  // dedups on the literal string, but one node has many string forms — dash vs
+  // colon node-id, and the `&t=<share token>` Figma appends on copy — so pasting
+  // the same node from the browser and the desktop app yielded 3 "distinct" URLs
+  // that all parse to one (fileId, nodeId). Without this we pushed 3 identical
+  // <figma_context> blocks + 3 copies of the same PNG (token waste + a reference
+  // the agent over-weights). parseFigmaUrl normalises both, so the key collapses.
+  const seenNodes = new Set<string>();
+  const refs: { url: string; parsed: ParsedFigmaUrl }[] = [];
+  for (const url of urls) {
+    const parsed = parseFigmaUrl(url);
+    if (!parsed) continue;
+    const key = `${parsed.fileId}:${parsed.nodeId}`;
+    if (seenNodes.has(key)) continue;
+    seenNodes.add(key);
+    refs.push({ url, parsed });
+  }
+
+  // Cap the number of distinct references resolved per turn. The loop is serial
+  // and each cold miss can burn the full digest budget (up to 65s on a precise
+  // edit), so an unbounded paste-heavy prompt could block turn-start for minutes.
+  // Real edits reference one or two designs; keep the first few and tell the user
+  // what was skipped rather than silently dropping or stalling.
+  const MAX_FIGMA_REFS = 4;
+  const dropped = refs.length - MAX_FIGMA_REFS;
+  const kept = dropped > 0 ? refs.slice(0, MAX_FIGMA_REFS) : refs;
+  if (dropped > 0) {
+    onNarration?.(`Using the first ${MAX_FIGMA_REFS} Figma references; skipping ${dropped} more.`);
+  }
+
   const blocks: string[] = [];
   let outImages = images;
 
-  for (let i = 0; i < urls.length; i++) {
-    const url = urls[i];
-    const parsed = parseFigmaUrl(url);
-    if (!parsed) continue;
+  for (let i = 0; i < kept.length; i++) {
+    const { url, parsed } = kept[i];
     // Only the first URL narrates the "loading…" line; extra references narrate
     // their own "reference N" line so the chat pane doesn't repeat identically.
     const isPrimary = i === 0;
     const label = isPrimary ? undefined : `Loading reference design ${i + 1}…`;
-    const resolved = await resolveFigmaReference({
-      url, parsed, ingest, explicitHiFi, prompt, suppressHiFiDirective: scopedEdit,
-      onNarration: (text) => onNarration?.(label ?? text),
-    });
-    if (resolved.block) blocks.push(resolved.block);
-    if (resolved.png) outImages = [...outImages, resolved.png];
+    // Isolate each reference: a single URL whose ingest throws (malformed node
+    // tree, token resolver blowing up) must not discard the references already
+    // resolved and fail the whole turn. A per-URL MISS is already handled inside
+    // resolveFigmaReference (returns {block:null}); this catches a per-URL THROW.
+    try {
+      const resolved = await resolveFigmaReference({
+        url, parsed, ingest, explicitHiFi, prompt, suppressHiFiDirective: scopedEdit,
+        onNarration: (text) => onNarration?.(label ?? text),
+      });
+      if (resolved.block) blocks.push(resolved.block);
+      if (resolved.png) outImages = [...outImages, resolved.png];
+    } catch (err) {
+      console.warn(`[studio] figma reference ${parsed.fileId}:${parsed.nodeId} failed to resolve:`, err);
+    }
   }
 
   if (!blocks.length) return { prompt: prompt, images };
