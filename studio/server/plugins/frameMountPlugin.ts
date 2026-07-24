@@ -339,6 +339,50 @@ export function buildFrameBootstrapSource(opts: {
       return null;
     }
 
+    // Reports the frame's NATURAL content height so the parent can hug the
+    // container to it (a short design → a short frame, no dead white space
+    // below). Measures #root's rendered box, NOT documentElement.scrollHeight
+    // (which floors at the viewport in most engines and would never let a
+    // content frame shrink). A full-app shell using h-screen/min-h-screen
+    // resolves 100vh to the iframe's own height, so #root reports ≈ the current
+    // container height → the parent's CSS min() cap holds it full, unchanged
+    // from today. Re-measures on any layout change (font load, page switch,
+    // accordion) via ResizeObserver. Best-effort; never breaks the frame.
+    function ArcadeFrameHeight() {
+      React.useEffect(() => {
+        let cancelled = false;
+        let last = -1;
+        const post = () => {
+          if (cancelled) return;
+          try {
+            const root = document.getElementById("root");
+            if (!root) return;
+            const h = Math.ceil(root.getBoundingClientRect().height);
+            if (h <= 0 || h === last) return;   // ignore pre-render 0s + no-op repeats
+            last = h;
+            window.parent && window.parent.postMessage(
+              { type: "arcade-studio:frame-height", slug: ${JSON.stringify(slug)}, frame: ${JSON.stringify(frame)}, n: __N, height: h }, "*");
+          } catch (_) { /* height report is best-effort; never break the frame */ }
+        };
+        const afterLayout = () => requestAnimationFrame(() => requestAnimationFrame(post));
+        const fonts = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+        fonts.then(afterLayout, afterLayout);
+        // Coalesce RO bursts into one rAF-throttled post so animations don't spam.
+        let scheduled = false;
+        const ro = typeof ResizeObserver !== "undefined"
+          ? new ResizeObserver(() => {
+              if (scheduled) return;
+              scheduled = true;
+              requestAnimationFrame(() => { scheduled = false; post(); });
+            })
+          : null;
+        const root = document.getElementById("root");
+        if (ro && root) ro.observe(root);
+        return () => { cancelled = true; if (ro) ro.disconnect(); };
+      }, []);
+      return null;
+    }
+
     // Rides its OWN message — never folded into frame-ready (which must fire
     // instantly to drive the double-buffer swap). Awaits fonts + double-rAF so
     // the fingerprint reflects the AT-REST rendered layout. Best-effort: any
@@ -372,6 +416,7 @@ export function buildFrameBootstrapSource(opts: {
           <FrameErrorBoundary slug=${JSON.stringify(slug)} frame=${JSON.stringify(frame)}>
             <Frame />
             <ArcadeFrameReady />
+            <ArcadeFrameHeight />
             <ArcadeFrameFingerprint />
           </FrameErrorBoundary>
         </DevRevThemeProvider>

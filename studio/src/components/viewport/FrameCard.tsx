@@ -87,6 +87,13 @@ export function FrameCard({
   // whether the hidden probe iframe is mounted at all.
   const [committedNonce, setCommittedNonce] = useState(0);
   const [incomingLoading, setIncomingLoading] = useState(false);
+  // Natural content height reported by the live iframe (frame-height message).
+  // Lets the container HUG a short design instead of stretching to the viewport
+  // (the dead-white-space bug). null until the first measurement lands — until
+  // then the container falls back to the full-viewport height so an app-shell
+  // frame never flashes short. Capped at the viewport via CSS min() so tall /
+  // h-screen frames stay full.
+  const [contentHeight, setContentHeight] = useState<number | null>(null);
   const [chip, setChip] = useState<"none" | "refining" | "terminal">("none");
   const [chipDetailOpen, setChipDetailOpen] = useState(false);
   const refineTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -220,6 +227,18 @@ export function FrameCard({
           const outcome = observeFingerprint(fpTracker.current, fp, n);
           if (outcome === "no-op") onVisualNoOpRef.current?.(frame.slug);
         }
+        return;
+      }
+      if (d.type === "arcade-studio:frame-height") {
+        const h = (d as { height?: unknown }).height;
+        const n = String(d.n ?? "");
+        // Only hug to the VISIBLE (committed) render. The hidden in-flight probe
+        // (reloadNonce) also reports, but resizing to it would jump the
+        // container before the edit is confirmed by the swap — ignore it. On a
+        // successful swap the committed iframe remounts and re-measures.
+        const isCommitted =
+          n === String(committedNonce) || (n === "" && committedNonce === 0);
+        if (typeof h === "number" && h > 0 && isCommitted) setContentHeight(h);
         return;
       }
       if (d.type === "arcade-studio:frame-digest") {
@@ -522,8 +541,16 @@ export function FrameCard({
         style={{
           position: "relative",
           width: clampedWidth,
-          height: "calc(100vh - 180px)",
-          transition: resizing ? "none" : "width 200ms ease-out",
+          // Hug the frame's natural content height so a short design (a modal,
+          // a card) doesn't leave dead white space below it. Capped at the
+          // viewport via min() so a tall / full-app-shell frame stays full and
+          // scrolls internally. Falls back to the full height until the first
+          // measurement lands (app shells never flash short).
+          height:
+            contentHeight != null
+              ? `min(${contentHeight}px, calc(100vh - 180px))`
+              : "calc(100vh - 180px)",
+          transition: resizing ? "none" : "width 200ms ease-out, height 200ms ease-out",
           willChange: "width",
         }}
       >
