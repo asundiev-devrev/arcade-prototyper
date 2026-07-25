@@ -8,6 +8,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.45.2] — 2026-07-25
+
+### Fixed
+- **The "update available" prompt no longer hides behind the "what's new" popup.** Right after the app silently updates itself, it shows a short "here's what changed" note. If a *newer* update had already downloaded in the background, its "install & restart" prompt was rendering underneath that note and you never saw it — so the app looked stuck on an old version. Now a waiting update always takes priority: the changelog for the version you're leaving is skipped, and you get its notes after you install the newer one.
+
 ## [0.45.1] — 2026-07-24
 
 Follow-up fixes for **selective (right-click) editing** and **Figma-referenced edits** — the flow where you generate a frame from a Figma design, then right-click an element and ask for a change. A round of adversarial testing surfaced a cluster of ways that flow could go wrong; this cleans them up.
