@@ -37,6 +37,18 @@ describe("shouldShowWhatsNew", () => {
     expect(shouldShowWhatsNew("0.35.0", null)).toBe(false);
     expect(shouldShowWhatsNew("0.35.0", undefined)).toBe(false);
   });
+  it("defers to a NEWER pending update (would otherwise bury the install prompt)", () => {
+    // Just silently updated to 0.45.0, but 0.45.1 is already downloaded and
+    // waiting → skip the 0.45.0 changelog so the update prompt isn't buried.
+    expect(shouldShowWhatsNew("0.44.0", "0.45.0", "0.45.1")).toBe(false);
+  });
+  it("still shows when the pending update is NOT newer (stale/equal pending)", () => {
+    // A pending version that isn't strictly newer than current can't collide
+    // as a fresh offer, so it must not suppress a legitimate changelog.
+    expect(shouldShowWhatsNew("0.44.0", "0.45.0", "0.45.0")).toBe(true);
+    expect(shouldShowWhatsNew("0.44.0", "0.45.0", "0.44.0")).toBe(true);
+    expect(shouldShowWhatsNew("0.44.0", "0.45.0", null)).toBe(true);
+  });
 });
 
 describe("extractChangelogSection", () => {

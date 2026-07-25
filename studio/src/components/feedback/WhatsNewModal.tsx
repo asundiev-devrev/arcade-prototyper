@@ -42,12 +42,33 @@ export function WhatsNewModal() {
       }
       if (cancelled || !current) return;
 
-      const stored = window.localStorage.getItem(LAST_SEEN_VERSION_KEY);
-      const show = shouldShowWhatsNew(stored, current);
+      // Is a newer update already downloaded and waiting? If so, defer to the
+      // "Update available" prompt — the two modals share a stacking layer and
+      // WhatsNew would otherwise bury the install offer (see shouldShowWhatsNew).
+      let pendingUpdate: string | null = null;
+      try {
+        const res = await fetch("/api/update/status");
+        if (res.ok) {
+          const s = (await res.json()) as { pendingVersion?: string | null };
+          pendingUpdate = s.pendingVersion ?? null;
+        }
+      } catch {
+        /* status unknown → treat as nothing pending */
+      }
+      if (cancelled) return;
 
-      // Always advance the marker so a version is shown at most once, even if
+      const stored = window.localStorage.getItem(LAST_SEEN_VERSION_KEY);
+      const show = shouldShowWhatsNew(stored, current, pendingUpdate);
+
+      // Deferring to a pending update is NOT "seen" — leave the marker so this
+      // version's changelog can still surface if the update never installs.
+      const deferredToUpdate =
+        !show && !!pendingUpdate && shouldShowWhatsNew(stored, current);
+      // Otherwise advance the marker so a version is shown at most once, even if
       // the changelog fetch below fails.
-      window.localStorage.setItem(LAST_SEEN_VERSION_KEY, current);
+      if (!deferredToUpdate) {
+        window.localStorage.setItem(LAST_SEEN_VERSION_KEY, current);
+      }
       if (!show) return;
 
       setVersion(current);

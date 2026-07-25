@@ -40,12 +40,27 @@ export function compareSemver(a: string, b: string): number {
  *  - stored is null (first ever launch) → no; caller records current silently.
  *    This means the FIRST version carrying this feature shows nothing (we can't
  *    know the user's prior version) — only subsequent updates do.
+ *  - a NEWER update is already pending  → no. WhatsNew and the "Update available"
+ *    prompt are both root-level modals at the same stacking layer, so when both
+ *    open at once (you just silently updated to X, and Y>X is already downloaded)
+ *    they collide and WhatsNew buries the update prompt — the user never sees the
+ *    offer to install. The pending update wins: skip the changelog for the
+ *    version you're about to leave; you'll get Y's notes after you install it.
  *  - current > stored (a real upgrade)  → yes.
  *  - otherwise (same, or a downgrade)   → no.
+ *
+ * `pendingUpdate` is the version the updater has downloaded and is offering
+ * (from /api/update/status); null/undefined when nothing is pending. Optional
+ * so existing 2-arg callers are unaffected.
  */
-export function shouldShowWhatsNew(stored: string | null, current: string | null | undefined): boolean {
+export function shouldShowWhatsNew(
+  stored: string | null,
+  current: string | null | undefined,
+  pendingUpdate?: string | null,
+): boolean {
   if (!current || current === "dev") return false;
   if (stored === null || stored === undefined || stored === "") return false;
+  if (pendingUpdate && compareSemver(pendingUpdate, current) > 0) return false;
   return compareSemver(current, stored) > 0;
 }
 
