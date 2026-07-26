@@ -8,6 +8,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.45.3] — 2026-07-26
+
+### Fixed
+- **No more "the model has gone quiet" / "design system sync skipped" scares mid-generation.** When you generate from a Figma file for the first time in a project, the app scans that file's design system in the background. That scan was firing its own AI call at the same time as your generation — the two competed for the same rate-limited connection, so your generation went silent and the scan timed out, surfacing two alarming messages on a run that was actually fine. The scan now runs *after* your generation finishes (its results are used by your next prompt anyway), so the two never compete. A scan that does fail now backs off quietly instead of re-warning on every prompt, and any status it shows is clearly labelled optional background work that doesn't affect your generation.
+
 ## [0.45.2] — 2026-07-25
 
 ### Fixed
