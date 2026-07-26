@@ -34,7 +34,12 @@ export interface SourcesDeps {
 }
 
 const MIN_FRAME_SIDE = 400;
-const MAX_SAMPLE_FRAMES = 8;
+// Cap on sample frames rendered to PNG + fed to the synth LLM. Trimmed from 8
+// to 4: each PNG is one figmanage export here AND one Read tool-call inside the
+// synth subprocess, so the count multiplies cost on both the fetch and the
+// synth side. 4 of the largest frames carry enough of a file's visual
+// personality; 8 pushed the whole sync past its 90s budget on big files.
+const MAX_SAMPLE_FRAMES = 4;
 
 export async function fetchSystemSources(fileKey: string, deps: SourcesDeps): Promise<SystemSources> {
   const warnings: string[] = [];
@@ -56,14 +61,22 @@ export async function fetchSystemSources(fileKey: string, deps: SourcesDeps): Pr
   } else {
     fileName = fileRaw.name;
     const picks = pickSampleFrames(fileRaw.document);
-    for (const p of picks) {
-      const png = await deps.exportPng(fileKey, p.nodeId).catch(() => null);
-      if (!png) { warnings.push(`png export failed for ${p.nodeId}`); continue; }
+    // Export PNGs concurrently rather than one-at-a-time. These were the
+    // dominant serial cost in the sync (up to MAX_SAMPLE_FRAMES round-trips to
+    // figmanage back-to-back); firing them together collapses that to a single
+    // slowest-export wait. Order is preserved (Promise.all keeps index order),
+    // so the largest-first ranking from pickSampleFrames still holds.
+    const exported = await Promise.all(
+      picks.map((p) => deps.exportPng(fileKey, p.nodeId).catch(() => null)),
+    );
+    picks.forEach((p, i) => {
+      const png = exported[i];
+      if (!png) { warnings.push(`png export failed for ${p.nodeId}`); return; }
       sampleFrames.push({
         nodeId: p.nodeId, name: p.name, pngPath: png.path,
         widthPx: p.widthPx, heightPx: p.heightPx,
       });
-    }
+    });
   }
 
   return { fileName, styles, variables, components, sampleFrames, warnings };

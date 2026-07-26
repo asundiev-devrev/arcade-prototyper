@@ -32,8 +32,8 @@ import { runFigmaKitEmitBranch } from "../figma/kitEmitBranch";
 import { ejectComposite } from "../figma/ejectComposite";
 import { getFigmaSystemIngest, type FigmaSystemIngest } from "../figmaSystemIngest";
 import { renderDesignMd } from "../figma/systemRender";
-import { designMdPath } from "../paths";
-import { startTurn, subscribe, getTurn, cancelTurn } from "../turnRegistry";
+import { designMdPath, designSyncSkipMarkerPath } from "../paths";
+import { startTurn, subscribe, getTurn, cancelTurn, hasActiveTurn } from "../turnRegistry";
 import { hasDeviationsSection, DEVIATIONS_MISSING_TRAILER } from "../deviationsContract";
 import { prependEditContext } from "../editContext";
 import {
@@ -381,11 +381,44 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
         ? runComputerBranch({ emit, slug, prompt, project, signal })
         : runClaudeBranch({ emit, slug, prompt, images, project, signal });
       task.then(
-        (result) => end(result),
-        (err) => end({ ok: false, error: err?.message ?? String(err) }),
+        (result) => {
+          end(result);
+          maybeSeedAfterTurn(emit);
+        },
+        (err) => {
+          end({ ok: false, error: err?.message ?? String(err) });
+          maybeSeedAfterTurn(emit);
+        },
       );
     },
   });
+
+  // DESIGN.md seeding runs AFTER the turn's claude subprocess exits (end() is
+  // synchronous, so by here this turn's status is terminal). This is the fix
+  // for the two contention symptoms: it no longer runs a second Bedrock synth
+  // call in parallel with the turn, so turns stop going silent ("model has
+  // gone quiet") and the sync gets the endpoint to itself. Claude-branch only
+  // — parity with where it launched before. Fire-and-forget: its own emit()s
+  // are dropped post-terminal (background work is silent by design), and it
+  // seeds a file the NEXT turn reads via CLAUDE.md's `@DESIGN.md` import.
+  //
+  // hasActiveTurn() inside the seeder still guards the narrow case where the
+  // user fires a new turn during the sync's own ~90s window; a success or a
+  // failure then persists (DESIGN.md or the backoff marker), so any residual
+  // contention is bounded to at most one occurrence per file.
+  function maybeSeedAfterTurn(emit: (ev: StudioEvent) => void): void {
+    if (isWireTurn || isKitEmitTurn || isComputerTurn || !figmaParsed?.fileId) return;
+    void maybeSeedProjectDesignMd({
+      slug,
+      fileKey: figmaParsed.fileId,
+      // turnRegistry's emit already drops events once the turn is terminal, so
+      // these background narrations are silent by the time this runs — that's
+      // intentional. Wired through anyway so a future in-turn use still works.
+      emit: (text) => emit({ kind: "narration", text }),
+    }).catch((err) => {
+      console.warn("[studio] unexpected seeder rejection:", err);
+    });
+  }
 
   res.writeHead(202, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ turnId: turn.id, slug }));
@@ -916,14 +949,31 @@ export interface SeedDesignMdInput {
   ingest?: FigmaSystemIngest;
   /** Wall-clock cap for the whole sync. Defaults to 90s. */
   timeoutMs?: number;
+  /** Clock injection for tests (marker backoff math). Defaults to Date.now. */
+  now?: () => number;
+  /** Backoff window before a skipped sync retries. Defaults to 24h. */
+  retryAfterMs?: number;
 }
 
 /** Max wall-clock for a single design-system sync attempt. Covers
- *  fetchSources (4 figmanage reads + up to 8 PNG exports) + synthesize
+ *  fetchSources (4 figmanage reads + up to 4 PNG exports) + synthesize
  *  (LLM call, already timed out internally at 60s). If figmanage or the
  *  network is having a bad day, we skip the sync rather than hang the
  *  turn narration indefinitely. */
 const DEFAULT_SEED_TIMEOUT_MS = 90_000;
+
+/** How long a skip marker suppresses re-attempts. Keeps a failing sync from
+ *  re-paying its cost on every single turn, but stays short enough that a
+ *  transient blip (a one-off timeout / Bedrock throttle) recovers within the
+ *  same working session rather than locking the feature out for a full day.
+ *  Cleared on the next success. */
+const DEFAULT_SEED_RETRY_AFTER_MS = 30 * 60_000;
+
+/** Per-attempt counter so concurrent seeders for the same slug never share a
+ *  `.tmp` path. Two turns can finish back-to-back and each launch a seeder
+ *  (they're unawaited background jobs, not registry turns); a shared tmp let
+ *  the rename loser ENOENT-fault and write a spurious skip marker. */
+let seedTmpCounter = 0;
 
 /**
  * On the first turn that references a Figma file in a project without a
@@ -940,6 +990,8 @@ const DEFAULT_SEED_TIMEOUT_MS = 90_000;
 export async function maybeSeedProjectDesignMd(input: SeedDesignMdInput): Promise<void> {
   const { slug, fileKey, emit } = input;
   const timeoutMs = input.timeoutMs ?? DEFAULT_SEED_TIMEOUT_MS;
+  const now = input.now ?? Date.now;
+  const retryAfterMs = input.retryAfterMs ?? DEFAULT_SEED_RETRY_AFTER_MS;
   if (!fileKey) return;
 
   const targetPath = designMdPath(slug);
@@ -950,6 +1002,34 @@ export async function maybeSeedProjectDesignMd(input: SeedDesignMdInput): Promis
   } catch {
     // Not present; proceed.
   }
+
+  // Backoff: a sync that already timed out / failed once tends to keep
+  // failing on the same file + network. Without this marker the sync re-fired
+  // on EVERY subsequent turn (the DESIGN.md-exists guard always missed, since
+  // the file never landed) — re-paying the cost and re-emitting the "skipped"
+  // line each time. Honor the marker until its window elapses.
+  const markerPath = designSyncSkipMarkerPath(slug);
+  try {
+    const raw = await fs.readFile(markerPath, "utf-8");
+    const marker = JSON.parse(raw) as { at?: number };
+    if (typeof marker.at === "number" && now() - marker.at < retryAfterMs) {
+      return; // still backing off — stay silent
+    }
+  } catch {
+    // No marker (or unparseable) — proceed as a fresh attempt.
+  }
+
+  // Skip while a generation turn is in flight so this sync's synth (a second
+  // claude/Bedrock subprocess) never contends with the turn's own claude call
+  // on the throttled Bedrock endpoint. Do NOT write a backoff marker here — a
+  // busy endpoint is transient; retry after the next idle, successful turn.
+  if (hasActiveTurn()) return;
+
+  const writeSkipMarker = async (reason: string): Promise<void> => {
+    try {
+      await fs.writeFile(markerPath, JSON.stringify({ at: now(), reason }));
+    } catch { /* marker is best-effort — a failed write just means we retry sooner */ }
+  };
 
   emit("Scanning Figma design system…");
 
@@ -964,24 +1044,36 @@ export async function maybeSeedProjectDesignMd(input: SeedDesignMdInput): Promis
   });
   const outcome = await Promise.race([ingest.ingest(fileKey), timeoutSignal]);
   if (timedOut) {
-    emit(`Design system sync skipped (${(outcome as { reason: string }).reason})`);
+    const reason = (outcome as { reason: string }).reason;
+    await writeSkipMarker(reason);
+    emit(`Design system sync skipped (${reason}) — optional background step; your generation isn't affected.`);
     return;
   }
   if (!outcome.ok) {
-    emit(`Design system sync skipped (${outcome.reason})`);
+    await writeSkipMarker(outcome.reason);
+    emit(`Design system sync skipped (${outcome.reason}) — optional background step; your generation isn't affected.`);
     return;
   }
 
   const markdown = renderDesignMd(outcome.sections, outcome.source);
-  const tmpPath = `${targetPath}.tmp`;
+  // Unique tmp per attempt: a concurrent seeder for the same slug must not be
+  // able to consume this one's tmp between our write and rename (that ENOENT
+  // wrongly looked like a write failure and resurrected a skip marker after a
+  // sibling had already succeeded).
+  const tmpPath = `${targetPath}.${process.pid}.${seedTmpCounter++}.tmp`;
   try {
     await fs.writeFile(tmpPath, markdown);
     await fs.rename(tmpPath, targetPath);
   } catch (err: any) {
-    emit(`Design system sync skipped (write error: ${err?.message ?? String(err)})`);
+    await writeSkipMarker(`write error: ${err?.message ?? String(err)}`);
+    emit(`Design system sync skipped (write error: ${err?.message ?? String(err)}) — optional background step; your generation isn't affected.`);
     try { await fs.unlink(tmpPath); } catch {}
     return;
   }
+
+  // Success — clear any stale backoff marker so a later re-scan (e.g. the user
+  // deletes DESIGN.md to regenerate it) isn't wrongly suppressed.
+  try { await fs.unlink(markerPath); } catch { /* no marker to clear */ }
 
   const counts = [
     `${outcome.sections.colors.entries.length} colors`,
@@ -1004,20 +1096,13 @@ async function runClaudeBranch(ctx: {
 
   const narrate = (text: string) => emit({ kind: "narration", text });
 
-  // The design-system sync seeds DESIGN.md for FUTURE turns via CLAUDE.md's
-  // `@DESIGN.md` import — it does NOT need to complete before the current
-  // turn starts. Launching it concurrently (fire-and-forget) keeps a slow
-  // figmanage read or LLM synth call from blocking "Working…" for minutes.
-  // maybeSeedProjectDesignMd has its own 90s wall-clock + narrates its own
-  // progress/skip events; if the Claude turn ends before the sync finishes,
-  // the emit calls become no-ops (turnRegistry drops events after terminal).
-  void maybeSeedProjectDesignMd({
-    slug,
-    fileKey: parsed?.fileId ?? null,
-    emit: narrate,
-  }).catch((err) => {
-    console.warn("[studio] unexpected seeder rejection:", err);
-  });
+  // NOTE: DESIGN.md seeding used to launch HERE, concurrently with the turn.
+  // That ran a SECOND claude/Bedrock subprocess (the synth call) in parallel
+  // with this turn's own claude call — two calls contending for one throttled
+  // Bedrock endpoint made turns go silent (the ~60s "still working" watchdog)
+  // and the sync itself never finished under its 90s cap. It now launches
+  // AFTER the turn's claude subprocess has exited — see maybeSeedAfterTurn in
+  // handleStart. Do NOT re-add a concurrent launch here.
 
   const enriched = await enrichPromptWithFigmaContext(ctx.prompt, ctx.images ?? [], narrate);
   const { images } = enriched;
@@ -1184,7 +1269,7 @@ async function runClaudeBranch(ctx: {
   // CLI-emitted signals count: turn_metrics ttft (first token) and tool_call
   // labels. Do NOT use narrationTexts — it also collects SERVER-side
   // narrations (the Figma/seeder progress lines and, critically, the soft-stall
-  // "the model has gone quiet…" watchdog message at ~60s). On the exact
+  // "still working on it…" watchdog message at ~60s). On the exact
   // zero-output Bedrock hang this guards against, that soft-stall narration
   // would make narrationTexts non-empty and wrongly mark the turn as having
   // streamed — defeating the self-heal for the case it exists for.

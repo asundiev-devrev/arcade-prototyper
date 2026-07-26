@@ -386,8 +386,10 @@ export async function runClaudeTurn(opts: RunTurnOptions): Promise<void> {
     // timeout budget.
     //
     // Two thresholds. The SOFT threshold (half of stallMs, ~60s) does NOT
-    // kill — it emits one narration so the user sees "model went quiet,
-    // hanging on" instead of a silent frozen pane. This is the single
+    // kill — it emits one reassuring narration ("still working, this can take
+    // a couple minutes") instead of leaving a silent frozen pane. The copy is
+    // deliberately calm: crossing 60s of silence is normal for a big detailed
+    // generation, not a fault. This is the single
     // highest-leverage churn fix: a stall used to be 0-240s of dead air
     // ending in an error; now it's visibly-progressing dead air. The HARD
     // threshold (stallMs) kills + lets the retry wrapper re-spawn.
@@ -411,7 +413,7 @@ export async function runClaudeTurn(opts: RunTurnOptions): Promise<void> {
             softStallWarned = true;
             opts.onEvent({
               kind: "narration",
-              text: "The model has gone quiet — hanging on, this can take a moment on a busy connection…",
+              text: "Still working on it — a detailed generation can take a couple of minutes. Hang tight…",
             });
           }
         }, Math.min(5_000, Math.max(1_000, Math.floor(stallMs / 4))))

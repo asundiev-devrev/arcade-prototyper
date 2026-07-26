@@ -47,6 +47,21 @@ vi.mock("../../../server/figmaIngest", () => ({
   }),
 }));
 
+// Neuter the post-turn DESIGN.md seeder: it now launches AFTER the turn's
+// claude subprocess exits (the de-conflict fix), and its synth is a SECOND
+// claude spawn via the same fake-claude bin. Left real, that synth would write
+// the shared ARCADE_TEST_PROMPT_OUT capture file LAST, clobbering the main
+// turn's prompt that these tests assert on. A forced-miss ingest makes the
+// seeder bail before spawning anything. (The seeder's own behavior is covered
+// by chat-figma-seeder*.test.ts.)
+vi.mock("../../../server/figmaSystemIngest", () => ({
+  getFigmaSystemIngest: async () => ({
+    ingest: async () => ({ ok: false as const, reason: "test: forced miss" }),
+    getCached: () => undefined,
+    getPending: () => undefined,
+  }),
+}));
+
 // Import AFTER the mock so chat.ts binds the stub.
 import { chatMiddleware } from "../../../server/middleware/chat";
 

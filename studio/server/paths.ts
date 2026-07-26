@@ -80,6 +80,18 @@ export function designMdPath(projectSlug: string): string {
 }
 
 /**
+ * Marker written when a design-system sync gives up (timeout / failure / write
+ * error) so it does NOT re-attempt on every subsequent turn. Without it the
+ * sync re-fires and re-fails forever — DESIGN.md never lands, so the
+ * file-exists guard always misses. Dotfile so the project + frame enumerators
+ * (which skip `.`-prefixed names) ignore it. Holds JSON `{ at, reason }`; the
+ * seeder honors a backoff window before retrying, and removes it on success.
+ */
+export function designSyncSkipMarkerPath(projectSlug: string): string {
+  return path.join(projectDir(projectSlug), ".design-sync-skip.json");
+}
+
+/**
  * Per-turn generation metrics log (JSONL, one row per turn). Lives at the
  * studio root — a sibling of projects/, not inside it — so the project watcher
  * ignores it and it survives project deletes. Written by the chat middleware,

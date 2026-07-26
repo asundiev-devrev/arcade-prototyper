@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { maybeSeedProjectDesignMd } from "../../../server/middleware/chat";
+import { designSyncSkipMarkerPath } from "../../../server/paths";
 import type { FigmaSystemIngest } from "../../../server/figmaSystemIngest";
 
 let tmpRoot: string;
@@ -54,6 +55,11 @@ describe("seeder race safety", () => {
     expect(entries).toContain("DESIGN.md");
     expect(entries.filter((e) => e.endsWith(".tmp"))).toEqual([]);
     expect(ingestCalls).toBe(2); // seeder calls ingest unconditionally when file absent; ingest itself dedupes in production
+    // No spurious skip marker: the rename loser must NOT ENOENT-fault and write
+    // a backoff marker after its sibling already succeeded — else a later
+    // delete-to-regenerate would be wrongly suppressed. Per-attempt tmp paths
+    // guarantee both renames overwrite atomically instead of racing one tmp.
+    await expect(fs.stat(designSyncSkipMarkerPath("p"))).rejects.toThrow();
   });
 
   it("atomic rename: if rename fails after write, no DESIGN.md appears", async () => {
