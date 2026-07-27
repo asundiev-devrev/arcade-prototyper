@@ -20,10 +20,13 @@ vi.mock("@xorkavi/arcade-gen", () => ({
   // rendering them as marker spans lets a test assert an icon is PRESENT —
   // the iconless-IconButton bug shipped precisely because the old mock
   // swallowed children.
-  Globe: () => <span data-icon="globe" />,
-  Pin: () => <span data-icon="pin" />,
-  PinFilled: () => <span data-icon="pin-filled" />,
-  TrashBin: () => <span data-icon="trash" />,
+  Globe: (p: any) => <span data-icon="globe" data-size={p?.size} />,
+  Pin: (p: any) => <span data-icon="pin" data-size={p?.size} />,
+  PinFilled: (p: any) => <span data-icon="pin-filled" data-size={p?.size} />,
+  TrashBin: (p: any) => <span data-icon="trash" data-size={p?.size} />,
+  Tag: ({ children }: any) => <span>{children}</span>,
+  // Tooltip wraps a single trigger element and must render it through.
+  Tooltip: ({ children }: any) => children,
 }));
 
 const SNAPSHOT = {
@@ -59,22 +62,31 @@ afterEach(() => {
 });
 
 describe("MemoryPanel", () => {
-  it("shows global memories above project memories", async () => {
+  it("says what the panel is for", async () => {
+    // The "what am I looking at?" failure: a list of facts with no stated purpose.
+    render(<MemoryPanel projectSlug="demo" />);
+    await waitFor(() => screen.getByText(/What Studio knows/));
+    expect(screen.getByText(/Applied to every frame it generates/)).toBeTruthy();
+  });
+
+  it("groups by source, not scope, and labels each fact's reach", async () => {
+    // Two identical "Rules you set" headings (one per scope) was unreadable.
     render(<MemoryPanel projectSlug="demo" />);
     await waitFor(() => screen.getByText(/Neutral gray for active nav rows/));
-    const body = document.body.textContent ?? "";
-    expect(body.indexOf("Neutral gray")).toBeLessThan(body.indexOf("Filter chips"));
+    expect(screen.getByText("Your instructions")).toBeTruthy();
+    expect(screen.getByText("Picked up from your edits")).toBeTruthy();
+    expect(screen.getAllByText("Every project").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("This project").length).toBeGreaterThan(0);
   });
 
-  it("renders the designer's rules and the project inventory", async () => {
+  it("renders the designer's rules", async () => {
     render(<MemoryPanel projectSlug="demo" />);
     await waitFor(() => screen.getByText(/Never use emoji in UI copy/));
-    expect(screen.getByText(/01-list/)).toBeTruthy();
   });
 
-  it("shows the repeat count for a row", async () => {
+  it("spells out the repeat count instead of a bare glyph", async () => {
     render(<MemoryPanel projectSlug="demo" />);
-    await waitFor(() => screen.getByText(/3×/));
+    await waitFor(() => screen.getByText(/came up 3 times/));
   });
 
   it("gives every row action a visible icon", async () => {
@@ -95,8 +107,12 @@ describe("MemoryPanel", () => {
     ).not.toBeNull();
   });
 
-  it("renders the inventory as frame rows, never as raw markdown", async () => {
+  it("summarises existing work instead of listing it, never as raw markdown", async () => {
     render(<MemoryPanel projectSlug="demo" />);
+    await waitFor(() => screen.getByText(/Studio can see 1 frame in this project/));
+    // The frame list is evidence, not a task — collapsed until asked for.
+    expect(screen.queryByText("01-list")).toBeNull();
+    await userEvent.click(screen.getByText("Show the list"));
     await waitFor(() => screen.getByText("01-list"));
     // The agent's INVENTORY.md uses markdown headings and dumps every visible
     // string in the frame. None of that belongs in front of a designer.
@@ -104,8 +120,15 @@ describe("MemoryPanel", () => {
     expect(body).not.toContain("## Frames");
     expect(body).not.toContain("visible text:");
     expect(body).not.toContain("components used:");
-    expect(screen.getByText(/VistaPage/)).toBeTruthy();
     expect(screen.getByText(/SkillCardAndrey/)).toBeTruthy();
+  });
+
+  it("sizes every action icon (an unsized icon renders huge)", async () => {
+    render(<MemoryPanel projectSlug="demo" />);
+    await waitFor(() => screen.getByText(/Neutral gray/));
+    for (const icon of Array.from(document.querySelectorAll("[data-icon]"))) {
+      expect(icon.getAttribute("data-size")).toBe("16");
+    }
   });
 
   it("deletes a row through the API", async () => {
@@ -134,7 +157,9 @@ describe("MemoryPanel", () => {
     );
     render(<MemoryPanel projectSlug="demo" />);
     await waitFor(() => {
-      expect(screen.getByText(/hasn't learned anything about your work yet/)).toBeTruthy();
+      // Empty states must say what to expect, not just be blank.
+      expect(screen.getByText(/Nothing yet\./)).toBeTruthy();
+      expect(screen.getByText(/No frames yet/)).toBeTruthy();
     });
   });
 

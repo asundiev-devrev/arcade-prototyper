@@ -1,51 +1,69 @@
 import { useState } from "react";
-import { Button, IconButton, TextArea, Globe, Pin, PinFilled, TrashBin } from "@xorkavi/arcade-gen";
+import {
+  Button,
+  IconButton,
+  TextArea,
+  Tag,
+  Tooltip,
+  Globe,
+  Pin,
+  PinFilled,
+  TrashBin,
+} from "@xorkavi/arcade-gen";
 import { useMemory, type LearnedRowView, type InventoryView } from "./useMemory";
 
 /**
- * What the agent knows, and where to fix it when a generation looks wrong.
+ * What Studio knows about your work — and where to correct it when a frame comes
+ * out wrong.
  *
- * Structure encodes AUTHORITY, because that's the thing a designer needs to read
- * off this panel at a glance:
- *   - Rules are hand-written and outrank everything → they lead each block.
- *   - Learned facts are inferred and deletable → subordinate, muted, under a
- *     label that says where they came from.
- *   - Global outranks project → global block first, reach stated on every block.
+ * Organised by SOURCE, not by scope. The only question a designer brings here is
+ * "why did it do that, and is anything it believes wrong?", and the answer turns
+ * on whether a line was written by them (authoritative, edit it) or inferred
+ * from their edits (a guess, delete it). Scope is a chip on the line, because a
+ * line's reach is a property of that line — earlier versions split the panel by
+ * scope and ended up with two identical "Rules you set" headings, which is
+ * unreadable.
  *
- * Deliberately NOT a dashboard: nothing here demands attention, and it is
- * expected to go unopened for long stretches.
+ * Deliberately not a dashboard: nothing here demands attention.
  */
 export function MemoryPanel({ projectSlug }: { projectSlug: string }) {
   const { status, data, mutationError, patchRow, deleteRow, saveRule } = useMemory(projectSlug);
 
   if (status === "loading") {
-    return <p style={{ padding: 16, fontSize: 13, color: "var(--fg-neutral-subtle)" }}>Loading…</p>;
+    return <p style={{ padding: 20, fontSize: 13, color: TEXT_MUTED }}>Loading…</p>;
   }
   if (status === "error" || !data) {
     return (
-      <p style={{ padding: 16, fontSize: 13, color: "var(--fg-neutral-subtle)" }}>
+      <p style={{ padding: 20, fontSize: 13, color: TEXT }}>
         Couldn't load what Studio remembers.
       </p>
     );
   }
 
-  const nothingKnown =
-    data.global.rows.length === 0 &&
-    data.project.rows.length === 0 &&
-    !data.global.rules.trim() &&
-    !data.project.rules.trim();
+  const learned = [...data.global.rows, ...data.project.rows];
+  const frameCount = data.inventory.frames.length;
 
   return (
-    <div style={{ height: "100%", overflowY: "auto", padding: "16px 16px 32px" }}>
+    <div style={{ height: "100%", overflowY: "auto", padding: "20px 20px 40px" }}>
+      {/* Orientation. Without this the panel is a list of facts with no stated
+          purpose — the "what am I looking at?" failure. */}
+      <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: TEXT }}>
+        What Studio knows
+      </p>
+      <p style={{ margin: "0 0 24px", fontSize: 13, lineHeight: 1.5, color: TEXT_MUTED }}>
+        Applied to every frame it generates. Correct anything that's wrong — changes take effect
+        on your next prompt.
+      </p>
+
       {mutationError && (
         <p
           role="status"
           style={{
-            margin: "0 0 16px",
-            padding: "8px 10px",
+            margin: "0 0 20px",
+            padding: "10px 12px",
             borderRadius: 6,
             background: "var(--surface-shallow)",
-            color: "var(--fg-neutral-prominent)",
+            color: TEXT,
             fontSize: 13,
           }}
         >
@@ -53,114 +71,131 @@ export function MemoryPanel({ projectSlug }: { projectSlug: string }) {
         </p>
       )}
 
-      {nothingKnown && (
-        <p style={{ margin: "0 0 24px", fontSize: 13, lineHeight: 1.5, color: "var(--fg-neutral-subtle)" }}>
-          Studio hasn't learned anything about your work yet. Write a rule below and it applies
-          from the next frame on.
-        </p>
-      )}
-
-      <Block reach="Every project" global title="Rules you set">
-        <RuleEditor
+      <Section
+        title="Your instructions"
+        hint="You wrote these. Studio follows them exactly."
+      >
+        <RuleField
+          label="For every project"
           text={data.global.rules}
           placeholder="e.g. Never use emoji in UI copy"
           onSave={(t) => saveRule("global", t)}
         />
-        <FactList rows={data.global.rows} onPatch={patchRow} onDelete={deleteRow} />
-      </Block>
-
-      <Block reach="This project only" title="Rules you set">
-        <RuleEditor
+        <RuleField
+          label="For this project only"
           text={data.project.rules}
           placeholder="e.g. Sidebar stays collapsed by default"
           onSave={(t) => saveRule("project", t)}
         />
-        <FactList rows={data.project.rows} onPatch={patchRow} onDelete={deleteRow} />
-      </Block>
+      </Section>
 
-      <Block reach="This project only" title="Already built">
-        <Inventory view={data.inventory} />
-      </Block>
+      <Section
+        title="Picked up from your edits"
+        hint={
+          learned.length === 0
+            ? "Nothing yet. Studio adds a line here when it notices you correcting the same thing."
+            : "Studio inferred these. Delete anything it got wrong."
+        }
+      >
+        {learned.length > 0 && (
+          <ul style={{ listStyle: "none", margin: "4px 0 0", padding: 0 }}>
+            {learned.map((r) => (
+              <FactRow key={r.id} row={r} onPatch={patchRow} onDelete={deleteRow} />
+            ))}
+          </ul>
+        )}
+      </Section>
+
+      {/* Reassurance, not a work surface: it exists so you can tell the agent
+          isn't about to rebuild something you already have. One line. */}
+      <Section title="Your existing work">
+        <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: TEXT }}>
+          {frameCount === 0
+            ? "No frames yet — nothing to reuse."
+            : `Studio can see ${frameCount} ${frameCount === 1 ? "frame" : "frames"} in this project${
+                data.inventory.composites.length > 0
+                  ? ` and ${data.inventory.composites.length} saved ${
+                      data.inventory.composites.length === 1 ? "component" : "components"
+                    }`
+                  : ""
+              }, and will reuse them instead of rebuilding.`}
+        </p>
+        {frameCount > 0 && <FrameList view={data.inventory} />}
+      </Section>
     </div>
   );
 }
 
-/** A reach-scoped group. Reach leads, because it IS the hierarchy signal. */
-function Block({
-  reach,
-  global,
+// Body text and secondary text. The secondary tone is only ever used for
+// supporting copy — never for content you need to read, which is what made the
+// previous version's component names inaccessible.
+const TEXT = "var(--fg-neutral-prominent)";
+const TEXT_MUTED = "var(--fg-neutral-soft)";
+
+function Section({
   title,
+  hint,
   children,
 }: {
-  reach: string;
-  global?: boolean;
   title: string;
-  children: React.ReactNode;
+  hint?: string;
+  children?: React.ReactNode;
 }) {
   return (
-    <section style={{ marginBottom: 28 }}>
-      <header style={{ marginBottom: 10 }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 5,
-            fontSize: 11,
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-            color: "var(--fg-neutral-subtle)",
-          }}
-        >
-          {global && <Globe style={{ width: 12, height: 12 }} aria-hidden />}
-          {reach}
-        </div>
-        <h3
-          style={{
-            margin: "2px 0 0",
-            fontSize: 14,
-            fontWeight: 600,
-            color: "var(--fg-neutral-prominent)",
-          }}
-        >
-          {title}
-        </h3>
-      </header>
+    <section style={{ marginBottom: 32 }}>
+      <h3 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: TEXT }}>{title}</h3>
+      {hint && (
+        <p style={{ margin: "3px 0 10px", fontSize: 12, lineHeight: 1.5, color: TEXT_MUTED }}>
+          {hint}
+        </p>
+      )}
       {children}
     </section>
   );
 }
 
-function FactList({
-  rows,
-  onPatch,
-  onDelete,
+/** A labelled standing-instruction field. The label states the reach in words. */
+function RuleField({
+  label,
+  text,
+  placeholder,
+  onSave,
 }: {
-  rows: LearnedRowView[];
-  onPatch: (
-    r: LearnedRowView,
-    p: { fact?: string; pinned?: boolean; toLevel?: "global" | "project" },
-  ) => Promise<void>;
-  onDelete: (r: LearnedRowView) => Promise<void>;
+  label: string;
+  text: string;
+  placeholder: string;
+  onSave: (t: string) => Promise<void>;
 }) {
-  if (rows.length === 0) return null;
+  const [draft, setDraft] = useState(text);
+  const dirty = draft.trim() !== text.trim();
   return (
-    <div style={{ marginTop: 14 }}>
-      <p
+    <div style={{ marginBottom: 14 }}>
+      <label
         style={{
-          margin: "0 0 4px",
-          fontSize: 11,
-          letterSpacing: "0.04em",
-          textTransform: "uppercase",
-          color: "var(--fg-neutral-subtle)",
+          display: "block",
+          marginBottom: 5,
+          fontSize: 12,
+          color: TEXT_MUTED,
         }}
       >
-        Picked up from your edits
-      </p>
-      <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-        {rows.map((r) => (
-          <FactRow key={r.id} row={r} onPatch={onPatch} onDelete={onDelete} />
-        ))}
-      </ul>
+        {label}
+      </label>
+      <TextArea
+        value={draft}
+        placeholder={placeholder}
+        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDraft(e.target.value)}
+        aria-label={label}
+      />
+      {dirty && (
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <Button size="sm" onClick={() => onSave(draft)}>
+            Save
+          </Button>
+          <Button size="sm" variant="tertiary" onClick={() => setDraft(text)}>
+            Cancel
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -182,7 +217,7 @@ function FactRow({
 
   if (editing) {
     return (
-      <li style={{ padding: "8px 0", borderTop: "1px solid var(--stroke-neutral-subtle)" }}>
+      <li style={{ padding: "12px 0", borderTop: "1px solid var(--stroke-neutral-subtle)" }}>
         <TextArea
           value={draft}
           onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDraft(e.target.value)}
@@ -213,13 +248,12 @@ function FactRow({
     );
   }
 
+  const everywhere = row.level === "global";
+
   return (
     <li
       style={{
-        display: "flex",
-        alignItems: "flex-start",
-        gap: 8,
-        padding: "8px 0",
+        padding: "12px 0",
         borderTop: "1px solid var(--stroke-neutral-subtle)",
       }}
     >
@@ -227,8 +261,8 @@ function FactRow({
         onClick={() => setEditing(true)}
         aria-label={`Edit: ${row.fact}`}
         style={{
-          flex: 1,
-          minWidth: 0,
+          display: "block",
+          width: "100%",
           textAlign: "left",
           background: "none",
           border: "none",
@@ -236,146 +270,125 @@ function FactRow({
           cursor: "pointer",
           font: "inherit",
           fontSize: 13,
-          lineHeight: 1.45,
-          color: "var(--fg-neutral-prominent)",
+          lineHeight: 1.5,
+          color: TEXT,
         }}
       >
         {row.fact}
       </button>
 
-      {/* Repeat count. Shown because a climbing number means the agent keeps
-          needing this — it is NOT a quality score and drives no behaviour.
-          Hidden at 1, where it would be noise on every row. */}
-      {row.hits > 1 && (
-        <span
-          title={`Came up ${row.hits} times`}
-          style={{
-            flexShrink: 0,
-            marginTop: 1,
-            fontSize: 11,
-            fontVariantNumeric: "tabular-nums",
-            color: "var(--fg-neutral-subtle)",
-            padding: "1px 6px",
-            borderRadius: 999,
-            background: "var(--surface-shallow)",
-          }}
-        >
-          {row.hits}×
-        </span>
-      )}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+        <Tag appearance="tinted" intent="neutral">
+          {everywhere ? "Every project" : "This project"}
+        </Tag>
+        {row.pinned && (
+          <Tag appearance="tinted" intent="info">
+            Pinned
+          </Tag>
+        )}
+        {row.hits > 1 && (
+          <span style={{ fontSize: 12, color: TEXT_MUTED, fontVariantNumeric: "tabular-nums" }}>
+            came up {row.hits} times
+          </span>
+        )}
 
-      <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
-        <IconButton
-          size="sm"
-          variant="tertiary"
-          aria-label={
-            row.level === "project"
-              ? `Apply everywhere: ${row.fact}`
-              : `Limit to this project: ${row.fact}`
-          }
-          title={row.level === "project" ? "Apply to every project" : "Limit to this project"}
-          onClick={() => onPatch(row, { toLevel: row.level === "project" ? "global" : "project" })}
-        >
-          <Globe />
-        </IconButton>
-        <IconButton
-          size="sm"
-          variant="tertiary"
-          aria-label={row.pinned ? `Unpin: ${row.fact}` : `Pin: ${row.fact}`}
-          title={row.pinned ? "Unpin — let this age out" : "Pin — always keep this"}
-          onClick={() => onPatch(row, { pinned: !row.pinned })}
-        >
-          {row.pinned ? <PinFilled /> : <Pin />}
-        </IconButton>
-        <IconButton
-          size="sm"
-          variant="tertiary"
-          aria-label={`Forget: ${row.fact}`}
-          title="Forget this"
-          onClick={() => onDelete(row)}
-        >
-          <TrashBin />
-        </IconButton>
+        <span style={{ flex: 1 }} />
+
+        <Tooltip content={everywhere ? "Limit to this project" : "Apply to every project"}>
+          <IconButton
+            size="sm"
+            variant="tertiary"
+            aria-label={
+              everywhere
+                ? `Limit to this project: ${row.fact}`
+                : `Apply everywhere: ${row.fact}`
+            }
+            onClick={() => onPatch(row, { toLevel: everywhere ? "project" : "global" })}
+          >
+            <Globe size={16} aria-hidden="true" />
+          </IconButton>
+        </Tooltip>
+        <Tooltip content={row.pinned ? "Unpin — let this age out" : "Pin — always keep this"}>
+          <IconButton
+            size="sm"
+            variant="tertiary"
+            aria-label={row.pinned ? `Unpin: ${row.fact}` : `Pin: ${row.fact}`}
+            onClick={() => onPatch(row, { pinned: !row.pinned })}
+          >
+            {row.pinned ? (
+              <PinFilled size={16} aria-hidden="true" />
+            ) : (
+              <Pin size={16} aria-hidden="true" />
+            )}
+          </IconButton>
+        </Tooltip>
+        <Tooltip content="Forget this">
+          <IconButton
+            size="sm"
+            variant="tertiary"
+            aria-label={`Forget: ${row.fact}`}
+            onClick={() => onDelete(row)}
+          >
+            <TrashBin size={16} aria-hidden="true" />
+          </IconButton>
+        </Tooltip>
       </div>
     </li>
   );
 }
 
 /**
- * What's already in the project. Read-only — it mirrors the frames on disk, so
- * there is nothing here to correct. The component names are the useful part:
- * they say what the agent will reuse instead of rebuilding.
+ * Collapsed by default. The frame list is evidence, not a task — it earns a
+ * disclosure, not a third of the panel.
  */
-function Inventory({ view }: { view: InventoryView }) {
-  if (view.frames.length === 0 && view.composites.length === 0) {
-    return <p style={{ margin: 0, fontSize: 13, color: "var(--fg-neutral-subtle)" }}>No frames yet.</p>;
-  }
+function FrameList({ view }: { view: InventoryView }) {
+  const [open, setOpen] = useState(false);
   return (
-    <div>
-      <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-        {view.frames.map((f) => (
-          <li
-            key={f.slug}
-            style={{
-              padding: "8px 0",
-              borderTop: "1px solid var(--stroke-neutral-subtle)",
-              fontSize: 13,
-            }}
-          >
-            <div style={{ color: "var(--fg-neutral-prominent)" }}>{f.slug}</div>
-            {f.components.length > 0 && (
-              <div
-                title={f.components.join(", ")}
-                style={{
-                  marginTop: 2,
-                  fontSize: 12,
-                  color: "var(--fg-neutral-subtle)",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {f.components.slice(0, 4).join(", ")}
-                {f.components.length > 4 && ` +${f.components.length - 4} more`}
-              </div>
-            )}
-          </li>
-        ))}
-      </ul>
-      {view.composites.length > 0 && (
-        <p style={{ margin: "12px 0 0", fontSize: 12, color: "var(--fg-neutral-subtle)" }}>
-          Your saved components: {view.composites.join(", ")}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function RuleEditor({
-  text,
-  placeholder,
-  onSave,
-}: {
-  text: string;
-  placeholder: string;
-  onSave: (t: string) => Promise<void>;
-}) {
-  const [draft, setDraft] = useState(text);
-  const dirty = draft.trim() !== text.trim();
-  return (
-    <div>
-      <TextArea
-        value={draft}
-        placeholder={placeholder}
-        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDraft(e.target.value)}
-        aria-label="Standing instructions"
-      />
-      {dirty && (
-        <div style={{ marginTop: 8 }}>
-          <Button size="sm" onClick={() => onSave(draft)}>
-            Save
-          </Button>
-        </div>
+    <div style={{ marginTop: 8 }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        style={{
+          background: "none",
+          border: "none",
+          padding: 0,
+          cursor: "pointer",
+          font: "inherit",
+          fontSize: 12,
+          color: TEXT_MUTED,
+          textDecoration: "underline",
+        }}
+      >
+        {open ? "Hide the list" : "Show the list"}
+      </button>
+      {open && (
+        <ul style={{ listStyle: "none", margin: "10px 0 0", padding: 0 }}>
+          {view.frames.map((f) => (
+            <li
+              key={f.slug}
+              style={{
+                padding: "8px 0",
+                borderTop: "1px solid var(--stroke-neutral-subtle)",
+                fontSize: 13,
+                color: TEXT,
+              }}
+            >
+              {f.slug}
+            </li>
+          ))}
+          {view.composites.length > 0 && (
+            <li
+              style={{
+                padding: "8px 0",
+                borderTop: "1px solid var(--stroke-neutral-subtle)",
+                fontSize: 13,
+                color: TEXT,
+              }}
+            >
+              Saved components: {view.composites.join(", ")}
+            </li>
+          )}
+        </ul>
       )}
     </div>
   );
