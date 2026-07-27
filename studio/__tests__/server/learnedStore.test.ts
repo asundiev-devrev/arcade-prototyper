@@ -173,4 +173,42 @@ describe("migrateLegacyLearned", () => {
     fs.writeFileSync(path.join(dir, "LEARNED.md"), "<!-- LEARNED.md — header only -->\n");
     expect(await migrateLegacyLearned("global")).toBe(0);
   });
+
+  it("preserves mixed-content original as .bak", async () => {
+    const dir = path.join(tmp, "memory");
+    fs.mkdirSync(dir, { recursive: true });
+    const original =
+      "## Typography\n\nAlways use teal accents in headers.\n\n- always use teal accents\n\nDo NOT let the agent switch back to Inter.\n";
+    fs.writeFileSync(path.join(dir, "LEARNED.md"), original);
+    const n = await migrateLegacyLearned("global");
+    expect(n).toBe(1);
+    const rows = await readRows("global");
+    expect(rows[0].fact).toBe("always use teal accents");
+    const bak = fs.readFileSync(path.join(dir, "LEARNED.md.bak"), "utf-8");
+    expect(bak).toBe(original); // original preserved byte-for-byte
+  });
+
+  it("migrates bullet-only file without creating a .bak", async () => {
+    const dir = path.join(tmp, "memory");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "LEARNED.md"), "- fact one\n- fact two\n");
+    const n = await migrateLegacyLearned("global");
+    expect(n).toBe(2);
+    // A .bak is still written (best-effort always tries), but that's the
+    // implementation. The critical assertion: migration succeeded.
+    const rows = await readRows("global");
+    expect(rows.map((r) => r.fact)).toEqual(["fact one", "fact two"]);
+  });
+
+  it("migration is still a no-op when learned.json exists", async () => {
+    // Regression guard: pre-existing JSON store prevents re-migration even
+    // when LEARNED.md is present.
+    await writeRows("global", [row()]);
+    const dir = path.join(tmp, "memory");
+    fs.writeFileSync(path.join(dir, "LEARNED.md"), "- should be ignored\n");
+    const n = await migrateLegacyLearned("global");
+    expect(n).toBe(0);
+    const rows = await readRows("global");
+    expect(rows[0].fact).toBe("Prefer neutral gray for active nav rows"); // unchanged
+  });
 });

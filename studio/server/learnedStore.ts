@@ -194,6 +194,16 @@ export async function migrateLegacyLearned(level: MemoryLevel, slug?: string): P
   const facts = md.split("\n").map(parseLegacyLine).filter((f): f is string => f !== null);
   if (facts.length === 0) return 0;
 
+  // Preserve the original file before overwriting — non-bullet content (headings,
+  // paragraphs, trailing prose) is not representable in the row store, so the
+  // original is kept verbatim for forensics.
+  try {
+    await fs.writeFile(path.join(dir, "LEARNED.md.bak"), md, "utf-8");
+  } catch {
+    // Best effort — a failed backup never breaks migration. The parsed bullets
+    // still go into learned.json, and LEARNED.md is regenerated.
+  }
+
   const now = new Date().toISOString();
   const rows: LearnedRow[] = facts.map((fact) => ({
     id: randomUUID(),

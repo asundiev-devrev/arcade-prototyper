@@ -8,8 +8,8 @@ function rulesStub(scope: string): string {
 }
 
 function learnedStub(scope: string): string {
-  return `<!-- LEARNED.md — facts the generator remembers about ${scope}.
-     Auto-appended during generation; safe to edit or prune by hand. -->
+  return `<!-- LEARNED.md — facts Studio has learned about ${scope}.
+     Generated from learned.json; edit via the Memory panel, not here. -->
 `;
 }
 
