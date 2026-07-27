@@ -48,10 +48,26 @@ Observed result after ~7 weeks and 233 logged turns
 
 ### Why it never fills — three root causes
 
-1. **The writer is the wrong actor.** Learning is delegated to the model's
-   judgment inside a turn whose own prompt says "speed matters", "do not
-   ritualize", aim for 2–3 minutes. Bookkeeping loses to that instruction every
-   time.
+1. **The writer is the wrong actor — and in picker turns, is actively
+   forbidden.** Learning is delegated to the model's judgment inside a turn whose
+   prompt says "speed matters", "do not ritualize", aim for 2–3 minutes.
+   Bookkeeping loses. Worse, in every element-picker turn the injected preamble
+   states *"do not modify unrelated parts of the file **or other files**"* and
+   *"A reply without a corresponding Edit or Write tool call is a failed turn"*
+   ([src/lib/visualEditPreamble.ts:61,65](../../../studio/src/lib/visualEditPreamble.ts)) —
+   which literally instructs the agent not to touch `LEARNED.md`. That is a
+   prompt contradiction, not a defect of model judgment, and it is cheap to fix
+   independently of this design (carve memory out of the "other files"
+   prohibition).
+
+   **Confound, stated honestly:** the "233 turns → 1 line" evidence does not by
+   itself prove the model is the wrong writer. Those turns span **39 project
+   slugs with a median of 2 turns each** (62% ≤3 turns), and only **4 of 12**
+   project directories ever received a `memory/` dir at all — so most turns had
+   no multi-turn history to learn from and, in many cases, no project file to
+   write to. The real reason to move writes to the server is the one that stands
+   on its own: **the designer must be able to edit, delete, and pin memories,
+   which requires stable row identity.** That is a requirement, not an inference.
 2. **The strongest signal is never read.** The designer's *next prompt* after a
    generation is the correction ("'All Knowledge' should work as a
    filter/select…" appears verbatim in a live `chat-history.json`). Nothing
@@ -89,10 +105,12 @@ mechanism (the kit rides in the cached `--append-system-prompt`, not in
 ## Goals
 
 - A brand-new project's **first** frame already reflects the designer's library,
-  product, and every correction they have confirmed — with no setup and nothing
-  retyped.
-- A confirmed correction stops recurring.
-- The designer can see, edit, and delete what Studio believes about them.
+  product, and the conventions they have confirmed — with no setup and nothing
+  retyped. (Via global `RULES.md` / `PROFILE.md` and any promoted memories;
+  project-specific facts stay with their project — see routing.)
+- Fewer rounds of correction per prototype: **edits-per-build falls from its 3.13
+  baseline.**
+- The designer can see, edit, delete, and pin what Studio believes about them.
 - Nothing added to the per-turn critical path: no extra latency, no new failure
   mode that can block a generation.
 
@@ -112,6 +130,13 @@ mechanism (the kit rides in the cached `--append-system-prompt`, not in
 maintains and becomes four named kinds the *server* owns and renders into the
 files the agent already imports. The agent's only memory duty is reading, which
 the existing `@`-imports already do. The agent may *propose*; it never writes.
+
+Steps 1–2 of the build order double as the cheap experiment that tests this
+premise: ship Inventory + the panel, fix the picker-preamble contradiction above,
+and observe whether the agent's own proposals become adequate once writing is
+permitted and visible. If memory fills on its own, step 3's extractor is
+unnecessary complexity and should not be built. Cost of finding out: one release
+of observation.
 
 Rejected alternatives:
 
@@ -142,30 +167,73 @@ PROJECT  projects/<slug>/memory/
 The designer's saved composites (`user-kit/`) are already global and stay where
 they are; `INVENTORY.md` references them by name rather than duplicating them.
 
-### Routing rule (inverted from today)
+### Routing rule: project by default, global by earned promotion
 
-Today the template instructs: ambiguous → write to the project file
-([CLAUDE.md.tpl:151-152](../../../studio/templates/CLAUDE.md.tpl)). That is why
-global holds one line and every new project starts cold. New default:
+> A confirmed correction goes to the **project**. It is offered for promotion to
+> **global** only when the same fact recurs in a *second* project.
 
-> A confirmed correction goes **global** unless it names something only this
-> project has — a frame in it, this Figma file, this feature's copy.
+An earlier draft inverted this — global by default, on the reasoning that the
+designer works in one library and a narrow feature set, so "taste travels".
+**Measured against the real corpus, that is false.** Every recurring corrective
+theme lives in exactly one project:
 
-Rationale: one library, one or two products, a narrow feature set. Taste
-travels; only specifics do not.
+| Theme | prompts | distinct projects |
+|---|---|---|
+| use our kit components | 3 | **1** |
+| don't make it a separate frame | 3 | **1** |
+| replace hand-rolled with kit | 3 | **1** |
+| resizable panels | 3 | **1** |
+| no top divider | 3 | **1** |
 
-Routing is decided by the **server** and shown on the confirm chip, not left to
-model judgment. The designer can flip the level with one tap before confirming.
-Cost of a misroute is one tap.
+Repetition is **within-project**, not cross-project. Global holds one line today
+because the agent never writes, not because routing starved it.
 
-### Guards so global never starves
+#### The failure global-default would cause
 
-- The chip names the level out loud ("Remember globally: …") so the default is
-  visible in use.
-- The panel shows Global first, always. An empty Global after real use is a
-  visible defect rather than silence.
-- A near-duplicate fact **reinforces** the existing row (increments a hit count)
-  instead of appending a second row. Global stays short and readable.
+`polina-s-prototype` — 42 turns, the densest correction stream in the corpus, so
+the project most likely to generate memories — opens with a prompt that
+deliberately departs from house style: *"re-implement this design using our
+components … there are a few meaningful differences … Left nav has clear
+differentiation … It's different to our current template for the left nav in
+Computer. You can copy the existing `ComputerSidebar` and modify it."*
+
+Under global-default: corrections from that project ("chat panel must be
+resizeable", "no top divider for the input", "photos instead of initials") name
+no frame and no Figma file, so they pass the project-specificity test and route
+global. The designer confirms — each is true *in that project, at that moment*.
+Weeks later a conventional DevRev vista project injects them into its first
+frame, applying one experiment's conventions as house style.
+
+The cost is **not** "one tap". It surfaces weeks later, in a different project,
+as unexplained wrong output, with nothing on screen connecting it to memory —
+i.e. it re-creates pain 1 by means of the fix for pain 1. The asymmetry is the
+point: a project-default misroute costs a re-teach in the next project (visible,
+local); a global-default misroute silently contaminates every future project.
+
+Promotion on second-project recurrence replaces the assumption that taste travels
+with a measurement of whether it did. Routing is decided by the **server** and
+shown on the chip; the designer can still promote manually with one tap.
+
+### Guards so global still fills
+
+Global must not starve — it is what makes a *new* project non-cold. With
+project-default routing, three mechanisms feed it:
+
+- **Promotion on second-project recurrence** (above) — the main path, and the
+  only one backed by evidence.
+- **`RULES.md` and `PROFILE.md` are global and hand-authored.** The facts that
+  genuinely span projects in this corpus are conventions ("use our kit
+  components", "read the file first") and profile facts (library, products) — both
+  better stated once by the designer than inferred from corrections. The panel
+  makes writing them a first-class action.
+- **The chip always names its level**, so the designer can promote at confirm
+  time when they already know a fact is general.
+
+The panel shows Global first, always: an empty Global after real use is a visible
+defect rather than silence.
+
+A near-duplicate fact **reinforces** the existing row instead of appending a
+second one, so memory converges rather than sprawls.
 
 ## The four kinds
 
@@ -196,20 +264,28 @@ interface LearnedRow {
   id: string;          // stable, server-assigned
   fact: string;        // one sentence, designer-confirmed wording
   level: "global" | "project";
-  hits: number;        // reinforcement count
+  hits: number;        // dedup/reinforcement count — NOT a value score
+  pinned?: boolean;    // designer-pinned: never evicted
   createdAt: string;   // ISO
   lastSeenAt: string;  // ISO — last time this fact was re-observed
   source: "confirmed" | "explicit";  // chip-confirmed vs `remember:` prompt
+  seenInProjects: string[];  // slugs — drives promotion to global on the 2nd
 }
 ```
 
 The recurrence gate needs one more store: a **prompt index** at the studio root
 (global, a sibling of `projects/` like `generation-metrics.jsonl`), holding one
 row per user prompt — the **typed span only** (see "Index what the designer
-typed"), its normalized content words, project slug, timestamp. Global because
-recurring preferences repeat *across* projects, which a per-project index cannot
-see. Append-only, capped by row count. It stores a subset of text the app already
-keeps in `chat-history.json`, so it raises no new data-sensitivity question.
+typed"), its normalized content words, project slug, timestamp.
+
+Stored globally even though recurrence is measured within-project, because the
+index has a second job: detecting when a fact recurs in a *second* project, which
+is what earns promotion to global. A per-project index cannot see that. Scoring
+still compares within-project first; the cross-project comparison exists only to
+offer promotion.
+
+Append-only, capped by row count. It stores a subset of text the app already keeps
+in `chat-history.json`, so it raises no new data-sensitivity question.
 
 Hand-editing `LEARNED.md` directly is tolerated but not authoritative: the next
 render regenerates it from JSON. The panel is the supported edit path, and the
@@ -223,8 +299,14 @@ re-rendered. One line exists in the wild, so this is cheap and low-risk; a parse
 failure leaves the file untouched and logs.
 
 Size ceiling: each rendered file has a hard character cap. Past the cap the
-renderer drops lowest-`hits`, then oldest `lastSeenAt`. Prompt size is bounded,
-so memory can never become a latency problem.
+renderer drops by **oldest `lastSeenAt`**, and never drops a `pinned` row.
+
+**Eviction must not key on `hits`.** An earlier draft did, which inverts the
+priority exactly: a memory that *works* — stated once, corrected, never recurred
+— has the lowest `hits` and would be evicted first, while a row at ×5 (which by
+this design's own reading means memory is *failing* for that fact) is the most
+protected. `hits` is a dedup counter and nothing else; it is not a value score,
+and per "How we know it worked" it is not the success metric either.
 
 ## Correction capture
 
@@ -247,10 +329,18 @@ overlap of content words against the prompt index) — no model, no embeddings.
 Recurrence, not vocabulary, is what earns a chip: a thing said once is a tweak;
 a thing said three times is a preference.
 
-*1b. Process directive.* The prompt instructs the *agent* about how to work
-rather than what to draw: "don't do that", "read the file first — do not edit
-from memory", "don't create a separate frame", "always/never …". These are rules
-by construction and are candidates on first sight.
+*1b. Process directive.* The typed span instructs the *agent* about how to work
+rather than what to draw: "don't do that", "don't create a separate frame",
+"use our components", "always/never …". These are rules by construction and are
+candidates on first sight. (Note "read the file first — do not edit from memory"
+is *Studio's* text, not the designer's — see below.)
+
+Any keyword list used here must be derived from the real corpus and its measured
+recall stated, not written from intuition. Evidence for that discipline: an
+earlier hand-written list omitted **`must`**, which appears in 19 real prompts —
+by far the designer's most common directive word — while including `actually`,
+`no, make it`, `too big/small` and `why did you`, which fire **zero** times in
+seven weeks of use.
 
 Plus explicit `remember:`, which bypasses both.
 
@@ -303,17 +393,28 @@ prompts.
 Regex-stripping the boilerplate was tried and rejected — it cut the rate but left
 plenty behind, and the pattern list silently rots whenever picker copy changes.
 
-**The fix is structural: capture the typed span at composition time.** The shell
-already composes prompt = machine preamble + typed text and knows the boundary
-exactly — `buildTargetPreamble()`'s own contract is "the user's change lives in
-their typed text; this block only tells the agent WHICH elements to touch"
-([PromptInput.tsx:100-102](../../../studio/src/components/chat/PromptInput.tsx)).
-So the shell records `typedText` alongside the composed prompt, and the prompt
-index stores **only** `typedText`. Deterministic, no pattern list, cannot rot.
+**The fix is structural, in two parts.**
 
-Consequence for build order: the prompt index must be populated from the shell,
-which makes step 3 depend on a small client change, not just server work.
-Prompts sent without a picker preamble are wholly typed and index as-is.
+*1. Exclude element-picker turns outright.* A sentinel already exists and is
+already recognized server-side: `SCOPED_EDIT_MARKER`
+([src/lib/scopedEdit.ts:22](../../../studio/src/lib/scopedEdit.ts), re-exported as
+`CLIENT_PREAMBLE_MARKER` in [server/editContext.ts:24](../../../studio/server/editContext.ts)).
+Scoped- and visual-edit turns are pixel nudges at a specific line:column *by
+construction* — the most one-off content in the corpus and the least likely to
+carry a standing preference. Skip them for capture entirely. One-line check, no
+pattern list.
+
+*2. Index the typed span for everything else.* The shell composes prompt =
+machine preamble + typed text and knows the boundary exactly —
+`buildTargetPreamble()`'s own contract is "the user's change lives in their typed
+text; this block only tells the agent WHICH elements to touch"
+([PromptInput.tsx:100-102](../../../studio/src/components/chat/PromptInput.tsx)).
+The shell records `typedText` alongside the composed prompt; the index stores
+only `typedText`. Deterministic, cannot rot.
+
+Consequence for build order: the prompt index is populated from the shell, so
+step 3 includes a small client change, not just server work. Prompts sent without
+any preamble are wholly typed and index as-is.
 
 **Stage 2 — extract (one small model call).** Given the previous prompt + the
 new prompt, return either nothing or exactly one candidate: `{ fact, level,
@@ -409,7 +510,17 @@ project  RULES.md  LEARNED.md  BRIEF.md  INVENTORY.md
 The template's `## Memory` section grows two lines for the new global/project
 files and its "memory protocol" subsection is **rewritten**: the agent no longer
 appends to `LEARNED.md`. It reads memory, honors it, and (unchanged) treats
-memory as outranking one-off prompt phrasing. The `phantomEditRetry` carve-out
+memory as outranking one-off prompt phrasing.
+
+Also required, and independent of everything else here: the element-picker
+preamble's *"do not modify unrelated parts of the file or other files"*
+([src/lib/visualEditPreamble.ts:61](../../../studio/src/lib/visualEditPreamble.ts))
+must carve out the memory directory, so that instruction stops silently
+prohibiting memory writes during picker turns. Worth shipping in step 2 on its
+own merits — it is a one-line prompt fix that may be a large part of why memory
+never filled.
+
+The `phantomEditRetry` carve-out
 for "bare `remember:` turns touch only memory"
 ([studio/server/phantomEditRetry.ts:14](../../../studio/server/phantomEditRetry.ts))
 must stay valid: with server-side writes, a bare `remember:` turn now changes
@@ -483,55 +594,105 @@ No new shell layout.
 | Computer 406s or is slow | Brief keeps its local half + "unavailable, retry". Generation never blocked. |
 | `LEARNED.md` hand-edited | Tolerated; next render regenerates from JSON. Panel is the supported path. |
 | `learned.json` corrupt / unparseable | Treated as empty, file preserved as `.bak`, logged. Memory degrades to Rules-only; generation unaffected. |
-| File exceeds size cap | Renderer drops lowest-`hits` then oldest `lastSeenAt`. Prompt size bounded. |
+| File exceeds size cap | Renderer drops oldest `lastSeenAt`, never a `pinned` row. Never keys on `hits` (that would evict what works). Prompt size bounded. |
 | Two turns finish concurrently | Per-file write queue (same discipline as the DS-sync per-attempt tmp fix). |
 | A memory proves harmful | Delete in panel → effective next turn (no session churn needed). |
 | Memory write lands mid-turn | Harmless: the in-flight turn keeps the context it started with; the next turn reads the new file. |
 
 ## How we know it worked
 
-**Primary measure: recurrence rate falls after a memory lands.** For each
-confirmed fact, compare how often the designer re-stated it in the N turns
-*before* it was remembered against the N turns *after*. Memory works when that
-rate drops toward zero. The prompt index built for gate 1a supplies both halves,
-so the measure is free.
+**Primary measure — edits-per-build.** Ratio of `edit` turns to `build` turns,
+already derivable from `generation-metrics.jsonl` with no new instrumentation.
+Current baseline: **3.13** (147 edit / 47 build turns across 233 logged turns);
+per-project it reaches 6.8 on the densest project. If memory works, the first
+frame lands closer to intent and this ratio falls.
 
-This must be stated carefully to avoid circularity: a row's raw `hits` count is
-*not* the metric, because recurrence is also the detector — a high count means
-"detected often", not "failing". The metric is the **before/after delta for a
-specific fact**, which the detector cannot manufacture.
+This is the metric because it has the three properties the alternatives lack: a
+real denominator, no dependence on the detector, and the ability to move in the
+*wrong* direction. It is a genuine product outcome — fewer rounds of correction
+per prototype — not a self-report.
 
-Two honest limits:
+**Why `hits` is NOT the metric.** An earlier draft used "a confirmed correction
+stops recurring", read off reinforcement counts. That is circular and biased
+toward false success: recurrence is also the *detector*, so a row sits at ×1 for
+six different reasons —
 
-- A fact that is never proposed, or always dismissed, produces no signal at all —
-  absence of data is not evidence of success. Track proposal and confirm/dismiss
-  counts separately so a silent feature is distinguishable from a working one.
-- This measures whether the designer stops repeating themselves. It does **not**
-  measure visual fidelity to Figma, which remains unmeasured in this repo. This
-  design does not claim to supply that metric.
+| Row sits at ×1 because | Memory is |
+|---|---|
+| memory worked; the correction stopped | working |
+| the situation never came up again | untested |
+| the gate missed the recurrence | **failing, invisibly** |
+| the project ended | untested |
+| the candidate was dismissed | n/a |
+| the candidate was never proposed | **failing, invisibly** |
+
+— and the untested cases are the *modal* case in this data: median **2 turns per
+project**, 62% of projects ≤3 turns. Most rows would sit at ×1 because the
+project ended, and the old metric would score that as success. Worse, the weaker
+the detector, the fewer recurrences observed, the healthier the dashboard: a gate
+that fires on nothing scores perfectly.
+
+**Supporting instrumentation (required, currently absent).** Log every gate
+evaluation (fired/not, which trigger) and every extractor outcome
+(candidate/nothing), plus per-row **exposure** — how many turns ran in a project
+where that row was injected (a join on `slug` in the existing metrics log). Then
+"0 hits over 40 exposed turns" reads as working and "0 hits over 1 exposed turn"
+reads as untested. Without this, a silent feature is indistinguishable from a
+working one — the exact blind spot that let today's memory sit dead for seven
+weeks unnoticed.
+
+**Limit, stated plainly:** none of this measures visual fidelity to Figma, which
+remains unmeasured in this repo. This design does not claim to supply that.
 
 **Manual gate:** create a fresh project, ask for one frame, confirm the first
-pass reflects global Rules + Learned + Profile with nothing retyped.
+pass reflects global Rules + Profile (+ any promoted memories) with nothing
+retyped.
 
-**Regression gate:** the new memory files must appear in the rendered
-`CLAUDE.md`; the renderer must respect its size cap; a near-duplicate fact must
-reinforce rather than append. All assertable in the existing vitest suite
-(`__tests__/server/...`).
+**Dry-run gate before step 3 ships to anyone:** run the gate and extractor with
+chips *suppressed*, logging candidates only, across a week of real use. Ship the
+chip only if the logged candidates read as things worth remembering. This design's
+detector has been wrong twice already under measurement (keyword gate, then
+boilerplate contamination), so it does not get to reach the designer unobserved.
+
+**Regression gates** (all assertable in the existing vitest suite,
+`__tests__/server/...`):
+
+- the new memory files appear in the rendered `CLAUDE.md`;
+- the renderer respects its size cap and never evicts a `pinned` row;
+- a near-duplicate fact reinforces rather than appends;
+- **eviction never keys on `hits`** (a ×1 row must outlive a ×5 row when it is
+  more recent);
+- **a scoped/visual-edit prompt never enters the prompt index** — the
+  boilerplate-contamination guard, which is a correctness bug if it regresses,
+  not a tuning knob.
 
 ## Build order
 
 Each step ships independently and is useful alone.
 
 1. **Inventory** — deterministic, no model, no network. Immediately fixes
-   "ignores my own work". No dependency on anything else here.
-2. **Panel + editing** — makes existing memory visible and correctable. Would
-   have caught today's dead memory. Depends on step 1 only for the read-only
-   "Built here" section; ship without it if step 1 slips.
-3. **Correction capture** — typed-span index (needs a small shell change) → gate
-   → extract → chip, global-first routing, reinforcement. Requires the JSON row
-   store; the panel (step 2) is strongly recommended first so a bad memory is
-   correctable before any can be created. Highest-risk step: its detector is the
-   part with the least evidence behind it, so it should ship behind a flag and be
-   dry-run first (log candidates without showing chips) against real use.
+   "ignores my own work". No dependency on anything else here. Highest
+   value-per-risk in the document; ship it first regardless of what happens to
+   the rest.
+2. **Panel + editing + the picker-preamble carve-out** — makes existing memory
+   visible and correctable, and stops the prompt from forbidding memory writes.
+   Depends on step 1 only for the read-only "Built here" section; ship without it
+   if step 1 slips.
+
+   **Then stop and observe.** Steps 1–2 are also the experiment that tests
+   whether step 3 is needed at all: with writes permitted and visible, does
+   memory fill on its own? Record `edits-per-build` (baseline 3.13) before and
+   after. If memory fills, step 3 is unnecessary complexity — do not build it.
+3. **Correction capture** — *only if step 2's observation says it's needed.*
+   Typed-span index (needs a small shell change) + `SCOPED_EDIT_MARKER` exclusion
+   → gate → extract → chip, project-default routing with earned promotion,
+   reinforcement, gate/extractor telemetry. Requires the JSON row store and the
+   panel first, so a bad memory is correctable before any can exist. Highest-risk
+   step: ships behind a flag, dry-run with chips suppressed before the designer
+   ever sees one.
 4. **Brief + Profile** — local derivation first, Computer on top. Independent of
    steps 1–3.
+
+Note this ordering deliberately front-loads everything that cannot be wrong
+(Inventory, visibility, a prompt fix) and gates the one speculative mechanism
+behind evidence that it is still needed.
