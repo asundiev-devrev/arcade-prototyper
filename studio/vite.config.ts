@@ -28,6 +28,7 @@ import { exportMiddleware } from "./server/middleware/export";
 import { figmaExportMiddleware } from "./server/middleware/figmaExport";
 import { assetsMiddleware } from "./server/middleware/assets";
 import { componentsMiddleware } from "./server/middleware/components";
+import { memoryMiddleware } from "./server/middleware/memory";
 import { cloudflareMiddleware } from "./server/middleware/cloudflare";
 import { runtimeErrorMiddleware } from "./server/middleware/runtimeError";
 import { visualEditMiddleware } from "./server/middleware/visualEdit";
@@ -77,6 +78,7 @@ function apiPlugin(): import("vite").Plugin {
       server.middlewares.use(figmaExportMiddleware());
       server.middlewares.use(assetsMiddleware());
       server.middlewares.use(componentsMiddleware());
+      server.middlewares.use(memoryMiddleware());
       server.middlewares.use(preflightMiddleware());
       server.middlewares.use(metricsMiddleware());
       server.middlewares.use(fontsMiddleware());
