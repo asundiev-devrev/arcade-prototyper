@@ -5,9 +5,6 @@ import {
   TextArea,
   Tag,
   Tooltip,
-  Globe,
-  Pin,
-  PinFilled,
   TrashBin,
 } from "@xorkavi/arcade-gen";
 import { useMemory, type LearnedRowView, type InventoryView } from "./useMemory";
@@ -16,21 +13,18 @@ import { useMemory, type LearnedRowView, type InventoryView } from "./useMemory"
  * What Studio knows about your work — and where to correct it when a frame comes
  * out wrong.
  *
- * Organised by SOURCE, not by scope. The only question a designer brings here is
- * "why did it do that, and is anything it believes wrong?", and the answer turns
- * on whether a line was written by them (authoritative, edit it) or inferred
- * from their edits (a guess, delete it). Scope is a chip on the line, because a
- * line's reach is a property of that line — earlier versions split the panel by
- * scope and ended up with two identical "Rules you set" headings, which is
- * unreadable.
+ * Organised by SOURCE, not scope: what you wrote (authoritative, edit it) vs what
+ * Studio inferred (a guess, delete it). That distinction is what decides what a
+ * designer does with a line. Scope rides on the line as a read-only chip.
  *
- * Deliberately not a dashboard: nothing here demands attention.
+ * Two things you act on, one thing you only read (existing work, in the footer).
+ * Deliberately not a dashboard — nothing here demands attention.
  */
 export function MemoryPanel({ projectSlug }: { projectSlug: string }) {
-  const { status, data, mutationError, patchRow, deleteRow, saveRule } = useMemory(projectSlug);
+  const { status, data, mutationError, deleteRow, saveRule } = useMemory(projectSlug);
 
   if (status === "loading") {
-    return <p style={{ padding: 20, fontSize: 13, color: TEXT_MUTED }}>Loading…</p>;
+    return <p style={{ padding: 20, fontSize: 13, color: MUTED }}>Loading…</p>;
   }
   if (status === "error" || !data) {
     return (
@@ -41,16 +35,13 @@ export function MemoryPanel({ projectSlug }: { projectSlug: string }) {
   }
 
   const learned = [...data.global.rows, ...data.project.rows];
-  const frameCount = data.inventory.frames.length;
 
   return (
-    <div style={{ height: "100%", overflowY: "auto", padding: "20px 20px 40px" }}>
-      {/* Orientation. Without this the panel is a list of facts with no stated
-          purpose — the "what am I looking at?" failure. */}
-      <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: TEXT }}>
+    <div style={{ height: "100%", overflowY: "auto", padding: "20px 20px 32px" }}>
+      <h2 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: TEXT }}>
         What Studio knows
-      </p>
-      <p style={{ margin: "0 0 24px", fontSize: 13, lineHeight: 1.5, color: TEXT_MUTED }}>
+      </h2>
+      <p style={{ margin: "0 0 28px", fontSize: 12, lineHeight: 1.5, color: MUTED }}>
         Applied to every frame it generates. Correct anything that's wrong — changes take effect
         on your next prompt.
       </p>
@@ -71,10 +62,7 @@ export function MemoryPanel({ projectSlug }: { projectSlug: string }) {
         </p>
       )}
 
-      <Section
-        title="Your instructions"
-        hint="You wrote these. Studio follows them exactly."
-      >
+      <Section title="Your instructions" hint="You wrote these. Studio follows them exactly.">
         <RuleField
           label="For every project"
           text={data.global.rules}
@@ -94,43 +82,27 @@ export function MemoryPanel({ projectSlug }: { projectSlug: string }) {
         hint={
           learned.length === 0
             ? "Nothing yet. Studio adds a line here when it notices you correcting the same thing."
-            : "Studio inferred these. Delete anything it got wrong."
+            : "Studio inferred these. Remove anything it got wrong."
         }
       >
         {learned.length > 0 && (
-          <ul style={{ listStyle: "none", margin: "4px 0 0", padding: 0 }}>
+          <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
             {learned.map((r) => (
-              <FactRow key={r.id} row={r} onPatch={patchRow} onDelete={deleteRow} />
+              <FactRow key={r.id} row={r} onDelete={deleteRow} />
             ))}
           </ul>
         )}
       </Section>
 
-      {/* Reassurance, not a work surface: it exists so you can tell the agent
-          isn't about to rebuild something you already have. One line. */}
-      <Section title="Your existing work">
-        <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: TEXT }}>
-          {frameCount === 0
-            ? "No frames yet — nothing to reuse."
-            : `Studio can see ${frameCount} ${frameCount === 1 ? "frame" : "frames"} in this project${
-                data.inventory.composites.length > 0
-                  ? ` and ${data.inventory.composites.length} saved ${
-                      data.inventory.composites.length === 1 ? "component" : "components"
-                    }`
-                  : ""
-              }, and will reuse them instead of rebuilding.`}
-        </p>
-        {frameCount > 0 && <FrameList view={data.inventory} />}
-      </Section>
+      <ExistingWork view={data.inventory} />
     </div>
   );
 }
 
-// Body text and secondary text. The secondary tone is only ever used for
-// supporting copy — never for content you need to read, which is what made the
-// previous version's component names inaccessible.
 const TEXT = "var(--fg-neutral-prominent)";
-const TEXT_MUTED = "var(--fg-neutral-soft)";
+// Secondary tone — supporting copy only, never content you must read.
+const MUTED = "var(--fg-neutral-soft)";
+const HAIRLINE = "1px solid var(--stroke-neutral-subtle)";
 
 function Section({
   title,
@@ -138,23 +110,22 @@ function Section({
   children,
 }: {
   title: string;
-  hint?: string;
+  hint: string;
   children?: React.ReactNode;
 }) {
   return (
-    <section style={{ marginBottom: 32 }}>
+    <section style={{ marginBottom: 28 }}>
       <h3 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: TEXT }}>{title}</h3>
-      {hint && (
-        <p style={{ margin: "3px 0 10px", fontSize: 12, lineHeight: 1.5, color: TEXT_MUTED }}>
-          {hint}
-        </p>
-      )}
+      <p style={{ margin: "2px 0 12px", fontSize: 12, lineHeight: 1.5, color: MUTED }}>{hint}</p>
       {children}
     </section>
   );
 }
 
-/** A labelled standing-instruction field. The label states the reach in words. */
+/**
+ * A standing-instruction field. Uses the kit TextArea's own `label` prop so the
+ * label gets the design system's styling and a real htmlFor association.
+ */
 function RuleField({
   label,
   text,
@@ -169,22 +140,15 @@ function RuleField({
   const [draft, setDraft] = useState(text);
   const dirty = draft.trim() !== text.trim();
   return (
-    <div style={{ marginBottom: 14 }}>
-      <label
-        style={{
-          display: "block",
-          marginBottom: 5,
-          fontSize: 12,
-          color: TEXT_MUTED,
-        }}
-      >
-        {label}
-      </label>
+    <div style={{ marginBottom: 16 }}>
       <TextArea
+        label={label}
         value={draft}
         placeholder={placeholder}
+        // Multi-line by default: these hold several sentences of standing
+        // instruction, and a 2-line box made them feel like single-line inputs.
+        rows={4}
         onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDraft(e.target.value)}
-        aria-label={label}
       />
       {dirty && (
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
@@ -200,133 +164,76 @@ function RuleField({
   );
 }
 
+/**
+ * One inferred fact.
+ *
+ * Only ONE action: remove. Pinning matters only against a size cap a designer
+ * will realistically never reach, and re-scoping someone else's guess is a
+ * power-user move nobody asked for — both were noise on every row. Scope stays
+ * visible as a read-only chip.
+ */
 function FactRow({
   row,
-  onPatch,
   onDelete,
 }: {
   row: LearnedRowView;
-  onPatch: (
-    r: LearnedRowView,
-    p: { fact?: string; pinned?: boolean; toLevel?: "global" | "project" },
-  ) => Promise<void>;
   onDelete: (r: LearnedRowView) => Promise<void>;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(row.fact);
-
-  if (editing) {
-    return (
-      <li style={{ padding: "12px 0", borderTop: "1px solid var(--stroke-neutral-subtle)" }}>
-        <TextArea
-          value={draft}
-          onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDraft(e.target.value)}
-          aria-label={`Edit: ${row.fact}`}
-        />
-        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-          <Button
-            size="sm"
-            onClick={async () => {
-              await onPatch(row, { fact: draft });
-              setEditing(false);
-            }}
-          >
-            Save
-          </Button>
-          <Button
-            size="sm"
-            variant="tertiary"
-            onClick={() => {
-              setDraft(row.fact);
-              setEditing(false);
-            }}
-          >
-            Cancel
-          </Button>
-        </div>
-      </li>
-    );
-  }
-
-  const everywhere = row.level === "global";
+  const [hover, setHover] = useState(false);
 
   return (
     <li
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
       style={{
-        padding: "12px 0",
-        borderTop: "1px solid var(--stroke-neutral-subtle)",
+        display: "flex",
+        alignItems: "flex-start",
+        gap: 10,
+        padding: "10px 0",
+        borderBottom: HAIRLINE,
       }}
     >
-      <button
-        onClick={() => setEditing(true)}
-        aria-label={`Edit: ${row.fact}`}
+      {/* Bullet: the marker that makes this read as a list item rather than
+          loose copy. Sized and nudged to sit on the first text line. */}
+      <span
+        aria-hidden="true"
         style={{
-          display: "block",
-          width: "100%",
-          textAlign: "left",
-          background: "none",
-          border: "none",
-          padding: 0,
-          cursor: "pointer",
-          font: "inherit",
-          fontSize: 13,
-          lineHeight: 1.5,
-          color: TEXT,
+          flexShrink: 0,
+          width: 4,
+          height: 4,
+          marginTop: 7,
+          borderRadius: "50%",
+          background: MUTED,
         }}
-      >
-        {row.fact}
-      </button>
+      />
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
-        <Tag appearance="tinted" intent="neutral">
-          {everywhere ? "Every project" : "This project"}
-        </Tag>
-        {row.pinned && (
-          <Tag appearance="tinted" intent="info">
-            Pinned
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: TEXT }}>{row.fact}</p>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5 }}>
+          <Tag appearance="tinted" intent="neutral">
+            {row.level === "global" ? "Every project" : "This project"}
           </Tag>
-        )}
-        {row.hits > 1 && (
-          <span style={{ fontSize: 12, color: TEXT_MUTED, fontVariantNumeric: "tabular-nums" }}>
-            came up {row.hits} times
-          </span>
-        )}
+          {row.hits > 1 && (
+            <span style={{ fontSize: 12, color: MUTED }}>came up {row.hits} times</span>
+          )}
+        </div>
+      </div>
 
-        <span style={{ flex: 1 }} />
-
-        <Tooltip content={everywhere ? "Limit to this project" : "Apply to every project"}>
+      {/* Revealed on hover/focus — a destructive action shouldn't sit lit up on
+          every row, but it must stay keyboard-reachable. */}
+      <div
+        style={{
+          flexShrink: 0,
+          opacity: hover ? 1 : 0,
+          transition: "opacity 120ms ease",
+        }}
+        onFocus={() => setHover(true)}
+      >
+        <Tooltip content="Remove this">
           <IconButton
             size="sm"
             variant="tertiary"
-            aria-label={
-              everywhere
-                ? `Limit to this project: ${row.fact}`
-                : `Apply everywhere: ${row.fact}`
-            }
-            onClick={() => onPatch(row, { toLevel: everywhere ? "project" : "global" })}
-          >
-            <Globe size={16} aria-hidden="true" />
-          </IconButton>
-        </Tooltip>
-        <Tooltip content={row.pinned ? "Unpin — let this age out" : "Pin — always keep this"}>
-          <IconButton
-            size="sm"
-            variant="tertiary"
-            aria-label={row.pinned ? `Unpin: ${row.fact}` : `Pin: ${row.fact}`}
-            onClick={() => onPatch(row, { pinned: !row.pinned })}
-          >
-            {row.pinned ? (
-              <PinFilled size={16} aria-hidden="true" />
-            ) : (
-              <Pin size={16} aria-hidden="true" />
-            )}
-          </IconButton>
-        </Tooltip>
-        <Tooltip content="Forget this">
-          <IconButton
-            size="sm"
-            variant="tertiary"
-            aria-label={`Forget: ${row.fact}`}
+            aria-label={`Remove: ${row.fact}`}
             onClick={() => onDelete(row)}
           >
             <TrashBin size={16} aria-hidden="true" />
@@ -338,58 +245,62 @@ function FactRow({
 }
 
 /**
- * Collapsed by default. The frame list is evidence, not a task — it earns a
- * disclosure, not a third of the panel.
+ * Reassurance, not a task: it exists so a designer can tell the agent won't
+ * rebuild work that already exists. Deliberately a quiet footer rather than a
+ * peer section — there is nothing here to act on, and giving it a heading
+ * implied otherwise.
  */
-function FrameList({ view }: { view: InventoryView }) {
+function ExistingWork({ view }: { view: InventoryView }) {
   const [open, setOpen] = useState(false);
+  const frames = view.frames.length;
+  const saved = view.composites.length;
+
+  const summary =
+    frames === 0
+      ? "No frames here yet, so there's nothing for Studio to reuse."
+      : `Studio can also see the ${frames} ${frames === 1 ? "frame" : "frames"}${
+          saved > 0 ? ` and ${saved} saved ${saved === 1 ? "component" : "components"}` : ""
+        } already in this project, and reuses them instead of rebuilding.`;
+
   return (
-    <div style={{ marginTop: 8 }}>
-      <button
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        style={{
-          background: "none",
-          border: "none",
-          padding: 0,
-          cursor: "pointer",
-          font: "inherit",
-          fontSize: 12,
-          color: TEXT_MUTED,
-          textDecoration: "underline",
-        }}
-      >
-        {open ? "Hide the list" : "Show the list"}
-      </button>
+    <footer style={{ marginTop: 4, paddingTop: 16, borderTop: HAIRLINE }}>
+      <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: MUTED }}>
+        {summary}
+        {frames > 0 && (
+          <>
+            {" "}
+            <button
+              onClick={() => setOpen((v) => !v)}
+              aria-expanded={open}
+              style={{
+                background: "none",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                font: "inherit",
+                color: MUTED,
+                textDecoration: "underline",
+              }}
+            >
+              {open ? "Hide" : "See what"}
+            </button>
+          </>
+        )}
+      </p>
       {open && (
         <ul style={{ listStyle: "none", margin: "10px 0 0", padding: 0 }}>
           {view.frames.map((f) => (
-            <li
-              key={f.slug}
-              style={{
-                padding: "8px 0",
-                borderTop: "1px solid var(--stroke-neutral-subtle)",
-                fontSize: 13,
-                color: TEXT,
-              }}
-            >
+            <li key={f.slug} style={{ padding: "5px 0", fontSize: 12, color: TEXT }}>
               {f.slug}
             </li>
           ))}
           {view.composites.length > 0 && (
-            <li
-              style={{
-                padding: "8px 0",
-                borderTop: "1px solid var(--stroke-neutral-subtle)",
-                fontSize: 13,
-                color: TEXT,
-              }}
-            >
+            <li style={{ padding: "5px 0", fontSize: 12, color: TEXT }}>
               Saved components: {view.composites.join(", ")}
             </li>
           )}
         </ul>
       )}
-    </div>
+    </footer>
   );
 }

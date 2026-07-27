@@ -15,14 +15,17 @@ vi.mock("@xorkavi/arcade-gen", () => ({
   ),
   Input: (p: any) => <input {...p} />,
   Badge: ({ children }: any) => <span>{children}</span>,
-  TextArea: (p: any) => <textarea {...p} />,
+  // The kit TextArea renders its own <label> from the `label` prop.
+  TextArea: ({ label, ...p }: any) => (
+    <label>
+      {label}
+      <textarea {...p} />
+    </label>
+  ),
   // Icons. The real kit exports these (verified against dist/index.d.mts);
   // rendering them as marker spans lets a test assert an icon is PRESENT —
   // the iconless-IconButton bug shipped precisely because the old mock
   // swallowed children.
-  Globe: (p: any) => <span data-icon="globe" data-size={p?.size} />,
-  Pin: (p: any) => <span data-icon="pin" data-size={p?.size} />,
-  PinFilled: (p: any) => <span data-icon="pin-filled" data-size={p?.size} />,
   TrashBin: (p: any) => <span data-icon="trash" data-size={p?.size} />,
   Tag: ({ children }: any) => <span>{children}</span>,
   // Tooltip wraps a single trigger element and must render it through.
@@ -89,30 +92,41 @@ describe("MemoryPanel", () => {
     await waitFor(() => screen.getByText(/came up 3 times/));
   });
 
-  it("gives every row action a visible icon", async () => {
-    // Regression: IconButton requires an icon as `children`. Shipping it with
-    // none rendered three blank circles in the panel, and the old mock hid it
-    // by discarding children.
+  it("offers one action per inferred fact, with a visible icon", async () => {
+    // Pin and re-scope were noise on every row; remove is the action the
+    // section exists for. IconButton needs the icon as `children` — shipping it
+    // without one rendered a blank circle.
     render(<MemoryPanel projectSlug="demo" />);
-    const forget = await waitFor(() =>
-      screen.getByLabelText("Forget: Neutral gray for active nav rows"),
+    const remove = await waitFor(() =>
+      screen.getByLabelText("Remove: Neutral gray for active nav rows"),
     );
-    expect(forget.querySelector("[data-icon]")).not.toBeNull();
-    expect(
-      screen.getByLabelText("Limit to this project: Neutral gray for active nav rows")
-        .querySelector("[data-icon]"),
-    ).not.toBeNull();
-    expect(
-      screen.getByLabelText("Pin: Neutral gray for active nav rows").querySelector("[data-icon]"),
-    ).not.toBeNull();
+    expect(remove.querySelector("[data-icon]")).not.toBeNull();
+    expect(screen.queryByLabelText(/^Pin:/)).toBeNull();
+    expect(screen.queryByLabelText(/^Apply everywhere:/)).toBeNull();
+    expect(screen.queryByLabelText(/^Limit to this project:/)).toBeNull();
+  });
+
+  it("labels each instruction field with the kit label", async () => {
+    render(<MemoryPanel projectSlug="demo" />);
+    await waitFor(() => screen.getByText("For every project"));
+    expect(screen.getByText("For this project only")).toBeTruthy();
+  });
+
+  it("gives the instruction fields room for several lines", async () => {
+    // A 2-row box read as a single-line input for multi-sentence rules.
+    render(<MemoryPanel projectSlug="demo" />);
+    await waitFor(() => screen.getByText("For every project"));
+    for (const ta of Array.from(document.querySelectorAll("textarea"))) {
+      expect(Number(ta.getAttribute("rows"))).toBeGreaterThanOrEqual(3);
+    }
   });
 
   it("summarises existing work instead of listing it, never as raw markdown", async () => {
     render(<MemoryPanel projectSlug="demo" />);
-    await waitFor(() => screen.getByText(/Studio can see 1 frame in this project/));
+    await waitFor(() => screen.getByText(/already in this project/));
     // The frame list is evidence, not a task — collapsed until asked for.
     expect(screen.queryByText("01-list")).toBeNull();
-    await userEvent.click(screen.getByText("Show the list"));
+    await userEvent.click(screen.getByText("See what"));
     await waitFor(() => screen.getByText("01-list"));
     // The agent's INVENTORY.md uses markdown headings and dumps every visible
     // string in the frame. None of that belongs in front of a designer.
@@ -134,7 +148,7 @@ describe("MemoryPanel", () => {
   it("deletes a row through the API", async () => {
     render(<MemoryPanel projectSlug="demo" />);
     await waitFor(() => screen.getByText(/Neutral gray/));
-    await userEvent.click(screen.getByLabelText("Forget: Neutral gray for active nav rows"));
+    await userEvent.click(screen.getByLabelText("Remove: Neutral gray for active nav rows"));
     await waitFor(() => {
       const calls = (global.fetch as any).mock.calls.map((c: any[]) => [String(c[0]), c[1]?.method]);
       expect(calls).toEqual(
@@ -159,7 +173,7 @@ describe("MemoryPanel", () => {
     await waitFor(() => {
       // Empty states must say what to expect, not just be blank.
       expect(screen.getByText(/Nothing yet\./)).toBeTruthy();
-      expect(screen.getByText(/No frames yet/)).toBeTruthy();
+      expect(screen.getByText(/No frames here yet/)).toBeTruthy();
     });
   });
 
@@ -181,14 +195,14 @@ describe("MemoryPanel", () => {
       }
       return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) } as any);
     });
-    await userEvent.click(screen.getByLabelText("Forget: Neutral gray for active nav rows"));
+    await userEvent.click(screen.getByLabelText("Remove: Neutral gray for active nav rows"));
     await waitFor(() => expect(screen.getByText(/couldn't/i)).toBeTruthy());
   });
 
   it("does not show a mutation error on the happy path", async () => {
     render(<MemoryPanel projectSlug="demo" />);
     await waitFor(() => screen.getByText(/Neutral gray/));
-    await userEvent.click(screen.getByLabelText("Forget: Neutral gray for active nav rows"));
+    await userEvent.click(screen.getByLabelText("Remove: Neutral gray for active nav rows"));
     await waitFor(() => {
       expect(screen.queryByText(/couldn't/i)).toBeNull();
     });
