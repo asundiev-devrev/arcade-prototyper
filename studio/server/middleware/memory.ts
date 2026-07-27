@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { globalMemoryDir, projectMemoryDir } from "../paths";
+import { readInventoryView } from "../inventory";
 import {
   readRows,
   writeRows,
@@ -103,12 +104,14 @@ export function memoryMiddleware() {
           slug ? readRows("project", slug) : Promise.resolve([]),
           readTextOrEmpty(path.join(gDir, "RULES.md")),
           pDir ? readTextOrEmpty(path.join(pDir, "RULES.md")) : Promise.resolve(""),
-          pDir ? readTextOrEmpty(path.join(pDir, "INVENTORY.md")) : Promise.resolve(""),
+          // Structured, NOT the rendered INVENTORY.md. That file is prompt text
+          // for the agent; shown to a designer it reads as a wall of markdown.
+          slug ? readInventoryView(slug) : Promise.resolve({ frames: [], composites: [] }),
         ]);
         send(res, 200, {
           global: { rows: globalRows, rules: stripHeaderComments(globalRules) },
           project: { rows: projectRows, rules: stripHeaderComments(projectRules) },
-          inventory: stripHeaderComments(inventory),
+          inventory,
         });
       })().catch((err) => {
         console.warn("[studio] memory GET failed:", err);

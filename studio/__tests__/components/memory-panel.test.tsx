@@ -10,12 +10,20 @@ vi.mock("@xorkavi/arcade-gen", () => ({
   Button: ({ children, onClick, ...p }: any) => (
     <button onClick={onClick} {...p}>{children}</button>
   ),
-  IconButton: ({ onClick, "aria-label": label }: any) => (
-    <button onClick={onClick} aria-label={label} />
+  IconButton: ({ onClick, "aria-label": label, children }: any) => (
+    <button onClick={onClick} aria-label={label}>{children}</button>
   ),
   Input: (p: any) => <input {...p} />,
   Badge: ({ children }: any) => <span>{children}</span>,
   TextArea: (p: any) => <textarea {...p} />,
+  // Icons. The real kit exports these (verified against dist/index.d.mts);
+  // rendering them as marker spans lets a test assert an icon is PRESENT —
+  // the iconless-IconButton bug shipped precisely because the old mock
+  // swallowed children.
+  Globe: () => <span data-icon="globe" />,
+  Pin: () => <span data-icon="pin" />,
+  PinFilled: () => <span data-icon="pin-filled" />,
+  TrashBin: () => <span data-icon="trash" />,
 }));
 
 const SNAPSHOT = {
@@ -29,7 +37,11 @@ const SNAPSHOT = {
     rows: [{ id: "p1", fact: "Filter chips go in the toolbar", level: "project", hits: 2 }],
     rules: "",
   },
-  inventory: "## Frames already in this project\n\n### frame: 01-list",
+  // Structured — the server sends data, never the agent's raw INVENTORY.md.
+  inventory: {
+    frames: [{ slug: "01-list", components: ["VistaPage", "Checkbox"] }],
+    composites: ["SkillCardAndrey"],
+  },
 };
 
 beforeEach(() => {
@@ -60,9 +72,40 @@ describe("MemoryPanel", () => {
     expect(screen.getByText(/01-list/)).toBeTruthy();
   });
 
-  it("shows the hit count for a row", async () => {
+  it("shows the repeat count for a row", async () => {
     render(<MemoryPanel projectSlug="demo" />);
-    await waitFor(() => screen.getByText(/×3/));
+    await waitFor(() => screen.getByText(/3×/));
+  });
+
+  it("gives every row action a visible icon", async () => {
+    // Regression: IconButton requires an icon as `children`. Shipping it with
+    // none rendered three blank circles in the panel, and the old mock hid it
+    // by discarding children.
+    render(<MemoryPanel projectSlug="demo" />);
+    const forget = await waitFor(() =>
+      screen.getByLabelText("Forget: Neutral gray for active nav rows"),
+    );
+    expect(forget.querySelector("[data-icon]")).not.toBeNull();
+    expect(
+      screen.getByLabelText("Limit to this project: Neutral gray for active nav rows")
+        .querySelector("[data-icon]"),
+    ).not.toBeNull();
+    expect(
+      screen.getByLabelText("Pin: Neutral gray for active nav rows").querySelector("[data-icon]"),
+    ).not.toBeNull();
+  });
+
+  it("renders the inventory as frame rows, never as raw markdown", async () => {
+    render(<MemoryPanel projectSlug="demo" />);
+    await waitFor(() => screen.getByText("01-list"));
+    // The agent's INVENTORY.md uses markdown headings and dumps every visible
+    // string in the frame. None of that belongs in front of a designer.
+    const body = document.body.textContent ?? "";
+    expect(body).not.toContain("## Frames");
+    expect(body).not.toContain("visible text:");
+    expect(body).not.toContain("components used:");
+    expect(screen.getByText(/VistaPage/)).toBeTruthy();
+    expect(screen.getByText(/SkillCardAndrey/)).toBeTruthy();
   });
 
   it("deletes a row through the API", async () => {
@@ -85,13 +128,13 @@ describe("MemoryPanel", () => {
           Promise.resolve({
             global: { rows: [], rules: "" },
             project: { rows: [], rules: "" },
-            inventory: "",
+            inventory: { frames: [], composites: [] },
           }),
       } as any),
     );
     render(<MemoryPanel projectSlug="demo" />);
     await waitFor(() => {
-      expect(screen.getByText(/Studio hasn't learned anything yet/)).toBeTruthy();
+      expect(screen.getByText(/hasn't learned anything about your work yet/)).toBeTruthy();
     });
   });
 

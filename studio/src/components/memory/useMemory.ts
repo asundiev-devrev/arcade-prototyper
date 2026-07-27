@@ -7,10 +7,19 @@ export interface LearnedRowView {
   hits: number;
   pinned?: boolean;
 }
+export interface InventoryFrameView {
+  slug: string;
+  components: string[];
+}
+/** Structured — the server no longer sends the agent's raw INVENTORY.md here. */
+export interface InventoryView {
+  frames: InventoryFrameView[];
+  composites: string[];
+}
 export interface MemorySnapshot {
   global: { rows: LearnedRowView[]; rules: string };
   project: { rows: LearnedRowView[]; rules: string };
-  inventory: string;
+  inventory: InventoryView;
 }
 
 type Status = "loading" | "ready" | "error";

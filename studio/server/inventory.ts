@@ -62,6 +62,66 @@ export function renderInventory(args: {
     : out;
 }
 
+/**
+ * Structured inventory for the Memory panel. The panel must NOT render
+ * `INVENTORY.md` — that file is prompt text for the agent (markdown headings,
+ * a full visible-text dump) and reads as a wall of code when shown to a
+ * designer. Same source data, shaped for a UI instead.
+ */
+export interface InventoryFrameView {
+  slug: string;
+  /** Kit composites/components this frame imports, deduped. */
+  components: string[];
+}
+export interface InventoryView {
+  frames: InventoryFrameView[];
+  composites: string[];
+}
+
+/** Component identifiers a frame imports — PascalCase named imports only. */
+function importedComponents(src: string): string[] {
+  const seen = new Set<string>();
+  const importRe = /import\s*\{([^}]*)\}\s*from\s*["'][^"']*["']/g;
+  let m: RegExpExecArray | null;
+  while ((m = importRe.exec(src)) !== null) {
+    for (const raw of m[1].split(",")) {
+      const name = raw.trim().split(/\s+as\s+/)[0].trim();
+      if (name && /^[A-Z]/.test(name)) seen.add(name);
+    }
+  }
+  return [...seen].sort();
+}
+
+/**
+ * Read the same on-disk state `writeInventory` renders, but return DATA.
+ * Never throws — an unreadable project degrades to an empty view so the panel
+ * still loads.
+ */
+export async function readInventoryView(projectSlug: string): Promise<InventoryView> {
+  try {
+    const listComposites = async (): Promise<string[]> => {
+      try {
+        // Lazy for the same reason as in writeInventory: componentStore pulls
+        // esbuild in through packFromSource.
+        const { listComponents } = await import("./componentStore");
+        return (await listComponents()).map((c) => c.name).sort();
+      } catch {
+        return [];
+      }
+    };
+    const [frames, composites] = await Promise.all([
+      readFrames(projectSlug),
+      listComposites(),
+    ]);
+    return {
+      frames: frames.map((f) => ({ slug: f.slug, components: importedComponents(f.source) })),
+      composites,
+    };
+  } catch {
+    return { frames: [], composites: [] };
+  }
+}
+
 /** Read every frame's index.tsx. Missing/unreadable frames are skipped, not fatal. */
 async function readFrames(
   projectSlug: string,
