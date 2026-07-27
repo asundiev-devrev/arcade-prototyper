@@ -119,7 +119,10 @@ mechanism (the kit rides in the cached `--append-system-prompt`, not in
 - Team-shared / hosted memory (designer's call: personal now, shareable later;
   file format should not preclude a future export/import).
 - Retrieval or embeddings over past turns.
-- Auto-writing a memory without designer confirmation.
+- Any UI that asks the designer to approve, review, or manage what the agent
+  learns. Memory exists to make the agent reason better; asking the designer to
+  curate it moves the work in the wrong direction. Capture is silent, correction
+  is on-demand in the panel.
 - Learning from anything but the designer's own words (no screenshot inference,
   no inferring taste from accepted output).
 - Fixing taste drift.
@@ -129,14 +132,20 @@ mechanism (the kit rides in the cached `--append-system-prompt`, not in
 **Typed, server-owned memory.** Memory stops being free prose the agent
 maintains and becomes four named kinds the *server* owns and renders into the
 files the agent already imports. The agent's only memory duty is reading, which
-the existing `@`-imports already do. The agent may *propose*; it never writes.
+the existing `@`-imports already do.
+
+**Memory is infrastructure for the agent, not a feature the designer operates.**
+It accrues and applies without comment; the designer never approves, reviews, or
+curates it during work. The one exception is an explicit `remember: …`, which is
+the designer asking, so it gets a one-line answer. The panel exists for
+diagnosis — open it when output looks wrong — not for routine management.
 
 Steps 1–2 of the build order double as the cheap experiment that tests this
-premise: ship Inventory + the panel, fix the picker-preamble contradiction above,
-and observe whether the agent's own proposals become adequate once writing is
-permitted and visible. If memory fills on its own, step 3's extractor is
-unnecessary complexity and should not be built. Cost of finding out: one release
-of observation.
+premise: ship Inventory + the panel, fix the picker-preamble contradiction below,
+and observe whether the agent's own writing becomes adequate once it is permitted
+and visible. If memory fills on its own, step 3's extractor is unnecessary
+complexity and should not be built. Cost of finding out: one release of
+observation.
 
 Rejected alternatives:
 
@@ -211,8 +220,8 @@ point: a project-default misroute costs a re-teach in the next project (visible,
 local); a global-default misroute silently contaminates every future project.
 
 Promotion on second-project recurrence replaces the assumption that taste travels
-with a measurement of whether it did. Routing is decided by the **server** and
-shown on the chip; the designer can still promote manually with one tap.
+with a measurement of whether it did. Routing is decided by the **server**,
+silently; the designer can promote or demote any row in the panel.
 
 ### Guards so global still fills
 
@@ -226,8 +235,8 @@ project-default routing, three mechanisms feed it:
   components", "read the file first") and profile facts (library, products) — both
   better stated once by the designer than inferred from corrections. The panel
   makes writing them a first-class action.
-- **The chip always names its level**, so the designer can promote at confirm
-  time when they already know a fact is general.
+- **Manual promotion in the panel**, for when the designer already knows a fact
+  is general and doesn't want to wait for a second project to prove it.
 
 The panel shows Global first, always: an empty Global after real use is a visible
 defect rather than silence.
@@ -240,7 +249,7 @@ second one, so memory converges rather than sprawls.
 | Kind | Answers | Written by | Cost when wrong |
 |---|---|---|---|
 | Rules (exists) | "always do X" | designer, by hand | designer edits it |
-| Learned | "you corrected me on Y" | agent proposes → **designer confirms** | a bad standing instruction |
+| Learned | "you corrected me on Y" | server, silently — designer corrects in the panel | a bad standing instruction |
 | Brief / Profile | "this is DevRev Knowledge, for support agents" | derived + Computer | generic first pass |
 | Inventory | "this project already has 6 frames + your SkillCard" | server, deterministic | rebuilds existing work |
 
@@ -353,8 +362,9 @@ in both directions:
 
 - **False positives: 10 fired, almost none durable.** "The active icon button
   must have '@' icon instead of '+'" trips `instead` but is a one-off tweak to
-  one button. Nothing to remember. These become chips the designer dismisses,
-  which is how the feature dies of fatigue in week one.
+  one button. Nothing to remember. With silent capture these are worse than an
+  ignorable prompt — they become standing instructions nobody vetted, poisoning
+  later frames with one project's pixel nudges.
 - **False negatives: the durable ones are exactly what it misses.**
   - "You've made ticket page a separate frame — don't do that. Instead it should
     open as a tab" → a standing instruction about how flows get built (passes
@@ -421,29 +431,57 @@ new prompt, return either nothing or exactly one candidate: `{ fact, level,
 evidence }`. Two-sentence output; cheap and fast. Nothing in the turn depends on
 it — on failure or timeout, silence.
 
-**Reinforcement before proposal.** If the candidate near-matches an existing row
-(either level), increment that row's `hits`, set `lastSeenAt`, and stop. No
-chip. This keeps memory converging instead of sprawling.
+**Reinforcement before writing.** If the candidate near-matches an existing row
+(either level), increment that row's `hits`, set `lastSeenAt`, add the slug to
+`seenInProjects` — and do not write a second row. A row whose `seenInProjects`
+reaches two is offered for promotion to global. This keeps memory converging
+instead of sprawling.
 
 Note this is *dedup only*, not the success metric — the recurrence gate (1a)
 already uses repetition as its detector, so counting repetitions cannot also
 prove the feature works. See "How we know it worked".
 
-**Then the chip.** In the chat pane, under the finished turn:
+**Then write it. Silently.** The row is persisted at the routed level and the
+markdown re-rendered. No chip, no notification, no line in the turn summary.
 
-```
-Remember globally: prefer neutral gray for active nav rows
-[ Remember ]  [ Project only ]  [ Dismiss ]
-```
+### Memory is for the agent, not for the designer (design principle)
 
-- Nothing is learned without a tap.
-- `Dismiss` is persisted per project, so the same candidate is not re-offered
-  there.
-- At most one chip per turn; if two candidates surface, keep the stronger and
-  drop the other.
+An earlier draft proposed a confirm chip under each turn ("Remember globally: …
+[Remember] [Project only] [Dismiss]"). **Cut.** Two reasons, the second decisive:
 
-**Explicit `remember:` bypasses stages 1–2.** The fact is written immediately
-(`source: "explicit"`); the chip only reports where it landed.
+1. Studio already has this pattern and it is the weaker half of the product. The
+   drift check asks Computer whether a frame contradicts how DevRev works and
+   surfaces a chime-in
+   ([server/devrev/driftCheck.ts](../../../studio/server/devrev/driftCheck.ts),
+   [server/chimeIns.ts](../../../studio/server/chimeIns.ts)). A memory chip is the
+   same shape — spend the designer's attention to tell them something — and would
+   compete with it for the same space.
+2. **The purpose of memory is to make the agent reason better, not to educate the
+   designer.** A prompt asking "should I remember this?" inverts that: it moves
+   work from the agent to the person, and turns a background capability into a
+   recurring decision. Anything that makes the designer manage the agent's
+   knowledge is a failure of the feature, not a feature of it.
+
+So: **capture is silent; the agent is quiet about memory unless explicitly
+nudged.** A `remember: …` prompt is the one case where the designer has asked, so
+the reply confirms in one short line what was stored and where. Everything else
+happens without comment.
+
+The panel remains, and its job changes accordingly: not "here is what Studio
+learned about you" but **the diagnostic surface you open when output looks
+wrong** — inspect the agent's context, correct or delete a bad row. Visibility on
+demand, never on interrupt.
+
+**The trade this makes explicit.** Dropping confirmation removes the human check
+that would have caught a bad memory before it took effect. The compensating
+controls are: the panel (see and delete anything, effective next turn), the
+dry-run gate before step 3 ships at all, and gate/extractor telemetry. Given the
+detector has been wrong twice under measurement, those are load-bearing, not
+optional — a silent writer with no dry-run and no panel would be the worst
+configuration in this document.
+
+**Explicit `remember:` bypasses stages 1–2** and is written immediately
+(`source: "explicit"`), acknowledged in one line.
 
 ## Brief, Profile, Inventory
 
@@ -547,10 +585,16 @@ per memory write.
 
 ## Panel
 
+The diagnostic surface: **what the agent currently knows, and the place to fix
+it when output looks wrong.** Not a dashboard, not a review queue — nothing here
+demands attention, and it is expected to go unopened for long stretches.
+
 A third tab beside Chat and Assets, following the shipped Assets pattern
 ([studio/src/components/shell/LeftPaneTabs.tsx](../../../studio/src/components/shell/LeftPaneTabs.tsx),
 [LeftPaneTabToggle.tsx](../../../studio/src/components/shell/LeftPaneTabToggle.tsx)).
-No new shell layout.
+No new shell layout. (If a persistent third tab proves to cost too much header
+real estate for something opened rarely, it can move behind Settings without
+affecting anything else in this design — the panel is the only client surface.)
 
 ```
 ┌─ Chat ─ Assets ─ Memory ──────────────────┐
@@ -579,17 +623,19 @@ No new shell layout.
 ```
 
 - Global on top, always — the level that must not starve is the one seen first.
-- Row hover → delete; click → edit. `×N` is the hit count, showing which
-  memories earn their place.
+- Row hover → delete; click → edit; also pin, and promote/demote between levels.
+  `×N` is the hit count — shown because it's the fastest way to spot a fact the
+  agent keeps needing, *not* as a value score (it drives neither eviction nor the
+  success metric).
 - Inventory is read-only (a mirror of disk). `↻` re-asks Computer.
-- Any edit writes JSON, re-renders markdown, and clears sessions per the rule
-  above.
+- Any edit writes JSON and re-renders the markdown; it takes effect on the next
+  turn with no session churn (see "No session invalidation needed").
 
 ## Failure modes
 
 | Failure | Behavior |
 |---|---|
-| Extractor call fails / times out | No chip. Turn already ended; unaffected. |
+| Extractor call fails / times out | Nothing written. Turn already ended; unaffected, and silent by design. |
 | Gate fires on Studio's own boilerplate | Prevented by construction: the index holds only the typed span. If a machine preamble ever reaches the index, treat as a bug with a regression test, not a tuning problem. |
 | Computer 406s or is slow | Brief keeps its local half + "unavailable, retry". Generation never blocked. |
 | `LEARNED.md` hand-edited | Tolerated; next render regenerates from JSON. Panel is the supported path. |
@@ -648,11 +694,13 @@ remains unmeasured in this repo. This design does not claim to supply that.
 pass reflects global Rules + Profile (+ any promoted memories) with nothing
 retyped.
 
-**Dry-run gate before step 3 ships to anyone:** run the gate and extractor with
-chips *suppressed*, logging candidates only, across a week of real use. Ship the
-chip only if the logged candidates read as things worth remembering. This design's
-detector has been wrong twice already under measurement (keyword gate, then
-boilerplate contamination), so it does not get to reach the designer unobserved.
+**Dry-run gate before step 3 writes anything:** run the gate and extractor with
+writes *disabled*, logging candidates only, across a week of real use. Enable
+writing only if the logged candidates read as things worth remembering. This is
+the single most important gate in the document: capture is silent, so there is no
+human check between a bad candidate and a standing instruction — and this
+design's detector has already been wrong twice under measurement (keyword gate,
+then boilerplate contamination).
 
 **Regression gates** (all assertable in the existing vitest suite,
 `__tests__/server/...`):
@@ -685,11 +733,11 @@ Each step ships independently and is useful alone.
    after. If memory fills, step 3 is unnecessary complexity — do not build it.
 3. **Correction capture** — *only if step 2's observation says it's needed.*
    Typed-span index (needs a small shell change) + `SCOPED_EDIT_MARKER` exclusion
-   → gate → extract → chip, project-default routing with earned promotion,
-   reinforcement, gate/extractor telemetry. Requires the JSON row store and the
-   panel first, so a bad memory is correctable before any can exist. Highest-risk
-   step: ships behind a flag, dry-run with chips suppressed before the designer
-   ever sees one.
+   → gate → extract → **silent write**, project-default routing with earned
+   promotion, reinforcement, gate/extractor telemetry. No chat-pane UI at all.
+   Requires the JSON row store and the panel first, so a bad memory is
+   correctable before any can exist. Highest-risk step: ships behind a flag,
+   dry-run with writes disabled first.
 4. **Brief + Profile** — local derivation first, Computer on top. Independent of
    steps 1–3.
 
