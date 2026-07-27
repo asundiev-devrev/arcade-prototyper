@@ -76,8 +76,8 @@ describe("MemoryPanel", () => {
     // Two identical "Rules you set" headings (one per scope) was unreadable.
     render(<MemoryPanel projectSlug="demo" />);
     await waitFor(() => screen.getByText(/Neutral gray for active nav rows/));
-    expect(screen.getByText("Your instructions")).toBeTruthy();
-    expect(screen.getByText("Picked up from your edits")).toBeTruthy();
+    expect(screen.getByText("Rules you wrote")).toBeTruthy();
+    expect(screen.getByText("Learned from your edits")).toBeTruthy();
     expect(screen.getAllByText("Every project").length).toBeGreaterThan(0);
     expect(screen.getAllByText("This project").length).toBeGreaterThan(0);
   });
@@ -90,6 +90,15 @@ describe("MemoryPanel", () => {
   it("spells out the repeat count instead of a bare glyph", async () => {
     render(<MemoryPanel projectSlug="demo" />);
     await waitFor(() => screen.getByText(/came up 3 times/));
+  });
+
+  it("carries the meaning in section titles, not in subtitles", async () => {
+    // Subtitles restating the title were noise; the source is IN the title now.
+    render(<MemoryPanel projectSlug="demo" />);
+    await waitFor(() => screen.getByText("Rules you wrote"));
+    const body = document.body.textContent ?? "";
+    expect(body).not.toContain("You wrote these. Studio follows them exactly.");
+    expect(body).not.toContain("Studio inferred these.");
   });
 
   it("offers one action per inferred fact, with a visible icon", async () => {
@@ -169,6 +178,7 @@ describe("MemoryPanel", () => {
     render(<MemoryPanel projectSlug="demo" />);
     await waitFor(() => {
       // Empty states must say what to expect, not just be blank.
+      // An empty section is the one place a hint earns its keep.
       expect(screen.getByText(/Nothing yet\./)).toBeTruthy();
     });
   });

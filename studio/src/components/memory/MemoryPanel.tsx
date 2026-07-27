@@ -64,7 +64,7 @@ export function MemoryPanel({ projectSlug }: { projectSlug: string }) {
         </p>
       )}
 
-      <Section title="Your instructions" hint="You wrote these. Studio follows them exactly.">
+      <Section title="Rules you wrote">
         <RuleField
           label="For every project"
           text={data.global.rules}
@@ -80,17 +80,25 @@ export function MemoryPanel({ projectSlug }: { projectSlug: string }) {
       </Section>
 
       <Section
-        title="Picked up from your edits"
+        title="Learned from your edits"
+        divider
+        // Only when empty: with no rows there is nothing to infer the section's
+        // purpose from, so say what will appear here.
         hint={
           learned.length === 0
-            ? "Nothing yet. Studio adds a line here when it notices you correcting the same thing."
-            : "Studio inferred these. Remove anything it got wrong."
+            ? "Nothing yet. A line appears here when Studio notices you correcting the same thing twice."
+            : undefined
         }
       >
         {learned.length > 0 && (
           <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-            {learned.map((r) => (
-              <FactRow key={r.id} row={r} onDelete={deleteRow} />
+            {learned.map((r, i) => (
+              <FactRow
+                key={r.id}
+                row={r}
+                onDelete={deleteRow}
+                last={i === learned.length - 1}
+              />
             ))}
           </ul>
         )}
@@ -107,17 +115,28 @@ const HAIRLINE = "1px solid var(--stroke-neutral-subtle)";
 function Section({
   title,
   hint,
+  divider,
   children,
 }: {
   title: string;
-  hint: string;
+  /** Only for empty states — a good title needs no gloss. */
+  hint?: string;
+  divider?: boolean;
   children?: React.ReactNode;
 }) {
   return (
-    <section style={{ marginBottom: 28 }}>
+    <section
+      style={
+        divider
+          ? { marginBottom: 28, paddingTop: 24, borderTop: HAIRLINE }
+          : { marginBottom: 28 }
+      }
+    >
       <h3 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: TEXT }}>{title}</h3>
-      <p style={{ margin: "2px 0 12px", fontSize: 12, lineHeight: 1.5, color: MUTED }}>{hint}</p>
-      {children}
+      {hint ? (
+        <p style={{ margin: "4px 0 0", fontSize: 12, lineHeight: 1.5, color: MUTED }}>{hint}</p>
+      ) : null}
+      <div style={{ marginTop: 12 }}>{children}</div>
     </section>
   );
 }
@@ -175,9 +194,12 @@ function RuleField({
 function FactRow({
   row,
   onDelete,
+  last,
 }: {
   row: LearnedRowView;
   onDelete: (r: LearnedRowView) => Promise<void>;
+  /** The final row draws no rule — a trailing hairline reads as a cut-off list. */
+  last?: boolean;
 }) {
   const [hover, setHover] = useState(false);
 
@@ -190,23 +212,9 @@ function FactRow({
         alignItems: "flex-start",
         gap: 10,
         padding: "10px 0",
-        borderBottom: HAIRLINE,
+        borderBottom: last ? "none" : HAIRLINE,
       }}
     >
-      {/* Bullet: the marker that makes this read as a list item rather than
-          loose copy. Sized and nudged to sit on the first text line. */}
-      <span
-        aria-hidden="true"
-        style={{
-          flexShrink: 0,
-          width: 4,
-          height: 4,
-          marginTop: 7,
-          borderRadius: "50%",
-          background: MUTED,
-        }}
-      />
-
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: TEXT }}>{row.fact}</p>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5 }}>
