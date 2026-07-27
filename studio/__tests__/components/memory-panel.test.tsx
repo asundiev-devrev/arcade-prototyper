@@ -102,4 +102,27 @@ describe("MemoryPanel", () => {
     render(<MemoryPanel projectSlug="demo" />);
     await waitFor(() => screen.getByText(/couldn't load/i));
   });
+
+  it("tells the designer when a change could not be saved", async () => {
+    render(<MemoryPanel projectSlug="demo" />);
+    await waitFor(() => screen.getByText(/Neutral gray/));
+    // GET keeps working; the mutation is what fails.
+    (global.fetch as any).mockImplementation((url: any, init?: any) => {
+      if (String(url).startsWith("/api/memory?")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(SNAPSHOT) } as any);
+      }
+      return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) } as any);
+    });
+    await userEvent.click(screen.getByLabelText("Forget: Neutral gray for active nav rows"));
+    await waitFor(() => expect(screen.getByText(/couldn't/i)).toBeTruthy());
+  });
+
+  it("does not show a mutation error on the happy path", async () => {
+    render(<MemoryPanel projectSlug="demo" />);
+    await waitFor(() => screen.getByText(/Neutral gray/));
+    await userEvent.click(screen.getByLabelText("Forget: Neutral gray for active nav rows"));
+    await waitFor(() => {
+      expect(screen.queryByText(/couldn't/i)).toBeNull();
+    });
+  });
 });

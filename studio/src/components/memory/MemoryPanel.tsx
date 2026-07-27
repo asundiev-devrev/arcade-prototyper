@@ -9,7 +9,7 @@ import { useMemory, type LearnedRowView } from "./useMemory";
  * unopened for long stretches.
  */
 export function MemoryPanel({ projectSlug }: { projectSlug: string }) {
-  const { status, data, patchRow, deleteRow, saveRule } = useMemory(projectSlug);
+  const { status, data, mutationError, patchRow, deleteRow, saveRule } = useMemory(projectSlug);
 
   if (status === "loading") {
     return <div className="p-4 text-(--fg-neutral-soft)">Loading…</div>;
@@ -30,6 +30,11 @@ export function MemoryPanel({ projectSlug }: { projectSlug: string }) {
 
   return (
     <div className="flex flex-col gap-6 overflow-y-auto p-4">
+      {mutationError && (
+        <div className="text-sm text-(--fg-neutral-soft)">
+          {mutationError}
+        </div>
+      )}
       {empty && (
         <p className="text-(--fg-neutral-soft)">
           Studio hasn't learned anything yet. Ask for a few frames, or write a

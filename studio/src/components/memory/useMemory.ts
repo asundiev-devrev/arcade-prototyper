@@ -18,6 +18,7 @@ type Status = "loading" | "ready" | "error";
 export function useMemory(slug: string) {
   const [status, setStatus] = useState<Status>("loading");
   const [data, setData] = useState<MemorySnapshot | null>(null);
+  const [mutationError, setMutationError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     let live = true;
@@ -48,39 +49,66 @@ export function useMemory(slug: string) {
 
   const patchRow = useCallback(
     async (row: LearnedRowView, patch: { fact?: string; pinned?: boolean; toLevel?: "global" | "project" }) => {
-      await fetch("/api/memory/row", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ level: row.level, slug, id: row.id, ...patch }),
-      });
-      load();
+      setMutationError(null);
+      try {
+        const r = await fetch("/api/memory/row", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ level: row.level, slug, id: row.id, ...patch }),
+        });
+        if (!r.ok) {
+          setMutationError("Couldn't save that change");
+          return;
+        }
+        load();
+      } catch {
+        setMutationError("Couldn't save that change");
+      }
     },
     [slug, load],
   );
 
   const deleteRow = useCallback(
     async (row: LearnedRowView) => {
-      await fetch("/api/memory/row", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ level: row.level, slug, id: row.id }),
-      });
-      load();
+      setMutationError(null);
+      try {
+        const r = await fetch("/api/memory/row", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ level: row.level, slug, id: row.id }),
+        });
+        if (!r.ok) {
+          setMutationError("Couldn't forget that memory");
+          return;
+        }
+        load();
+      } catch {
+        setMutationError("Couldn't forget that memory");
+      }
     },
     [slug, load],
   );
 
   const saveRule = useCallback(
     async (level: "global" | "project", text: string) => {
-      await fetch("/api/memory/rule", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ level, slug, text }),
-      });
-      load();
+      setMutationError(null);
+      try {
+        const r = await fetch("/api/memory/rule", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ level, slug, text }),
+        });
+        if (!r.ok) {
+          setMutationError("Couldn't save your rules");
+          return;
+        }
+        load();
+      } catch {
+        setMutationError("Couldn't save your rules");
+      }
     },
     [slug, load],
   );
 
-  return { status, data, refresh: load, patchRow, deleteRow, saveRule };
+  return { status, data, mutationError, refresh: load, patchRow, deleteRow, saveRule };
 }
