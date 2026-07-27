@@ -113,6 +113,38 @@ describe("readRows / writeRows", () => {
     expect(await readRows("global")).toEqual([]);
     expect(fs.existsSync(path.join(dir, "learned.json.bak"))).toBe(true);
   });
+
+  it("skips a malformed row and keeps the valid ones", async () => {
+    const dir = path.join(tmp, "memory");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, "learned.json"),
+      JSON.stringify([row({ id: "ok1" }), { id: "bad", fact: "missing fields" }, row({ id: "ok2" })]),
+    );
+    const rows = await readRows("global");
+    expect(rows.map((r) => r.id)).toEqual(["ok1", "ok2"]);
+    expect(fs.existsSync(path.join(dir, "learned.json.bak"))).toBe(true);
+  });
+
+  it("renders a store containing a malformed row without throwing", async () => {
+    // Regression: the sort comparator read lastSeenAt off an incomplete row.
+    // Needs 2+ rows — a lone bad row never invokes the comparator.
+    const dir = path.join(tmp, "memory");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, "learned.json"),
+      JSON.stringify([row({ id: "ok1" }), { id: "bad" }, row({ id: "ok2" })]),
+    );
+    const rows = await readRows("global");
+    expect(() => renderLearned(rows, "global")).not.toThrow();
+  });
+
+  it("returns [] for a JSON object rather than an array", async () => {
+    const dir = path.join(tmp, "memory");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "learned.json"), JSON.stringify({ not: "an array" }));
+    expect(await readRows("global")).toEqual([]);
+  });
 });
 
 describe("migrateLegacyLearned", () => {

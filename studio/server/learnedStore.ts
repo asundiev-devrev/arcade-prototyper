@@ -30,6 +30,29 @@ export interface LearnedRow {
  */
 export const LEARNED_CHAR_CAP = 4_000;
 
+/**
+ * A row is usable only if every field renderLearned/eviction touches is present
+ * and the right type. readRows type-guarded only Array.isArray, so a valid-JSON
+ * array holding one incomplete row crashed the sort comparator on render —
+ * taking down every turn, with no .bak written because JSON.parse succeeded.
+ * Hand-editing these files is supported, so a malformed row must degrade to
+ * "skip that row", never "lose the store".
+ */
+function isUsableRow(r: unknown): r is LearnedRow {
+  if (typeof r !== "object" || r === null) return false;
+  const o = r as Record<string, unknown>;
+  return (
+    typeof o.id === "string" && o.id.length > 0 &&
+    typeof o.fact === "string" && o.fact.length > 0 &&
+    (o.level === "global" || o.level === "project") &&
+    typeof o.hits === "number" &&
+    typeof o.createdAt === "string" &&
+    typeof o.lastSeenAt === "string" &&
+    (o.source === "confirmed" || o.source === "explicit") &&
+    Array.isArray(o.seenInProjects)
+  );
+}
+
 function dirFor(level: MemoryLevel, slug?: string): string {
   if (level === "global") return globalMemoryDir();
   if (!slug) throw new Error("project level requires a slug");
@@ -89,7 +112,21 @@ export async function readRows(level: MemoryLevel, slug?: string): Promise<Learn
   }
   try {
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as LearnedRow[]) : [];
+    if (!Array.isArray(parsed)) return [];
+
+    const valid = parsed.filter(isUsableRow);
+    const dropped = parsed.length - valid.length;
+    if (dropped > 0) {
+      // Partial corruption: preserve the original for forensics, return what's usable.
+      // Partial recovery beats total loss.
+      try {
+        await fs.writeFile(`${file}.bak`, raw, "utf-8");
+      } catch {
+        /* best effort */
+      }
+      console.warn(`[studio] ${dropped} malformed row(s) in ${file} — preserved as .bak`);
+    }
+    return valid;
   } catch {
     // Corrupt store: preserve it for forensics, degrade to Rules-only memory.
     // Never delete the designer's data on a parse failure.
