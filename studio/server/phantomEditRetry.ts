@@ -11,9 +11,10 @@
  */
 
 /**
- * Bare `remember: …` turns legitimately touch only memory/LEARNED.md (outside
- * the frames/shared snapshot) and may still carry a Deviations section; they
- * must never be retried as phantom edits.
+ * Bare `remember: …` turns legitimately produce no file change (the template
+ * instructs the agent to acknowledge and point at the Memory panel) but may
+ * still carry a `### Deviations` section if the agent narrates acknowledging
+ * the request; they must never be retried as phantom edits.
  */
 export function isMemoryOnlyPrompt(prompt: string): boolean {
   return /^\s*remember:/i.test(prompt);

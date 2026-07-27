@@ -59,4 +59,16 @@ describe("CLAUDE.md template — inventory injection", () => {
     expect(imports.length).toBeGreaterThanOrEqual(5);
     expect(tpl).toMatch(/read-only to you/);
   });
+
+  it("does not claim Studio writes memory for remember: prompts", () => {
+    // Regression: the template once promised "Studio does the writing" but no
+    // such writer existed — silent data loss. Now the agent must honestly direct
+    // the user to the Memory panel.
+    expect(tpl).not.toMatch(/Studio does the writing/i);
+    expect(tpl).not.toMatch(/Studio will (write|save|capture)/i);
+  });
+
+  it("points at the Memory panel for remember: prompts", () => {
+    expect(tpl).toMatch(/Memory\s+panel/i);
+  });
 });
