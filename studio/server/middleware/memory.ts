@@ -42,6 +42,33 @@ export function applyRowPatch(
   });
 }
 
+/**
+ * Move a row between global and project stores. SAFE ORDER — writes to
+ * destination FIRST, then removes from source. If anything throws between the
+ * two writes (e.g. corrupt destination store), the worst case is a row present
+ * in BOTH stores (visible + deletable in the panel) instead of permanent loss.
+ * Recoverable duplicate > silent loss.
+ */
+export async function moveRowBetweenLevels(
+  row: LearnedRow,
+  sourceLevel: MemoryLevel,
+  sourceSlug: string | undefined,
+  destLevel: MemoryLevel,
+  destSlug: string | undefined,
+): Promise<void> {
+  // Destination write FIRST, source removal second. If this order were
+  // reversed, a throw between the two writes (e.g. a corrupt destination
+  // store failing readRows) would remove the row from source and never
+  // land it — silent, permanent loss of a designer's memory. In this
+  // order the worst case is the row appearing in BOTH stores, which the
+  // designer can see and delete. Recoverable duplicate > silent loss.
+  const dest = await readRows(destLevel, destSlug);
+  await writeRows(destLevel, [...dest, row], destSlug);
+
+  const source = await readRows(sourceLevel, sourceSlug);
+  await writeRows(sourceLevel, source.filter((r) => r.id !== row.id), sourceSlug);
+}
+
 async function readTextOrEmpty(file: string): Promise<string> {
   try {
     return await fs.readFile(file, "utf-8");
@@ -108,10 +135,8 @@ export function memoryMiddleware() {
         // A level change moves the row between stores rather than editing in place.
         const moved = patched.find((r) => r.id === b.id && r.level !== level);
         if (moved) {
-          await writeRows(level, patched.filter((r) => r.id !== b.id), b.slug);
           const destSlug = moved.level === "project" ? b.slug : undefined;
-          const dest = await readRows(moved.level, destSlug);
-          await writeRows(moved.level, [...dest, moved], destSlug);
+          await moveRowBetweenLevels(moved, level, b.slug, moved.level, destSlug);
         } else {
           await writeRows(level, patched, b.slug);
         }
