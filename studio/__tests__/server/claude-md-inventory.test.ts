@@ -36,4 +36,16 @@ describe("CLAUDE.md template — inventory injection", () => {
     expect(tpl).not.toMatch(/append one line/i);
     expect(tpl).not.toMatch(/`LEARNED\.md` is yours to maintain/i);
   });
+
+  it("does not hardcode a count of memory files", () => {
+    // A literal count ("all four files") goes stale the moment a memory file
+    // is added, and the stale number reads as an exemption for the new file.
+    expect(tpl).not.toMatch(/All (two|three|four|five|six) files above/i);
+  });
+
+  it("declares every memory import read-only to the agent", () => {
+    const imports = tpl.match(/^@(\{\{GLOBAL_MEMORY\}\}|memory)\/[A-Z]+\.md$/gm) ?? [];
+    expect(imports.length).toBeGreaterThanOrEqual(5);
+    expect(tpl).toMatch(/read-only to you/);
+  });
 });

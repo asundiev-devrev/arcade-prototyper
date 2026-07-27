@@ -137,7 +137,7 @@ What this project already contains — read before building something new:
 
 ### Memory protocol — how memory works
 
-- All four files above are **read-only to you**. Studio maintains them; you
+- All memory files above are **read-only to you**. Studio maintains them; you
   never edit or append to any of them. If the designer says
   `remember: <fact>`, acknowledge it in one short line — Studio does the
   writing.
