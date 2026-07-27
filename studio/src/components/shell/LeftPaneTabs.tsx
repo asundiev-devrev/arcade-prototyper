@@ -1,9 +1,10 @@
 import { type MutableRefObject } from "react";
 import { ChatPane } from "../chat/ChatPane";
 import { AssetsPanel } from "../assets/AssetsPanel";
+import { MemoryPanel } from "../memory/MemoryPanel";
 import type { ChatMessage, ChimeIn } from "../../../server/types";
 
-export type LeftPaneTab = "chat" | "assets";
+export type LeftPaneTab = "chat" | "assets" | "memory";
 export const LEFT_PANE_TAB_KEY = "studio:leftPaneTab";
 
 interface Props {
@@ -46,6 +47,9 @@ export function LeftPaneTabs(props: Props) {
             onSeeded={() => props.onTabChange("chat")}
           />
         )}
+      </div>
+      <div style={{ flex: 1, minHeight: 0, display: tab === "memory" ? "block" : "none", overflow: "hidden" }}>
+        {tab === "memory" && <MemoryPanel projectSlug={props.projectSlug} />}
       </div>
     </div>
   );

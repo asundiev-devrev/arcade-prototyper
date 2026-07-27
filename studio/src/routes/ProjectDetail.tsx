@@ -234,7 +234,8 @@ function ProjectDetailShell({
   });
   const [leftTab, setLeftTab] = useState<LeftPaneTab>(() => {
     if (typeof window === "undefined") return "chat";
-    return window.localStorage.getItem(LEFT_PANE_TAB_KEY) === "assets" ? "assets" : "chat";
+    const saved = window.localStorage.getItem(LEFT_PANE_TAB_KEY);
+    return saved === "assets" || saved === "memory" ? saved : "chat";
   });
   const [chatWidth, setChatWidth] = useState<number>(() => {
     if (typeof window === "undefined") return CHAT_WIDTH_DEFAULT;
