@@ -132,29 +132,26 @@ Project memory (this project only):
 @memory/RULES.md
 @memory/LEARNED.md
 
-### Memory protocol — how you keep memory
+What this project already contains — read before building something new:
+@memory/INVENTORY.md
 
-- `RULES.md` is human-authored. You NEVER edit it. Read it, honor it.
-- `LEARNED.md` is yours to maintain. When you notice a **durable** preference
-  or correction during a turn — something the designer will want applied to
-  *future* frames, not a one-off tweak to the current frame — append one line:
-  - a fact specific to this project → `memory/LEARNED.md`
-  - a cross-project taste/preference → `{{GLOBAL_MEMORY}}/LEARNED.md`
-- Line format: `- <fact> <!-- YYYY-MM-DD --> ` (one fact per line).
-- Before appending, read the target `LEARNED.md` and check for a near-duplicate.
-  If one exists, update that line instead of adding a second.
-- Do NOT record: secrets or tokens, volatile file paths, or this-frame-only
-  details ("made this heading bigger"). Record taste, conventions, and
-  recurring corrections — the things worth remembering next time.
-- If the prompt contains an explicit `remember:` instruction (e.g.
-  "remember: always use teal accents"), write that fact verbatim to
-  `LEARNED.md`. Choose project vs global from context; if genuinely ambiguous,
-  write it to the project file.
-- Memory bookkeeping is SILENT: appending to `LEARNED.md` does NOT count as the
-  turn's frame change, does NOT appear in your journey lines, and does NOT go in
-  the `### Deviations` section. A frame-editing turn still requires a real frame
-  edit. A bare `remember:` turn with no frame work may produce no frame change
-  and no `### Deviations` section.
+### Memory protocol — how memory works
+
+- All four files above are **read-only to you**. Studio maintains them; you
+  never edit or append to any of them. If the designer says
+  `remember: <fact>`, acknowledge it in one short line — Studio does the
+  writing.
+- `RULES.md` is the designer's standing instructions. Honor them.
+- `LEARNED.md` is what Studio has learned from past turns. Treat it the same
+  way — these are things the designer already told you, across turns, so they
+  outrank one-off phrasing in the current prompt.
+- `INVENTORY.md` lists the frames and saved composites that already exist here.
+  **Reuse them.** If a frame already implements the shape you need, edit or
+  copy it rather than rebuilding from scratch; if a saved composite covers the
+  piece, import it from `arcade-prototypes`. Never rebuild something this list
+  says you already have.
+- Memory is never a substitute for the frame work: a turn that only
+  acknowledges a `remember:` may produce no frame change, and that is fine.
 
 ## How to work
 
