@@ -2,7 +2,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { projectDir, projectMemoryDir } from "./paths";
 import { summarizeFrameSource } from "./frameSummary";
-import { listComponents } from "./componentStore";
 
 /**
  * Hard cap on the rendered inventory. This file is @-imported into every turn's
@@ -96,13 +95,27 @@ async function readFrames(
  */
 export async function writeInventory(projectSlug: string): Promise<void> {
   try {
+    // Lazy import: componentStore pulls in the esbuild-backed bundler through
+    // packFromSource. A static import would drag esbuild into every module that
+    // imports projects.ts/chat.ts, which breaks 12 test files under jsdom
+    // (esbuild's TextEncoder invariant fails there). Loading it here keeps the
+    // dependency at the call site.
+    const listComponentNames = async (): Promise<string[]> => {
+      try {
+        const { listComponents } = await import("./componentStore");
+        return (await listComponents()).map((c) => c.name).sort();
+      } catch {
+        return [];
+      }
+    };
+
     const [frames, components] = await Promise.all([
       readFrames(projectSlug),
-      listComponents().catch(() => []),
+      listComponentNames(),
     ]);
     const body = renderInventory({
       frames,
-      components: components.map((c) => c.name).sort(),
+      components,
     });
     const dir = projectMemoryDir(projectSlug);
     await fs.mkdir(dir, { recursive: true });
