@@ -7,7 +7,7 @@ import {
   Tooltip,
   TrashBin,
 } from "@xorkavi/arcade-gen";
-import { useMemory, type LearnedRowView, type InventoryView } from "./useMemory";
+import { useMemory, type LearnedRowView } from "./useMemory";
 
 /**
  * What Studio knows about your work — and where to correct it when a frame comes
@@ -17,7 +17,9 @@ import { useMemory, type LearnedRowView, type InventoryView } from "./useMemory"
  * Studio inferred (a guess, delete it). That distinction is what decides what a
  * designer does with a line. Scope rides on the line as a read-only chip.
  *
- * Two things you act on, one thing you only read (existing work, in the footer).
+ * Only things you can act on. The project's frame/composite inventory is NOT
+ * shown here — it still reaches the agent via memory/INVENTORY.md, but a list
+ * the designer can't do anything with was just noise in this panel.
  * Deliberately not a dashboard — nothing here demands attention.
  */
 export function MemoryPanel({ projectSlug }: { projectSlug: string }) {
@@ -93,8 +95,6 @@ export function MemoryPanel({ projectSlug }: { projectSlug: string }) {
           </ul>
         )}
       </Section>
-
-      <ExistingWork view={data.inventory} />
     </div>
   );
 }
@@ -241,66 +241,5 @@ function FactRow({
         </Tooltip>
       </div>
     </li>
-  );
-}
-
-/**
- * Reassurance, not a task: it exists so a designer can tell the agent won't
- * rebuild work that already exists. Deliberately a quiet footer rather than a
- * peer section — there is nothing here to act on, and giving it a heading
- * implied otherwise.
- */
-function ExistingWork({ view }: { view: InventoryView }) {
-  const [open, setOpen] = useState(false);
-  const frames = view.frames.length;
-  const saved = view.composites.length;
-
-  const summary =
-    frames === 0
-      ? "No frames here yet, so there's nothing for Studio to reuse."
-      : `Studio can also see the ${frames} ${frames === 1 ? "frame" : "frames"}${
-          saved > 0 ? ` and ${saved} saved ${saved === 1 ? "component" : "components"}` : ""
-        } already in this project, and reuses them instead of rebuilding.`;
-
-  return (
-    <footer style={{ marginTop: 4, paddingTop: 16, borderTop: HAIRLINE }}>
-      <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: MUTED }}>
-        {summary}
-        {frames > 0 && (
-          <>
-            {" "}
-            <button
-              onClick={() => setOpen((v) => !v)}
-              aria-expanded={open}
-              style={{
-                background: "none",
-                border: "none",
-                padding: 0,
-                cursor: "pointer",
-                font: "inherit",
-                color: MUTED,
-                textDecoration: "underline",
-              }}
-            >
-              {open ? "Hide" : "See what"}
-            </button>
-          </>
-        )}
-      </p>
-      {open && (
-        <ul style={{ listStyle: "none", margin: "10px 0 0", padding: 0 }}>
-          {view.frames.map((f) => (
-            <li key={f.slug} style={{ padding: "5px 0", fontSize: 12, color: TEXT }}>
-              {f.slug}
-            </li>
-          ))}
-          {view.composites.length > 0 && (
-            <li style={{ padding: "5px 0", fontSize: 12, color: TEXT }}>
-              Saved components: {view.composites.join(", ")}
-            </li>
-          )}
-        </ul>
-      )}
-    </footer>
   );
 }

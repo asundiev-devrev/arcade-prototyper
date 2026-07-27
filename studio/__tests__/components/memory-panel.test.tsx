@@ -121,20 +121,17 @@ describe("MemoryPanel", () => {
     }
   });
 
-  it("summarises existing work instead of listing it, never as raw markdown", async () => {
+  it("does not show the project inventory", async () => {
+    // The frame/composite list still reaches the AGENT via memory/INVENTORY.md,
+    // but the designer can't act on it, so it has no place in this panel.
     render(<MemoryPanel projectSlug="demo" />);
-    await waitFor(() => screen.getByText(/already in this project/));
-    // The frame list is evidence, not a task — collapsed until asked for.
-    expect(screen.queryByText("01-list")).toBeNull();
-    await userEvent.click(screen.getByText("See what"));
-    await waitFor(() => screen.getByText("01-list"));
-    // The agent's INVENTORY.md uses markdown headings and dumps every visible
-    // string in the frame. None of that belongs in front of a designer.
+    await waitFor(() => screen.getByText(/Neutral gray/));
     const body = document.body.textContent ?? "";
+    expect(body).not.toContain("01-list");
+    expect(body).not.toContain("SkillCardAndrey");
+    // And never the agent's raw markdown, under any circumstances.
     expect(body).not.toContain("## Frames");
     expect(body).not.toContain("visible text:");
-    expect(body).not.toContain("components used:");
-    expect(screen.getByText(/SkillCardAndrey/)).toBeTruthy();
   });
 
   it("sizes every action icon (an unsized icon renders huge)", async () => {
@@ -173,7 +170,6 @@ describe("MemoryPanel", () => {
     await waitFor(() => {
       // Empty states must say what to expect, not just be blank.
       expect(screen.getByText(/Nothing yet\./)).toBeTruthy();
-      expect(screen.getByText(/No frames here yet/)).toBeTruthy();
     });
   });
 
