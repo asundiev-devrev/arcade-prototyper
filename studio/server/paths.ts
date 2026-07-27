@@ -121,6 +121,18 @@ export function projectMemoryDir(projectSlug: string): string {
 }
 
 /**
+ * Path of the per-project symlink that points at the global memory dir.
+ * Global memory MUST be imported by CLAUDE.md through this relative path:
+ * absolute-path @-imports silently do not resolve in the claude CLI (verified
+ * 2026-07-27 against 2.1.220 — same file, same content, relative loads and
+ * absolute returns NOT VISIBLE), which meant global memory never reached the
+ * agent at all.
+ */
+export function projectGlobalMemoryLink(projectSlug: string): string {
+  return path.join(projectDir(projectSlug), "global-memory");
+}
+
+/**
  * Writable per-user kit — holds components a designer saved or imported.
  * Lives at the studio root (sibling of projects/), NOT in the read-only .app
  * bundle, so contributing a component needs no DMG. The generator sees these

@@ -125,8 +125,8 @@ design decisions; when memory conflicts with one-off prompt phrasing, memory
 wins (the designer told you this on purpose, across turns).
 
 Global memory (applies to every project):
-@{{GLOBAL_MEMORY}}/RULES.md
-@{{GLOBAL_MEMORY}}/LEARNED.md
+@global-memory/RULES.md
+@global-memory/LEARNED.md
 
 Project memory (this project only):
 @memory/RULES.md

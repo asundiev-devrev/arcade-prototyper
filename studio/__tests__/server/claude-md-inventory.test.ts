@@ -20,10 +20,21 @@ describe("CLAUDE.md template — inventory injection", () => {
   });
 
   it("still imports both memory levels", () => {
-    expect(tpl).toContain("@{{GLOBAL_MEMORY}}/RULES.md");
-    expect(tpl).toContain("@{{GLOBAL_MEMORY}}/LEARNED.md");
+    expect(tpl).toContain("@global-memory/RULES.md");
+    expect(tpl).toContain("@global-memory/LEARNED.md");
     expect(tpl).toContain("@memory/RULES.md");
     expect(tpl).toContain("@memory/LEARNED.md");
+  });
+
+  it("imports global memory via relative path, not absolute", () => {
+    expect(tpl).toContain("@global-memory/RULES.md");
+    expect(tpl).toContain("@global-memory/LEARNED.md");
+  });
+
+  it("contains NO absolute-path @-import (silently do not resolve)", () => {
+    // Absolute-path @-imports silently fail in claude CLI 2.1.220 — same file,
+    // same content, relative loads and absolute returns NOT VISIBLE.
+    expect(tpl).not.toMatch(/^@\//m);
   });
 
   it("tells the agent to reuse what the inventory lists", () => {
@@ -44,7 +55,7 @@ describe("CLAUDE.md template — inventory injection", () => {
   });
 
   it("declares every memory import read-only to the agent", () => {
-    const imports = tpl.match(/^@(\{\{GLOBAL_MEMORY\}\}|memory)\/[A-Z]+\.md$/gm) ?? [];
+    const imports = tpl.match(/^@(global-memory|memory)\/[A-Z]+\.md$/gm) ?? [];
     expect(imports.length).toBeGreaterThanOrEqual(5);
     expect(tpl).toMatch(/read-only to you/);
   });

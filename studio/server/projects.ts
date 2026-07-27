@@ -2,10 +2,10 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { projectDir, projectsRoot, projectJsonPath, chatHistoryPath, projectMemoryDir, globalMemoryDir, sharedDir } from "./paths";
+import { projectDir, projectsRoot, projectJsonPath, chatHistoryPath, projectMemoryDir, globalMemoryDir, sharedDir, projectGlobalMemoryLink } from "./paths";
 import { projectSchema, type Project, type Frame, type ChatMessage } from "./types";
 import { scaffoldDevRevHelper } from "./devrev/scaffoldHelper";
-import { ensureMemoryStubs } from "./memory";
+import { ensureMemoryStubs, ensureGlobalMemoryLink } from "./memory";
 import { writeInventory } from "./inventory";
 import { getTemplate, readTemplateSeed, templateSeedPath, isSeedDirectory, type TemplateId } from "./templates";
 
@@ -121,10 +121,11 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
       THEME: input.theme,
       ARCADE: ARCADE_GEN_ROOT,
       PROTOTYPER: PROTOTYPER_ROOT,
-      GLOBAL_MEMORY: globalMemoryDir(),
     }));
     await fs.writeFile(chatHistoryPath(slug), "[]");
+    await ensureMemoryStubs(globalMemoryDir(), "global");
     await ensureMemoryStubs(projectMemoryDir(slug), "this project");
+    await ensureGlobalMemoryLink(projectGlobalMemoryLink(slug), globalMemoryDir());
     await writeInventory(slug);
     await scaffoldDevRevHelper(slug);
     await scaffoldDevRevApiReference(slug);
@@ -210,9 +211,11 @@ export async function scaffoldImportedProject(slug: string): Promise<void> {
   const tpl = await readTemplate();
   await fs.writeFile(path.join(projectDir(slug), "CLAUDE.md"), renderTemplate(tpl, {
     PROJECT_NAME: p.name, THEME: p.theme,
-    ARCADE: ARCADE_GEN_ROOT, PROTOTYPER: PROTOTYPER_ROOT, GLOBAL_MEMORY: globalMemoryDir(),
+    ARCADE: ARCADE_GEN_ROOT, PROTOTYPER: PROTOTYPER_ROOT,
   }));
+  await ensureMemoryStubs(globalMemoryDir(), "global");
   await ensureMemoryStubs(projectMemoryDir(slug), "this project");
+  await ensureGlobalMemoryLink(projectGlobalMemoryLink(slug), globalMemoryDir());
   await writeInventory(slug);
   await scaffoldDevRevApiReference(slug);
   await scaffoldComputerReferenceFrame(projectDir(slug)); // now exported
@@ -431,7 +434,9 @@ export async function refreshStaleClaudeMd(): Promise<number> {
   let refreshed = 0;
   for (const p of ps) {
     // Backfill memory/ for projects created before the memory feature. Idempotent.
+    await ensureMemoryStubs(globalMemoryDir(), "global");
     await ensureMemoryStubs(projectMemoryDir(p.slug), "this project");
+    await ensureGlobalMemoryLink(projectGlobalMemoryLink(p.slug), globalMemoryDir());
     // Backfill INVENTORY.md for projects created before it existed, so the
     // template's @memory/INVENTORY.md import resolves on the very first turn
     // instead of silently importing nothing.
@@ -444,7 +449,6 @@ export async function refreshStaleClaudeMd(): Promise<number> {
       THEME: p.theme,
       ARCADE: ARCADE_GEN_ROOT,
       PROTOTYPER: PROTOTYPER_ROOT,
-      GLOBAL_MEMORY: globalMemoryDir(),
     });
     const file = path.join(projectDir(p.slug), "CLAUDE.md");
     let current = "";
