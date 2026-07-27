@@ -6,6 +6,7 @@ import { projectDir, projectsRoot, projectJsonPath, chatHistoryPath, projectMemo
 import { projectSchema, type Project, type Frame, type ChatMessage } from "./types";
 import { scaffoldDevRevHelper } from "./devrev/scaffoldHelper";
 import { ensureMemoryStubs } from "./memory";
+import { writeInventory } from "./inventory";
 import { getTemplate, readTemplateSeed, templateSeedPath, isSeedDirectory, type TemplateId } from "./templates";
 
 const STUDIO_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -124,6 +125,7 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
     }));
     await fs.writeFile(chatHistoryPath(slug), "[]");
     await ensureMemoryStubs(projectMemoryDir(slug), "this project");
+    await writeInventory(slug);
     await scaffoldDevRevHelper(slug);
     await scaffoldDevRevApiReference(slug);
     await scaffoldComputerReferenceFrame(dir);
@@ -211,6 +213,7 @@ export async function scaffoldImportedProject(slug: string): Promise<void> {
     ARCADE: ARCADE_GEN_ROOT, PROTOTYPER: PROTOTYPER_ROOT, GLOBAL_MEMORY: globalMemoryDir(),
   }));
   await ensureMemoryStubs(projectMemoryDir(slug), "this project");
+  await writeInventory(slug);
   await scaffoldDevRevApiReference(slug);
   await scaffoldComputerReferenceFrame(projectDir(slug)); // now exported
 }
@@ -429,6 +432,10 @@ export async function refreshStaleClaudeMd(): Promise<number> {
   for (const p of ps) {
     // Backfill memory/ for projects created before the memory feature. Idempotent.
     await ensureMemoryStubs(projectMemoryDir(p.slug), "this project");
+    // Backfill INVENTORY.md for projects created before it existed, so the
+    // template's @memory/INVENTORY.md import resolves on the very first turn
+    // instead of silently importing nothing.
+    await writeInventory(p.slug);
     // Backfill the DevRev API reference for projects created before it was
     // split out of CLAUDE.md. Idempotent (plain copy, last write wins).
     await scaffoldDevRevApiReference(p.slug);

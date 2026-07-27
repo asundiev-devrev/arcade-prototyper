@@ -11,6 +11,7 @@ import { runComputerTurn } from "../devrev/computerAgent";
 import { buildComputerContext } from "../devrev/computerContext";
 import { summarizeFrameSource } from "../frameSummary";
 import { runDriftCheck } from "../devrev/driftCheck";
+import { writeInventory } from "../inventory";
 import { pendingObjections, markStaleByFrame } from "../chimeIns";
 import type { ChatMessage, ChimeIn } from "../types";
 import type { StudioEvent } from "../../src/lib/streamJson";
@@ -1508,6 +1509,12 @@ async function runClaudeBranch(ctx: {
         void readFrameSummaries(slug)
           .then((frameSource) => runDriftCheck(slug, { frameSource, frameSlug: changedFrame }))
           .catch((err) => console.warn(`[studio] drift check rejected for ${slug}:`, err));
+
+        // Refresh the project inventory so the NEXT turn knows this frame
+        // exists. Deterministic and local (a dir read + one write) — no model,
+        // no network. writeInventory never throws; the .catch is belt-and-
+        // braces against an unhandled rejection.
+        void writeInventory(slug).catch(() => {});
       }
     }
 
