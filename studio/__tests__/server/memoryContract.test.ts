@@ -84,13 +84,55 @@ describe("decorated sentinel lines", () => {
     });
   }
 
-  it("round-trips the literal line the CLAUDE.md template teaches (fails closed on drift)", () => {
-    // The template shows the line inside backticks. If the parser ever stops
-    // accepting that exact shape, capture dies silently — a sentinel-substring
-    // check would still pass, so assert the parse itself.
-    const tplLine = "   `⟐ remember: <global|project> | <the preference, one short sentence>`";
-    expect(extractProposedMemories(tplLine)).toHaveLength(1);
+  it("round-trips a FILLED-IN copy of the line the CLAUDE.md template teaches (fails closed on drift)", () => {
+    // The template shows the line inside backticks with indentation. If the
+    // parser ever stops accepting that exact shape, capture dies silently — a
+    // sentinel-substring check would still pass, so assert the parse itself.
+    // The placeholders are filled in on purpose: the template's own example,
+    // verbatim, must NOT parse (see "template placeholders" below).
+    const tplLine = "   `⟐ remember: global | Active nav rows use neutral gray`";
+    expect(extractProposedMemories(tplLine)).toEqual([
+      { fact: "Active nav rows use neutral gray", level: "global" },
+    ]);
     expect(stripMemoryLines(tplLine)).not.toContain(MEMORY_SENTINEL);
+  });
+});
+
+// --- Regression: the template's own example must not become a real memory ---
+// The response shape has to show the line's literal form, and an LLM echoing a
+// format placeholder verbatim is ordinary behaviour. Before this guard the
+// template example parsed as a real fact: `<global|project>` is not a
+// word-shaped level head so nothing was stripped as a level, and the
+// normalized body ("global project the preference one short sentence") matched
+// no null-content rule. It became a permanent bullet in LEARNED.md, injected
+// into every later turn, with no UI cue pointing at memory as the cause.
+describe("template placeholders are never captured", () => {
+  const echoes: [string, string][] = [
+    ["the template line verbatim", "   `⟐ remember: <global|project> | <the preference, one short sentence>`"],
+    ["undecorated", "⟐ remember: <global|project> | <the preference, one short sentence>"],
+    ["level filled, fact still a placeholder", "⟐ remember: global | <the preference, one short sentence>"],
+    ["fact filled, level still a placeholder", "⟐ remember: <global|project> | Active nav rows use neutral gray"],
+    ["angle placeholder mid-sentence", "⟐ remember: project | Use <the designer's> preferred casing"],
+    ["bare placeholder, no level bar", "⟐ remember: <the preference>"],
+  ];
+
+  for (const [label, line] of echoes) {
+    it(`records nothing when the agent echoes ${label}`, () => {
+      expect(extractProposedMemories(line)).toEqual([]);
+    });
+
+    it(`still strips ${label} so the plumbing never reaches the designer`, () => {
+      // Rejected proposals are still plumbing: strip must be broader than
+      // extract, or the leak the sentinel exists to avoid comes back.
+      expect(stripMemoryLines(`Built the nav.\n${line}\n`)).not.toContain(MEMORY_SENTINEL);
+    });
+  }
+
+  it("does not reject a real fact that merely contains a comparison operator", () => {
+    // Guard the guard: only bracket PAIRS are placeholders. A lone `<` or `>`
+    // must not silently cost the designer a memory.
+    const out = extractProposedMemories(`${MEMORY_SENTINEL} project | Keep dense tables under 8 rows > that use a list`);
+    expect(out).toHaveLength(1);
   });
 });
 

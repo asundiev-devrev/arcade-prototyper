@@ -10,6 +10,7 @@ import { chatHistoryPath, lastErrorLogPath, lastStdoutLogPath, projectDir } from
 import { runComputerTurn } from "../devrev/computerAgent";
 import { buildComputerContext } from "../devrev/computerContext";
 import { summarizeFrameSource } from "../frameSummary";
+import { extractProposedMemories, stripMemoryLines, type ProposedMemory } from "../memoryContract";
 import { runDriftCheck } from "../devrev/driftCheck";
 import { writeInventory } from "../inventory";
 import { pendingObjections, markStaleByFrame } from "../chimeIns";
@@ -1150,6 +1151,30 @@ async function runClaudeBranch(ctx: {
   let capturedSessionId: string | undefined;
   const narrationTexts: string[] = [];
   const toolLabels: string[] = [];
+  /**
+   * Memory lines the agent proposed this turn. Harvested at the narration seam
+   * below; the WRITE is wired separately (behind the rollout flag) — the server
+   * is the only writer either way.
+   */
+  const proposedMemories: ProposedMemory[] = [];
+  /**
+   * Memory capture is SILENT: the `⟐ remember:` line is plumbing between the
+   * agent and the server, and must never reach the designer's chat pane or the
+   * persisted history.
+   *
+   * This runs at the ONE seam where narration forks into both destinations —
+   * `emit()` (live SSE → chat pane) and `narrationTexts` (→ appendHistory).
+   * Stripping post-turn would be too late for the pane: the designer has
+   * already read the line.
+   *
+   * Returns the narration to keep, or null when the message was nothing BUT a
+   * memory line (emit nothing rather than an empty bubble).
+   */
+  const harvestMemoryLines = (text: string): string | null => {
+    for (const proposal of extractProposedMemories(text)) proposedMemories.push(proposal);
+    const kept = stripMemoryLines(text);
+    return kept.trim() ? kept : null;
+  };
   let pendingEnd: { ok: boolean; error?: string } | null = null;
   // Telemetry captured across the turn — persisted as one metrics row at the
   // end. The CLI's `turn_metrics` event carries ttft/duration/tokens/cost; the
@@ -1208,7 +1233,13 @@ async function runClaudeBranch(ctx: {
       signal,
       onEvent: (ev) => {
         if (ev.kind === "session") capturedSessionId = ev.sessionId;
-        if (ev.kind === "narration") narrationTexts.push(ev.text);
+        if (ev.kind === "narration") {
+          const kept = harvestMemoryLines(ev.text);
+          if (kept === null) return; // memory line only — nothing to show
+          narrationTexts.push(kept);
+          emit({ ...ev, text: kept });
+          return;
+        }
         if (ev.kind === "tool_call") toolLabels.push(ev.pretty);
         if (ev.kind === "turn_metrics") {
           // Keep the latest (a retried turn emits one per attempt; the last
@@ -1460,7 +1491,15 @@ async function runClaudeBranch(ctx: {
             signal,
             onEvent: (ev) => {
               if (ev.kind === "session") capturedSessionId = ev.sessionId;
-              if (ev.kind === "narration") narrationTexts.push(ev.text);
+              if (ev.kind === "narration") {
+                // Same silence contract on the retry attempt — a sentinel line
+                // here would leak exactly as it would on the first pass.
+                const kept = harvestMemoryLines(ev.text);
+                if (kept === null) return;
+                narrationTexts.push(kept);
+                emit({ ...ev, text: kept });
+                return;
+              }
               if (ev.kind === "tool_call") toolLabels.push(ev.pretty);
               // Keep the first attempt's metrics; the retry's end is
               // supplementary and must not flip the turn's terminal result.

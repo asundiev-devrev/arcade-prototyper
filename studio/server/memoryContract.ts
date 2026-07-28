@@ -81,6 +81,21 @@ const NULL_FACTS = new Set([
   "project",
 ]);
 
+/**
+ * An angle-bracket placeholder — `<global|project>`, `<the preference, one
+ * short sentence>`. The response-shape instruction has to show the line's
+ * literal shape, and an LLM echoing a format example verbatim is ordinary
+ * behaviour, not an edge case. Without this guard the template's own example
+ * parses as a real memory and becomes a permanent standing instruction that
+ * gets injected into every later turn — with no UI cue explaining why.
+ *
+ * Costs us any genuine fact that contains a `<…>` pair (e.g. one naming a raw
+ * HTML tag). That is the right trade: such a fact is implementation detail the
+ * prompt already tells the agent not to record, and losing one memory is far
+ * cheaper than writing garbage into permanent memory.
+ */
+const PLACEHOLDER_RE = /<[^<>]*>/;
+
 /** Lowercase, punctuation-free, single-spaced — so "None." and "N/A" collapse onto the denylist. */
 function normalizeForNullCheck(fact: string): string {
   return fact
@@ -90,6 +105,9 @@ function normalizeForNullCheck(fact: string): string {
 }
 
 function isNullContent(fact: string): boolean {
+  // Check the RAW fact first: normalization strips the brackets, so a
+  // placeholder must be spotted before punctuation is thrown away.
+  if (PLACEHOLDER_RE.test(fact)) return true;
   const n = normalizeForNullCheck(fact);
   if (!n || n.length < MIN_FACT_CHARS) return true;
   if (NULL_FACTS.has(n)) return true;
