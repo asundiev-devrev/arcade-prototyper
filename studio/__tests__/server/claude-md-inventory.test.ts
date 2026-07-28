@@ -68,7 +68,11 @@ describe("CLAUDE.md template — inventory injection", () => {
     expect(tpl).not.toMatch(/Studio will (write|save|capture)/i);
   });
 
-  it("points at the Memory panel for remember: prompts", () => {
-    expect(tpl).toMatch(/Memory\s+panel/i);
+  it("asks the agent to propose a memory for remember: prompts", () => {
+    // Was: "points at the Memory panel". That was the honest stopgap while
+    // nothing wrote memory. Studio captures the proposal now, so the template
+    // must ask the agent for the line instead of deferring to the panel.
+    expect(tpl).toMatch(/⟐ remember:/);
+    expect(tpl).not.toMatch(/tell them to add it under/i);
   });
 });
