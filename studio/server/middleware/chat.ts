@@ -11,6 +11,7 @@ import { runComputerTurn } from "../devrev/computerAgent";
 import { buildComputerContext } from "../devrev/computerContext";
 import { summarizeFrameSource } from "../frameSummary";
 import { extractProposedMemories, stripMemoryLines, type ProposedMemory } from "../memoryContract";
+import { recordProposedMemories } from "../memoryCapture";
 import { runDriftCheck } from "../devrev/driftCheck";
 import { writeInventory } from "../inventory";
 import { pendingObjections, markStaleByFrame } from "../chimeIns";
@@ -1438,6 +1439,30 @@ async function runClaudeBranch(ctx: {
     });
   }
   if (endResult.ok) {
+    // Memory capture, part 1 of 2 — extract and strip.
+    //
+    // The agent proposes durable facts with a sentinel line. The PRIMARY
+    // extraction + strip already happened at the narration seam
+    // (harvestMemoryLines): that is the one fork where narration goes to BOTH
+    // the live SSE stream and the persisted history, and the chat pane needs
+    // the line gone before the designer reads it — post-turn is too late there.
+    //
+    // This pass is belt-and-braces for any narration that reached
+    // narrationTexts without going through that seam. It runs BEFORE the
+    // deviations check and before appendHistory, both of which read
+    // narrationTexts, so a sentinel can never be mistaken for narration
+    // content nor persisted.
+    for (let i = 0; i < narrationTexts.length; i += 1) {
+      for (const proposal of extractProposedMemories(narrationTexts[i])) {
+        proposedMemories.push(proposal);
+      }
+      narrationTexts[i] = stripMemoryLines(narrationTexts[i]);
+    }
+    // Drop entries that were nothing but a memory line.
+    for (let i = narrationTexts.length - 1; i >= 0; i -= 1) {
+      if (!narrationTexts[i].trim()) narrationTexts.splice(i, 1);
+    }
+
     // Enforce the deviations-section contract defined in templates/CLAUDE.md.tpl.
     // If the agent produced narration at all and that narration doesn't contain
     // a `### Deviations` heading, append a visible warning trailer. Emitting
@@ -1566,6 +1591,28 @@ async function runClaudeBranch(ctx: {
         source: "claude",
         createdAt: new Date().toISOString(),
       });
+    }
+
+    // Memory capture, part 2 of 2 — record. Runs here, at the very end of the
+    // turn, so it sees proposals harvested by the phantom-edit retry too (that
+    // retry runs above and pushes into the same array). Recording at the top of
+    // this block would silently drop them.
+    if (proposedMemories.length > 0) {
+      // `dry` (the default) logs without writing — the rollout gate before a
+      // silent writer starts shaping generations. Set ARCADE_MEMORY_CAPTURE=on
+      // to enable writes.
+      const mode = process.env.ARCADE_MEMORY_CAPTURE ?? "dry";
+      // Fire-and-forget, same discipline as the drift check and the inventory
+      // write: a failure to remember must not delay or break the turn.
+      void recordProposedMemories({ proposals: proposedMemories, slug, dryRun: mode !== "on" })
+        .then((r) => {
+          console.log(
+            `[studio] memory capture (${mode}) for ${slug}: ` +
+              `${r.written} new, ${r.reinforced} reinforced, ${r.skipped} skipped — ` +
+              proposedMemories.map((p) => `${p.level}:${p.fact}`).join(" | "),
+          );
+        })
+        .catch((err) => console.warn(`[studio] memory capture rejected for ${slug}:`, err));
     }
   }
 
