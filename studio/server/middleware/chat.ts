@@ -1475,7 +1475,16 @@ async function runClaudeBranch(ctx: {
     // keeps the SSE view in agreement with what readHistory() will return
     // after reload.
     const joined = narrationTexts.join("\n\n").trim();
-    if (joined && !hasDeviationsSection(joined)) {
+    // A bare `remember: …` turn is EXPECTED to change no frame and to carry no
+    // Deviations section — the template tells the agent to acknowledge it and
+    // emit a memory line, nothing more. Both trailers below fire on exactly
+    // that shape, so without this exemption a perfectly successful memory turn
+    // reports itself as two failures (a missing-Deviations warning plus the red
+    // no-frame-changes banner). `isMemoryOnlyPrompt` was previously threaded
+    // only into the phantom-edit RETRY gate, which suppressed the re-run but
+    // not the warnings.
+    const memoryOnlyTurn = isMemoryOnlyPrompt(ctx.prompt);
+    if (joined && !memoryOnlyTurn && !hasDeviationsSection(joined)) {
       emit({ kind: "narration", text: DEVIATIONS_MISSING_TRAILER.trimStart() });
       narrationTexts.push(DEVIATIONS_MISSING_TRAILER.trimStart());
     }
@@ -1549,7 +1558,9 @@ async function runClaudeBranch(ctx: {
         }
       }
 
-      if (!hasAnyChange(diff)) {
+      // See memoryOnlyTurn above: a `remember:` turn legitimately writes no
+      // frame, so the red no-changes banner would be a false alarm.
+      if (!memoryOnlyTurn && !hasAnyChange(diff)) {
         emit({ kind: "narration", text: NO_CHANGES_TRAILER.trimStart() });
         narrationTexts.push(NO_CHANGES_TRAILER.trimStart());
       }

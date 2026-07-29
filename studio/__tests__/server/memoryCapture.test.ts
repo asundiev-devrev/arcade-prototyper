@@ -106,7 +106,7 @@ describe("recordProposedMemories", () => {
 
   it("does nothing for an empty proposal list", async () => {
     const r = await recordProposedMemories({ proposals: [], slug: "demo" });
-    expect(r).toEqual({ written: 0, reinforced: 0, skipped: 0 });
+    expect(r).toEqual({ written: 0, reinforced: 0, skipped: 0, promoted: 0 });
   });
 
   it("never throws on a bad slug", async () => {
@@ -206,5 +206,36 @@ describe("recordProposedMemories", () => {
     } finally {
       fs.chmodSync(globalDir, 0o755);
     }
+  });
+
+  it("promotes a fact to global once it recurs in a SECOND project", async () => {
+    // The prompt tells the agent to default to `project` and promises Studio
+    // promotes a preference itself once it recurs elsewhere. This is that
+    // promise. Note it cannot be read off one store: the same fact in two
+    // projects lands as two rows, each with a single-entry seenInProjects.
+    fs.mkdirSync(path.join(tmp, "projects", "beta"), { recursive: true });
+    const p = [{ fact: "Sidebar stays collapsed", level: "project" as const }];
+    await recordProposedMemories({ proposals: p, slug: "demo" });
+    const r2 = await recordProposedMemories({ proposals: p, slug: "beta" });
+
+    expect(r2.promoted).toBe(1);
+    const g = await readRows("global");
+    expect(g.map((x) => x.fact)).toEqual(["Sidebar stays collapsed"]);
+    expect(g[0].level).toBe("global");
+    // Not duplicated into the second project's store.
+    expect(await readRows("project", "beta")).toEqual([]);
+  });
+
+  it("does NOT promote a fact repeated within one project", async () => {
+    // Repetition in a single project is not evidence that a preference travels;
+    // promoting on it would apply one project's experiment as house style.
+    const p = [{ fact: "Only true here", level: "project" as const }];
+    await recordProposedMemories({ proposals: p, slug: "demo" });
+    const r2 = await recordProposedMemories({ proposals: p, slug: "demo" });
+
+    expect(r2.promoted).toBe(0);
+    expect(r2.reinforced).toBe(1);
+    expect(await readRows("global")).toEqual([]);
+    expect((await readRows("project", "demo"))[0].hits).toBe(2);
   });
 });

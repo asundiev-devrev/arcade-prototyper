@@ -54,4 +54,16 @@ describe("chat.ts — memory capture wiring", () => {
     const block = src.slice(src.indexOf("recordProposedMemories"));
     expect(block.slice(0, 800)).not.toContain("clearAllProjectSessions");
   });
+
+  it("exempts a bare remember: turn from BOTH false-alarm trailers", () => {
+    // A `remember:` turn is instructed to acknowledge + emit a sentinel and
+    // nothing else: no frame write, no Deviations section. Both trailers fire on
+    // exactly that shape, so without the exemption a successful memory turn
+    // reported itself as two failures — including the red no-frame-changes
+    // banner. isMemoryOnlyPrompt was previously wired ONLY into the phantom-edit
+    // retry gate, which suppressed the re-run but not the warnings.
+    expect(src).toContain("const memoryOnlyTurn = isMemoryOnlyPrompt(ctx.prompt)");
+    expect(src).toMatch(/if \(joined && !memoryOnlyTurn && !hasDeviationsSection\(joined\)\)/);
+    expect(src).toMatch(/if \(!memoryOnlyTurn && !hasAnyChange\(diff\)\)/);
+  });
 });
