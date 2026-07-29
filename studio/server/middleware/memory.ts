@@ -5,8 +5,9 @@ import { globalMemoryDir, projectMemoryDir } from "../paths";
 import { readInventoryView } from "../inventory";
 import {
   readRows,
-  writeRows,
+  mutateRows,
   migrateLegacyLearned,
+  selectRowsWithinRenderBudget,
   type LearnedRow,
   type MemoryLevel,
 } from "../learnedStore";
@@ -63,11 +64,19 @@ export async function moveRowBetweenLevels(
   // land it — silent, permanent loss of a designer's memory. In this
   // order the worst case is the row appearing in BOTH stores, which the
   // designer can see and delete. Recoverable duplicate > silent loss.
-  const dest = await readRows(destLevel, destSlug);
-  await writeRows(destLevel, [...dest, row], destSlug);
+  //
+  // Each step is one locked read-modify-write, so a concurrent capture cannot
+  // clobber either store. The two steps are deliberately NOT one transaction —
+  // they touch two different files, and the ordering above is the safety net.
+  await mutateRows(destLevel, destSlug, (rows) => ({
+    rows: [...rows, row],
+    result: undefined,
+  }));
 
-  const source = await readRows(sourceLevel, sourceSlug);
-  await writeRows(sourceLevel, source.filter((r) => r.id !== row.id), sourceSlug);
+  await mutateRows(sourceLevel, sourceSlug, (rows) => ({
+    rows: rows.filter((r) => r.id !== row.id),
+    result: undefined,
+  }));
 }
 
 async function readTextOrEmpty(file: string): Promise<string> {
@@ -81,6 +90,19 @@ async function readTextOrEmpty(file: string): Promise<string> {
 /** Strip the `<!-- … -->` stub header so the panel shows content, not plumbing. */
 function stripHeaderComments(md: string): string {
   return md.replace(/<!--[\s\S]*?-->/g, "").trim();
+}
+
+/**
+ * Tag each row with whether it is actually reaching the agent. The rendered
+ * LEARNED.md is capped by characters, so a large store shows the designer more
+ * memories than the generator ever receives — a line you can read, believe is
+ * active, and never edit, that has silently stopped applying. `applied: false`
+ * is what lets the panel say so.
+ */
+export function markApplied(rows: LearnedRow[]): (LearnedRow & { applied: boolean })[] {
+  const { applied } = selectRowsWithinRenderBudget(rows);
+  const live = new Set(applied);
+  return rows.map((r) => ({ ...r, applied: live.has(r) }));
 }
 
 export function memoryMiddleware() {
@@ -109,8 +131,9 @@ export function memoryMiddleware() {
           slug ? readInventoryView(slug) : Promise.resolve({ frames: [], composites: [] }),
         ]);
         send(res, 200, {
-          global: { rows: globalRows, rules: stripHeaderComments(globalRules) },
-          project: { rows: projectRows, rules: stripHeaderComments(projectRules) },
+          // Each level renders its own LEARNED.md, so the budget is per level.
+          global: { rows: markApplied(globalRows), rules: stripHeaderComments(globalRules) },
+          project: { rows: markApplied(projectRows), rules: stripHeaderComments(projectRules) },
           inventory,
         });
       })().catch((err) => {
@@ -128,20 +151,27 @@ export function memoryMiddleware() {
         if (level === "project" && !b.slug) return send(res, 400, { error: "slug required" });
         if (!b.id) return send(res, 400, { error: "id required" });
 
-        const rows = await readRows(level, b.slug);
-        const patched = applyRowPatch(rows, b.id, {
-          fact: b.fact,
-          pinned: b.pinned,
-          level: b.toLevel,
+        // A level change moves the row between stores rather than editing in
+        // place, and that needs two stores — so decide first, under the lock,
+        // then hand off. In-place edits never leave the lock: a background
+        // capture writing the same file between read and write would drop the
+        // designer's edit.
+        const moved = await mutateRows<LearnedRow | undefined>(level, b.slug, (rows) => {
+          const patched = applyRowPatch(rows, b.id, {
+            fact: b.fact,
+            pinned: b.pinned,
+            level: b.toLevel,
+          });
+          const relocating = patched.find((r) => r.id === b.id && r.level !== level);
+          // Leave the source untouched while relocating: moveRowBetweenLevels
+          // writes the destination first, then removes from source, so that a
+          // throw in between leaves a visible duplicate rather than losing the row.
+          return { rows: relocating ? rows : patched, result: relocating };
         });
 
-        // A level change moves the row between stores rather than editing in place.
-        const moved = patched.find((r) => r.id === b.id && r.level !== level);
         if (moved) {
           const destSlug = moved.level === "project" ? b.slug : undefined;
           await moveRowBetweenLevels(moved, level, b.slug, moved.level, destSlug);
-        } else {
-          await writeRows(level, patched, b.slug);
         }
         send(res, 200, { ok: true });
       })().catch((err) => {
@@ -157,8 +187,12 @@ export function memoryMiddleware() {
         const b = await readJson(req);
         const level: MemoryLevel = b.level === "global" ? "global" : "project";
         if (level === "project" && !b.slug) return send(res, 400, { error: "slug required" });
-        const rows = await readRows(level, b.slug);
-        await writeRows(level, rows.filter((r) => r.id !== b.id), b.slug);
+        // Under the lock: a concurrent capture that read this store before the
+        // delete would otherwise write the removed row straight back.
+        await mutateRows(level, b.slug, (rows) => ({
+          rows: rows.filter((r) => r.id !== b.id),
+          result: undefined,
+        }));
         send(res, 200, { ok: true });
       })().catch((err) => {
         console.warn("[studio] memory DELETE failed:", err);

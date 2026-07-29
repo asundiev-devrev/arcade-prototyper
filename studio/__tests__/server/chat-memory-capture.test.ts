@@ -13,9 +13,13 @@ const CHAT = path.resolve(
   "chat.ts",
 );
 
-// Static source assertions: exercising a full turn needs a live claude
-// subprocess. The units are covered in memoryContract/memoryCapture tests; what
-// matters here is that chat.ts wires them at the right seam.
+// Static source assertions — a cheap structural net only.
+//
+// These CANNOT see semantics: an inverted, deleted or awaited gate satisfies
+// every `toContain` below. The behaviour is asserted against a real turn in
+// `__tests__/server/middleware/chat-memory-writes.test.ts` — the flag in both
+// directions, the per-turn cap, the fence exemption, the journey seam, and that
+// an unwritable store still ends the turn cleanly. Keep both files.
 describe("chat.ts — memory capture wiring", () => {
   const src = fs.readFileSync(CHAT, "utf-8");
 
@@ -29,12 +33,21 @@ describe("chat.ts — memory capture wiring", () => {
   });
 
   it("honours the rollout flag", () => {
+    // Semantics — both directions of the gate — live in chat-memory-writes.
     expect(src).toContain("ARCADE_MEMORY_CAPTURE");
+  });
+
+  it("caps the whole turn, not just one narration message", () => {
+    // extractProposedMemories caps per call; chat.ts accumulates across many.
+    expect(src).toContain("capProposalsPerTurn");
   });
 
   it("captures fire-and-forget, never awaiting the turn on it", () => {
     // A failure to remember must not delay or break the designer's turn.
-    expect(src).toMatch(/void recordProposedMemories|recordProposedMemories\([\s\S]{0,400}?\)\s*\.catch/);
+    // Both halves matter: the `void` call must be present AND no `await` form
+    // may exist — `void` surviving only in a comment used to satisfy this.
+    expect(src).toContain("void recordProposedMemories(");
+    expect(src).not.toMatch(/await\s+recordProposedMemories\s*\(/);
   });
 
   it("does not clear the session on a memory write", () => {

@@ -224,6 +224,15 @@ function FactRow({
           {row.hits > 1 && (
             <span style={{ fontSize: 12, color: MUTED }}>came up {row.hits} times</span>
           )}
+          {/* There is a per-turn budget on how much memory reaches the
+              generator. Without this, an over-budget row reads as active while
+              it has quietly stopped applying — and the only cue would be
+              frames that ignore it. */}
+          {row.applied === false && (
+            <span style={{ fontSize: 12, color: MUTED }}>
+              not currently applied — remove older memories to make room
+            </span>
+          )}
         </div>
       </div>
 

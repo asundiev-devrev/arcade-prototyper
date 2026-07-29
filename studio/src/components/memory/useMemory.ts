@@ -6,6 +6,12 @@ export interface LearnedRowView {
   level: "global" | "project";
   hits: number;
   pinned?: boolean;
+  /**
+   * Whether this memory is actually reaching the generator. The rendered
+   * LEARNED.md is capped per turn, so a large store can hold rows the agent
+   * never sees. Server-computed; absent on older responses, treated as applied.
+   */
+  applied?: boolean;
 }
 export interface InventoryFrameView {
   slug: string;

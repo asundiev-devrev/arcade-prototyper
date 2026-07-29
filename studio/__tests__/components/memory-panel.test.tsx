@@ -213,4 +213,63 @@ describe("MemoryPanel", () => {
       expect(screen.queryByText(/couldn't/i)).toBeNull();
     });
   });
+
+  // There is a per-turn budget on how much memory reaches the generator. Without
+  // a cue, an over-budget row reads as active while it has quietly stopped
+  // applying — and the only symptom the designer would ever see is frames
+  // ignoring a memory that is right there on screen.
+  describe("the not-applied cue", () => {
+    function snapshotWith(applied: boolean | undefined) {
+      return {
+        ...SNAPSHOT,
+        project: {
+          rules: "",
+          rows: [
+            {
+              id: "p1",
+              fact: "Filter chips go in the toolbar",
+              level: "project",
+              hits: 2,
+              ...(applied === undefined ? {} : { applied }),
+            },
+          ],
+        },
+      };
+    }
+
+    function mockSnapshot(applied: boolean | undefined) {
+      (global.fetch as any).mockImplementation((url: any) => {
+        if (String(url).startsWith("/api/memory?")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(snapshotWith(applied)),
+          } as any);
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) } as any);
+      });
+    }
+
+    it("says so when a memory is no longer reaching the generator", async () => {
+      mockSnapshot(false);
+      render(<MemoryPanel projectSlug="demo" />);
+      await waitFor(() => screen.getByText(/Filter chips/));
+      expect(screen.getByText(/not currently applied/i)).toBeTruthy();
+    });
+
+    it("stays quiet for an applied memory", async () => {
+      mockSnapshot(true);
+      render(<MemoryPanel projectSlug="demo" />);
+      await waitFor(() => screen.getByText(/Filter chips/));
+      expect(screen.queryByText(/not currently applied/i)).toBeNull();
+    });
+
+    it("stays quiet when the server did not send the flag at all", async () => {
+      // An older server response has no `applied` field. Treating absent as
+      // "not applied" would put a scary warning on every row.
+      mockSnapshot(undefined);
+      render(<MemoryPanel projectSlug="demo" />);
+      await waitFor(() => screen.getByText(/Filter chips/));
+      expect(screen.queryByText(/not currently applied/i)).toBeNull();
+    });
+  });
 });

@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { parseStreamLineAll, type StudioEvent } from "../../src/lib/streamJson";
+import { MEMORY_SENTINEL } from "../../server/memoryContract";
+
+/** A memory line smuggled behind the journey marker. */
+const MEMORY_SENTINEL_LINE = `→ ${MEMORY_SENTINEL} project | journey-smuggled fact`;
 
 function asAssistantText(text: string): string {
   return JSON.stringify({
@@ -102,6 +106,35 @@ describe("parseStreamLineAll: journey sentinel", () => {
     const events = parseStreamLineAll(asAssistantText("→ \t\n→ Real"));
     expect(events).toEqual<StudioEvent[]>([
       { kind: "journey", text: "Real" },
+    ]);
+  });
+
+  // Regression: a memory-proposal line that ALSO carries the journey marker used
+  // to become a `journey` event. Journey events bypass the memory seam in
+  // chat.ts, so the plumbing line rendered to the designer verbatim AND the fact
+  // was never recorded. It belongs on the narration side, which is the one path
+  // that runs the seam.
+  it("routes a `→ ⟐ remember:` line to narration, not to a journey", () => {
+    const events = parseStreamLineAll(
+      asAssistantText(`${MEMORY_SENTINEL_LINE}\n→ Sketching\nBuilt the page.`),
+    );
+    expect(events).toEqual<StudioEvent[]>([
+      { kind: "journey", text: "Sketching" },
+      {
+        kind: "narration",
+        text: `${MEMORY_SENTINEL} project | journey-smuggled fact\nBuilt the page.`,
+      },
+    ]);
+    // No journey event carries the sentinel.
+    for (const ev of events) {
+      if (ev.kind === "journey") expect(ev.text).not.toContain("⟐");
+    }
+  });
+
+  it("keeps the memory line out of journeys even when it is the only line", () => {
+    const events = parseStreamLineAll(asAssistantText(MEMORY_SENTINEL_LINE));
+    expect(events).toEqual<StudioEvent[]>([
+      { kind: "narration", text: `${MEMORY_SENTINEL} project | journey-smuggled fact` },
     ]);
   });
 });

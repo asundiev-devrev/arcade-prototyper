@@ -21,11 +21,27 @@
  *  2. What the agent writes is markdown, so the sentinel arrives wrapped in
  *     markdown — backticked, bulleted, bolded, quoted. Decoration must not
  *     decide whether memory works.
+ *
+ * Both invariants are enforced by construction below: the glyph early-out and
+ * the line matcher are DERIVED from `MEMORY_SENTINEL`, so changing the sentinel
+ * cannot leave a stale duplicate behind. A hand-copied regex fails open — the
+ * prompt asks for one shape, the parser matches another, and the plumbing line
+ * silently starts appearing in the designer's chat pane.
  */
 export const MEMORY_SENTINEL = "⟐ remember:";
 
-/** The caseless glyph — a cheap early-out that cannot disagree with the regex. */
-const SENTINEL_GLYPH = "⟐";
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * The sentinel split into its glyph and its keyword, straight off the constant.
+ * `⟐ remember:` → `⟐` + `remember:`.
+ */
+const [SENTINEL_GLYPH, SENTINEL_WORD] = (() => {
+  const m = /^(\S+)[ \t]*(.*)$/.exec(MEMORY_SENTINEL);
+  return [m?.[1] ?? MEMORY_SENTINEL, m?.[2] ?? ""];
+})();
 
 export interface ProposedMemory {
   fact: string;
@@ -34,8 +50,16 @@ export interface ProposedMemory {
 
 /** One fact should be one sentence. Longer means the agent is pasting context. */
 const MAX_FACT_CHARS = 200;
-/** More than a few per turn means it is narrating, not distilling. */
-const MAX_PER_TURN = 3;
+/**
+ * More than a few per turn means it is narrating, not distilling.
+ *
+ * Exported because this function only sees ONE message, while a turn is many
+ * messages: the caller accumulates across all of them and has to apply the same
+ * cap to the accumulator, or a chatty turn writes 3 × (number of messages) rows
+ * and floods the store. See `capProposalsPerTurn`.
+ */
+export const MAX_MEMORIES_PER_TURN = 3;
+const MAX_PER_TURN = MAX_MEMORIES_PER_TURN;
 /** Shorter than this cannot be a preference. */
 const MIN_FACT_CHARS = 3;
 
@@ -49,8 +73,19 @@ const LINE_SPLIT_RE = /(\r\n|[\n\r\u2028\u2029])/;
 /**
  * Leading markdown decoration the agent may put in front of the sentinel:
  * blockquote markers, list bullets, emphasis, code fences.
+ *
+ * Built from MEMORY_SENTINEL, never hand-copied — see the header note.
  */
-const SENTINEL_LINE_RE = /^[ \t>*_`~+-]*⟐[ \t]*remember:(.*)$/i;
+const SENTINEL_LINE_RE = new RegExp(
+  `^[ \\t>*_\`~+-]*${escapeRe(SENTINEL_GLYPH)}[ \\t]*${escapeRe(SENTINEL_WORD)}(.*)$`,
+  "i",
+);
+
+/**
+ * A fenced-code opener/closer: ``` or ~~~, optionally indented, optionally with
+ * an info string. Inside a fence the agent is SHOWING text, not saying it.
+ */
+const FENCE_RE = /^[ \t]*(?:`{3,}|~{3,})/;
 
 /** Emphasis/code characters to shave off the body's two ends (never `.` — a fact may end in a period). */
 const EDGE_DECORATION_RE_START = /^[\s*_`~]+/;
@@ -125,6 +160,18 @@ function matchSentinelLine(line: string): string | null {
   return m ? (m[1] ?? "") : null;
 }
 
+/**
+ * Is this single line a memory-proposal line? The same matcher extract/strip
+ * use, so no caller can disagree with them about what a sentinel is.
+ *
+ * Exists for the stream parser, which classifies lines BEFORE the memory seam
+ * runs: a sentinel that also carries a journey marker must not be promoted into
+ * a journey event, because journeys bypass the seam and render verbatim.
+ */
+export function isMemoryLine(line: string): boolean {
+  return matchSentinelLine(line) !== null;
+}
+
 /** Split into lines while keeping each line's own terminator. */
 function splitLines(text: string): { line: string; term: string }[] {
   const parts = text.split(LINE_SPLIT_RE);
@@ -135,11 +182,42 @@ function splitLines(text: string): { line: string; term: string }[] {
   return out;
 }
 
+/**
+ * The ONE scanner both public functions walk. Adds fenced-code state to each
+ * line, because a sentinel inside a fence is the agent SHOWING the line, not
+ * saying it — most often when the designer asked how memory works and the reply
+ * quotes the format. Line-based matching cannot tell those apart on its own, and
+ * getting it wrong writes a permanent standing instruction off an explanation,
+ * with no cue that anything was recorded.
+ *
+ * Fence lines are content: a fenced block is left completely alone — not
+ * extracted (nothing is recorded) and not stripped (the explanation the designer
+ * asked for stays readable).
+ *
+ * Only CLOSED fences count. An unpaired trailing ``` is malformed markdown, and
+ * of the two ways to read it, "not a fence" is the safe one: the sentinel is
+ * still stripped, so a plumbing line can never reach the chat pane because the
+ * agent forgot a closing fence.
+ */
+function scanLines(text: string): { line: string; term: string; inFence: boolean }[] {
+  const parts = splitLines(text);
+  const delims: number[] = [];
+  for (let i = 0; i < parts.length; i += 1) {
+    if (FENCE_RE.test(parts[i].line)) delims.push(i);
+  }
+  const fenced = new Array<boolean>(parts.length).fill(false);
+  for (let d = 0; d + 1 < delims.length; d += 2) {
+    for (let i = delims[d]; i <= delims[d + 1]; i += 1) fenced[i] = true;
+  }
+  return parts.map((p, i) => ({ ...p, inFence: fenced[i] }));
+}
+
 export function extractProposedMemories(text: string): ProposedMemory[] {
   if (!text.includes(SENTINEL_GLYPH)) return [];
   const out: ProposedMemory[] = [];
-  for (const { line } of splitLines(text)) {
+  for (const { line, inFence } of scanLines(text)) {
     if (out.length >= MAX_PER_TURN) break;
+    if (inFence) continue;
     const raw = matchSentinelLine(line);
     if (raw === null) continue;
 
@@ -171,6 +249,21 @@ export function extractProposedMemories(text: string): ProposedMemory[] {
 }
 
 /**
+ * Enforce the per-TURN cap on an accumulator built from several messages.
+ *
+ * `extractProposedMemories` caps one message, which is the wrong unit: a turn
+ * emits many narration messages (plus the phantom-edit retry's), each capped
+ * independently, so three messages of three sentinels each get nine rows past a
+ * limit that reads like it bounds the turn. Keeps the FIRST few — a reply's
+ * earlier proposals are the ones the agent led with.
+ */
+export function capProposalsPerTurn(proposals: ProposedMemory[]): ProposedMemory[] {
+  return proposals.length <= MAX_MEMORIES_PER_TURN
+    ? proposals
+    : proposals.slice(0, MAX_MEMORIES_PER_TURN);
+}
+
+/**
  * Remove the sentinel lines from narration. Memory bookkeeping is silent — the
  * designer sees the summary and the Deviations section, never the plumbing.
  * Drops the whole line so no blank gap is left behind.
@@ -178,12 +271,17 @@ export function extractProposedMemories(text: string): ProposedMemory[] {
  * Deliberately strips every line `matchSentinelLine` recognises, including ones
  * `extractProposedMemories` then rejects (null content, over-long, past the
  * per-turn cap): a rejected proposal is still plumbing, and must not surface.
+ *
+ * The ONE exception is a fenced-code block, and it is the same exception
+ * extraction makes: inside a fence the line is the agent quoting the format,
+ * usually because the designer asked how memory works. Gutting that block would
+ * silently delete the answer to the question.
  */
 export function stripMemoryLines(text: string): string {
   if (!text.includes(SENTINEL_GLYPH)) return text;
   const out: string[] = [];
-  for (const { line, term } of splitLines(text)) {
-    if (matchSentinelLine(line) !== null) {
+  for (const { line, term, inFence } of scanLines(text)) {
+    if (!inFence && matchSentinelLine(line) !== null) {
       // A sentinel line at the very end has no terminator of its own; drop the
       // one that preceded it so no dangling break is left behind.
       if (!term && out.length) out.pop();

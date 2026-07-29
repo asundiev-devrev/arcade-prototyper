@@ -117,4 +117,94 @@ describe("recordProposedMemories", () => {
       }),
     ).resolves.toMatchObject({ written: 0 });
   });
+
+  it("collapses duplicates within one turn instead of counting a recurrence", async () => {
+    // One reply may carry several sentinel lines, and two can be the same fact in
+    // different casing. Counting each as reinforcement pushes `hits` to 2 off a
+    // single turn, which the panel then reads out as "came up 2 times" — a
+    // recurrence that never happened.
+    const r = await recordProposedMemories({
+      proposals: [
+        { fact: "Filter chips go in the toolbar", level: "project" },
+        { fact: "filter chips go in the toolbar.", level: "project" },
+      ],
+      slug: "demo",
+    });
+    expect(r.written).toBe(1);
+    expect(r.reinforced).toBe(0);
+    expect(r.skipped).toBe(1);
+    const rows = await readRows("project", "demo");
+    expect(rows.length).toBe(1);
+    expect(rows[0].hits).toBe(1);
+  });
+
+  it("migrates a pre-JSON LEARNED.md before writing the first captured fact", async () => {
+    // Capture is the first writer that runs with no designer present, and the
+    // write re-renders LEARNED.md from the row store — so without migrating
+    // first, the first captured fact silently replaces a hand-written file and
+    // the migration that would have rescued it never runs again.
+    const dir = path.join(tmp, "projects", "demo", "memory");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, "LEARNED.md"),
+      "- Legacy fact worth keeping\n- Second legacy fact\n",
+      "utf-8",
+    );
+
+    await recordProposedMemories({
+      proposals: [{ fact: "Filter chips go in the toolbar", level: "project" }],
+      slug: "demo",
+    });
+
+    const facts = (await readRows("project", "demo")).map((r) => r.fact);
+    expect(facts).toContain("Legacy fact worth keeping");
+    expect(facts).toContain("Second legacy fact");
+    expect(facts).toContain("Filter chips go in the toolbar");
+  });
+
+  it("dryRun leaves the disk byte-identical, including the legacy migration", async () => {
+    // The dry run is the rollout instrument. If it mutates anything, the "flag
+    // off means nothing changes" promise is false.
+    const dir = path.join(tmp, "projects", "demo", "memory");
+    fs.mkdirSync(dir, { recursive: true });
+    const before = "- Legacy fact worth keeping\n";
+    fs.writeFileSync(path.join(dir, "LEARNED.md"), before, "utf-8");
+
+    await recordProposedMemories({
+      proposals: [{ fact: "Filter chips go in the toolbar", level: "project" }],
+      slug: "demo",
+      dryRun: true,
+    });
+
+    expect(fs.readFileSync(path.join(dir, "LEARNED.md"), "utf-8")).toBe(before);
+    expect(fs.existsSync(path.join(dir, "learned.json"))).toBe(false);
+    expect(fs.existsSync(path.join(tmp, "memory", "learned.json"))).toBe(false);
+  });
+
+  it("a failed global write does not lose the project write", async () => {
+    // The two levels are separate transactions. Sharing one try meant a failed
+    // global write skipped the project write entirely while the counts still
+    // claimed both had landed.
+    const globalDir = path.join(tmp, "memory");
+    fs.mkdirSync(globalDir, { recursive: true });
+    fs.chmodSync(globalDir, 0o444);
+    try {
+      const r = await recordProposedMemories({
+        proposals: [
+          { fact: "Active nav rows use neutral gray", level: "global" },
+          { fact: "Filter chips go in the toolbar", level: "project" },
+        ],
+        slug: "demo",
+      });
+      // The project fact landed…
+      expect((await readRows("project", "demo")).map((x) => x.fact)).toEqual([
+        "Filter chips go in the toolbar",
+      ]);
+      // …and the global one is reported as skipped, never as written.
+      expect(r.written).toBe(1);
+      expect(r.skipped).toBe(1);
+    } finally {
+      fs.chmodSync(globalDir, 0o755);
+    }
+  });
 });

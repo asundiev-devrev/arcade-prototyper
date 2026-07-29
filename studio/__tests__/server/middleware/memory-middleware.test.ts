@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { applyRowPatch, moveRowBetweenLevels } from "../../../server/middleware/memory";
-import { readRows, writeRows } from "../../../server/learnedStore";
+import { applyRowPatch, moveRowBetweenLevels, markApplied } from "../../../server/middleware/memory";
+import { readRows, writeRows, selectRowsWithinRenderBudget } from "../../../server/learnedStore";
 import type { LearnedRow, MemoryLevel } from "../../../server/learnedStore";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -53,6 +53,54 @@ describe("applyRowPatch", () => {
   it("rejects an empty fact — a blank memory is a delete, not an edit", () => {
     const out = applyRowPatch([row()], "r1", { fact: "   " });
     expect(out[0].fact).toBe("original fact");
+  });
+});
+
+describe("markApplied", () => {
+  // The panel used to show every stored row as if it were active, while the
+  // agent only ever received the ones that fit the per-turn render budget — a
+  // memory the designer can read, believe in, and that quietly stopped applying.
+  it("marks every row applied when the whole store fits", () => {
+    const out = markApplied([row(), row({ id: "r2", fact: "second" })]);
+    expect(out.map((r) => r.applied)).toEqual([true, true]);
+  });
+
+  it("marks over-budget rows as not applied", () => {
+    const rows = Array.from({ length: 60 }, (_, i) =>
+      row({
+        id: `r${i}`,
+        fact: `fact ${i} ${"x".repeat(300)}`,
+        lastSeenAt: new Date(Date.parse("2026-01-01T00:00:00.000Z") + i * 60_000).toISOString(),
+      }),
+    );
+    const out = markApplied(rows);
+    expect(out.some((r) => r.applied === false)).toBe(true);
+    expect(out.some((r) => r.applied === true)).toBe(true);
+  });
+
+  it("agrees exactly with the render budget the agent's file is built from", () => {
+    // If these two could disagree, the cue would lie in one direction or the
+    // other — which is the bug it exists to prevent.
+    const rows = Array.from({ length: 60 }, (_, i) =>
+      row({
+        id: `r${i}`,
+        fact: `fact ${i} ${"x".repeat(300)}`,
+        lastSeenAt: new Date(Date.parse("2026-01-01T00:00:00.000Z") + i * 60_000).toISOString(),
+      }),
+    );
+    const { applied } = selectRowsWithinRenderBudget(rows);
+    const appliedIds = new Set(applied.map((r) => r.id));
+    for (const r of markApplied(rows)) {
+      expect(r.applied).toBe(appliedIds.has(r.id));
+    }
+  });
+
+  it("preserves the caller's row order and every original field", () => {
+    const rows = [row(), row({ id: "r2", fact: "second", pinned: true })];
+    const out = markApplied(rows);
+    expect(out.map((r) => r.id)).toEqual(["r1", "r2"]);
+    expect(out[1].pinned).toBe(true);
+    expect(out[1].hits).toBe(2);
   });
 });
 
