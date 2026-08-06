@@ -8,6 +8,21 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.46.0] — 2026-08-06
+
+**Studio stops starting from zero every time.** You mostly prototype in one component library, on one or two products, around a limited set of features — so treating every generation as a first meeting was throwing away everything the app already knew about your work. This release gives the generator a memory you can see and correct.
+
+### Added
+- **A Memory tab, next to Chat and Assets.** One place that answers "what does Studio actually know about my work?" Two sections: **Rules you wrote** — standing instructions you type, either for every project or for this one only, followed exactly. And **Learned from your edits** — things Studio picked up on its own, each labelled with its reach and with a remove button, because an inferred preference is a guess and you should be able to throw it out. Changes take effect on your next prompt.
+- **Studio knows what your project already contains.** Before generating, the agent now sees a digest of your existing frames and your saved composites. Previously it would happily build a fourth variant of a list view you'd already made three times, or hand-roll a component you'd already saved. It can now build on your own work instead of beside it.
+- **Global memory that actually persists across projects.** A preference you state once travels with you to every project, instead of being re-learned each time you start something new. A preference specific to one product stays with that product — and if you state it again while working somewhere else, Studio takes that as evidence it travels and promotes it to global on its own.
+- **`remember: …` in the chat** saves something on the spot, and Studio confirms what it stored.
+
+### Fixed
+- **Global memory was never reaching the generator — in any previous version.** The mechanism that feeds memory into each turn silently ignores absolute file paths, and that's exactly how global memory was wired. So every cross-project preference you'd set since 0.27.1 was being written to disk and then quietly dropped on the way to the agent — the feature looked present and did nothing. Now wired the way that mechanism actually supports, and verified end-to-end by watching the agent quote a global rule back.
+- **A memory that couldn't be saved now says so.** Failed edits in the panel were indistinguishable from edits that did nothing at all.
+- **Your hand-written memory files are no longer overwritten.** Moving to the new store used to replace an existing `LEARNED.md` with no way back; the original is now kept alongside it as `LEARNED.md.bak`.
+
 ## [0.45.3] — 2026-07-26
 
 ### Fixed
