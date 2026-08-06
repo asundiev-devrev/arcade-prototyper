@@ -1,0 +1,342 @@
+{
+  "_comment": "Real designer prompts captured from Arcade Studio sessions (2026-08-06). The evaluation set for turn-routing changes. isCorrection = hand-labelled: does this prompt complain about output Studio already produced? See server/figma/turnRouting.ts case 4.",
+  "_provenance": "Extracted from ~/Library/Application Support/arcade-studio/projects/*/chat-history.json. Verbatim except whitespace collapsed.",
+  "_labelling": "isCorrection labelled by hand 2026-08-06. A keyword detector scored 4/15 recall (27%) on these, which is why keyword routing was abandoned.",
+  "prompts": [
+    {
+      "i": 0,
+      "isCorrection": false,
+      "text": "Implement this precisely: https://www.figma.com/design/ssUerkBL5uOm7tNyHoZVtc/Onboarding-3.0?node-id=5678-118876&t=2Dpcget8xJwUoFhQ-11"
+    },
+    {
+      "i": 1,
+      "isCorrection": true,
+      "text": "You haven't implemented this background blur properly: https://www.figma.com/design/ssUerkBL5uOm7tNyHoZVtc/Onboarding-3.0?node-id=5678-118877&t=2Dpcget8xJwUoFhQ-11 try again"
+    },
+    {
+      "i": 2,
+      "isCorrection": false,
+      "text": "When I click on \"Save\", I want you to animate the transition to this screen: https://www.figma.com/design/ssUerkBL5uOm7tNyHoZVtc/Onboarding-3.0?node-id=5678-118907&t=2Dpcget8xJwUoFhQ-11 IMPORTANT: don't separate these screens onto multiple frames, the transition must happen within this single frame."
+    },
+    {
+      "i": 3,
+      "isCorrection": false,
+      "text": "I want you to re-implement this design using our components: https://www.figma.com/design/EAo4gdFvjvzXnmL8hX6Ctc/Untitled?node-id=27-327&t=mCwWBD3L7ps4AoRG-11 Overall, the parts of this design resemble ComputerScene and its parts. However, there are a few meaningful differences: 1. Left nav has clear differentiation between \"Projects\" and \"Other\". It's different to our current template for the left nav in Computer. You can copy the existing `ComputerSidebar` and modify it. 2. Canvas is expanded, and by default wee show its files view. Can be the same as ours, BUT there’s a very important difference: canvas here is a browser with tabs! By default it’s opened on the “Canvas” tab with our default files view, but you can click on “+” to open a new tab with a different view (more on that later). This prototype is intentionally deviating from our existing patterns because we intend to develop some new directions. As such, I want you to prioritise staying true to the reference rather than our baked-in things."
+    },
+    {
+      "i": 4,
+      "isCorrection": false,
+      "text": "Let’s fix the custom ComputerSidebar step-by-step: 1. The top part with a “Computer” button and a “+” button: 1.1. Change the “New chat with Computer” label and an icon to be a Computer logo instead (like in design). 1.2. Both the “Computer” button and “+” button must fit the nav’s width (currently they overflow). 2. The bottom part with links: 2.1. No need for a top divider. 2.2. User avatar is missing. 3. The nav sidebar has lost its interactivity — fix the regression: 3.1. I cannot resize the nav at the moment. 3.2. I cannot collapse the nav at the moment."
+    },
+    {
+      "i": 5,
+      "isCorrection": false,
+      "text": "In frames/01-tabbed-canvas-prototype/index.tsx, on the <Button> at line 241, describe the change."
+    },
+    {
+      "i": 6,
+      "isCorrection": false,
+      "text": "In frames/01-tabbed-canvas-prototype/index.tsx, on the <Button> at line 241, computer logo is incorrect. I see an artefact of some icon and a word mark. I need you to import the proper Computer logo as svg from Figma design."
+    },
+    {
+      "i": 7,
+      "isCorrection": true,
+      "text": "This is how the button looks right now. Check your import and remove the duplication"
+    },
+    {
+      "i": 8,
+      "isCorrection": true,
+      "text": "You removed the duplication, but the svg is still broken. Try this one"
+    },
+    {
+      "i": 9,
+      "isCorrection": true,
+      "text": "The avatar at the bottom of the sidenav is misaligned with the rest of the links at the bottom"
+    },
+    {
+      "i": 10,
+      "isCorrection": false,
+      "text": "Apply these visual changes in frames/01-tabbed-canvas-prototype/index.tsx. Read the file first — do not edit from memory. Element <div> inside <Root> at line 99:28: - padding left: 12px -> 16px Apply each change ONLY to the element identified by its line:column; do not modify unrelated parts of the file or other files. Express every change with idiomatic Tailwind utility classes and arcade-gen design tokens (e.g. text-(--fg-...), bg-(--bg-...), p-4, text-lg, font-semibold) — map raw px/colors to the nearest token or scale step. Do NOT write raw hex or inline style props. Use the Edit tool with a tight anchor and change only the lines that must change — do NOT rewrite or re-emit the whole file. A reply without a corresponding Edit or Write tool call is a failed turn. If your Edit reports zero or multiple matches, widen the surrounding context and retry; only fall back to Write with the full file contents when a unique anchor truly can't be found."
+    },
+    {
+      "i": 11,
+      "isCorrection": true,
+      "text": "For some reason, changes aren't applied. The item with my avatar is still misaligned with the rest."
+    },
+    {
+      "i": 12,
+      "isCorrection": false,
+      "text": "Let's look at the central panel with the chat itself now. Currently, it’s a super-simplified implementation of a part of `ComputerScene` with `ChatMessages`. Can you extract the chat panel (messages + heading) from ComputerScene and replace the current hand-rolled version with it?"
+    },
+    {
+      "i": 13,
+      "isCorrection": false,
+      "text": "The chat panel must be resizeable. There should be no top divider for the input at the bottom"
+    },
+    {
+      "i": 14,
+      "isCorrection": false,
+      "text": "The chat panel must be resizeable. There should be no top divider for the input at the bottom"
+    },
+    {
+      "i": 15,
+      "isCorrection": false,
+      "text": "Now the most important thing: the canvas panel. As mentioned in the first prompt, it becomes more of a browser. You can click on a \"+\" button to open a new tab. By default, the tab is \"Issues\" and shows a simplified vista view. Implement this interaction based on Figma reference: https://www.figma.com/design/EAo4gdFvjvzXnmL8hX6Ctc/Untitled?node-id=28-977&t=mCwWBD3L7ps4AoRG-11 What's very important: you can switch the conversations in the left navbar, and this will update the chat, but not the canvas whilst you're on the \"issues\" tab."
+    },
+    {
+      "i": 16,
+      "isCorrection": false,
+      "text": "Let's fix this step by step: 1. In tabs, change the \"Pages\" label to \"Canvas\" 2. Add a \"+\" button that would appear on hover over the tabs header. This button will create new tabs. 3. When I switch to \"Issues\" tab — the tabs header visibly jumps — there's something with layout."
+    },
+    {
+      "i": 17,
+      "isCorrection": false,
+      "text": "1. There's no top and bottom padding in the tab header when I switch to \"Issues\" tab — check the tab header 2. The + button should be next to the last tab, not on the far right 3. The new tab should look like \"Issues\" from the formatting perspective: icon + label"
+    },
+    {
+      "i": 18,
+      "isCorrection": false,
+      "text": "Implement different chats connected to the items in the sidenav. When I'm switching between these items — chats and canvases switch, but opened tabs remain the same"
+    },
+    {
+      "i": 19,
+      "isCorrection": false,
+      "text": "Let's update the collapsed state of the nav: 1. Computer button should become icon-only. Computer button should use the \"Computer\" icon in that state. 2. \"Projects\" and \"Other\" titles must be hidden. 3. The name beside the avatar must be hidden. 4. window chrome buttons in the top-left corner must be hidden. 5. Expand button must be present to switch the nav back to expanded state"
+    },
+    {
+      "i": 20,
+      "isCorrection": true,
+      "text": "I see that \"Projects\" and \"Other\" titles have disappeared from the expanded nav too — they should only be hidden in the collapsed nav"
+    },
+    {
+      "i": 21,
+      "isCorrection": false,
+      "text": "Add another section to the side nav: \"Work\" with the following items: - All tickets - My tickets - Unassigned tickets - Updates"
+    },
+    {
+      "i": 22,
+      "isCorrection": false,
+      "text": "When I click on \"My tickets\" item in the side nav, it should open this page AS A NEW TAB (next to \"Canvas\" and \"Issues\"): https://www.figma.com/design/EAo4gdFvjvzXnmL8hX6Ctc/Untitled?node-id=36-7845&t=mCwWBD3L7ps4AoRG-11"
+    },
+    {
+      "i": 23,
+      "isCorrection": false,
+      "text": "Replace the bar at the top of \"My tickets\" page (my tickets articles QnA) with this one from the original design: https://www.figma.com/design/EAo4gdFvjvzXnmL8hX6Ctc/Untitled?node-id=36-7850&t=mCwWBD3L7ps4AoRG-11"
+    },
+    {
+      "i": 24,
+      "isCorrection": true,
+      "text": "Updates to the filter bar you've made: 1. The active icon button must have \"@\" icon instead of \"+\" 2. Remove \"^\" and checkmark buttons. 3. Remove \"Group\", \"Sort by SLA\", \"Customise\", \"View\" and three dots"
+    },
+    {
+      "i": 25,
+      "isCorrection": false,
+      "text": "Now, the line underneath — \"My tickets\" title. 1. There must be three buttons on the right hand side, inline with the heading: https://www.figma.com/design/EAo4gdFvjvzXnmL8hX6Ctc/Untitled?node-id=36-7851&t=mCwWBD3L7ps4AoRG-11 2. Use smaller heading style"
+    },
+    {
+      "i": 26,
+      "isCorrection": false,
+      "text": "In \"My tickets\" view, on the line where \"My tickets\" heading is: 1. Use smaller heading style 2. Add three buttons inline, aligned right: 2.1. Tertiary icon button with `LightningBolt` icon 2.2. Tertiary icon button with `Placeholder` icon 2.3. Primary button with \"+\" icon and \"Ticket\" label"
+    },
+    {
+      "i": 27,
+      "isCorrection": false,
+      "text": "Change top padding of the \"My tickets\" section from `pt-11` to `pt-4`"
+    },
+    {
+      "i": 28,
+      "isCorrection": false,
+      "text": "In \"My tickets\" in the filter section, change the active button's icon to `AtSymbol`"
+    },
+    {
+      "i": 29,
+      "isCorrection": false,
+      "text": "Tabs under the \"My tickets\" title — let's switch them from custom tabs to `arcade-gen` tabs"
+    },
+    {
+      "i": 30,
+      "isCorrection": false,
+      "text": "My tickets > table with tickets: change from table to list view with a list of cards. Use this design as reference (DON'T IMPLEMENT THIS AS A SEPARATE FRAME!!!): https://www.figma.com/design/EAo4gdFvjvzXnmL8hX6Ctc/Untitled?node-id=36-7860&t=mCwWBD3L7ps4AoRG-11"
+    },
+    {
+      "i": 31,
+      "isCorrection": true,
+      "text": "My tickets > table with tickets: change from table to list view with a list of cards. You just imported the reference design as a separate frame `Frame 36 7860` — use that as a reference but with our components"
+    },
+    {
+      "i": 32,
+      "isCorrection": false,
+      "text": "Let's implement a default \"new tab\" experience. When a new tab is created, a user must see this page: https://www.figma.com/design/EAo4gdFvjvzXnmL8hX6Ctc/Untitled?node-id=45-664&t=mCwWBD3L7ps4AoRG-11 — it's a list of quick links to their tickets and other work items"
+    },
+    {
+      "i": 33,
+      "isCorrection": false,
+      "text": "Let's implement a default \"new tab\" experience. When a new tab is created, a user must see this page — currently implemented as a reference in `Frame 45 664` — it's a list of quick links to their tickets and other work items"
+    },
+    {
+      "i": 34,
+      "isCorrection": false,
+      "text": "On a new tab screen update the icons from square placeholders: 1. In the \"Recent\" group use `Document` icons for all `TKT-...` items 2. In \"Work\", use `Window` icon for all items. 3. In \"Pinned\" use `Pin` icon for both items"
+    },
+    {
+      "i": 35,
+      "isCorrection": false,
+      "text": "On the \"new tab\" screen, wire the \"My tickets\" list item such that it opens (or navigates to) a corresponding \"My tickets\" tab"
+    },
+    {
+      "i": 36,
+      "isCorrection": false,
+      "text": "On the new tab screen change `TKT-...` placeholders to some ticket ID's (4-5 digits)"
+    },
+    {
+      "i": 37,
+      "isCorrection": false,
+      "text": "https://www.figma.com/design/EAo4gdFvjvzXnmL8hX6Ctc/Untitled?node-id=51-7168&t=mCwWBD3L7ps4AoRG-11"
+    },
+    {
+      "i": 38,
+      "isCorrection": false,
+      "text": "Implement a ticket page view. Use this frame as a reference: `Frame 51 7168`. Wire this page to `TKT-4821` item in the “Recent” group of the new page screen."
+    },
+    {
+      "i": 39,
+      "isCorrection": true,
+      "text": "You’ve made ticket page a separate frame — don’t do that. Instead, it should open as a tab in the main frame “Tabbed Canvas Prototype”"
+    },
+    {
+      "i": 40,
+      "isCorrection": false,
+      "text": "Remove the extra heading line with a tab from the ticket page view."
+    },
+    {
+      "i": 41,
+      "isCorrection": false,
+      "text": "Check `Frame 51 7168` for reference on formatting of the copy on the ticket page: styles, margins, etc."
+    },
+    {
+      "i": 42,
+      "isCorrection": false,
+      "text": "Apply these visual changes in frames/01-tabbed-canvas-prototype/index.tsx. Read the file first — do not edit from memory. Element <div> inside <TicketDetailTab> at line 32:20: - margin bottom: 54px -> 20px Apply each change ONLY to the element identified by its line:column; do not modify unrelated parts of the file or other files. Express every change with idiomatic Tailwind utility classes and arcade-gen design tokens (e.g. text-(--fg-...), bg-(--bg-...), p-4, text-lg, font-semibold) — map raw px/colors to the nearest token or scale step. Do NOT write raw hex or inline style props. Use the Edit tool with a tight anchor and change only the lines that must change — do NOT rewrite or re-emit the whole file. A reply without a corresponding Edit or Write tool call is a failed turn. If your Edit reports zero or multiple matches, widen the surrounding context and retry; only fall back to Write with the full file contents when a unique anchor truly can't be found."
+    },
+    {
+      "i": 43,
+      "isCorrection": false,
+      "text": "The title of the ticket page view must have top and bottom margins of 16px"
+    },
+    {
+      "i": 44,
+      "isCorrection": false,
+      "text": "On the ticket page view: 1. Use avatar stack on the right hand side inline with the page heading. Replace the current hand-rolled thing. 2. Replace current broken svg under the body copy of the page with two tertiary icon buttons: attachment and emoji For all these changes use `Frame 51 7168` as a visual reference"
+    },
+    {
+      "i": 45,
+      "isCorrection": false,
+      "text": "https://www.figma.com/design/EAo4gdFvjvzXnmL8hX6Ctc/Untitled?node-id=55-1196&t=mCwWBD3L7ps4AoRG-11"
+    },
+    {
+      "i": 46,
+      "isCorrection": false,
+      "text": "When user opens a ticket page, their chat panel must switch to a corresponding view. See the reference design on the frame `Frame 55 1196` — it’s hand-rolled at the moment, implement as much as possible with our components."
+    },
+    {
+      "i": 47,
+      "isCorrection": false,
+      "text": "TicketChatPanel must use the same bottom input as the normal ChatPanel. Apply the same grey background on both."
+    },
+    {
+      "i": 48,
+      "isCorrection": true,
+      "text": "You changed the background of the TicketChatPanel, whereas I asked to change the background of the input. The background of TicketChatPanel must be white as before"
+    },
+    {
+      "i": 49,
+      "isCorrection": false,
+      "text": "Change the background colour of the ChatInput component to #F7F6F6"
+    },
+    {
+      "i": 50,
+      "isCorrection": true,
+      "text": "There's no difference — ChatInput is still white. Look deeper — something is overriding the styles"
+    },
+    {
+      "i": 51,
+      "isCorrection": false,
+      "text": "TicketChatPanel must be resizable, like ChatPanel"
+    },
+    {
+      "i": 52,
+      "isCorrection": false,
+      "text": "TicketChatPanel must be only present when I'm on a ticket page. On all other pages show ChatPanel"
+    },
+    {
+      "i": 53,
+      "isCorrection": false,
+      "text": "https://www.figma.com/design/JztJjqt3i6uFwB6r4dfewz/Navigation--where-to-next?node-id=195-9587&t=dRoVKHV9wHzYLdrq-11"
+    },
+    {
+      "i": 54,
+      "isCorrection": false,
+      "text": "Update the navbar to an always collapsed one. Use `Frame 195 9587` as a design reference. The top menu item should be active by default. When I hover over the button with the clock icon, we should show a popup with secondary menu items."
+    },
+    {
+      "i": 55,
+      "isCorrection": true,
+      "text": "repair the broken frame"
+    },
+    {
+      "i": 56,
+      "isCorrection": false,
+      "text": "Target element: - <div> inside <Root> — frames/01-tabbed-canvas-prototype/ProjectsSidebar.tsx:37:22 Read the file above first — do not edit from memory. Each line:column identifies one targeted element inside its file. Apply the requested change ONLY to this element (or their direct children if the intent clearly requires it); do not modify other files or unrelated parts of that file. A reply without a corresponding Edit or Write tool call is a failed turn. If your Edit reports zero or multiple matches, widen the surrounding context and retry — or fall back to Write with the full new file contents. Do not paraphrase the change in narration as a substitute for editing. Look at the reference frame `frame 195 9587` — the group of icon buttons at the top of it is different to your implementation. It must go: 1. New chat 2. Search 3. Pinned 4. Recent chats 5. Avatars"
+    },
+    {
+      "i": 57,
+      "isCorrection": false,
+      "text": "Double-check that all icon-buttons in the collapsed nav are using valid `arcade-get` icons. The top button must be active by default."
+    },
+    {
+      "i": 58,
+      "isCorrection": false,
+      "text": "The first “+” icon button in the collapsed nav must be in active state by default."
+    },
+    {
+      "i": 59,
+      "isCorrection": false,
+      "text": "Target element: - <IconButton> — frames//prototype-kit/arcade-components.tsx:83:12 Read the file above first — do not edit from memory. Each line:column identifies one targeted element inside its file. Apply the requested change ONLY to this element (or their direct children if the intent clearly requires it); do not modify other files or unrelated parts of that file. A reply without a corresponding Edit or Write tool call is a failed turn. If your Edit reports zero or multiple matches, widen the surrounding context and retry — or fall back to Write with the full new file contents. Do not paraphrase the change in narration as a substitute for editing. This button must be in an active state by default"
+    },
+    {
+      "i": 60,
+      "isCorrection": false,
+      "text": "Target element that come from a SHARED prototype-kit component (rendered inside frames/01-tabbed-canvas-prototype/index.tsx): - <IconButton> Do NOT edit anything under prototype-kit/ — that source is shared by every prototype. Do NOT trust any line:column for these; a kit line number does not map to the frame file. Instead, in frames/01-tabbed-canvas-prototype/index.tsx, inline a local copy of just the markup needed so the targeted element becomes part of THIS frame, then apply the requested change to that copy. Identify the element by what it is and its visible content — not by line number. Preserve all other props, children, and behavior of the surrounding composite. A reply without a corresponding Edit or Write tool call is a failed turn. If your Edit reports zero or multiple matches, widen the surrounding context and retry — or fall back to Write with the full new file contents. Do not paraphrase the change in narration as a substitute for editing. This button must be in active state by default"
+    },
+    {
+      "i": 61,
+      "isCorrection": true,
+      "text": "I was not talking about \"add tab\" button — revert that change. I was talking about \"+\" icon button in the NAVIGATION BAR — the one on top. This is our design system component. Switch it to active state."
+    },
+    {
+      "i": 62,
+      "isCorrection": false,
+      "text": "Target element: - <IconButton> — the <IconButton> placed at frames/01-tabbed-canvas-prototype/ProjectsSidebar.tsx:76:13 Read the file(s) first — do not edit from memory. Each location above points at the exact element (or the exact <Component/> usage that renders it) in the frame's own source. Apply the requested change ONLY to this element at that location — do NOT edit a different element that merely looks similar, and do NOT edit anything under prototype-kit/. If the change needs the component's internal markup (not just its props/className), inline a local copy of just that markup at the SAME location and edit the copy; keep everything else identical. A reply without a corresponding Edit or Write tool call is a failed turn. If your Edit reports zero or multiple matches, widen the surrounding context and retry — or fall back to Write with the full new file contents. Do not paraphrase the change in narration as a substitute for editing. Change default state of the \"+\" button on top of the navigation bar to active/pressed"
+    },
+    {
+      "i": 63,
+      "isCorrection": true,
+      "text": "Try again, I see that the change hasn't been applied"
+    },
+    {
+      "i": 64,
+      "isCorrection": false,
+      "text": "Target element: - <div> inside <Root> — frames/01-tabbed-canvas-prototype/ProjectsSidebar.tsx:121:13 Read the file(s) first — do not edit from memory. Each location above points at the exact element (or the exact <Component/> usage that renders it) in the frame's own source. Apply the requested change ONLY to this element at that location — do NOT edit a different element that merely looks similar, and do NOT edit anything under prototype-kit/. If the change needs the component's internal markup (not just its props/className), inline a local copy of just that markup at the SAME location and edit the copy; keep everything else identical. A reply without a corresponding Edit or Write tool call is a failed turn. If your Edit reports zero or multiple matches, widen the surrounding context and retry — or fall back to Write with the full new file contents. Do not paraphrase the change in narration as a substitute for editing. This avatar is broken, replace with a valid avatar component"
+    },
+    {
+      "i": 65,
+      "isCorrection": false,
+      "text": "Update the avatars in the Nav: 1. Use photos instead of initials 2. Make the size larger 3. Update the last avatar in the list (it currently has \"+\" icon inside for some reason)"
+    },
+    {
+      "i": 66,
+      "isCorrection": true,
+      "text": "There's no top padding in the tab area and in the top part of the chat panel area. Also, the \"+\" button (to add a new tab) doesn't show on hover. I can still click on that area to add a new tab, but the button isn't visible."
+    }
+  ]
+}

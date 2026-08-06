@@ -20,6 +20,32 @@
  * "Target element:" substring, which missed the plural + baked preamble shapes
  * and so misrouted multi-select / baked-element edits into a new-frame import.
  *
+ * Case 4 — KNOWN UNFIXED. A designer TYPES a complaint about a frame we already
+ * produced ("you haven't implemented this background blur properly <figma url> …
+ * try again"). No element is picked, so there is no sentinel, and the prompt has
+ * no build verb — so it falls through to the bare-import default below and
+ * reaches the deterministic importer, which has NO LLM. It cannot read one word
+ * of the complaint: it stamps a BRAND NEW frame and narrates "No design-system
+ * components detected" about that new import. Structurally, EVERY second turn on
+ * a Figma frame fails this way (live session 2026-08-06, project
+ * implement-this-precisely-3).
+ *
+ * A keyword detector for case 4 was built and then REMOVED. Measured against the
+ * real prompt corpus (__tests__/fixtures/designer-prompts.json — 67 prompts from
+ * actual sessions), it caught 4 of the 15 genuine corrections: 27% recall. The
+ * misses are ordinary English with no complaint keyword — "This is how the button
+ * looks right now. Check your import", "The avatar … is misaligned", "repair the
+ * broken frame", "revert that change", "There's no difference — ChatInput is
+ * still white". It also FIRED on descriptive prose ("It's the connection-failed
+ * state with a Try again button"), pulling faithful-copy asks off the fast
+ * deterministic path.
+ *
+ * A correction is a SPEECH ACT, not a vocabulary, so string matching is the wrong
+ * mechanism — it was simultaneously too deaf and too twitchy. The fix belongs on
+ * the model, which already reads the prompt: let it classify the turn (fresh
+ * import / correction / interaction, plus any constraints) and keep the
+ * deterministic path only where the ask is unambiguous. Do NOT re-add patterns.
+ *
  * Pure — no I/O, no subprocess. Unit-tested in
  * __tests__/server/figma/turnRouting.test.ts.
  */
