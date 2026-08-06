@@ -58,7 +58,7 @@ export function buildVisualEditPreamble(elements: EditedElement[], frameRel: str
     `Apply these visual changes in frames/${frameRel}. Read the file first — do not edit from memory.`,
     "",
     ...blocks.flatMap((b) => [b, ""]),
-    "Apply each change ONLY to the element identified by its line:column; do not modify unrelated parts of the file or other files.",
+    "Apply each change ONLY to the element identified by its line:column; do not modify unrelated parts of the file or other frame/kit files (the `memory/` directory is exempt — it is not frame code).",
     "",
     "Express every change with idiomatic Tailwind utility classes and arcade-gen design tokens (e.g. text-(--fg-...), bg-(--bg-...), p-4, text-lg, font-semibold) — map raw px/colors to the nearest token or scale step. Do NOT write raw hex or inline style props.",
     "",

@@ -310,7 +310,7 @@ describe("project memory seeding", () => {
 });
 
 describe("CLAUDE.md memory imports", () => {
-  it("renders the four memory @import lines with a resolved global path", async () => {
+  it("renders the four memory @import lines via relative global-memory symlink", async () => {
     await createProject({ name: "Mem Imports", theme: "arcade", mode: "light" });
     const md = fs.readFileSync(
       path.join(tmp, "projects", "mem-imports", "CLAUDE.md"),
@@ -319,11 +319,13 @@ describe("CLAUDE.md memory imports", () => {
     // Project-relative imports
     expect(md).toContain("@memory/RULES.md");
     expect(md).toContain("@memory/LEARNED.md");
-    // Global imports resolved to an absolute path under the tmp studio root
-    expect(md).toContain(`@${path.join(tmp, "memory", "RULES.md")}`);
-    expect(md).toContain(`@${path.join(tmp, "memory", "LEARNED.md")}`);
+    // Global imports via relative symlink (not absolute paths)
+    expect(md).toContain("@global-memory/RULES.md");
+    expect(md).toContain("@global-memory/LEARNED.md");
     // No unreplaced placeholder
     expect(md).not.toContain("{{GLOBAL_MEMORY}}");
+    // No absolute-path @-imports (they silently don't resolve in claude CLI)
+    expect(md).not.toMatch(/^@\//m);
   });
 });
 

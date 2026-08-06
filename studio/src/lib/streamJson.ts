@@ -1,4 +1,6 @@
 import { extractComposites } from "./agentCursor";
+// Pure, dependency-free module (no node builtins) — safe in the client bundle.
+import { isMemoryLine } from "../../server/memoryContract";
 
 export type StudioEvent =
   | { kind: "session"; sessionId: string }
@@ -88,6 +90,13 @@ export type StudioEvent =
  *     preserved.
  *   - Bare sentinels (no text or whitespace-only text after `→ `) are
  *     dropped, NOT emitted as empty journey events.
+ *   - A line carrying BOTH markers (`→ ⟐ remember: …`) is a memory line, not a
+ *     journey: journey events skip the memory seam in chat.ts and render to the
+ *     designer verbatim, so promoting one would print plumbing on screen. It is
+ *     handed to the narration side WITHOUT its `→ `, which is the one path that
+ *     runs the seam — so the fact is still recorded and the line still stripped.
+ *     Dropping it outright would keep the pane clean but silently lose the
+ *     memory the agent proposed.
  */
 export function splitJourneyAndNarration(text: string): {
   journeys: string[];
@@ -100,7 +109,9 @@ export function splitJourneyAndNarration(text: string): {
     const stripped = line.replace(/^[ \t]+/, "");
     if (stripped.startsWith("→ ")) {
       const text = stripped.slice(2).replace(/\s+$/, "");
-      if (text) journeys.push(text);
+      // Memory bookkeeping never becomes a journey step — see the note above.
+      if (text && isMemoryLine(text)) narrationLines.push(text);
+      else if (text) journeys.push(text);
     } else {
       narrationLines.push(line);
     }

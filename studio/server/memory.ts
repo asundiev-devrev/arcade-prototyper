@@ -8,8 +8,8 @@ function rulesStub(scope: string): string {
 }
 
 function learnedStub(scope: string): string {
-  return `<!-- LEARNED.md — facts the generator remembers about ${scope}.
-     Auto-appended during generation; safe to edit or prune by hand. -->
+  return `<!-- LEARNED.md — facts Studio has learned about ${scope}.
+     Generated from learned.json; edit via the Memory panel, not here. -->
 `;
 }
 
@@ -35,4 +35,53 @@ export async function ensureMemoryStubs(dir: string, scope: string): Promise<voi
   const learned = path.join(dir, "LEARNED.md");
   if (!(await fileExists(rules))) await fs.writeFile(rules, rulesStub(scope));
   if (!(await fileExists(learned))) await fs.writeFile(learned, learnedStub(scope));
+}
+
+/**
+ * Create (or repair) the `global-memory` symlink inside a project dir so
+ * CLAUDE.md can @-import global memory RELATIVELY. See
+ * projectGlobalMemoryLink for why absolute imports are unusable.
+ * Idempotent and never throws: a stale or wrong-target link is replaced, and
+ * on a filesystem that refuses symlinks the project still works with project
+ * memory only.
+ */
+export async function ensureGlobalMemoryLink(linkPath: string, targetDir: string): Promise<void> {
+  try {
+    await fs.mkdir(targetDir, { recursive: true });
+    await fs.mkdir(path.dirname(linkPath), { recursive: true });
+
+    let needsCreate = false;
+    try {
+      const stat = await fs.lstat(linkPath);
+      if (stat.isSymbolicLink()) {
+        const existingTarget = await fs.readlink(linkPath);
+        if (existingTarget === targetDir) {
+          return; // Already correct
+        }
+        // Wrong target, replace it
+        await fs.rm(linkPath, { recursive: false, force: true });
+        needsCreate = true;
+      } else if (stat.isDirectory()) {
+        // Real directory — do NOT delete, log and bail
+        console.warn(`[ensureGlobalMemoryLink] ${linkPath} is a real directory; cannot replace with symlink (data safety)`);
+        return;
+      } else {
+        // File or other — safe to remove
+        await fs.rm(linkPath, { recursive: false, force: true });
+        needsCreate = true;
+      }
+    } catch (err: any) {
+      if (err.code === "ENOENT") {
+        needsCreate = true;
+      } else {
+        throw err;
+      }
+    }
+
+    if (needsCreate) {
+      await fs.symlink(targetDir, linkPath, "dir");
+    }
+  } catch (err) {
+    console.warn(`[ensureGlobalMemoryLink] Failed to create symlink ${linkPath} → ${targetDir}:`, err);
+  }
 }

@@ -23,6 +23,7 @@ export function LeftPaneTabToggle({
     >
       <ToggleGroup.Item value="chat">Chat</ToggleGroup.Item>
       <ToggleGroup.Item value="assets">Assets</ToggleGroup.Item>
+      <ToggleGroup.Item value="memory">Memory</ToggleGroup.Item>
     </ToggleGroup.Root>
   );
 }

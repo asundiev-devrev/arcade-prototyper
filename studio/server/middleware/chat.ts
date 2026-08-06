@@ -10,7 +10,15 @@ import { chatHistoryPath, lastErrorLogPath, lastStdoutLogPath, projectDir } from
 import { runComputerTurn } from "../devrev/computerAgent";
 import { buildComputerContext } from "../devrev/computerContext";
 import { summarizeFrameSource } from "../frameSummary";
+import {
+  extractProposedMemories,
+  stripMemoryLines,
+  capProposalsPerTurn,
+  type ProposedMemory,
+} from "../memoryContract";
+import { recordProposedMemories } from "../memoryCapture";
 import { runDriftCheck } from "../devrev/driftCheck";
+import { writeInventory } from "../inventory";
 import { pendingObjections, markStaleByFrame } from "../chimeIns";
 import type { ChatMessage, ChimeIn } from "../types";
 import type { StudioEvent } from "../../src/lib/streamJson";
@@ -1149,6 +1157,30 @@ async function runClaudeBranch(ctx: {
   let capturedSessionId: string | undefined;
   const narrationTexts: string[] = [];
   const toolLabels: string[] = [];
+  /**
+   * Memory lines the agent proposed this turn. Harvested at the narration seam
+   * below; the WRITE is wired separately (behind the rollout flag) — the server
+   * is the only writer either way.
+   */
+  const proposedMemories: ProposedMemory[] = [];
+  /**
+   * Memory capture is SILENT: the `⟐ remember:` line is plumbing between the
+   * agent and the server, and must never reach the designer's chat pane or the
+   * persisted history.
+   *
+   * This runs at the ONE seam where narration forks into both destinations —
+   * `emit()` (live SSE → chat pane) and `narrationTexts` (→ appendHistory).
+   * Stripping post-turn would be too late for the pane: the designer has
+   * already read the line.
+   *
+   * Returns the narration to keep, or null when the message was nothing BUT a
+   * memory line (emit nothing rather than an empty bubble).
+   */
+  const harvestMemoryLines = (text: string): string | null => {
+    for (const proposal of extractProposedMemories(text)) proposedMemories.push(proposal);
+    const kept = stripMemoryLines(text);
+    return kept.trim() ? kept : null;
+  };
   let pendingEnd: { ok: boolean; error?: string } | null = null;
   // Telemetry captured across the turn — persisted as one metrics row at the
   // end. The CLI's `turn_metrics` event carries ttft/duration/tokens/cost; the
@@ -1207,7 +1239,13 @@ async function runClaudeBranch(ctx: {
       signal,
       onEvent: (ev) => {
         if (ev.kind === "session") capturedSessionId = ev.sessionId;
-        if (ev.kind === "narration") narrationTexts.push(ev.text);
+        if (ev.kind === "narration") {
+          const kept = harvestMemoryLines(ev.text);
+          if (kept === null) return; // memory line only — nothing to show
+          narrationTexts.push(kept);
+          emit({ ...ev, text: kept });
+          return;
+        }
         if (ev.kind === "tool_call") toolLabels.push(ev.pretty);
         if (ev.kind === "turn_metrics") {
           // Keep the latest (a retried turn emits one per attempt; the last
@@ -1406,6 +1444,30 @@ async function runClaudeBranch(ctx: {
     });
   }
   if (endResult.ok) {
+    // Memory capture, part 1 of 2 — extract and strip.
+    //
+    // The agent proposes durable facts with a sentinel line. The PRIMARY
+    // extraction + strip already happened at the narration seam
+    // (harvestMemoryLines): that is the one fork where narration goes to BOTH
+    // the live SSE stream and the persisted history, and the chat pane needs
+    // the line gone before the designer reads it — post-turn is too late there.
+    //
+    // This pass is belt-and-braces for any narration that reached
+    // narrationTexts without going through that seam. It runs BEFORE the
+    // deviations check and before appendHistory, both of which read
+    // narrationTexts, so a sentinel can never be mistaken for narration
+    // content nor persisted.
+    for (let i = 0; i < narrationTexts.length; i += 1) {
+      for (const proposal of extractProposedMemories(narrationTexts[i])) {
+        proposedMemories.push(proposal);
+      }
+      narrationTexts[i] = stripMemoryLines(narrationTexts[i]);
+    }
+    // Drop entries that were nothing but a memory line.
+    for (let i = narrationTexts.length - 1; i >= 0; i -= 1) {
+      if (!narrationTexts[i].trim()) narrationTexts.splice(i, 1);
+    }
+
     // Enforce the deviations-section contract defined in templates/CLAUDE.md.tpl.
     // If the agent produced narration at all and that narration doesn't contain
     // a `### Deviations` heading, append a visible warning trailer. Emitting
@@ -1413,7 +1475,16 @@ async function runClaudeBranch(ctx: {
     // keeps the SSE view in agreement with what readHistory() will return
     // after reload.
     const joined = narrationTexts.join("\n\n").trim();
-    if (joined && !hasDeviationsSection(joined)) {
+    // A bare `remember: …` turn is EXPECTED to change no frame and to carry no
+    // Deviations section — the template tells the agent to acknowledge it and
+    // emit a memory line, nothing more. Both trailers below fire on exactly
+    // that shape, so without this exemption a perfectly successful memory turn
+    // reports itself as two failures (a missing-Deviations warning plus the red
+    // no-frame-changes banner). `isMemoryOnlyPrompt` was previously threaded
+    // only into the phantom-edit RETRY gate, which suppressed the re-run but
+    // not the warnings.
+    const memoryOnlyTurn = isMemoryOnlyPrompt(ctx.prompt);
+    if (joined && !memoryOnlyTurn && !hasDeviationsSection(joined)) {
       emit({ kind: "narration", text: DEVIATIONS_MISSING_TRAILER.trimStart() });
       narrationTexts.push(DEVIATIONS_MISSING_TRAILER.trimStart());
     }
@@ -1459,7 +1530,15 @@ async function runClaudeBranch(ctx: {
             signal,
             onEvent: (ev) => {
               if (ev.kind === "session") capturedSessionId = ev.sessionId;
-              if (ev.kind === "narration") narrationTexts.push(ev.text);
+              if (ev.kind === "narration") {
+                // Same silence contract on the retry attempt — a sentinel line
+                // here would leak exactly as it would on the first pass.
+                const kept = harvestMemoryLines(ev.text);
+                if (kept === null) return;
+                narrationTexts.push(kept);
+                emit({ ...ev, text: kept });
+                return;
+              }
               if (ev.kind === "tool_call") toolLabels.push(ev.pretty);
               // Keep the first attempt's metrics; the retry's end is
               // supplementary and must not flip the turn's terminal result.
@@ -1479,7 +1558,9 @@ async function runClaudeBranch(ctx: {
         }
       }
 
-      if (!hasAnyChange(diff)) {
+      // See memoryOnlyTurn above: a `remember:` turn legitimately writes no
+      // frame, so the red no-changes banner would be a false alarm.
+      if (!memoryOnlyTurn && !hasAnyChange(diff)) {
         emit({ kind: "narration", text: NO_CHANGES_TRAILER.trimStart() });
         narrationTexts.push(NO_CHANGES_TRAILER.trimStart());
       }
@@ -1508,6 +1589,12 @@ async function runClaudeBranch(ctx: {
         void readFrameSummaries(slug)
           .then((frameSource) => runDriftCheck(slug, { frameSource, frameSlug: changedFrame }))
           .catch((err) => console.warn(`[studio] drift check rejected for ${slug}:`, err));
+
+        // Refresh the project inventory so the NEXT turn knows this frame
+        // exists. Deterministic and local (a dir read + one write) — no model,
+        // no network. writeInventory never throws; the .catch is belt-and-
+        // braces against an unhandled rejection.
+        void writeInventory(slug).catch(() => {});
       }
     }
 
@@ -1520,6 +1607,39 @@ async function runClaudeBranch(ctx: {
         source: "claude",
         createdAt: new Date().toISOString(),
       });
+    }
+
+    // Memory capture, part 2 of 2 — record. Runs here, at the very end of the
+    // turn, so it sees proposals harvested by the phantom-edit retry too (that
+    // retry runs above and pushes into the same array). Recording at the top of
+    // this block would silently drop them.
+    //
+    // The cap is applied HERE, to the whole turn. extractProposedMemories caps
+    // each message it sees, but a turn is many messages (plus the phantom-edit
+    // retry's), all pushing into this one array — so without this a chatty turn
+    // writes three rows per message and floods the store past a limit that reads
+    // like it bounds the turn.
+    const toRecord = capProposalsPerTurn(proposedMemories);
+    if (toRecord.length > 0) {
+      // `dry` (the default) logs without writing — the rollout gate before a
+      // silent writer starts shaping generations. Set ARCADE_MEMORY_CAPTURE=on
+      // to enable writes.
+      const mode = process.env.ARCADE_MEMORY_CAPTURE ?? "dry";
+      // Fire-and-forget, same discipline as the drift check and the inventory
+      // write: a failure to remember must not delay or break the turn.
+      void recordProposedMemories({ proposals: toRecord, slug, dryRun: mode !== "on" })
+        .then((r) => {
+          console.log(
+            `[studio] memory capture (${mode}) for ${slug}: ` +
+              `${r.written} new, ${r.reinforced} reinforced, ${r.skipped} skipped` +
+              (proposedMemories.length > toRecord.length
+                ? ` (${proposedMemories.length - toRecord.length} over the per-turn cap, dropped)`
+                : "") +
+              " — " +
+              toRecord.map((p) => `${p.level}:${p.fact}`).join(" | "),
+          );
+        })
+        .catch((err) => console.warn(`[studio] memory capture rejected for ${slug}:`, err));
     }
   }
 

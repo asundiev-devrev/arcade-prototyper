@@ -121,7 +121,9 @@ export function liftEmitPlugin(): Plugin {
       // boot isn't blocked on the walk.
       void emitForExistingFrames();
 
-      watcher = chokidar.watch(projectsRoot(), { ignoreInitial: true, depth: 6 });
+      // Watcher must not traverse the global-memory symlink inside each project —
+      // only care about files inside the project itself.
+      watcher = chokidar.watch(projectsRoot(), { ignoreInitial: true, depth: 6, followSymlinks: false });
       watcher.on("all", async (_event, filePath) => {
         const parsed = parseFrameTouched(filePath);
         if (!parsed) return;

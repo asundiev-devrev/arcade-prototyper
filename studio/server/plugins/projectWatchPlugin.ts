@@ -165,7 +165,9 @@ export function projectWatchPlugin(): Plugin {
   return {
     name: "arcade-studio-project-watch",
     configureServer(server) {
-      watcher = chokidar.watch(projectsRoot(), { ignoreInitial: true, depth: 6 });
+      // Watcher must not traverse the global-memory symlink inside each project —
+      // only care about files inside the project itself.
+      watcher = chokidar.watch(projectsRoot(), { ignoreInitial: true, depth: 6, followSymlinks: false });
       watcher.on("all", async (event, filePath) => handleProjectWatchEvent(event, filePath, server));
     },
     async closeBundle() {
