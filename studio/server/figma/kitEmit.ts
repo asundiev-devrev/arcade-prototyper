@@ -417,6 +417,43 @@ function strokeColor(n: RawNode, tok?: TokenResolver | null): string | null {
   return null;
 }
 
+/**
+ * Figma blur effects → CSS. LAYER_BLUR blurs the node's own pixels (`filter`);
+ * BACKGROUND_BLUR blurs what shows THROUGH it (`backdrop-filter`) — the frosted-
+ * glass effect, which needs a translucent fill to be visible at all.
+ *
+ * The radius→CSS conversion is `radius / 2`, taken from Figma's OWN SVG exporter
+ * rather than guessed: exporting the real blurred nodes emitted
+ * `feGaussianBlur stdDeviation="22"` for `radius: 44` and `stdDeviation="87"` for
+ * `radius: 174` (verified live 2026-08-06 against Onboarding 3.0 node 5678:118876).
+ * CSS `blur(<n>px)` is defined as a Gaussian with standard deviation n, so
+ * stdDeviation maps to it directly.
+ *
+ * Every blur effect was previously DROPPED — only DROP_SHADOW was read. That is
+ * why a designer's soft background glow imported as a hard-edged purple blob: the
+ * blur lives on a parent GROUP, and the child's exported SVG is the sharp shape.
+ *
+ * Multiple blurs of one kind compose (CSS allows a filter list). `visible: false`
+ * effects are skipped, matching the DROP_SHADOW path above.
+ */
+export function blurStyle(n: RawNode): { filter?: string; backdropFilter?: string } {
+  const layer: string[] = [];
+  const background: string[] = [];
+  for (const e of n.effects ?? []) {
+    if (e.visible === false) continue;
+    const radius = typeof e.radius === "number" ? e.radius : 0;
+    if (radius <= 0) continue;
+    // Round to 2dp: Figma radii are floats and a 14-decimal CSS value is noise.
+    const px = Math.round((radius / 2) * 100) / 100;
+    if (e.type === "LAYER_BLUR") layer.push(`blur(${px}px)`);
+    else if (e.type === "BACKGROUND_BLUR") background.push(`blur(${px}px)`);
+  }
+  const out: { filter?: string; backdropFilter?: string } = {};
+  if (layer.length) out.filter = layer.join(" ");
+  if (background.length) out.backdropFilter = background.join(" ");
+  return out;
+}
+
 function paintStyle(n: RawNode, tok?: TokenResolver | null): Style {
   const s: Style = {};
   if (typeof n.opacity === "number" && n.opacity < 1) s.opacity = Math.round(n.opacity * 1000) / 1000;
@@ -446,6 +483,9 @@ function paintStyle(n: RawNode, tok?: TokenResolver | null): Style {
     }
   }
   if (shadows.length) s.boxShadow = shadows.join(", ");
+  const blur = blurStyle(n);
+  if (blur.filter) s.filter = blur.filter;
+  if (blur.backdropFilter) s.backdropFilter = blur.backdropFilter;
   const rr = n.rectangleCornerRadii;
   if (rr) s.borderRadius = `${rr[0]}px ${rr[1]}px ${rr[2]}px ${rr[3]}px`;
   else if (typeof n.cornerRadius === "number" && n.cornerRadius > 0) s.borderRadius = `${n.cornerRadius}px`;
@@ -1357,6 +1397,14 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
         const s = nodeBox(n, px, py, flex);
         delete s.background;
         delete s.boxShadow;
+        // Figma BAKES a node's own blur into its export (an SVG export of a
+        // blurred node carries an feGaussianBlur filter; a PNG export carries the
+        // blurred pixels and a bbox expanded to fit them). Re-applying CSS blur
+        // here would blur it TWICE. Verified live 2026-08-06. The blur is only
+        // lost when it sits on an ANCESTOR of the exported node — that ancestor
+        // is a container and keeps its CSS blur via paintStyle.
+        delete s.filter;
+        delete s.backdropFilter;
         lines.push(`${pad}<img${figmaIdAttr(n)} src={${v}} style=${sx(s)} alt="" />`);
         return;
       }
@@ -1369,6 +1417,9 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
         const s = nodeBox(n, px, py, flex);
         delete s.background;
         s.objectFit = "cover";
+        // Same baked-blur reasoning as the graphic path above.
+        delete s.filter;
+        delete s.backdropFilter;
         lines.push(`${pad}<img${figmaIdAttr(n)} src={${v}} style=${sx(s)} alt="" />`);
         return;
       }
@@ -1387,6 +1438,12 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
         const s = nodeBox(n, px, py, flex);
         delete s.background;
         delete s.boxShadow;
+        // Same baked-blur reasoning as the graphic path above. Note the asset may
+        // be a DESCENDANT (glyphExportId), so this node's own blur is baked only
+        // when the export came from this node — but a glyph subtree's blur is
+        // inside that export either way, so stripping is correct in both cases.
+        delete s.filter;
+        delete s.backdropFilter;
         lines.push(`${pad}<img${figmaIdAttr(n)} src={${v}} style=${sx(s)} alt="" />`);
         return;
       }

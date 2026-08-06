@@ -3,6 +3,7 @@ import {
   planAssets,
   emitKitFrame,
   resolveIdentity,
+  blurStyle,
 } from "../../../server/figma/kitEmit";
 import {
   matchKit,
@@ -1447,5 +1448,92 @@ describe("stroke fidelity — per-side borders + hairline dividers", () => {
     expect(r.source).toContain('width: "1px"');
     expect(r.source).toContain('height: "400px"');
     expect(r.source).not.toContain("<img");
+  });
+});
+
+// Blur effects. Before this, paintStyle read ONLY DROP_SHADOW, so every
+// LAYER_BLUR / BACKGROUND_BLUR in a design was silently dropped — a designer's
+// soft purple background glow imported as a hard-edged blob (live session
+// 2026-08-06, Onboarding 3.0 node 5678:118876). The radii below are the REAL
+// values from that frame.
+//
+// radius/2 is Figma's own conversion, read off its SVG exporter rather than
+// guessed: exporting those nodes emits feGaussianBlur stdDeviation="22" for
+// radius 44 and stdDeviation="87" for radius 174.
+describe("blurStyle", () => {
+  it("maps LAYER_BLUR to filter at radius/2 (Figma's own conversion)", () => {
+    expect(blurStyle({ effects: [{ type: "LAYER_BLUR", visible: true, radius: 174 }] } as any))
+      .toEqual({ filter: "blur(87px)" });
+    expect(blurStyle({ effects: [{ type: "LAYER_BLUR", visible: true, radius: 44 }] } as any))
+      .toEqual({ filter: "blur(22px)" });
+  });
+
+  it("maps BACKGROUND_BLUR to backdropFilter (blurs what shows THROUGH)", () => {
+    expect(blurStyle({ effects: [{ type: "BACKGROUND_BLUR", visible: true, radius: 52 }] } as any))
+      .toEqual({ backdropFilter: "blur(26px)" });
+  });
+
+  it("keeps the two kinds separate and composes multiples", () => {
+    const out = blurStyle({ effects: [
+      { type: "LAYER_BLUR", visible: true, radius: 10 },
+      { type: "LAYER_BLUR", visible: true, radius: 4 },
+      { type: "BACKGROUND_BLUR", visible: true, radius: 8 },
+    ] } as any);
+    expect(out).toEqual({ filter: "blur(5px) blur(2px)", backdropFilter: "blur(4px)" });
+  });
+
+  it("ignores hidden, zero-radius, and non-blur effects", () => {
+    expect(blurStyle({ effects: [{ type: "LAYER_BLUR", visible: false, radius: 40 }] } as any)).toEqual({});
+    expect(blurStyle({ effects: [{ type: "LAYER_BLUR", visible: true, radius: 0 }] } as any)).toEqual({});
+    expect(blurStyle({ effects: [{ type: "DROP_SHADOW", visible: true, radius: 8 }] } as any)).toEqual({});
+    expect(blurStyle({} as any)).toEqual({});
+  });
+
+  it("rounds a float radius to 2dp instead of emitting CSS noise", () => {
+    // Figma radii are floats; 319.78460693359375/2 must not reach the stylesheet.
+    expect(blurStyle({ effects: [{ type: "LAYER_BLUR", visible: true, radius: 5.333 }] } as any))
+      .toEqual({ filter: "blur(2.67px)" });
+  });
+});
+
+describe("emitKitFrame — blur", () => {
+  it("emits CSS blur on a container GROUP (the real dropped case)", () => {
+    // Shape of the live failure: the blur sits on a parent GROUP whose child is
+    // exported as a SHARP svg. Without the container's CSS blur the import shows
+    // a hard-edged blob.
+    const doc = frameNode("0", [{
+      id: "glow", type: "GROUP",
+      absoluteBoundingBox: bbox(0, 101, 600, 320),
+      opacity: 0.2,
+      effects: [{ type: "LAYER_BLUR", visible: true, radius: 174 }],
+      children: [{
+        id: "blob", type: "VECTOR",
+        absoluteBoundingBox: bbox(0, 101, 600, 320),
+        fills: [{ type: "SOLID", color: { r: 0.27, g: 0, b: 0.67, a: 1 } }],
+      }],
+    }]);
+    const r = emitKitFrame(doc, {
+      components: {}, componentSets: {},
+      assetFiles: new Map([["blob", "blob.svg"]]),
+    });
+    expect(r.source).toContain('filter: "blur(87px)"');
+  });
+
+  it("does NOT double-blur an exported node — Figma bakes blur into the asset", () => {
+    // The blur is on the EXPORTED node itself. Its SVG/PNG already contains the
+    // blur (verified live), so emitting CSS blur too would apply it twice.
+    const doc = frameNode("0", [{
+      id: "icon", type: "VECTOR",
+      absoluteBoundingBox: bbox(10, 10, 24, 24),
+      effects: [{ type: "LAYER_BLUR", visible: true, radius: 20 }],
+      fills: [{ type: "SOLID", color: { r: 0, g: 0, b: 0, a: 1 } }],
+    }]);
+    const r = emitKitFrame(doc, {
+      components: {}, componentSets: {},
+      assetFiles: new Map([["icon", "icon.svg"]]),
+    });
+    expect(r.source).toContain("<img");
+    expect(r.source).not.toContain("blur(10px)");
+    expect(r.source).not.toContain("filter:");
   });
 });
