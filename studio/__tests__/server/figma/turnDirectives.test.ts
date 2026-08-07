@@ -64,7 +64,27 @@ describe("buildTurnDirectives", () => {
     expect(d).toContain("<target_frame>");
     expect(d).toContain("`01-figma-5678-118876`");
     expect(d).toContain("EDITS the existing frame");
-    expect(d).toContain("Do NOT create a new frame directory");
+    expect(d).toContain("Do NOT create a new frame");
+    // Studio's default vocabulary still names Studio's on-disk layout.
+    expect(d).toContain("frames/01-figma-5678-118876/");
+  });
+
+  // The <target_frame> block also spoke Studio-only ("Edit the files in
+  // `frames/<slug>/`"), so it takes the same HostVocabulary. A foreign host gets the
+  // behavioural rule — edit what already renders this — without a path its repo does
+  // not have. See HostVocabulary in server/figma/turnConstraints.ts.
+  it("states the target in a FOREIGN host's nouns when one is supplied", () => {
+    const [d] = buildTurnDirectives(
+      plan({ decidedBy: "provenance", targetFrame: "TicketsPage" }),
+      { container: "route", linkComponent: "<Link>", rulesFile: "AGENTS.md" },
+    );
+    expect(d).toContain("EDITS the existing route `TicketsPage`");
+    expect(d).toContain("Do NOT create a new route");
+    // No Studio path, and no Studio component name.
+    expect(d).not.toContain("frames/");
+    expect(d).not.toContain("FrameLink");
+    // …but it still says WHICH thing to edit.
+    expect(d).toContain("already render `TicketsPage`");
   });
 
   it("hands over CANDIDATES rather than guessing when provenance was ambiguous", () => {
@@ -168,6 +188,50 @@ describe("shouldSuppressWholeFrame", () => {
     for (const i of [1, 2, 30, 39]) {
       expect(detectHiFiIntent(P(i)), `#${i}`).toBe(false);
     }
+  });
+
+  // A REVIEW FINDING THE CASCADE NOW ANSWERS STRUCTURALLY, which is a better fix
+  // than the one proposed, so it is recorded here rather than in a comment nobody
+  // reads.
+  //
+  // The finding: the carve-out is justified by "the constraint directive is
+  // appended LAST and overrides everything else about frames", and a
+  // PROVENANCE-located turn has no constraint directive — so on an
+  // `explicitHiFi` + `targetFrame` turn the agent would get `<target_frame>`
+  // ("make the SMALLEST change") AND `<high_fidelity_mode>` ("each section has the
+  // SAME number of rows, same order, as the PNG" — rebuild the frame) with nothing
+  // overriding the latter. Real, and it named a plausible collision: hi-fi wording
+  // is this product's most common Figma phrasing.
+  //
+  // It cannot happen any more. Provenance only diverts when the prompt does NOT ask
+  // for a fresh import (hard constraint 4, turnRouting.ts step 6), and
+  // `detectFreshImportIntent` is TRUE for exactly the hi-fi wording that would
+  // trigger the collision. So `targetFrame` and `explicitHiFi` are now mutually
+  // exclusive by construction — measured below through the real cascade, not
+  // asserted from the type. If step 6's veto is ever relaxed, this test fails and
+  // the carve-out has to be re-argued.
+  it("a plan can never carry BOTH a targetFrame and explicit hi-fi wording", async () => {
+    const url = "https://www.figma.com/design/k/x?node-id=5678-118885";
+    const stamped = [
+      { slug: "01-figma-5678-118876", source: '<div data-figma-id="5678:118885"/>' },
+    ];
+    // Hi-fi wording → the importer, so no target frame exists to collide with.
+    for (const p of [
+      `Implement this precisely: ${url}`,
+      `copy this exactly ${url}`,
+      `implement precisely, the padding is wrong ${url}`,
+    ]) {
+      const plan = await planFigmaTurn(inputsFor(p), { readFrames: async () => stamped });
+      expect(detectHiFiIntent(p), p).toBe(true);
+      expect(plan.targetFrame, p).toBeUndefined();
+    }
+    // No hi-fi wording → the target frame lands, and hi-fi is suppressed, so the
+    // two directives never contradict each other.
+    const edit = `the padding on this card is wrong ${url}`;
+    const plan = await planFigmaTurn(inputsFor(edit), { readFrames: async () => stamped });
+    expect(plan.targetFrame).toBe("01-figma-5678-118876");
+    expect(detectHiFiIntent(edit)).toBe(false);
+    expect(shouldSuppressWholeFrame(plan, { explicitHiFi: detectHiFiIntent(edit) })).toBe(true);
   });
 });
 

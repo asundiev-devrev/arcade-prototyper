@@ -153,6 +153,32 @@ describe("runFigmaKitEmitBranch", () => {
     await expect(fs.access(path.join(targetDir, "index.tsx"))).rejects.toThrow();
     // …and the caller owns narration, so a sub-import appends NO history.
     expect((appendHistory as any)).not.toHaveBeenCalled();
+    // NO origin record either: the frame dir already has one, for a DIFFERENT
+    // node (the screen), and overwriting it would relabel the frame after its
+    // overlay. See the origin-record test below.
+    await expect(fs.access(path.join(targetDir, "figma-origin.json"))).rejects.toThrow();
+  });
+
+  // THE PROVENANCE FILE KEY IS WRITTEN HERE, AT IMPORT TIME — the one moment the
+  // real Figma file key is known for certain. Provenance
+  // (server/figma/provenance.ts) scopes a node match to a file because node ids
+  // are only unique within one, and multi-file projects are real.
+  //
+  // This test is the half that makes the guard non-vacuous. The reader
+  // (adapters/studioFrameReader.ts) originally reconstructed the key from
+  // `LIFT.json#intentSummary` instead — which `liftEmitPlugin` sets to the
+  // PROJECT'S FIRST user prompt, so every frame carried the first import's key.
+  // Verified on disk: all three frames of the live `implement-this-precisely-3`
+  // have a byte-identical intentSummary. Without a writer test, a reader test
+  // proves only that the reader can parse a file nobody produces.
+  it("records the Figma file key + node id for provenance", async () => {
+    const deps = makeDeps();
+    const { input } = makeInput(deps);
+    const r = await runFigmaKitEmitBranch(input as any);
+    expect(r.ok).toBe(true);
+    const fdir = path.join(tmpRoot, "proj", "frames", "01-figma-1-1");
+    const origin = JSON.parse(await fs.readFile(path.join(fdir, "figma-origin.json"), "utf-8"));
+    expect(origin).toEqual({ fileKey: "FILE", nodeId: "1:1" });
   });
 
   it("re-plans past nodes whose export URL is null (broken)", async () => {

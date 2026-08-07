@@ -25,8 +25,10 @@
  * Unit-tested in __tests__/server/figma/turnDirectives.test.ts; wired end-to-end
  * through the real handler in __tests__/server/middleware/chat-single-frame.test.ts.
  */
-import { buildSingleFrameDirective } from "./turnConstraints";
+import { buildSingleFrameDirective, type HostVocabulary } from "./turnConstraints";
 import type { FigmaTurnPlan } from "./turnRouting";
+
+export type { HostVocabulary };
 
 /**
  * Name the frame this turn edits, when provenance identified exactly one.
@@ -43,15 +45,23 @@ import type { FigmaTurnPlan } from "./turnRouting";
  * silently dropped (design spec §5.4). Emitting it as its own directive makes it
  * independent of the frame list entirely.
  */
-function buildTargetFrameDirective(slug: string): string {
+function buildTargetFrameDirective(slug: string, vocab: HostVocabulary): string {
+  const container = vocab.container ?? "frame";
+  // `frames/<slug>/` is Studio's on-disk layout, so the LOCATION is stated only in
+  // Studio's default vocabulary. A foreign host that passes its own `container`
+  // noun gets the behavioural rule ("edit what already renders this") without a
+  // path that does not exist in its repo — see HostVocabulary for the measurement.
+  const where = vocab.container
+    ? `- Edit the file(s) that already render \`${slug}\` in place.`
+    : `- Edit the files in \`frames/${slug}/\` in place.`;
   return [
     "<target_frame>",
-    `This turn EDITS the existing frame \`${slug}\`. The Figma node the designer pasted is`,
-    "ALREADY rendered inside it — matched on the `data-figma-id` attribute that frame carries,",
-    "not inferred from the wording — so this is a follow-up on that frame, not a fresh design.",
+    `This turn EDITS the existing ${container} \`${slug}\`. The Figma node the designer pasted is`,
+    "ALREADY rendered inside it — matched on the `data-figma-id` attribute that it carries,",
+    `not inferred from the wording — so this is a follow-up on that ${container}, not a fresh design.`,
     "",
-    `- Edit the files in \`frames/${slug}/\` in place. Do NOT create a new frame directory and`,
-    "  do NOT re-import the design as a second frame.",
+    `${where} Do NOT create a new ${container} and`,
+    "  do NOT re-import the design as a second one.",
     "- Make the SMALLEST change that satisfies the request; leave everything else as it is.",
     "</target_frame>",
   ].join("\n");
@@ -65,17 +75,18 @@ function buildTargetFrameDirective(slug: string): string {
  * third frame. So we hand over the candidates and let the agent, which can read
  * the prompt, pick.
  */
-function buildFrameCandidatesDirective(slugs: string[]): string {
+function buildFrameCandidatesDirective(slugs: string[], vocab: HostVocabulary): string {
+  const container = vocab.container ?? "frame";
   return [
     "<target_frame>",
-    `The Figma node the designer pasted already appears in more than one existing frame: ${slugs
+    `The Figma node the designer pasted already appears in more than one existing ${container}: ${slugs
       .map((s) => `\`${s}\``)
       .join(", ")}.`,
     "So this is an EDIT of one of them, not a new design.",
     "",
-    "- Work out from the request which of those frames it is about, then edit that frame in place.",
-    "- Do NOT create a new frame directory and do NOT re-import the design as a second frame.",
-    "- If you genuinely cannot tell which frame is meant, say so and ask — do not guess and rebuild.",
+    `- Work out from the request which of those it is about, then edit that ${container} in place.`,
+    `- Do NOT create a new ${container} and do NOT re-import the design as a second one.`,
+    `- If you genuinely cannot tell which ${container} is meant, say so and ask — do not guess and rebuild.`,
     "</target_frame>",
   ].join("\n");
 }
@@ -106,15 +117,25 @@ function buildFrameCandidatesDirective(slugs: string[]): string {
  * produces a byte-identical prompt to before this feature existed. That is the
  * regression guarantee the middleware tests rely on.
  */
-export function buildTurnDirectives(plan?: FigmaTurnPlan | null): string[] {
+export function buildTurnDirectives(
+  plan?: FigmaTurnPlan | null,
+  /**
+   * The host's own layout nouns. Omitted ⇒ Studio's (`frame` / `<FrameLink>` /
+   * `CLAUDE.md`), byte-identical to what Studio has always emitted. A foreign host
+   * passes its three words so the portable text stops naming things only Studio
+   * has — see HostVocabulary in ./turnConstraints for the measurement.
+   */
+  vocab: HostVocabulary = {},
+): string[] {
   if (!plan) return [];
   if (plan.kind !== "claude") return [];
 
   const out: string[] = [];
   // Provenance NAMED one frame, or narrowed it to a few. Never both — the plan
   // type only ever sets one (turnRouting.ts step 6).
-  if (plan.targetFrame) out.push(buildTargetFrameDirective(plan.targetFrame));
-  else if (plan.frameCandidates?.length) out.push(buildFrameCandidatesDirective(plan.frameCandidates));
+  if (plan.targetFrame) out.push(buildTargetFrameDirective(plan.targetFrame, vocab));
+  else if (plan.frameCandidates?.length)
+    out.push(buildFrameCandidatesDirective(plan.frameCandidates, vocab));
 
   // Last word before the model. Scoped to a real constraint on the plan — NOT to
   // `kind === "claude"`, which is true of every non-Figma prompt as well. That
@@ -122,7 +143,7 @@ export function buildTurnDirectives(plan?: FigmaTurnPlan | null): string[] {
   // new frame directory" in response to "New screen: an error state with a Try
   // again button"; the cascade's scope guard prevents it upstream and the
   // `constraints` check here is the second layer.
-  if (plan.constraints?.includes("single-frame")) out.push(buildSingleFrameDirective());
+  if (plan.constraints?.includes("single-frame")) out.push(buildSingleFrameDirective(vocab));
 
   return out;
 }

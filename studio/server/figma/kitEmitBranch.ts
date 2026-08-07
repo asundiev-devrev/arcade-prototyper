@@ -20,6 +20,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { StudioEvent } from "../../src/lib/streamJson";
 import { frameDir, figmaIngestRoot } from "../paths";
+import { FIGMA_ORIGIN_FILE, serialiseFigmaOrigin } from "./figmaOrigin";
 import { appendHistory, nextFramePrefix } from "../projects";
 import {
   getNode as figmanageGetNode,
@@ -480,6 +481,32 @@ export async function runFigmaKitEmitBranch(
     const msg = `Couldn't generate the frame: ${err?.message ?? String(err)}`;
     narrate(msg);
     return { ok: false, error: msg };
+  }
+
+  // Record WHICH FIGMA FILE + NODE this frame came from, before the entry file.
+  //
+  // Provenance (server/figma/provenance.ts) scopes a node match to a Figma file,
+  // because node ids are only unique WITHIN a file and multi-file projects are
+  // real. This is the one moment the real key is known for certain — reconstructing
+  // it later is what went wrong the first time round: the reader derived it from
+  // `LIFT.json#intentSummary`, which `liftEmitPlugin` sets to the PROJECT'S first
+  // user prompt, so every frame was labelled with the first import's file key. See
+  // server/figma/figmaOrigin.ts for the full note.
+  //
+  // Best-effort: a failure here costs a provenance signal (the reader reads a
+  // missing record as "unknown" and keeps today's behaviour), never the import.
+  // Skipped for a sub-import (`target`), which writes a sibling component into a
+  // frame dir that already has its own record for a different node.
+  if (!target) {
+    try {
+      await fs.writeFile(
+        path.join(fdir, FIGMA_ORIGIN_FILE),
+        serialiseFigmaOrigin({ fileKey, nodeId }),
+        "utf-8",
+      );
+    } catch (err: any) {
+      console.warn(`[kitEmit] ${frameSlug}: couldn't record figma origin:`, err?.message ?? err);
+    }
   }
 
   // Entry file LAST so the watcher's reload sees assets present.

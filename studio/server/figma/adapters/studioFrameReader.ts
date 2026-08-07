@@ -29,6 +29,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { frameDir } from "../../paths";
 import { slugMatchesNode } from "../frameSlug";
+import { FIGMA_ORIGIN_FILE } from "../figmaOrigin";
 import type { FrameSource, FrameSourceReader } from "../provenance";
 
 /**
@@ -46,23 +47,38 @@ const MAX_FILE_BYTES = 1_000_000;
  * reads as an edit of the wrong frame — and the generator would edit it without
  * hesitating.
  *
- * The deterministic importer writes `LIFT.json` next to the frame's entry file,
- * and its `intentSummary` is the verbatim prompt that created the frame — which,
- * for an imported frame, contains the Figma URL. Verified on the live frame
- * `01-figma-5678-118876`: `intentSummary` is
- * `"Implement this precisely: https://www.figma.com/design/ssUerkBL5uOm7tNyHoZVtc/…"`.
+ * IT COMES FROM THE IMPORTER'S OWN PER-FRAME RECORD (`FIGMA_ORIGIN_FILE`), which
+ * the kit-emit branch writes at import time because that is the one moment the
+ * real key is known for certain.
  *
- * Returns `undefined` on anything unexpected, and that is a FEATURE: provenance
- * treats a missing key as "unknown", never as "mismatch", so a frame we cannot
- * attribute keeps today's behaviour rather than losing provenance altogether.
+ * IT USED TO COME FROM `LIFT.json#intentSummary`, AND THAT WAS WRONG — a spec
+ * review caught it, and it is worth recording because the mistake read as verified.
+ * `liftEmitPlugin.ts` sets `intentSummary: await readFirstUserPrompt(slug)`, which
+ * returns the FIRST user message of the whole PROJECT, not the prompt that created
+ * this frame. Verified on disk: all three frames of the live
+ * `implement-this-precisely-3` carry a byte-identical `intentSummary`, including
+ * `02-figma-5678-118907`, which was imported from a different node. So the old
+ * derivation stamped the project's first file key onto EVERY frame, and it failed
+ * in both directions on a multi-file project: it suppressed genuine provenance
+ * hits on later-imported files (the original bug, on the very project shape that
+ * motivated file scoping) AND it accepted the colliding id it was built to reject.
+ * The original test passed only because it hand-wrote a per-frame `intentSummary`
+ * the real writer never produces for frame 2+.
+ *
+ * Returns `undefined` for any frame with no record — every frame written before
+ * this fix, and every LLM-authored frame — and that is a FEATURE: provenance treats
+ * a missing key as "unknown", never as "mismatch", so such a frame keeps today's
+ * behaviour. A WRONG key is strictly worse than none, because it both blocks real
+ * hits and invents false ones.
  */
 async function readFileKey(projectSlug: string, frameSlug: string): Promise<string | undefined> {
   try {
-    const raw = await fs.readFile(path.join(frameDir(projectSlug, frameSlug), "LIFT.json"), "utf-8");
-    const url = String(JSON.parse(raw)?.intentSummary ?? "");
-    // Same shape parseFigmaUrl accepts; matched here rather than imported so this
-    // adapter stays a leaf over the brain rather than a second consumer of it.
-    return /figma\.com\/(?:design|file)\/([A-Za-z0-9]+)/.exec(url)?.[1];
+    const raw = await fs.readFile(
+      path.join(frameDir(projectSlug, frameSlug), FIGMA_ORIGIN_FILE),
+      "utf-8",
+    );
+    const key = JSON.parse(raw)?.fileKey;
+    return typeof key === "string" && key.length > 0 ? key : undefined;
   } catch {
     return undefined;
   }

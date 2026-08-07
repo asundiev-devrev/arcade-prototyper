@@ -19,9 +19,11 @@
 // Cheap guard, in the shape of the existing claude-md-*.test.ts files: read the
 // template, assert the marker phrases. A future template rewrite that drops any of
 // the three fails here rather than in a designer's session.
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
+import { createProject } from "../../server/projects";
 
 const tpl = fs.readFileSync(path.resolve(__dirname, "../../templates/CLAUDE.md.tpl"), "utf8");
 
@@ -78,5 +80,59 @@ describe("CLAUDE.md.tpl single-frame override", () => {
 
   it("cites the session that motivated it, so a future reader can check the claim", () => {
     expect(tpl).toContain("2026-08-06 designer session");
+  });
+});
+
+describe("the override survives RENDERING, not just the template source", () => {
+  // The five tests above read `CLAUDE.md.tpl`. The generator never reads that file
+  // — it reads the rendered `CLAUDE.md` in the project dir, produced by
+  // `createProject` → `renderTemplate` (server/projects.ts). That is a
+  // `{{VAR}}` → value substitution, so a placeholder accidentally introduced INSIDE
+  // the override paragraph would leave a literal `{{…}}` in the generator's rules
+  // while every source-level assertion above stayed green.
+  //
+  // Cheap to close, and it is the file the model actually obeys, so it is worth one
+  // real project creation. Same reasoning as the middleware tests: the unit tests
+  // prove the words are right, only this proves they ARRIVE.
+  let tmp: string | undefined;
+
+  afterEach(() => {
+    delete process.env.ARCADE_STUDIO_ROOT;
+    if (tmp) fs.rmSync(tmp, { recursive: true, force: true });
+    tmp = undefined;
+  });
+
+  it("a real project's CLAUDE.md carries the override, with no unsubstituted placeholders", async () => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "arcade-studio-tpl-single-frame-"));
+    process.env.ARCADE_STUDIO_ROOT = tmp;
+    const p = await createProject({ name: "Demo", theme: "arcade", mode: "light" });
+    const rendered = fs.readFileSync(
+      path.join(tmp, "projects", p.slug, "CLAUDE.md"),
+      "utf8",
+    );
+
+    // The override, and the constructive half that tells the generator what to do
+    // INSTEAD — a rule that only forbids leaves the request unsatisfiable.
+    expect(rendered).toContain("An explicit in-frame instruction OVERRIDES every signal below");
+    expect(rendered).toMatch(/do NOT create a second frame and do NOT use `<FrameLink>`/);
+    expect(rendered).toMatch(/`useState` \+ conditional render/);
+    // The verbatim designer phrasings, so recognition does not depend on paraphrase.
+    expect(rendered).toContain("DON'T IMPLEMENT THIS AS A SEPARATE FRAME");
+    expect(rendered).toContain("as a tab in the main frame");
+    // The two rules it has to beat, both still qualified after rendering.
+    expect(rendered).toContain(
+      "unless the prompt explicitly asks to stay in one frame, in which case add the new step inside the existing frame",
+    );
+    expect(rendered).toContain("is an in-frame state change, not a `<FrameLink>`");
+    // Ordering survives too: the override must precede the signal list it overrides,
+    // because the generator is entitled to follow whichever rule it reads last.
+    expect(rendered.indexOf("An explicit in-frame instruction OVERRIDES")).toBeLessThan(
+      rendered.indexOf("**Signal patterns to watch for in the prompt:**"),
+    );
+
+    // No `{{PLACEHOLDER}}` left anywhere in the override paragraph.
+    const start = rendered.indexOf("An explicit in-frame instruction OVERRIDES");
+    const section = rendered.slice(start, rendered.indexOf("**Primitive:**", start));
+    expect(section).not.toMatch(/\{\{[A-Z_]+\}\}/);
   });
 });

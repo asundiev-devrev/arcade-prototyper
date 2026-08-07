@@ -27,6 +27,8 @@ import { parseFigmaUrl, type ParsedFigmaUrl } from "../figmaCli";
 import { isScopedEditTurn, planFigmaTurn, type FigmaTurnPlan } from "../figma/turnRouting";
 import { buildTurnDirectives, shouldSuppressWholeFrame } from "../figma/turnDirectives";
 import { makeStudioFrameReader } from "../figma/adapters/studioFrameReader";
+import { makeStudioCliResolver } from "../figma/adapters/studioCliResolver";
+import type { TurnResolver } from "../figma/resolveTurn";
 import type { IngestResult } from "../figma/types";
 import { frameDir } from "../paths";
 import { getFigmaIngest } from "../figmaIngest";
@@ -170,6 +172,38 @@ const lastTurnMeta = new Map<
   string,
   { turnType: string; frame: string | null; targetPage: string | null }
 >();
+
+/**
+ * LAYER 4's HOST ADAPTER, as Studio binds it — flag-gated and injectable.
+ *
+ * OFF BY DEFAULT, on purpose. Asking costs a ~5-12s classifier call on a turn that
+ * would otherwise be a 16-26s no-model import, and NO LIVE GATE HAS RUN on whether
+ * the classification is any good. This project's own history is the argument for the
+ * flag: render-measurement shipped behind jsdom-blind tests that passed while it was
+ * broken live, and the import hook was silently dead in the DMG. So a tester opts in
+ * with `ARCADE_STUDIO_TURN_RESOLVER=1`, and until then the cascade behaves exactly as
+ * it did before the seam existed.
+ *
+ * The routing layer itself never imports the adapter — the module-graph guard in
+ * __tests__/server/figma/headlessRouting.test.ts enforces that — so a headless host
+ * gets the seam without inheriting Studio's subprocess.
+ */
+let turnResolverOverride: TurnResolver | undefined;
+
+/** Test seam. Lets the middleware tests inject a fake resolver so no model is ever
+ *  spawned; production always goes through `makeStudioCliResolver`. */
+export function __setTurnResolverForTests(fn: TurnResolver | undefined): void {
+  turnResolverOverride = fn;
+}
+
+function studioTurnResolver(): TurnResolver | undefined {
+  // THE FLAG IS CHECKED FIRST, ahead of the test override, so a test cannot
+  // accidentally prove the feature works while the flag is off — which is the one
+  // thing the default-off test needs to be able to check. The override then replaces
+  // only the IMPLEMENTATION, never the gate.
+  if (process.env.ARCADE_STUDIO_TURN_RESOLVER !== "1") return undefined;
+  return turnResolverOverride ?? makeStudioCliResolver();
+}
 
 export function chatMiddleware() {
   return async (req: IncomingMessage, res: ServerResponse, next?: () => void) => {
@@ -348,7 +382,13 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
         .filter((p): p is ParsedFigmaUrl => Boolean(p))
         .map((p) => ({ nodeId: p.nodeId, fileKey: p.fileId })),
     },
-    { readFrames: makeStudioFrameReader(slug, project.frames ?? []) },
+    {
+      readFrames: makeStudioFrameReader(slug, project.frames ?? []),
+      // Layer 4. `undefined` unless the tester opted in — see studioTurnResolver.
+      // The cascade only consults it for turns the deterministic layers could not
+      // settle AND that state no import ask, so a bare import never pays for it.
+      resolveTurn: studioTurnResolver(),
+    },
   );
   const isKitEmitTurn = figmaPlan.kind === "kit-emit";
   const isWireTurn = figmaPlan.kind === "wire";
@@ -801,7 +841,26 @@ export async function enrichPromptWithFigmaContext(
    * prompt directives via the brain module server/figma/turnDirectives.ts.
    */
   figmaPlan?: FigmaTurnPlan,
-): Promise<{ prompt: string; images: string[] }> {
+): Promise<{
+  prompt: string;
+  images: string[];
+  /**
+   * The plan directives, returned SEPARATELY from `prompt` so the caller can put
+   * them after everything else it appends.
+   *
+   * They used to be concatenated into `prompt` here, which was almost right: they
+   * ended up last within THIS function's output but not last in the prompt the
+   * model reads, because `runClaudeBranch` then appends `ejectSuffix`. That block
+   * ends with instructions about frame folders ("COPY that file into your new frame
+   * folder and import it LOCALLY"), so on a compose-base turn that also stated a
+   * single-frame constraint the last frame-related words the model read were the
+   * eject block's — while `<single_frame_constraint>` claims to override "every
+   * other instruction about frames". Measured: the eject block landed 792 chars
+   * after it. Ordering is part of this feature's contract, so the seam has to hand
+   * the directives back rather than bury them.
+   */
+  directives: string[];
+}> {
   // EVERY Figma node URL in the prompt is reference material, not just the
   // first. A scoped edit like "make this a filter that opens <popover url> and
   // shows selected chips <toolbar url>" references TWO designs — the earlier
@@ -809,7 +868,14 @@ export async function enrichPromptWithFigmaContext(
   // toolbar chips it never saw (the "chips break the layout" bug). We resolve a
   // context block + reference PNG for each URL, in document order.
   const urls = extractFigmaUrls(prompt);
-  if (!urls.length) return { prompt, images };
+  // NO FIGMA URL — nothing to enrich AND nothing to direct. `directives: []` is
+  // explicit rather than omitted: the caller now reads `.directives`, and an
+  // `undefined` here crashed the whole turn on every non-Figma prompt (caught by
+  // the two hard-constraint-2 tests, which is exactly what they are for). This is
+  // also the scope guard restated at the seam — a prompt with no Figma node must
+  // never receive a frame directive, and `planFigmaTurn` returns `no-node` with no
+  // constraints for it in the first place.
+  if (!urls.length) return { prompt, images, directives: [] };
 
   // Directive decision is CONTEXT-FREE: it depends only on the prompt + URL,
   // both of which we have even when the digest missed. This is the fix for the
@@ -907,17 +973,22 @@ export async function enrichPromptWithFigmaContext(
   // DIGEST MISS. The plan directives still ship — they need no digest, and this is
   // precisely when the designer is most likely to retry (see the planDirectives
   // comment above). `images` unchanged, because no reference PNG resolved.
+  //
+  // NOTE the directives are returned SEPARATELY rather than concatenated, on both
+  // paths. The caller appends them after `ejectSuffix`, because the single-frame
+  // directive claims to be the last word about frames and `<eject_to_source>` — a
+  // block this function never sees — ends with instructions about frame folders
+  // ("COPY that file into your new frame folder"). Measured on a compose-base turn
+  // that also stated a constraint: the eject block landed 792 chars AFTER it. See
+  // the `planDirectives` hand-off in runClaudeBranch.
   if (!blocks.length) {
-    if (!planDirectives.length) return { prompt: prompt, images };
-    return { prompt: `${prompt}\n\n${planDirectives.join("\n\n")}`, images };
+    return { prompt, images, directives: planDirectives };
   }
   if (scopedEdit) blocks.push(buildScopedEditReferenceDirective());
-  // Plan directives go LAST — after the <figma_context> blocks and after any
-  // <edit_reference_designs> — so the frame constraint is the final word before the
-  // model starts. buildTurnDirectives owns the order WITHIN that list.
   return {
-    prompt: `${prompt}\n\n${[...blocks, ...planDirectives].join("\n\n")}`,
+    prompt: `${prompt}\n\n${blocks.join("\n\n")}`,
     images: outImages,
+    directives: planDirectives,
   };
 }
 
@@ -1231,7 +1302,22 @@ async function runClaudeBranch(ctx: {
     }
   }
 
-  const prompt = prependEditContext(enriched.prompt + ejectSuffix, frameSlugs);
+  // PLAN DIRECTIVES LAST, after `ejectSuffix`. `<single_frame_constraint>` opens
+  // with "This overrides every other instruction about frames", so it has to be the
+  // final frame-related thing the model reads — and `<eject_to_source>` ends with
+  // "COPY that file into your new frame folder and import it LOCALLY". Appending
+  // them inside enrichPromptWithFigmaContext put them last within THAT function and
+  // 792 chars BEFORE the eject block in the real prompt, which the ordering test
+  // could not see because `<eject_to_source>` was not in its list. Both are fixed
+  // together: the seam returns the directives, this line places them, and the test
+  // now checks against the eject block too.
+  const planSuffix = enriched.directives.length
+    ? `\n\n${enriched.directives.join("\n\n")}`
+    : "";
+  const prompt = prependEditContext(
+    enriched.prompt + ejectSuffix + planSuffix,
+    frameSlugs,
+  );
   let capturedSessionId: string | undefined;
   const narrationTexts: string[] = [];
   const toolLabels: string[] = [];

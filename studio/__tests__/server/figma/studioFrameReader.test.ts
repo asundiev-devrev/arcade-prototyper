@@ -72,16 +72,21 @@ describe("makeStudioFrameReader", () => {
     expect(prov.frameSlug).toBe("01-figma-3814-30541");
   });
 
-  it("recovers the Figma FILE key from LIFT.json so ids cannot collide across files", async () => {
+  it("recovers the Figma FILE key from the importer's own record so ids cannot collide across files", async () => {
     // Node ids are only unique WITHIN a Figma file, and multi-file projects exist on
     // disk (`polina-s-prototype` references two). Without a key, a colliding id from
     // a different file reads as an edit of the wrong frame — and the generator edits
     // it without hesitating.
+    //
+    // The key comes from `figma-origin.json`, which the kit-emit branch writes at
+    // IMPORT time. It used to be regexed out of `LIFT.json#intentSummary`, which is
+    // the project's FIRST user prompt and therefore identical for every frame — see
+    // the dedicated describe block at the bottom of this file.
     writeFrame("p", "01-figma-36-7860", {
       "index.tsx": '<div data-figma-id="36:7861" />',
-      "LIFT.json": JSON.stringify({
-        intentSummary:
-          "Implement this precisely: https://www.figma.com/design/EAo4gdFvjvzXnmL8hX6Ctc/Untitled?node-id=36-7860",
+      "figma-origin.json": JSON.stringify({
+        fileKey: "EAo4gdFvjvzXnmL8hX6Ctc",
+        nodeId: "36:7860",
       }),
     });
     const read = makeStudioFrameReader("p", [{ slug: "01-figma-36-7860" }]);
@@ -101,10 +106,12 @@ describe("makeStudioFrameReader", () => {
     expect(same.kind).toBe("exact");
   });
 
-  it("leaves fileKey undefined when there is no LIFT.json — unknown, never mismatch", async () => {
-    // An LLM-authored frame has no LIFT.json. Provenance treats a missing key as
-    // "unknown", so such a frame keeps today's behaviour instead of losing
-    // provenance altogether.
+  it("leaves fileKey undefined when there is no origin record — unknown, never mismatch", async () => {
+    // An LLM-authored frame was never imported, so it has no origin record — and
+    // neither does any frame imported before this record existed. Provenance treats
+    // a missing key as "unknown", so such a frame keeps today's behaviour instead of
+    // losing provenance altogether. A WRONG key would be worse than none: it blocks
+    // real hits AND invents false ones.
     writeFrame("p", "01-hand-written", { "index.tsx": '<div data-figma-id="1:2" />' });
     const read = makeStudioFrameReader("p", [{ slug: "01-hand-written" }]);
     const frames = await read();
@@ -177,5 +184,106 @@ describe("makeStudioFrameReader", () => {
   it("returns [] for a project with no frames, and never rejects", async () => {
     await expect(makeStudioFrameReader("p", [])()).resolves.toEqual([]);
     await expect(makeStudioFrameReader("no-such-project", [{ slug: "01-x" }])()).resolves.toEqual([]);
+  });
+});
+
+/**
+ * THE FILE KEY, AGAINST THE REAL WRITER — the shape `emitLiftForFrame` actually
+ * produces, not a hand-built one.
+ *
+ * The tests above write a per-frame `intentSummary` whose URL is that frame's own
+ * import. **The real writer never produces that for frame 2+.**
+ * `liftEmitPlugin.ts`'s `readFirstUserPrompt` returns the FIRST user message of
+ * the whole PROJECT, so every frame in a project is labelled with the file key of
+ * whatever the designer imported first — verified on disk: all three frames of the
+ * live `implement-this-precisely-3` carry a byte-identical `intentSummary`,
+ * including `02-figma-5678-118907`, which was imported from a different node.
+ *
+ * So deriving `fileKey` from `intentSummary` reports a WRONG key on a multi-file
+ * project, and it fails in both directions — it suppresses genuine provenance hits
+ * on later-imported files (the exact bug this branch exists to fix, on the
+ * multi-file project that motivated file scoping) and it accepts a colliding id it
+ * was built to reject. Both are now pinned below, against the real writer.
+ */
+describe("makeStudioFrameReader — fileKey, built the way liftEmitPlugin builds it", () => {
+  function writeProjectHistory(projectSlug: string, userPrompts: string[]) {
+    const dir = path.join(tmp, "projects", projectSlug);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, "chat-history.json"),
+      JSON.stringify(userPrompts.map((content) => ({ role: "user", content }))),
+    );
+  }
+
+  const FILE_A = "EAo4gdFvjvzXnmL8hX6Ctc";
+  const FILE_B = "JztJjqt3i6uFwB6r4dfewz";
+
+  it("does NOT stamp the project's FIRST file key onto a later frame", async () => {
+    // The live `polina-s-prototype` shape: turn 1 imported from file A, turn 2 from
+    // file B. `emitLiftForFrame` gives BOTH frames intentSummary = the file-A URL.
+    writeProjectHistory("multi", [
+      `Implement this precisely: https://www.figma.com/design/${FILE_A}/Untitled?node-id=36-7860`,
+      `now this one https://www.figma.com/design/${FILE_B}/Nav?node-id=195-9587`,
+    ]);
+    writeFrame("multi", "01-figma-36-7860", { "index.tsx": '<div data-figma-id="36:7861" />' });
+    writeFrame("multi", "02-figma-195-9587", { "index.tsx": '<div data-figma-id="195:9588" />' });
+
+    const { emitLiftForFrame } = await import("../../../server/plugins/liftEmitPlugin");
+    await emitLiftForFrame("multi", "01-figma-36-7860");
+    await emitLiftForFrame("multi", "02-figma-195-9587");
+
+    const read = makeStudioFrameReader("multi", [
+      { slug: "01-figma-36-7860" },
+      { slug: "02-figma-195-9587" },
+    ]);
+    const frames = await read();
+    const second = frames.find((f) => f.slug === "02-figma-195-9587")!;
+    // The whole point: frame 02 came from file B, so it must NEVER be labelled A.
+    expect(second.fileKey).not.toBe(FILE_A);
+
+    // FALSE NEGATIVE, the costly direction. The designer corrects frame 02 by
+    // re-pasting a node file B really stamped there. With the wrong key this
+    // returned {kind:"none"} and the turn fell back to the LLM-less importer,
+    // stamping a duplicate frame — the original bug, on the one project shape
+    // that motivated file scoping in the first place.
+    const corrective = await locateNodeProvenance([{ nodeId: "195:9588", fileKey: FILE_B }], read);
+    expect(corrective.kind).toBe("exact");
+    expect(corrective.frameSlug).toBe("02-figma-195-9587");
+  });
+
+  it("still recovers the key when the importer recorded it per frame", async () => {
+    // The fix's own mechanism: the importer knows the real key at write time, so it
+    // is persisted per frame and the reader reads THAT. No dependence on chat
+    // history, and correct on frame 2+ of a multi-file project.
+    writeFrame("solo", "01-figma-36-7860", {
+      "index.tsx": '<div data-figma-id="36:7861" />',
+      "figma-origin.json": JSON.stringify({ fileKey: FILE_A, nodeId: "36:7860" }),
+    });
+    const read = makeStudioFrameReader("solo", [{ slug: "01-figma-36-7860" }]);
+    expect((await read())[0].fileKey).toBe(FILE_A);
+
+    // Same id, different file → still no match. The collision guard the module
+    // documents at caveat 4 now actually guards.
+    const collide = await locateNodeProvenance([{ nodeId: "36:7861", fileKey: FILE_B }], read);
+    expect(collide.kind).toBe("none");
+  });
+
+  it("leaves fileKey undefined rather than guessing when nothing recorded it", async () => {
+    // A frame with a LIFT.json but no per-frame origin record — every frame written
+    // before this fix. `undefined` means "unknown" to provenance, which keeps
+    // today's behaviour; a WRONG key both blocks real hits and invents false ones,
+    // so unknown is strictly the safer default.
+    writeProjectHistory("legacy", [
+      `Implement this precisely: https://www.figma.com/design/${FILE_A}/Untitled?node-id=36-7860`,
+    ]);
+    writeFrame("legacy", "02-figma-195-9587", { "index.tsx": '<div data-figma-id="195:9588" />' });
+    const { emitLiftForFrame } = await import("../../../server/plugins/liftEmitPlugin");
+    await emitLiftForFrame("legacy", "02-figma-195-9587");
+
+    const read = makeStudioFrameReader("legacy", [{ slug: "02-figma-195-9587" }]);
+    expect((await read())[0].fileKey).toBeUndefined();
+    // …so a corrective on that frame resolves, whatever file it is claimed from.
+    const prov = await locateNodeProvenance([{ nodeId: "195:9588", fileKey: FILE_B }], read);
+    expect(prov.kind).toBe("exact");
   });
 });

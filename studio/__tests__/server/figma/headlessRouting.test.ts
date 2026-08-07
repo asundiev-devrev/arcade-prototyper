@@ -62,11 +62,48 @@ describe("planFigmaTurn with NO host capability at all", () => {
     }
   });
 
+  // …AND `kit-emit` IS THE MOST HOST-DEPENDENT ANSWER THE CASCADE GIVES, which is the
+  // opposite of what an earlier framing of this test claimed. It means "run
+  // server/figma/kitEmitBranch.ts", whose closure is ~29 modules reaching paths.ts,
+  // projects.ts, figmaCli.ts (the `figmanage` binary) and claudeBin.ts — a module the
+  // guard below lists as FORBIDDEN for the brain. A foreign host needs a Figma PAT,
+  // the CLI, the emitter and a frames dir to execute it.
+  //
+  // So this assertion is about ROUTING STABILITY (the plan is the same everywhere),
+  // NOT about portability of the outcome. Measured, 6 of the 13 corpus Figma prompts
+  // come back `kit-emit` with zero directives, i.e. a decision a Cursor / Claude Code
+  // host can neither run nor read. That is the design's largest headless gap and it is
+  // recorded as §9 item 11 of the spec, not fixed here — degrading it to `claude` would
+  // hand the dominant Figma-import lane from a 16-26s deterministic trace to a p50 98s
+  // LLM reconstruction, the trade §0 rejects twice.
   it("still settles the bare imports on the deterministic fast path", async () => {
+    const bare: string[] = [];
     for (const i of [0, 37, 45, 53]) {
       const plan = await planFigmaTurn(inputsFor(P(i)));
       expect(plan.kind, `#${i}`).toBe("kit-emit");
+      expect(plan.constraints, `#${i}`).toEqual([]);
+      bare.push(`#${i}`);
     }
+    expect(bare.length).toBe(4);
+  });
+
+  // The gap above, MEASURED rather than described, so it cannot drift silently: how
+  // many real Figma prompts leave the cascade with a kind a foreign host cannot
+  // execute AND no words it can read? If this number moves in either direction,
+  // someone changed the headless story and should say so.
+  //
+  // It is SEVEN, not six — #1 joins the list in this host, because provenance needs a
+  // reader and a bare Claude Code host supplies none, so the motivating correction
+  // falls through to the importer too. The four bare imports are correct-but-unrunnable;
+  // #1, #25 and #32 are prose the host is handed no way to honour.
+  it("7 of the 13 corpus Figma prompts return a Studio-only decision with no directives", async () => {
+    const { buildTurnDirectives } = await import("../../../server/figma/turnDirectives");
+    const stuck: number[] = [];
+    for (const p of corpus.prompts.filter((x) => extractFigmaUrls(x.text).length > 0)) {
+      const plan = await planFigmaTurn(inputsFor(p.text));
+      if (plan.kind === "kit-emit" && buildTurnDirectives(plan).length === 0) stuck.push(p.i);
+    }
+    expect(stuck).toEqual([0, 1, 25, 32, 37, 45, 53]);
   });
 
   // L3 needs ZERO host capability, so the single-frame fix — the live failure this
@@ -132,6 +169,23 @@ const BRAIN_ENTRYPOINTS = [
   "server/figma/turnConstraints.ts",
   "server/figma/turnDirectives.ts",
   "server/figma/frameSlug.ts",
+  // LAYER 4's SEAM, and being on this list is the entire point of building it the
+  // way it is built. The obvious implementation of "ask a model which kind of turn
+  // this is" is a `claude --print` subprocess — the systemSynth.ts shape — and that
+  // presumes a host owning a CLI binary and Bedrock credentials. In Claude Code /
+  // Computer the brain is ALREADY inside a model turn, so a nested spawn there is
+  // wrong twice over. So the seam RETURNS A QUESTION and the host answers it; the
+  // subprocess lives in server/figma/adapters/studioCliResolver.ts, which is
+  // deliberately NOT on this list and which this module never imports. If someone
+  // ever "simplifies" the seam by calling the CLI directly, this guard fails.
+  "server/figma/resolveTurn.ts",
+  // `detectHiFiIntent` + its patterns, as a zero-import leaf. It is BRAIN because
+  // the cascade calls it (via detectFreshImportIntent, to protect the
+  // deterministic fast path from a provenance divert) and because a foreign host
+  // must be able to compute `shouldSuppressWholeFrame`'s `ctx.explicitHiFi`.
+  // Extracted from fidelityDirective.ts, whose 250 lines of directive text name
+  // the `figmanage` CLI and stay off this list.
+  "server/figma/hiFiIntent.ts",
 ];
 
 /**
@@ -155,13 +209,47 @@ const HOST_GLUE_ENTRYPOINTS = [
   "src/lib/figmaUrl.ts", // extractFigmaUrls + detectInteractionIntent
 ];
 
+/**
+ * Source shapes a brain module may not contain.
+ *
+ * WIDENED after a spec review poisoned `turnConstraints.ts` eight ways and SEVEN
+ * of them left all 18 tests green. The original list matched only a static
+ * `import … from "node:<builtin>"`, so every other way to couple a brain module to
+ * a host slipped past: a BARE specifier (`from "fs"` — valid, resolves identically,
+ * and what an outside contributor or a Claude Code session writes), a DYNAMIC
+ * import, `createRequire` (this repo's own established idiom — 4 live sites under
+ * server/), `process.cwd()`, `os.homedir()`, and a hardcoded
+ * `~/Library/Application Support/arcade-studio` literal — the one thing the brief
+ * names explicitly as forbidden.
+ *
+ * `FORBIDDEN_MODULES` only helps when the coupling routes through one of six named
+ * Studio files; a direct builtin import or a path literal bypasses it entirely. The
+ * `import-hook-dead-in-dmg` failure was exactly this shape one level up: green
+ * tests, dead feature.
+ *
+ * Every needle here is proven to FIRE against a fixture in the self-test below, and
+ * proven NOT to fire on ordinary brain code. Adding a needle without both is how the
+ * blind spot reopens.
+ */
 const FORBIDDEN_SOURCE = [
-  /\bfrom\s+["']node:fs["']/,
-  /\bfrom\s+["']node:fs\/promises["']/,
-  /\bfrom\s+["']node:child_process["']/,
-  /\bfrom\s+["']node:os["']/,
+  // Node builtins, static import, `node:`-prefixed OR bare. Both are valid and
+  // resolve identically; the guard used to see only the prefixed form.
+  /\bfrom\s+["'](?:node:)?(?:fs|fs\/promises|child_process|os|module|path|worker_threads|net|http|https|dns|tls|cluster|v8|vm|repl|readline|inspector)["']/,
+  // Dynamic import of a builtin — same coupling, later.
+  /\bimport\s*\(\s*["'](?:node:)?(?:fs|fs\/promises|child_process|os|module|path)["']\s*\)/,
+  // CommonJS interop. `createRequire` is this repo's idiom for reaching builtins,
+  // so it is banned by NAME rather than by what it is used for.
+  /\bcreateRequire\s*\(/,
+  /\brequire\s*\(\s*["']/,
   /\bfrom\s+["']electron["']/,
+  // Host environment. `process.env` was already here; the others are the same
+  // question ("where am I running?") asked differently.
   /\bprocess\.env\b/,
+  /\bprocess\.cwd\s*\(/,
+  /\bos\.homedir\s*\(/,
+  // The literal the brief forbids by name. A module can hardcode this without
+  // importing anything at all.
+  /Library\/Application Support\/arcade-studio/,
 ];
 
 /** Modules the brain must never be able to reach, by resolved path suffix. */
@@ -273,6 +361,65 @@ describe("brain modules stay decoupled from Studio (transitive)", () => {
     expect(/\bprocess\.env\b/.test(codeOnly("const x = process.env.FOO;"))).toBe(true);
   });
 
+  // EVERY NEEDLE MUST BE PROVEN TO FIRE, not just the two shapes kitEmitBranch.ts
+  // happens to exhibit. A spec review poisoned `turnConstraints.ts` eight ways and
+  // SEVEN of them left all 18 tests green: bare-specifier builtins (`from "fs"`),
+  // dynamic `await import("node:fs")`, `createRequire` + `require("path")`,
+  // `process.cwd()`, and a hardcoded `~/Library/Application Support/arcade-studio`
+  // literal — the one thing the brief names explicitly as forbidden. Two of those
+  // are not hypothetical: `createRequire` is this repo's established idiom for
+  // reaching builtins (4 live sites under server/), and the guard's self-test could
+  // not surface any of it, because it only ever proved the needles that already
+  // matched.
+  //
+  // A guard is worth exactly its demonstrated failure modes. So each needle gets a
+  // fixture string here; adding a needle without a fixture is what let this reopen.
+  it("every FORBIDDEN_SOURCE needle fires against a real violation shape", () => {
+    const mustCatch = [
+      'import fs from "node:fs";',
+      'import fs from "node:fs/promises";',
+      'import { spawn } from "node:child_process";',
+      'import os from "node:os";',
+      'import { app } from "electron";',
+      "const home = process.env.HOME;",
+      // The seven shapes that slipped through before this block existed.
+      'import fs from "fs";',
+      'import path from "path";',
+      'import os from "os";',
+      'import { spawn } from "child_process";',
+      'import { createRequire } from "node:module";',
+      'const fs = await import("node:fs");',
+      'const req = createRequire(import.meta.url); const fs = req("fs");',
+      "const root = process.cwd();",
+      "const home = os.homedir();",
+      'const STUDIO = "/Users/x/Library/Application Support/arcade-studio/projects";',
+    ];
+    for (const shape of mustCatch) {
+      expect(
+        FORBIDDEN_SOURCE.some((re) => re.test(shape)),
+        `no needle catches: ${shape}`,
+      ).toBe(true);
+    }
+  });
+
+  // …and the widened needles must not fire on ORDINARY brain code, or the guard
+  // becomes a nuisance and someone deletes it. These are the shapes the real
+  // modules contain: relative imports, type imports, and prose about the rule.
+  it("the widened needles do not fire on ordinary brain code", () => {
+    const mustPass = [
+      'import { slugMatchesNode } from "./frameSlug";',
+      'import type { FigmaTurnPlan } from "./turnRouting";',
+      'import { isScopedEditPrompt } from "../../src/lib/scopedEdit";',
+      "const requires = fields.filter(Boolean);", // "require" as a substring
+      "return prompt.replace(/https?:\\/\\/[^\\s]+/g, ' ');",
+      "const paths = slugs.map((s) => `frames/${s}/`);",
+    ];
+    for (const shape of mustPass) {
+      const hit = FORBIDDEN_SOURCE.find((re) => re.test(shape));
+      expect(hit, `${hit} false-positives on: ${shape}`).toBeUndefined();
+    }
+  });
+
   // Keep the closure SMALL, not merely clean. A large closure is how a Studio
   // dependency sneaks back in — the guard above only rejects today's known-bad
   // modules, so bounding growth is what makes it durable.
@@ -282,13 +429,40 @@ describe("brain modules stay decoupled from Studio (transitive)", () => {
       for (const f of closureOf(e).keys()) all.add(path.relative(SERVER_DIR, f));
     }
     // brain: turnRouting + provenance + turnConstraints + turnDirectives
-    //        + frameSlug + scopedEdit
+    //        + frameSlug + hiFiIntent + scopedEdit
     // glue:  figmaNodeUrl + generationIntent + src/lib/figmaUrl
+    //
+    // THE TENTH MODULE, AND THE TEST DID ITS JOB AGAIN. `hiFiIntent.ts` is
+    // `detectHiFiIntent` + its pattern array, extracted out of
+    // `fidelityDirective.ts` as a zero-import leaf. Adding it failed this
+    // assertion, which is the intended behaviour — growth is a decision someone
+    // makes on purpose, in a diff.
+    //
+    // The cost is one leaf with zero imports; the return is two things the brain
+    // genuinely needs. (a) `detectFreshImportIntent` uses it to keep a STATED
+    // faithful-copy ask on the deterministic importer even when provenance can see
+    // the node — hard constraint 4. (b) A foreign host must be able to compute
+    // `shouldSuppressWholeFrame`'s `ctx.explicitHiFi`; before this it could not,
+    // because the function lived only in `fidelityDirective.ts`, which is not on
+    // this list. A host that guessed `false` silently got different routing from
+    // Studio on the same prompt. Its 250 lines of `figmanage`-naming directive TEXT
+    // stayed put and is still off the list.
+    //
+    // THE ELEVENTH MODULE is `resolveTurn.ts`, layer 4's seam, and it grew this
+    // list on purpose — this assertion failing is what forced the decision to be
+    // written down rather than absorbed. It costs one module whose only non-relative
+    // import is `zod` (already a runtime dependency, and a schema validator with no
+    // host coupling); it buys the ONE capability the deterministic layers provably
+    // cannot supply, on prompts that provably need it (corpus #25 and #32, whose
+    // prose used to be discarded by an engine with no LLM). The subprocess that
+    // answers the question in Studio is an ADAPTER off this list.
     expect([...all].sort()).toEqual([
       "server/figma/figmaNodeUrl.ts",
       "server/figma/frameSlug.ts",
       "server/figma/generationIntent.ts",
+      "server/figma/hiFiIntent.ts",
       "server/figma/provenance.ts",
+      "server/figma/resolveTurn.ts",
       "server/figma/turnConstraints.ts",
       "server/figma/turnDirectives.ts",
       "server/figma/turnRouting.ts",
@@ -329,6 +503,82 @@ describe("brain modules stay decoupled from Studio (transitive)", () => {
     const directives = buildTurnDirectives(plan);
     expect(directives.length).toBe(1);
     expect(directives[0]).toContain("01-figma-5678-118876");
+  });
+
+  // ── LAYER 4: THE SEAM MUST BE USABLE WITHOUT THE STUDIO ADAPTER ───────────────
+  //
+  // This is the brief's own acceptance test for the seam, and it is STRUCTURAL
+  // rather than behavioural on purpose: a nested `claude --print` would work fine
+  // in Studio's test suite and be dead on arrival in Cursor, which is precisely the
+  // `import-hook-dead-in-dmg` shape one level up. So we assert the module GRAPH.
+  it("the seam does not reach the CLI adapter, child_process, paths, or claudeBin", () => {
+    const closure = closureOf("server/figma/resolveTurn.ts");
+    const rels = [...closure.keys()].map((f) => path.relative(SERVER_DIR, f));
+    for (const forbidden of [
+      "server/figma/adapters/studioCliResolver.ts",
+      "server/claudeBin.ts",
+      "server/paths.ts",
+      "server/figmaCli.ts",
+    ]) {
+      expect(rels, `resolveTurn.ts must not reach ${forbidden}`).not.toContain(forbidden);
+    }
+    // And no source-level coupling either — the guard's own needles, applied to the
+    // seam's whole closure.
+    for (const [file] of closure) {
+      const src = codeOnly(fs.readFileSync(file, "utf8"));
+      for (const re of FORBIDDEN_SOURCE) {
+        expect(re.test(src), `${path.relative(SERVER_DIR, file)} matches ${re}`).toBe(false);
+      }
+    }
+  });
+
+  // …and the ROUTING LAYER must not reach the adapter either. The cascade is what a
+  // foreign host imports, so if `turnRouting.ts` pulled the adapter in for a default,
+  // every host would pay for a subprocess it can never run. The adapter is reached
+  // ONLY from Studio's middleware, which is not brain.
+  it("the routing layer does not reach the CLI adapter", () => {
+    const rels = [...closureOf("server/figma/turnRouting.ts").keys()].map((f) =>
+      path.relative(SERVER_DIR, f),
+    );
+    expect(rels).not.toContain("server/figma/adapters/studioCliResolver.ts");
+  });
+
+  // THE SELF-TEST FOR THE TWO ASSERTIONS ABOVE — a guard that cannot fail is worse
+  // than no guard, and "this module does not import that one" is exactly the shape
+  // that silently becomes vacuous (a renamed file, a moved adapter). So prove the
+  // adapter IS dirty: it must reach claudeBin and contain a forbidden source shape.
+  // If this stops holding, the adapter has stopped being a subprocess adapter and
+  // the two assertions above are measuring nothing.
+  it("the adapter really is dirty (self-test for the separation assertions)", () => {
+    const rels = [...closureOf("server/figma/adapters/studioCliResolver.ts").keys()].map((f) =>
+      path.relative(SERVER_DIR, f),
+    );
+    expect(rels).toContain("server/claudeBin.ts");
+    const dirty = codeOnly(
+      fs.readFileSync(
+        path.resolve(SERVER_DIR, "server/figma/adapters/studioCliResolver.ts"),
+        "utf8",
+      ),
+    );
+    expect(FORBIDDEN_SOURCE.some((re) => re.test(dirty))).toBe(true);
+  });
+
+  // A HEADLESS HOST GETS THE L4 FIX WITH NO SUBPROCESS ANYWHERE. Corpus #25 carries
+  // real prose the deterministic layers cannot fix, and before layer 4 it reached an
+  // engine with no LLM that discarded every word. Here an INLINE resolver — the
+  // Claude-Code shape, answering from the turn it is already inside — takes it off
+  // the importer and the directive text follows, all from the brain modules above.
+  it("an inline resolver fixes #25 in a foreign host, with no adapter and no reader", async () => {
+    const { buildTurnDirectives } = await import("../../../server/figma/turnDirectives");
+    const plan = await planFigmaTurn(inputsFor(P(25)), {
+      // What a Claude Code host does: it is already in a model turn, so it answers.
+      resolveTurn: async () => ({ kind: "edit", constraints: ["single-frame"] }),
+    });
+    expect(plan.kind).toBe("claude");
+    expect(plan.decidedBy).toBe("resolver");
+    const directives = buildTurnDirectives(plan);
+    expect(directives.length).toBe(1);
+    expect(directives[0]).toContain("<single_frame_constraint>");
   });
 
   // #30 IS THE LIVE FAILURE, so prove the whole chain lands in a foreign host with

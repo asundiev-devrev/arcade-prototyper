@@ -93,6 +93,46 @@ function normaliseApostrophes(s: string): string {
 const NOT_NEGATED = String.raw`(?<!\b(?:don'?t|do\s+not|does\s+not|doesn'?t|never|not|no)\b[^.!?]{0,24})`;
 
 /**
+ * A DISTRIBUTIVE quantifier: "each", "every", "per", "apiece", "its own". These
+ * turn a single-frame sentence into a MULTI-frame ask, and they do it without any
+ * negation, so NOT_NEGATED above cannot see them.
+ *
+ * "Put each state in a single frame" means ONE FRAME PER STATE — the exact
+ * opposite requirement — and measured (spec review, 2026-08-06) 6 of 8 plausible
+ * distributive phrasings fired: "each screen should be in a single frame",
+ * "Every variant goes in a single frame of its own", "keep each state in a single
+ * frame", … Each then received the maximally forceful directive below ("This
+ * overrides every other instruction about frames"), so the generator confidently
+ * built the opposite of what the designer typed and they could not see why.
+ *
+ * This is the SAME class of bug the bare noun phrase died of (see NOT_NEGATED),
+ * in a shape the committed inversion list missed: that list holds only "one frame
+ * per X" and negated forms, so the distributive-quantifier family slipped past a
+ * guard that looked like it covered inversions. INVERTING an instruction is
+ * strictly worse than missing one.
+ *
+ * SENTENCE-SCOPED, and that scoping is the whole care in this rule. A veto that
+ * matched the WHOLE prompt would let "Each row shows a ticket. Don't implement
+ * this as a separate frame." lose its constraint — the mirror-image mistake, and
+ * the one that put this branch here. So the veto is applied per sentence, and
+ * only to the sentence the pattern actually matched.
+ *
+ * Costs nothing real: none of the three corpus prompts that must fire (#2, #30,
+ * #39) contains a distributive quantifier — verified against the fixture, not
+ * assumed. Both directions are pinned by test.
+ */
+const DISTRIBUTIVE = /\b(?:each|every|per|apiece|its\s+own|their\s+own)\b/i;
+
+/**
+ * Split on sentence terminators, keeping it dumb on purpose: the patterns below
+ * are all `[^.!?]`-bounded, so a match lies inside exactly one of these pieces
+ * and the veto can be applied to the piece that matched rather than the prompt.
+ */
+function sentencesOf(s: string): string[] {
+  return s.split(/[.!?]+/).filter((p) => p.trim().length > 0);
+}
+
+/**
  * Statements of "keep this in one frame".
  *
  * Every span is `[^.!?]`-bounded so a pattern cannot bridge two sentences. That
@@ -141,7 +181,45 @@ const SINGLE_FRAME_PATTERNS: RegExp[] = [
 export function detectTurnConstraints(prompt: string): TurnConstraint[] {
   if (typeof prompt !== "string" || !prompt) return [];
   const s = normaliseApostrophes(prompt);
-  return SINGLE_FRAME_PATTERNS.some((re) => re.test(s)) ? ["single-frame"] : [];
+  // Per SENTENCE, not per prompt, so the distributive veto (see DISTRIBUTIVE)
+  // only silences the sentence that carries the quantifier. A whole-prompt veto
+  // would turn the inversion fix into a new class of miss — "Each row shows a
+  // ticket. Don't implement this as a separate frame." must still fire.
+  const stated = sentencesOf(s).some(
+    (sentence) =>
+      !DISTRIBUTIVE.test(sentence) && SINGLE_FRAME_PATTERNS.some((re) => re.test(sentence)),
+  );
+  return stated ? ["single-frame"] : [];
+}
+
+/**
+ * The layout nouns a HOST uses, so the portable directive can say them.
+ *
+ * WHY THIS IS A PARAMETER AND NOT A CONSTANT. The directive text is the part of
+ * this design that genuinely travels — a foreign host runs
+ * `buildTurnDirectives(await planFigmaTurn(inputs))` and gets these exact words,
+ * which is the whole reason the constraint fix is not .dmg-only. But the words were
+ * written in Studio's vocabulary, and measured (spec review, 2026-08-06) all three
+ * nouns are Studio-only: the root SKILL.md has ZERO occurrences of `frames/` or
+ * `FrameLink`; `FrameLink` is a prototype-kit composite at
+ * studio/prototype-kit/composites/FrameLink.tsx that no foreign repo can import;
+ * and CLAUDE.md.tpl renders only into a Studio project dir. So a designer in Cursor
+ * typing corpus #30 got the design's headline win — a correct plan with zero host
+ * capability — and was then told to edit a directory that does not exist, not to use
+ * a component it cannot import, and to obey rules in a file it never read.
+ *
+ * Every field is optional and defaults to Studio's noun, so Studio's output is
+ * BYTE-IDENTICAL (pinned by test) and a foreign host passes its own three words.
+ */
+export interface HostVocabulary {
+  /** What one screen IS in this host. Studio: `frame`. Cursor in a Next.js repo
+   *  might say `route`; a component library might say `story`. */
+  container?: string;
+  /** How this host navigates between containers, if it does. Studio:
+   *  `<FrameLink>`. */
+  linkComponent?: string;
+  /** The project rules file this directive is overriding. Studio: `CLAUDE.md`. */
+  rulesFile?: string;
 }
 
 /**
@@ -154,21 +232,27 @@ export function detectTurnConstraints(prompt: string): TurnConstraint[] {
  * that failed. Prompt-region text is obeyed harder than CLAUDE.md (the reason
  * server/editContext.ts exists), so this is the primary mechanism and the
  * template edit is belt-and-braces for hosts that never assemble it.
+ *
+ * Takes an optional `HostVocabulary` so the same behavioural rule can be stated in
+ * a foreign host's nouns — see that interface for the measurement behind it.
  */
-export function buildSingleFrameDirective(): string {
+export function buildSingleFrameDirective(vocab: HostVocabulary = {}): string {
+  const container = vocab.container ?? "frame";
+  const link = vocab.linkComponent ?? "<FrameLink>";
+  const rules = vocab.rulesFile ?? "CLAUDE.md";
   return [
     "<single_frame_constraint>",
-    "The designer explicitly asked for this to stay in ONE frame. This overrides every other",
-    "instruction about frames, including the flow-splitting and <FrameLink> rules in CLAUDE.md.",
+    `The designer explicitly asked for this to stay in ONE ${container}. This overrides every other`,
+    `instruction about ${container}s, including the flow-splitting and ${link} rules in ${rules}.`,
     "",
-    "- Do NOT create a new frame directory. Do NOT add a second frame for the second state,",
+    `- Do NOT create a new ${container} directory. Do NOT add a second ${container} for the second state,`,
     "  screen, or step — even when the request describes a transition between two screens.",
-    "- Build every referenced state INSIDE the existing frame, switched by React state",
+    `- Build every referenced state INSIDE the existing ${container}, switched by React state`,
     "  (useState + conditional render / CSS transition). A click that \"goes to\" another screen",
-    "  is an in-frame state change here, NOT a <FrameLink>.",
-    "- Do NOT use <FrameLink> on this turn.",
-    "- If you genuinely cannot fit it in one frame, say so under ### Deviations and still do not",
-    "  create the second frame.",
+    `  is an in-${container} state change here, NOT a ${link}.`,
+    `- Do NOT use ${link} on this turn.`,
+    `- If you genuinely cannot fit it in one ${container}, say so under ### Deviations and still do not`,
+    `  create the second ${container}.`,
     "</single_frame_constraint>",
   ].join("\n");
 }

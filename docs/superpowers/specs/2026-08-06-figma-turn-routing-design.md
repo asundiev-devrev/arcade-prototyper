@@ -2,8 +2,43 @@
 
 **Date:** 2026-08-06
 **Status:** **SHIPPED.** L2 + L3 + the cascade landed as task 1; the wiring (§5.2–§5.4) and
-the template edits (§6) landed as task 2. Full suite **2606 passed / 0 failed / 2 skipped**
-(2461 baseline + exactly the 145 new tests; the arithmetic closes, §7).
+the template edits (§6) landed next; **revision 8** fixed one blocker and six review findings;
+**revision 9 BUILT L4, the resolver seam** — reversing two earlier cuts, because the gate both
+cuts called impossible now exists (§0.2). Full suite **2743 passed / 0 failed / 2 skipped**
+(2631 before revision 9 + 112 new: 34 seam + 46 cascade + 20 adapter + 12 middleware; the
+arithmetic closes, measured by removing the four files and re-running). `tsc` is unchanged at
+its pre-existing 194 errors — **zero** from the new files.
+
+**L4 IS OFF BY DEFAULT** (`ARCADE_STUDIO_TURN_RESOLVER=1` to opt in). It is wired and tested
+but no live gate has run on whether a model classifies these turns well — §9 item 12.
+
+**REVISION 8 (2026-08-06, adversarial spec review — one BLOCKER and six findings, every one
+reproduced by running the real modules before acting, and one review claim REFUTED).**
+
+| # | Finding | Verdict | Fix |
+|---|---|---|---|
+| 1 | **BLOCKER — L2 captured the fast path.** Provenance diverted on an `exact` hit REGARDLESS of the prompt, and the importer stamps `data-figma-id` on EVERY emitted child node. So after ONE import, pasting any node inside that frame diverted. **Reproduced: 31 of 31 committed must-stay-deterministic strings flipped**, including "import this from figma" and a bare URL, and the guard that was supposed to catch this passed VACUOUSLY (its stub reader held a node no test URL pointed at). | **REAL** | §2.7 — a STATED-fresh-import veto; the guard now runs in both provenance worlds |
+| 2 | **`fileKey` guarded nothing.** It was regexed out of `LIFT.json#intentSummary`, which `liftEmitPlugin` sets to the PROJECT'S FIRST user prompt — so every frame carried the first import's key. Verified on disk: all 3 frames of `implement-this-precisely-3` have a byte-identical `intentSummary`. | **REAL** | §5.2 — the importer persists `figma-origin.json` at write time |
+| 3 | **Distributive quantifiers INVERTED the constraint.** "Put each state in a single frame" means one frame PER state; 6 of 8 such phrasings fired and got the maximally forceful override. Same class as the deleted bare noun phrase, in a shape the committed inversion list missed. | **REAL** | §3.2 — a sentence-scoped `each\|every\|per\|its own` veto |
+| 4 | **The headless guard caught one shape out of eight.** Poisoning a brain module with `from "fs"` (bare), dynamic `import("node:fs")`, `createRequire`, `process.cwd()`, `os.homedir()`, or a literal `~/Library/Application Support/arcade-studio` all left 18/18 green. | **REAL** | §7 — 10 widened needles, each proven to fire AND not to false-positive; re-verified by poisoning |
+| 5 | **`<eject_to_source>` broke the ordering contract.** It is concatenated after the enriched prompt, so on a compose-base turn it landed **792 chars AFTER** the directive claiming to be the last word on frames — and the ordering test's list excluded it. | **REAL** | §5.3 — the seam returns directives; the caller places them after `ejectSuffix` |
+| 6 | **The portable directive spoke Studio-only.** `frames/<slug>/`, `<FrameLink>` and `CLAUDE.md` have zero presence in any foreign host — measured, SKILL.md has 0 hits for `frames/` or `FrameLink`. | **REAL** | §3.4 — an optional `HostVocabulary`; Studio's output byte-identical |
+| 7 | **`detectHiFiIntent` was not in the host's audited set** although `shouldSuppressWholeFrame` requires it. Its closure is 1 file and scores 0 violations, so the stated justification did not hold. | **REAL** | §5.2 — extracted to the zero-import leaf `hiFiIntent.ts`; closure grows to **10** by name |
+| 8 | *"`shouldSuppressWholeFrame`'s carve-out leaves a provenance turn with two contradictory directives"* | **REFUTED by the blocker fix** | Finding 1's veto makes `targetFrame` and `explicitHiFi` **mutually exclusive by construction** — measured through the real cascade, pinned by test |
+
+**A REAL DEFECT WAS FOUND BY FIXING #5**, which is the argument for making the ordering change
+rather than only widening the test: `enrichPromptWithFigmaContext`'s `if (!urls.length)` early
+return did not carry the new `directives` field, so `enriched.directives` was `undefined` and
+**every non-Figma prompt crashed the turn.** The two existing hard-constraint-2 tests caught it
+immediately — which is exactly what they are for.
+
+**#39 IS NOW PINNED AS UNCOVERED, not presented as fixed.** A review argued the scope guard
+should carry constraints past the no-node exit. It measured correctly (#39 is the only one of 54
+no-URL corpus prompts that fires, and 0 of the 29 committed adversarial strings do) but the brief's hard
+constraint 2 makes the guard structural on purpose, and that mistake has shipped once. So the
+guard stays and a test states the price: `detectTurnConstraints(#39)` fires, `planFigmaTurn(#39)`
+carries nothing, and the only thing covering it is the template — which does not travel. See §9
+item 10.
 
 **REVISION 7 (2026-08-06, independent verification pass before commit).** Every load-bearing
 claim in this document was re-measured from primary sources — the corpus fixture, real frame
@@ -32,7 +67,7 @@ work; across **11 live projects exactly 2 files** carry the attribute (§9 item 
 `buildHiFiDirective` does say *"each section has the SAME number of rows, same order, as the
 PNG"*; `suppressWholeFrameDirective` does not exist, `suppressHiFiDirective` does; #39 really
 has no Figma URL; the L3 fire set is asserted as exactly `[2, 30, 39]`; the resolver seam is
-genuinely absent from the tree (only comments and a test's rationale mention it).
+genuinely absent from the tree at that time (only comments and a test's rationale mentioned it) — **no longer true as of revision 9, which built it; see §0.2**.
 
 **The headless guard is NOT vacuous — verified by poisoning it.** Prepending
 `import { frameDir } from "../paths"` to `turnConstraints.ts` fails **4 of 18** tests and names
@@ -249,6 +284,14 @@ strictly better trade. **Do not build a prose gate. Do not reintroduce it under 
 name** (a "residue budget", a "boilerplate ratio", a "token count"). Any such proposal must
 first show a rule that separates 64 from 64.
 
+**L4, THE RESOLVER SEAM — CUT TWICE, THEN BUILT IN REVISION 9. See §0.2, which
+supersedes the two cut arguments below.** They are kept verbatim rather than deleted,
+because the reason the cut was right at the time and wrong now is a single missing
+function, and that is worth being able to see. In short: both cuts turned on "there is
+no gate that decides whom to ask", and the gate (`detectFreshImportIntent`) was written
+*afterwards*, as revision 8's fix for an unrelated blocker. Neither cut could have
+measured it.
+
 **CUT — L4, the resolver seam** (`TurnQuestion`, `TurnAnswerSchema`, `TurnResolver`,
 `resolveTurnOrFallback`, `studioCliResolver`, and their ~10 tests). Rejected on measurement.
 Running the cascade over the 13 corpus Figma prompts with the resolver present versus absent
@@ -349,6 +392,89 @@ Odd-input tolerance is now pinned too (376KB prompt routes in 10ms despite the u
   the product's speed advantage), and makes a classifier outage break importing entirely.
 - **"no gate, all prose to the generator"** — loses the deterministic fidelity guarantee
   whenever ANY prose is present, e.g. "implement this precisely, but make the header 16px".
+
+### 0.2 REVISION 9 — L4 is BUILT, because the gate now exists (task 2, 2026-08-06)
+
+**The cut is reversed, and the reversal turns on one fact rather than a change of taste.**
+Both cuts (revision 4, revision 6) rest on the same load-bearing claim, stated in capitals
+in `turnRouting.ts`: *"THERE IS NO GATE THAT DECIDES WHOM TO ASK."* That claim was **true
+when written and is now false**, and the reason is chronological, not argumentative:
+
+> `detectFreshImportIntent` **did not exist** when either cut was measured. Verified:
+> `git show cd2e973:studio/server/figma/generationIntent.ts | grep -c detectFreshImportIntent`
+> → **0**. It was written *afterwards*, in the uncommitted revision-8 layer, as the fix for
+> the **L2 fast-path blocker** — an entirely different problem. Neither cut could have
+> measured the gate, because nobody had written it yet.
+
+**What revision 6 actually measured, and why it is the weaker signal.** It tested
+`detectHiFiIntent` **alone** as the ask/don't-ask gate and correctly rejected it: FALSE for
+13 of the 30 must-stay-deterministic strings reaching step 8, including `"import this from
+figma"`, `"bring this in"` and a bare URL. The gate now in the tree is
+`asksForImport = bare-URL ∨ detectHiFiIntent ∨ IMPORT_VERBS`, which is **strictly stronger**
+than the arm revision 6 rejected. Re-measured 2026-08-06:
+
+| check | result |
+|---|---|
+| stated import asks wrongly asked (bare URL, `import this`, `Implement this precisely:`, `copy this exactly`, `re-import this`, …) | **0 of 13** |
+| FALSE for the prompts this design already fixes (#1, #2, #30, #39) | **yes — costs the shipped fixes nothing** |
+| committed must-stay-deterministic strings protected by a stated ask | **21 of 31** |
+| corpus Figma prompts that reach the resolver | **#25 and #32 — exactly the two the deterministic layers provably cannot fix** |
+
+**A requirement-modal gate was re-measured and is STILL rejected** — recorded so it is not
+re-proposed as "the obvious alternative". `must`/`should`/`needs to`, even refined with a
+negation anchor and a resemblance-verb veto, scores **0 false positives against the 31
+committed must-miss strings** and then **18 of 23 against FRESH held-out descriptive prose**
+(`"the button should be blue in the design"`, `"the toggle should be off in this state"`,
+`"the badge should say 'New' in the design"`). Scoring clean on the committed list and
+collapsing on held-out prose is the signature of a vocabulary gate **fit to its own test
+data** — the same trap that killed the corrective detector and the prose gate. The gate that
+works asks a STATED question (*did the designer ask for an import?*), never a mood.
+
+**ONE BRIEF RULE HAD TO BEND, and the measurement is why.** The brief's layer-4 bullet says
+*"NO adapter supplied -> fall back to the generator. Never to the importer."* Applied
+literally to the **absent** case it breaks hard constraint 4: measured, **9 of the 31**
+committed must-stay-deterministic faithful-copy strings leave the importer whenever no
+adapter is supplied — a 16-26s no-model import becoming a p50 98s LLM reconstruction, **in
+exactly the headless host the seam exists to serve**, on the product's dominant lane. So the
+rule is split by case, and hard constraint 1 is honoured *in full* for the case it actually
+describes:
+
+- **`unasked`** (nobody to ask) → keep today's decision. Nothing was attempted, so nothing
+  was lost, and no host is penalised for not implementing an optional capability.
+- **`failed`** (we ASKED and got nothing — threw, timed out, unparseable, schema-mismatched)
+  → the **GENERATOR**, never the importer. 10 failure modes, one test each, plus the same 10
+  re-asserted through the real `/api/chat` handler.
+
+*"Nobody to ask" is not "we asked and got nothing."* Only the second is a failure.
+
+**What shipped (revision 9).**
+
+| # | Thing | Where | Host |
+|---|---|---|---|
+| 1 | `TurnQuestion`, `TurnAnswerSchema` (zod), `TurnResolver`, `resolveTurnOrFallback` | `server/figma/resolveTurn.ts` | **BRAIN** — on `BRAIN_ENTRYPOINTS`; closure grows to **11** by name, as a reviewed decision |
+| 2 | Step 8 of the cascade: ask only when `!asksForImport` **and** a resolver was supplied | `server/figma/turnRouting.ts` | **BRAIN** — pure; the injected function is the only call |
+| 3 | `claude --print --bare`, prompt via **STDIN not argv**, JSON out, zod, SIGTERM, injectable `spawn` | `server/figma/adapters/studioCliResolver.ts` | **STUDIO-ONLY ADAPTER** — a headless host ignores the file |
+| 4 | Flag-gated wiring + a test seam | `server/middleware/chat.ts` | Studio; **OFF by default** (`ARCADE_STUDIO_TURN_RESOLVER=1`) |
+
+**The separation is enforced, not requested.** `headlessRouting.test.ts` asserts that neither
+the seam nor the routing layer can reach `studioCliResolver.ts`, `claudeBin.ts`, `paths.ts`
+or `figmaCli.ts`, and a **self-test** asserts the adapter really *is* dirty (it reaches
+`claudeBin` and contains a `node:child_process` import) so the separation assertions cannot
+quietly become vacuous. Verified non-vacuous by poisoning: prepending
+`import { spawn } from "node:child_process"` to `resolveTurn.ts` fails **4 tests** and names
+the chain (`server/figma/turnRouting.ts -> server/figma/resolveTurn.ts`). Restored after.
+
+**A REAL DEFECT WAS FOUND BY BUILDING IT**, which is the argument for building rather than
+re-litigating: `detectFreshImportIntent` **missed an objectless import ask**. `"please
+import <url>"` — about as stated as an import ask gets — was FALSE, because every pattern
+required an explicit object. Before L4 nothing downstream noticed (the miss only cost a
+provenance divert, which additionally needs the node to be already stamped in a frame); with
+L4 wired it became a model-answered edit. Fixed with an end-anchored pattern, verified to
+change the verdict on **0 of the 31** committed must-miss strings and on none of #1/#25/#32.
+
+**Still open, honestly: NO LIVE GATE HAS RUN.** The tests prove the seam is wired and the
+words arrive; they cannot prove a model classifies these turns *well*. That is why the flag
+defaults to OFF. See §9 item 12.
 
 ---
 
@@ -719,6 +845,68 @@ Enumeration is the host reader's job; the pure layer iterates what it is handed.
 **A provenance failure must never fail a turn.** If `readFrames()` rejects, treat it as
 `kind: "none"` and continue. The caller has no `try` block; the module swallows.
 
+### 2.7 REVISION 8 — L2 MUST NOT DIVERT A STATED IMPORT ASK (the blocker)
+
+The first cut diverted on an `exact` hit **regardless of what the prompt said**, and that
+captured the one thing §4 and hard constraint 4 forbid touching.
+
+**Why it is not an edge case.** The importer stamps `data-figma-id` on EVERY emitted child node
+— 38 plain ids across the 3 live frames of `implement-this-precisely-3`. So the moment a
+designer imports one frame, pasting **any** node from inside it is an `exact` hit. Measured with
+a reader over that live project: all 38 stamped ids routed to `claude`/`provenance` for all five
+canonical fast-path phrasings. A 16–26s no-model import became a p50 32s LLM edit turn that
+loses the deterministic fidelity guarantee, and the agent was handed `<target_frame>` saying
+*"Do NOT create a new frame directory"* — in answer to a designer typing "import this".
+
+**The regression guard could not see it, and that is the sharper lesson.** Every
+must-stay-deterministic string in `planFigmaTurn.test.ts` is appended to `U1`, whose node is
+`1:2`, while the stub reader holds `5678:118877` — a node in no frame. Step 6 was therefore
+never reached, and 31 of 31 strings were "protected" by never being exercised. Re-running the
+same loop with a reader that stamps `U1`'s node flips **31 of 31** (vs 1 today). A guard whose
+fixture cannot reach the code under test is worse than no guard, which is the same lesson §5.5
+records for the module-path needle and §7 now records for the source needles.
+
+**The fix: divert only when the designer did NOT ask for an import.**
+`detectFreshImportIntent(prompt)` (in `server/figma/generationIntent.ts`, which already owns
+importer-versus-generator intent) is true when any of three things holds, and every one STATES
+the ask rather than inferring a mood — the standard §3.1 sets:
+
+1. **Fidelity wording** — `detectHiFiIntent`: "Implement this precisely", "copy this exactly",
+   "pixel-perfect build of this frame".
+2. **An import verb** — `import\|re-import\|bring\|grab\|pull\|fetch` + an object, or
+   "from figma". Anchored to verb + object so a noun ("the import failed") does not fire.
+3. **Nothing but a URL** — handled in the cascade rather than the detector, because only the
+   cascade knows what the URLs were. A prompt that is only a URL has no prose to lose.
+
+**Measured, both directions:**
+
+| | before | after |
+|---|---|---|
+| must-stay-deterministic strings that flip when the pasted node IS stamped | 31 / 31 | **10 / 31** |
+| the 5 canonical fast-path phrasings, node stamped | 0 / 5 stay | **5 / 5 stay** |
+| corpus #1 (the motivating correction) still diverts | yes | **yes** |
+| #2, #30, #39 vetoed by mistake | — | **no** (`detectFreshImportIntent` false for all) |
+
+**THE REMAINING 10 ARE PINNED BY NAME, not papered over.** They are all DESCRIPTIVE prose —
+"This is the view once you choose Annual", "the spinner animates in the prototype but keep it
+static for now" — where the designer says what the design *is* and never that they want it
+imported. Nothing checkable separates them from a correction about a frame that already draws
+that node, and closing the gap needs *intent*, which is precisely the measurement that cut L1
+(§0: a correction and a faithful-copy string both measure 64 characters). **It is not closed
+with a length rule.**
+
+The exposure is bounded and one-directional: it applies only when the designer has ALREADY
+imported the pasted node into this project, and the outcome is a named edit of that frame rather
+than a duplicate. That is the milder error — visible, and one turn undoes it — and the previous
+behaviour on those same 10 strings was to silently stamp a second copy of a frame the project
+already had.
+
+**A note on `stripFigmaUrls`, because it looks like the banned prose gate.** It is not, and the
+difference is the comparison, not the mechanism: L1 measured residue and routed on the NUMBER,
+which is unusable because the distributions coincide exactly. This asks the only question with a
+defensible answer — **zero or non-zero**. A `> N` comparison must never be added there; the
+function's doc comment says so.
+
 ### 2.6 Measured effect (the reason this layer ships)
 
 Simulating the L2+L3 cascade over the corpus with the *verified* provenance world
@@ -817,6 +1005,28 @@ no Figma URL, so it reaches the generator today anyway and simply gains the dire
 > This is the standard the module's own doc comment sets — "it may only contain patterns that
 > STATE the requirement, never patterns that INFER a mood" — and the first cut violated it.
 
+> **CORRECTION (revision 8) — THE DISTRIBUTIVE FAMILY, the same inversion bug in a shape the
+> committed guard missed.** The `within|in|on … single frame` pattern has no subject anchor, so it
+> fired on DISTRIBUTIVE multi-frame asks: measured, **6 of 8** — "Put each state in a single
+> frame", "each screen should be in a single frame", "Every variant goes in a single frame of its
+> own", "keep each state in a single frame", … Each means ONE FRAME PER STATE, the opposite
+> requirement, and each then received the maximally forceful directive. `NOT_NEGATED` cannot
+> help: these sentences are not negated.
+>
+> The committed inversion must-NOT-fire list held only "one frame per X" and negated phrasings,
+> so it looked like it covered inversions while missing this whole family. That is the second time
+> in this file a guard's *shape* rather than its intent let a bug through.
+>
+> **The fix is a sentence-scoped veto**: reject a match when `each|every|per|apiece|its own|their
+> own` appears in the SAME sentence. Sentence-scoping is the whole care in the rule — a
+> whole-prompt veto would turn the fix into a new class of MISS ("Each row shows a ticket. Don't
+> implement this as a separate frame." must still fire), which is the mirror-image mistake and
+> the one that put this branch here. Both directions are committed tests.
+>
+> **It costs nothing real:** none of #2, #30, #39 contains a distributive quantifier (verified
+> against the fixture), the corpus fire set is still exactly `[2, 30, 39]`, and every must-fire
+> string still fires.
+
 `"keep everything on a single frame"` (a committed must-miss string for a DIFFERENT detector)
 still fires, via the `keep …` pattern. That is **correct as detection** — the designer did
 state a single-frame constraint — and §2.6 records it as the one intentional routing flip. Do
@@ -870,6 +1080,27 @@ instruction about frames, including the flow-splitting and <FrameLink> rules in 
   create the second frame.
 </single_frame_constraint>
 ```
+
+> **REVISION 8 — THE NOUNS ARE NOW A PARAMETER (`HostVocabulary`), because this text is the part
+> of the design that actually travels.** §8 says the directive module "travels to every host that
+> calls the cascade", and that is true of the CODE — but the words were written in Studio's
+> filesystem and component vocabulary. Measured: `frames/` and `FrameLink` have **zero**
+> occurrences in the root `SKILL.md` (the real foreign-host surface); `FrameLink` is a
+> prototype-kit composite at `studio/prototype-kit/composites/FrameLink.tsx` that no foreign repo
+> can import; and `CLAUDE.md.tpl` renders only into a Studio project dir (§6). So a designer in
+> Cursor typing corpus #30 got the design's headline win — a correct plan with zero host
+> capability — and was then told to edit a directory that does not exist, not to use a component
+> it cannot import, and to obey rules in a file it never read. They had to guess which parts
+> applied.
+>
+> `buildSingleFrameDirective(vocab?)` and `buildTurnDirectives(plan, vocab?)` now take
+> `{ container?, linkComponent?, rulesFile? }`, each defaulting to Studio's noun (`frame` /
+> `<FrameLink>` / `CLAUDE.md`). **Studio's output is byte-identical, pinned by an equality test**
+> (`buildSingleFrameDirective() === buildSingleFrameDirective({})`), and a foreign host passes
+> three words. `<target_frame>` takes the same treatment: with a foreign `container` it states
+> *"Edit the file(s) that already render `<slug>`"* instead of `frames/<slug>/`, so the
+> behavioural rule survives and the non-existent path does not. §8's verdict for
+> `turnDirectives.ts` no longer needs the distribution caveat `CLAUDE.md.tpl` carries.
 
 ### 3.5 Where it attaches
 
@@ -1094,13 +1325,41 @@ Studio filesystem path in the whole feature.**
 > **AS SHIPPED (revision 5) — four details the ~15-line estimate did not account for.** It came
 > in around 100 lines, all of it failure handling that a stub reader cannot have:
 >
-> 1. **`fileKey` comes from `LIFT.json#intentSummary`.** Verified on the live frame
->    `01-figma-5678-118876`: `intentSummary` is the verbatim creating prompt,
->    `"Implement this precisely: https://www.figma.com/design/ssUerkBL5uOm7tNyHoZVtc/…"`, so the
->    file key is recoverable with one regex. Read once per FRAME, not per file. A frame with no
->    `LIFT.json` (any LLM-written frame) yields `undefined`, which provenance reads as "unknown"
->    rather than "mismatch" — so such a frame keeps today's behaviour instead of losing
->    provenance. Pinned both ways by test.
+> 1. ~~**`fileKey` comes from `LIFT.json#intentSummary`.**~~ **WRONG, and corrected in revision
+>    8 — the central `fileKey` claim in this spec was false.** This subsection said
+>    `intentSummary` is "the verbatim creating prompt". It is not:
+>    `liftEmitPlugin.ts:43` sets `intentSummary: await readFirstUserPrompt(slug)`, which reads
+>    `chat-history.json` and returns the **first user message of the whole PROJECT** — the same
+>    string for every frame in it. Verified on disk: all three frames of
+>    `implement-this-precisely-3` carry a byte-identical `intentSummary`, including
+>    `02-figma-5678-118907`, which was imported from a different node.
+>
+>    So `readFileKey()` stamped the file key of the project's FIRST import onto every frame, and
+>    on a multi-file project (`polina-s-prototype` is one) it failed in **both** directions: it
+>    SUPPRESSED genuine provenance hits on later-imported files — the original duplicate-frame
+>    bug, in the one scenario file scoping exists for — and it ACCEPTED the colliding id it was
+>    built to reject. The claim read as verified only because both live multi-file projects
+>    happen to have imported their first node from the same file as the frame under test, and the
+>    committed test hand-wrote a per-frame `intentSummary` **the real writer never produces for
+>    frame 2+**, so it could not catch this.
+>
+>    **The fix persists the key where it is known for certain.** The importer receives `fileKey`
+>    at write time, so `kitEmitBranch.ts` now writes `figma-origin.json`
+>    (`{ fileKey, nodeId }`) into the frame dir, and the reader reads that. The filename and shape
+>    live in the zero-import leaf `server/figma/figmaOrigin.ts` so writer and reader cannot drift
+>    — the same discipline `frameSlug.ts` exists for. A frame with no record (every frame written
+>    before this fix, and every LLM-authored frame) yields `undefined`, which provenance reads as
+>    "unknown" rather than "mismatch", so it keeps today's behaviour. **A WRONG key is strictly
+>    worse than none: it blocks real hits AND invents false ones.**
+>
+>    Tested against the REAL writer, not a hand-built fixture: a two-file history run through
+>    `emitLiftForFrame`, asserting frame 02 is not labelled file A and that a corrective on frame
+>    02's own node resolves. Plus a WRITER test in `kitEmitBranch.test.ts` — without it a reader
+>    test only proves the reader can parse a file nobody produces.
+>
+>    **The general lesson, worth more than the fix:** a value derived from a field that means
+>    something else is indistinguishable from a correct one on the frames you happen to check.
+>    Persist it at the moment it is known.
 > 2. **`importedFromNodeId` is round-tripped through `slugMatchesNode`, not trusted.** The
 >    digit-grouping in a slug is ambiguous in principle (`figma-5678-118-876` parses three ways),
 >    so the reader only returns an id the SHARED transform confirms regenerates that exact slug.
@@ -1125,9 +1384,26 @@ Studio filesystem path in the whole feature.**
 > `figmaCli.ts` re-exports them so `chat.ts` and `middleware/figma.ts` are untouched. §7's
 > guard is pointed at the HOST GLUE as well as the brain — `figmaNodeUrl.ts`,
 > `generationIntent.ts`, `src/lib/figmaUrl.ts` — so the seam's own cost is measured rather
-> than assumed. All three are clean; the whole brain-plus-glue closure is **9** files, asserted
-> by name (this sentence said 8 until revision 7 — it was written before `turnDirectives.ts`
-> existed, and §7's `toEqual` list is the authority).
+> than assumed. All three are clean; the whole brain-plus-glue closure is **10** files, asserted
+> by name (this sentence said 8 until revision 7 and 9 until revision 8; §7's `toEqual` list is
+> the authority).
+
+> **REVISION 8 — `detectHiFiIntent` MOVED TO A LEAF, and §3.6's justification for keeping it out
+> did not survive measurement.** §3.6 argued the value must be passed IN because `detectHiFiIntent`
+> "lives in fidelityDirective.ts alongside 250 lines … that names the `figmanage` CLI — a binary
+> no foreign host has". Measured: `fidelityDirective.ts`'s import closure is **exactly one file**
+> (itself, zero relative imports) and it scores **zero** violations against the guard's own
+> needles. The `figmanage` strings are plain text inside `buildHiFiDirective`, a *different*
+> exported function. So importing the detector cost the brain closure nothing measurable, and the
+> split had a real cost: a foreign host could not compute `shouldSuppressWholeFrame`'s
+> `ctx.explicitHiFi` from any module it was told about, so it would pass the plausible default
+> `false` and **silently get different routing from Studio on the same prompt.**
+>
+> `detectHiFiIntent` + `HI_FI_PATTERNS` now live in the zero-import leaf
+> `server/figma/hiFiIntent.ts`; `fidelityDirective.ts` re-exports both so every call site and test
+> is untouched, and its 250 lines of directive text stay off the audited list. The leaf is on
+> `BRAIN_ENTRYPOINTS` and in the by-name closure, which is how the list reached **10**. The
+> blocker fix (§2.7) needs it too — `detectFreshImportIntent` composes it.
 
 ### 5.3 `enrichPromptWithFigmaContext` — widen the REAL seam
 
@@ -1176,16 +1452,41 @@ Keep `scopedEdit` as its own variable for `blocks.push(buildScopedEditReferenceD
 at `chat.ts:855`: that directive is specifically about right-click edits and must NOT start
 appearing on typed single-frame turns.
 
-**AS SHIPPED, the attach point (§3.5's corrected one):**
+**AS SHIPPED, the attach point (§3.5's corrected one), REVISED IN REVISION 8 so the directives
+are RETURNED rather than concatenated:**
 
 ```ts
-if (!blocks.length) {                       // digest MISS
-  if (!planDirectives.length) return { prompt, images };
-  return { prompt: `${prompt}\n\n${planDirectives.join("\n\n")}`, images };
-}
+// enrichPromptWithFigmaContext now returns { prompt, images, directives }
+if (!urls.length) return { prompt, images, directives: [] };   // ← see the defect note below
+if (!blocks.length) return { prompt, images, directives: planDirectives };   // digest MISS
 if (scopedEdit) blocks.push(buildScopedEditReferenceDirective());
-return { prompt: `${prompt}\n\n${[...blocks, ...planDirectives].join("\n\n")}`, images: outImages };
+return { prompt: `${prompt}\n\n${blocks.join("\n\n")}`, images: outImages, directives: planDirectives };
+
+// …and runClaudeBranch places them AFTER ejectSuffix:
+const planSuffix = enriched.directives.length ? `\n\n${enriched.directives.join("\n\n")}` : "";
+const prompt = prependEditContext(enriched.prompt + ejectSuffix + planSuffix, frameSlugs);
 ```
+
+> **WHY THE HAND-BACK (revision 8) — ORDERING IS PART OF THE CONTRACT, and `<eject_to_source>`
+> broke it.** §3.5 makes the constraint "the last word before the model starts" because it opens
+> with *"This overrides every other instruction about frames"*, and the middleware ordering test
+> enforced that against `<figma_context`, `<edit_reference_designs>`, `<high_fidelity_mode>` and
+> `<target_frame>`. But `ejectSuffix` is concatenated AFTER the enriched prompt
+> (`prependEditContext(enriched.prompt + ejectSuffix, frameSlugs)`), outside anything that test
+> saw — and `<eject_to_source>` ENDS with instructions about frame folders (*"COPY that file into
+> your new frame folder and import it LOCALLY"*). Measured through the real handler on
+> `"Modify the ComputerScene composite …, and keep everything on a single frame: <url>"`:
+> `<single_frame_constraint>` at offset **140**, `<eject_to_source>` at **932** — 792 chars after
+> the block claiming to be the final word. The invariant was asserted with the one violator
+> excluded from the list.
+>
+> Both halves are fixed together: `<eject_to_source>` is in the ordering test's list, and the seam
+> hands the directives back so the caller can place them last.
+>
+> **AND FIXING IT SURFACED A REAL DEFECT**, which is the argument for changing the code rather
+> than only the test: the `if (!urls.length)` early return did not carry `directives`, so
+> `enriched.directives` was `undefined` and **every non-Figma prompt crashed the turn.** The two
+> existing hard-constraint-2 tests failed immediately.
 
 Verified by MUTATION, not by reading: reverting that guard to the single-line
 `if (!blocks.length) return { prompt, images };` fails **5 of the 10** tests in
@@ -1373,25 +1674,34 @@ Files as actually landed — the cascade tests live in their own file rather tha
 the cascade tests must DERIVE it from the prompt (hand-setting it would let a test pass while
 the real middleware caller disagreed):
 
-**AS SHIPPED, RE-COUNTED 2026-08-06 (revision 7): 2606 passed / 0 failed / 2 skipped.**
-Every count below was re-measured by running each file alone, because the earlier figures in
-this section were **wrong in a way that mattered** — see the correction under the table.
+**AS SHIPPED, RE-COUNTED AFTER REVISION 8: 2625 passed / 0 failed / 2 skipped.**
+Every count below was measured by running each file alone, because the figures in this section
+were once **wrong in a way that mattered** — see the correction under the table.
 
-| file | tests |
+| file | tests (rev 7 → rev 8) |
 |---|---|
-| `__tests__/server/figma/planFigmaTurn.test.ts` | 42 |
+| `__tests__/server/figma/planFigmaTurn.test.ts` | 42 → **47** |
 | `__tests__/server/figma/provenance.test.ts` | 27 |
-| `__tests__/server/figma/headlessRouting.test.ts` | 18 |
-| `__tests__/server/figma/turnDirectives.test.ts` | 18 |
-| `__tests__/server/figma/turnConstraints.test.ts` | 13 |
-| `__tests__/server/figma/studioFrameReader.test.ts` | 11 |
-| `__tests__/server/middleware/chat-single-frame.test.ts` | 10 |
+| `__tests__/server/figma/headlessRouting.test.ts` | 18 → **21** |
+| `__tests__/server/figma/turnDirectives.test.ts` | 18 → **20** |
+| `__tests__/server/figma/turnConstraints.test.ts` | 13 → **17** |
+| `__tests__/server/figma/studioFrameReader.test.ts` | 11 → **14** |
+| `__tests__/server/middleware/chat-single-frame.test.ts` | 10 → **11** |
 | `__tests__/templates/claude-md-single-frame.test.ts` | 6 |
-| **total** | **145** |
+| **subtotal (new files)** | 145 → **163** |
+| plus 1 test added to the pre-existing `kitEmitBranch.test.ts` (the origin-record WRITER) | **+1** |
+| **total delta** | **164** |
 
-**The arithmetic closes exactly: 2461 baseline + 145 = 2606.** That is the check worth having,
-because it proves the new files account for the ENTIRE delta — no pre-existing test was
-silently deleted, renamed, or skipped to make room.
+**The arithmetic closes exactly: 2461 baseline + 163 + 1 = 2625.** That is the check worth
+having, because it proves the new tests account for the ENTIRE delta — no pre-existing test was
+silently deleted, renamed, or skipped to make room. Taken on a clean tree (`git status --short
+studio/__tests__/` shows nothing untracked — §9 item 9).
+
+`tsc --noEmit -p studio/tsconfig.json` still reports **194 errors in 58 files, and revision 8
+proved they are unchanged by DIFFING the two outputs** rather than by comparing totals: with the
+work stashed and unstashed, the error lists are **byte-identical once line numbers are stripped**.
+The only differences are line-number shifts inside `chat.ts`, from lines this work inserted above
+pre-existing errors. Zero errors in any new module.
 
 > **CORRECTION (revision 7) — the earlier counts in this section were wrong twice over, and
 > one of the errors was a contaminated measurement.** This section previously claimed 2581 and
@@ -1565,6 +1875,36 @@ nuisance:
    `kitEmitBranch.ts` — a known-dirty module. A guard that cannot fail is worse than no
    guard; that is the `import-hook-dead-in-dmg` lesson.
 
+   > **REVISION 8 — THE NEEDLES WERE THE BLIND SPOT, and the self-test could not see it.** §5.5
+   > argues at length that the module-path needle had to become a resolved-path walk because "a
+   > guard that cannot fail is worse than no guard". **The same reasoning was never carried across
+   > to the SOURCE needles.** They matched only a static `import … from "node:<builtin>"`, so
+   > almost every other way to couple a brain module to a host passed clean. Poisoning
+   > `turnConstraints.ts` (a brain entrypoint) eight ways: `from "../paths"` correctly failed 4 of
+   > 18, and **all seven of these left 18/18 GREEN** — `import fs from "fs"` (bare specifier, valid
+   > and identical at runtime), `import os from "os"`, `import cp from "child_process"`,
+   > `await import("node:fs")` (dynamic), `createRequire(import.meta.url)` + `req("path")`,
+   > `process.cwd()`, and a hardcoded `"/Users/x/Library/Application Support/arcade-studio"`.
+   >
+   > Two are not hypothetical: `createRequire` is **this repo's own idiom** for reaching builtins
+   > (4 live sites — `kitTokens.ts:34`, `kitBarrel.ts:19`, `codeWriter/kitProps.ts:4`,
+   > `assetsCatalog.ts:1`), and the hardcoded `~/Library/Application Support/arcade-studio` literal
+   > is the single thing the brief names explicitly as forbidden. The self-test could not surface
+   > any of it, because `kitEmitBranch.ts` happens to use the prefixed form — so the guard was
+   > only ever proven against the shapes it already caught.
+   >
+   > The list is now 10 needles: builtins with an OPTIONAL `node:` prefix (widened to `path`,
+   > `module`, `worker_threads`, `net`, `http(s)`, `dns`, `tls`, `cluster`, `v8`, `vm`, `repl`,
+   > `readline`, `inspector`), dynamic `import("node:…")`, `createRequire(`, `require("`,
+   > `electron`, `process.env`, `process.cwd(`, `os.homedir(`, and the Studio path literal.
+   >
+   > **And the self-test is now two-sided**, which is the part that stops this reopening: every
+   > needle is asserted to FIRE against a fixture violation, AND asserted NOT to fire on ordinary
+   > brain code (relative imports, `import type`, the word "require" as a substring, a
+   > `frames/${slug}/` template literal) — because a guard that false-positives gets deleted by the
+   > next person. Re-verified by poisoning: each of the five previously-slipping shapes now fails
+   > **3 of 21** tests, and the tree is clean again.
+
 4. **REVISION 4 — it covers the HOST'S INPUT CONTRACT, not only the brain.** Auditing the
    routing layer alone measured the wrong thing: a host cannot call `planFigmaTurn` without
    `parseFigmaUrl` (`nodeIds`), `shouldGenerateFromFigma` (`wantsGeneration`) and
@@ -1573,10 +1913,17 @@ nuisance:
    `HOST_GLUE_ENTRYPOINTS` under the same rules. Before this, the guard forbade the brain
    exactly what the call contract required of the host (§5.2).
 
-Also asserts the total brain + glue closure is exactly these **9** modules **by name**, not
+Also asserts the total brain + glue closure is exactly these **10** modules **by name**, not
 merely under a size cap — so growth is a decision someone makes on purpose:
-`figmaNodeUrl`, `frameSlug`, `generationIntent`, `provenance`, `turnConstraints`,
-**`turnDirectives`**, `turnRouting`, `src/lib/figmaUrl`, `src/lib/scopedEdit`.
+`figmaNodeUrl`, `frameSlug`, `generationIntent`, **`hiFiIntent`**, `provenance`,
+`turnConstraints`, `turnDirectives`, `turnRouting`, `src/lib/figmaUrl`, `src/lib/scopedEdit`.
+
+> **THE TENTH MODULE ARRIVED, AND THE TEST DID ITS JOB AGAIN (revision 8).** Adding
+> `hiFiIntent.ts` failed this assertion, which is the intended behaviour. The cost is one leaf with
+> zero imports; the return is two things the brain genuinely needs — the fast-path veto (§2.7) and
+> a host's ability to compute `ctx.explicitHiFi` at all (see the note in §5.2). `figmaOrigin.ts`
+> is deliberately NOT on the list: it is shared by the Studio *adapter* and the Studio *importer*,
+> neither of which is brain, and nothing in the routing closure imports it.
 
 > **THE NINTH MODULE ARRIVED, AND THE TEST DID ITS JOB (revision 5).** The paragraph below
 > said: *"If it ever needs a ninth module, this test says so in one place instead of leaving a
@@ -1682,7 +2029,9 @@ easy and has cost time before.
 | `server/figma/turnConstraints.ts` | **brain** | Pure regex + a template string. Runs identically in any host. |
 | `server/figma/turnRouting.ts` (extended) | **brain** | `planFigmaTurn` is pure apart from the one injected dep, and correct with `deps` absent entirely. `classifyFigmaTurn` stays pure and unchanged. |
 | `server/editContext.ts` | **brain, UNCHANGED as shipped** | Revision 5 did NOT extend it. The target frame is its own `<target_frame>` directive from `turnDirectives.ts` instead — independent of `frameSlugs` (whose empty-list no-op would have dropped it), and reachable by a foreign host, which has no equivalent of the `prependEditContext` seam. See §5.4. |
-| `server/figma/turnDirectives.ts` | **brain** | Plan → directive strings + the hi-fi suppression decision. Imports only `./turnConstraints` and a TYPE from `./turnRouting`. This module is the reason a foreign host can ACT on a plan rather than just compute one; it closes revision 4's honest exception 1. §3.6. |
+| `server/figma/turnDirectives.ts` | **brain** | Plan → directive strings + the hi-fi suppression decision. Imports only `./turnConstraints` and a TYPE from `./turnRouting`. This module is the reason a foreign host can ACT on a plan rather than just compute one; it closes revision 4's honest exception 1. §3.6. **Revision 8: its output TEXT was Studio-only** (`frames/<slug>/`, `<FrameLink>`, `CLAUDE.md` — all zero-presence in any foreign host), so it now takes an optional `HostVocabulary`. Studio's output is byte-identical; a foreign host passes its own three nouns. §3.4. |
+| `server/figma/hiFiIntent.ts` | **brain** | Zero-import leaf. `detectHiFiIntent` + `HI_FI_PATTERNS`, extracted out of `fidelityDirective.ts` in revision 8 because the cascade needs the answer (§2.7's fast-path veto) and a foreign host must be able to compute `shouldSuppressWholeFrame`'s `ctx.explicitHiFi`. `fidelityDirective.ts` re-exports both, so every call site is untouched, and its 250 lines of `figmanage`-naming directive text stay off the audited list. |
+| `server/figma/figmaOrigin.ts` | **shared leaf, NOT brain** | Zero-import leaf holding the `figma-origin.json` filename + shape, so the importer (writer) and the Studio adapter (reader) cannot drift. Deliberately off the audited brain list: both its consumers are Studio-side, and nothing in the routing closure imports it. It exists because deriving the file key from `LIFT.json#intentSummary` was wrong in both directions — see §5.2 item 1. |
 | `server/figma/frameSlug.ts` | **brain** | Zero-import leaf. Extracted out of `kitEmitBranch.ts` so the reader can share the writer's transform without inheriting `paths.ts` / `figmaCli.ts` / `claudeBin.ts` (§2.3). |
 | `server/figma/figmaNodeUrl.ts` | **brain** | Zero-import leaf. `parseFigmaUrl`, extracted out of `figmaCli.ts` because it is part of the routing layer's INPUT CONTRACT and `figmaCli.ts` imports `node:child_process` (§5.2). |
 | `templates/CLAUDE.md.tpl` (edited) | **brain by nature, Studio-only by DISTRIBUTION** | Generator instructions travel to every host in principle — but measured, this template is rendered only into a Studio project dir and never exported, and the root `SKILL.md` carries none of these rules. See the revision-4 note in §6. |
@@ -1698,7 +2047,30 @@ here.
 **Nothing in the ROUTING LAYER can only work inside the desktop app.** The single Studio-only
 module is an adapter behind a two-line seam, and the headless test in §7 proves the cascade
 produces correct plans without it — including the #30 fix, which lands with zero host
-capability at all. The brain-plus-glue closure is **9** files, asserted by name.
+capability at all. The brain-plus-glue closure is **10** files, asserted by name.
+
+> **BUT `kind: "kit-emit"` IS A STUDIO-ONLY *DECISION*, and this section used to imply otherwise
+> (revision 8, conceding a review finding).** §7's headless test asserts `#0 #37 #45 #53 →
+> kit-emit` and commented *"the fast path needs no host"*. That comment is backwards.
+> `kit-emit` means "run `server/figma/kitEmitBranch.ts`", whose closure is 30 modules reaching
+> `paths.ts`, `projects.ts`, `figmaCli.ts` (the `figmanage` binary) and `claudeBin.ts` — the most
+> Studio-coupled module in the tree, and one this guard lists as FORBIDDEN for the brain. So the
+> fast path needs the MOST host capability of any branch (a Figma PAT, the CLI, the emitter, a
+> frames dir), not none.
+>
+> Measured: over the 13 corpus Figma prompts with no deps, **7 come back `kit-emit` with zero
+> directives** — #0, **#1**, #25, #32, #37, #45, #53 — i.e. a decision a Cursor/Claude Code host
+> can neither execute nor read. (The review said six; the real number is seven, because #1 also
+> falls through in a host with no frame reader. Pinned by a test that asserts the exact list, so
+> it cannot drift in either direction.) This is the design's **largest remaining headless gap**,
+> and it is now §9 item 11 rather than a verdict of portability achieved.
+>
+> It is NOT fixed here, deliberately: degrading `kit-emit` to `claude` + a faithful-transcription
+> directive when no importer capability is supplied would hand the dominant Figma-import lane
+> (auto-memory `figma-import-is-the-dominant-usecase`) from a 16–26s deterministic trace to a p50
+> 98s LLM reconstruction — the exact trade §0 rejects twice. The honest options are recorded in
+> §9 item 11; picking one needs the manual gate (§9 item 7) first, because which one is right
+> depends on what a real foreign host can actually do.
 
 **Two honest exceptions, added in revision 4 rather than glossed. Revision 5 CLOSED the first
 and confirmed the second:**
@@ -1783,3 +2155,101 @@ Honest limits. Each is a real gap, not a hedge.
    habit, and the one that actually caught this, is to check that the delta reconciles: baseline
    + tests-you-added should equal the new total exactly, and if it does not, the difference is
    something you have not explained yet.
+10. **Corpus #39 is UNCOVERED in the headless host** — the one live designer complaint this work
+    leaves with no mechanism where it matters most. `detectTurnConstraints(#39)` fires
+    (`single-frame`), but #39 carries **no Figma URL**, so step 1's scope guard returns before
+    constraints are computed and `planFigmaTurn` hands back `no-node` with `constraints: []`. The
+    only thing covering it is the §6 `CLAUDE.md.tpl` edit, and measured, that template renders
+    **only into a Studio project dir** — so a designer re-typing #39 in their own Cursor / Claude
+    Code gets nothing.
+
+    This is a deliberate trade, not an oversight, and the numbers are worth keeping because they
+    argue *against* the choice: across the 54 no-URL corpus prompts #39 is the **only** one the
+    detector fires on, and 0 of the **29** committed adversarial must-NOT-fire strings fire
+    (7 faithful-copy / 8 inversion / 9 distributive / 5 negated — counted by executing the
+    committed lists, not by reading them; the review's "20" was an undercount) — so carrying
+    constraints past the scope guard would cost exactly one prompt of exposure, the one it fixes.
+    The guard stays anyway because the brief's hard constraint 2 makes it **structural**: a gate
+    written as `kind === "claude" && …` also fires on ordinary non-Figma prompts, and that exact
+    mistake has already shipped once, telling a designer who typed "New screen: an error state
+    with a Try again button" to "not create a new frame directory". A structural guard that costs
+    one prompt beats a conditional one that has already failed in the field. Pinned by test
+    (`planFigmaTurn.test.ts`, "#39 states the constraint but gets no routing enforcement") so the
+    price is visible rather than forgotten. Revisit only WITH the manual gate of item 7: if a
+    designer hits this in a foreign host, the fix is to let the no-node exit carry constraints
+    **and** to re-run the full 20-string adversarial list in the same commit.
+11. **`kind: "kit-emit"` is a decision only Studio can execute — the largest headless gap.**
+    Measured with no deps over the 13 corpus Figma prompts, **7 come back `kit-emit` with zero
+    directives**: #0, #1, #25, #32, #37, #45, #53 (pinned by an exact-list test in
+    `headlessRouting.test.ts`, so it cannot drift in either direction). `kit-emit` means "run
+    `server/figma/kitEmitBranch.ts`", a **30**-module closure (re-counted with the guard's own
+    `closureOf` walker; the review's "29" was one short) reaching `paths.ts`, `projects.ts`,
+    `figmaCli.ts` (the `figmanage` binary) and `claudeBin.ts` — the most Studio-coupled module in
+    the tree, and one the guard lists as FORBIDDEN for the brain. So the fast path needs the
+    **most** host capability of any branch, not none, and §8 used to imply the opposite.
+
+    Four of the seven are bare imports that are *correct but unrunnable* elsewhere; #1, #25 and
+    #32 are prose a foreign host is handed no way to honour. Deliberately NOT fixed here, because
+    the obvious fix is worse than the gap: degrading `kit-emit` to `claude` + a
+    faithful-transcription directive whenever no importer capability is supplied would hand the
+    **dominant** Figma-import lane (auto-memory `figma-import-is-the-dominant-usecase`) from a
+    16–26s deterministic trace to a p50 98s LLM reconstruction that loses the fidelity guarantee
+    — the exact trade §0 rejects twice, and the same shape as the cut L4 resolver's fallback rule.
+    The two honest options are (a) declare the importer a host capability alongside `readFrames`
+    (`deps?: { readFrames?, importNode? }`) and degrade only when the host says it cannot import,
+    or (b) leave `kit-emit` as a Studio-only decision and document that a foreign host must
+    supply its own import path. Picking one needs the manual gate of item 7 first: which is right
+    depends on what a real foreign host can actually do, and nobody has run one yet.
+
+12. **L4 is wired but UNPROVEN, and that is why the flag defaults to OFF.** Revision 9 built the
+    resolver seam (§0.2) because the gate that both cuts said was missing now exists. What the
+    tests prove is mechanical: the seam is consulted for exactly the turns the deterministic
+    layers cannot settle (#25, #32), never for a stated import ask or a bare URL (asserted on the
+    CALL COUNT, not the outcome), every one of 10 failure modes lands on the generator rather than
+    the importer, and a host cannot name a frame it was never offered. What no test can prove is
+    whether a model classifies these turns **well** — whether "There must be three buttons on the
+    right hand side" really comes back `edit` rather than `import`, and whether the `targetFrame`
+    it names is the one the designer meant.
+
+    That is an empirical question about a model, and this project has been burned by exactly this
+    gap twice: render-measurement shipped behind jsdom-blind tests that passed while it was broken
+    live, and the import hook was silently dead in the DMG with a green suite. So layer 4 ships
+    behind `ARCADE_STUDIO_TURN_RESOLVER=1` and no tester pays for it by default. The gate to run
+    before flipping it on: corpus #25 and #32 verbatim, in a project that already has one frame,
+    with the flag set — pass condition is that the prose reaches the generator AND the resulting
+    frame reflects it. Do it in a Claude Code host too, with an INLINE resolver, since that is the
+    host the seam exists for and the one no automated test in this repo can stand in for.
+
+13. **The suppression seam's end-to-end assertions were VACUOUS as first shipped — now fixed, and
+    worth recording because the shape recurs.** §5.3's widening of `suppressHiFiDirective` is
+    real and is proved by unit test (`shouldSuppressWholeFrame`,
+    `__tests__/server/figma/turnDirectives.test.ts`). But the END-TO-END proof in
+    `__tests__/server/middleware/chat-single-frame.test.ts` mocked the Figma digest to a FORCED
+    MISS for every test, and on a miss `resolveFigmaReference` returns `{block:null}` for any turn
+    without explicit hi-fi wording (`chat.ts` — `if (!explicitHiFi || suppressHiFiDirective)
+    return { block: null, png: null }`). `detectHiFiIntent` is FALSE for #1, #2, #30 and #39 —
+    every prompt this design fixes — so `<high_fidelity_mode>` was absent because **nothing
+    produced it**, not because suppression removed it.
+
+    Measured 2026-08-06 by poisoning `shouldSuppressWholeFrame` to `return false`
+    unconditionally: **all 11 tests in the file still passed.** The whole-frame directive only
+    FIRES on the digest-HIT path, via `shouldUseHiFi`'s novel-design upgrade (`classified: true`
+    + no high-confidence composite) — so that is the only path on which suppression can be
+    observed at all.
+
+    Fixed by giving the file a digest-mode switch and adding a `describe` that runs on a HIT and
+    asserts DIFFERENTIALLY: corpus #2 with its `IMPORTANT: don't separate…` sentence removed
+    (derived from the fixture, so it cannot drift) must KEEP `<high_fidelity_mode>`; the verbatim
+    prompt must lose it and gain `<single_frame_constraint>`. #30 and the provenance test moved to
+    the hit path for the same reason, and an ordinary build turn with NO hi-fi wording
+    ("Build this screen and make the search input functional") pins that the suppression is scoped
+    rather than global. Re-poisoning now fails 3 tests. The two original miss-path
+    `not.toContain("<high_fidelity_mode>")` assertions were REMOVED rather than left as
+    decoration, with a comment saying where suppression is really proved.
+
+    The general lesson, and it is the same one §5.5 draws about the headless guard: **a
+    negative assertion is only worth the control that proves the thing could have appeared.** A
+    mock chosen to exercise one failure path (here, the digest miss the first cut was broken on)
+    can silently disable the mechanism a different assertion in the same file is testing. Every
+    `not.toContain` in this feature's tests should be readable as "and here is the control where
+    it IS there".

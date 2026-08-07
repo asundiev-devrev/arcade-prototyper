@@ -28,6 +28,11 @@
  * detectInteractionIntent, which this composes with.
  */
 import { detectInteractionIntent } from "../../src/lib/figmaUrl";
+// The zero-import leaf, NOT fidelityDirective.ts. Both re-export the same
+// function, but fidelityDirective carries 250 lines of Studio directive text
+// naming the `figmanage` CLI, and this module is audited as part of the brain's
+// host INPUT CONTRACT (__tests__/server/figma/headlessRouting.test.ts).
+import { detectHiFiIntent } from "./hiFiIntent";
 
 /**
  * Instructions the deterministic importer cannot honour because it has no LLM:
@@ -76,6 +81,76 @@ const BUILD_INTENT_PATTERNS: RegExp[] = [
 export function detectBuildIntent(prompt: string): boolean {
   if (typeof prompt !== "string" || !prompt) return false;
   return BUILD_INTENT_PATTERNS.some((re) => re.test(prompt));
+}
+
+/**
+ * Verbs a designer uses when they are asking for a FRESH IMPORT of a node —
+ * "import this", "bring this in", "grab this design", "pull it in from figma".
+ *
+ * Anchored to VERB + object so a noun ("the import failed") or a passing mention
+ * does not fire, and deliberately narrow: this list only has to catch a designer
+ * STATING an import ask, never infer that they might have meant one.
+ */
+const FRESH_IMPORT_PATTERNS: RegExp[] = [
+  /\b(?:import|re-?import|bring|grab|pull|fetch)\s+(?:this|these|it|them|that|those)\b/i,
+  /\b(?:import|re-?import|bring|grab|pull|fetch)\s+(?:the|a|an)\s+(?:\w+\s+){0,2}(?:design|frame|screen|node|page|component|nav|modal)\b/i,
+  /\bfrom\s+figma\b/i,
+  /\b(?:re-?import|reimport)\b/i,
+  // AN OBJECTLESS IMPORT ASK — "please import <url>", "import", "grab <url>".
+  // The patterns above all require an explicit object, so a designer whose object
+  // IS the pasted link ("please import" + a URL) stated an import as plainly as
+  // possible and was missed. Found by wiring layer 4: the turn became a
+  // model-answered edit, and "please import" is about as stated as an import ask
+  // gets. Before layer 4 nothing downstream noticed, because the miss only cost a
+  // provenance divert that needed a node already in a frame.
+  //
+  // Anchored to END-OF-STRING (after any trailing URLs) so it cannot fire mid-
+  // sentence: "the padding on this card is wrong <url>" and "fix the blur <url>"
+  // must NOT match, and neither must corpus #1/#25/#32. Verified: this changes the
+  // verdict on 0 of the 31 committed must-stay-deterministic strings.
+  /\b(?:import|re-?import|reimport|bring|grab|pull|fetch)\b(?:\s+(?:in|this|it|them))?\s*(?:https?:\/\/\S+\s*)*$/i,
+];
+
+/**
+ * Did the designer STATE that they want this node imported fresh, rather than an
+ * existing frame edited?
+ *
+ * WHY THIS EXISTS — it protects the deterministic fast path from provenance.
+ * Layer 2 (server/figma/provenance.ts) diverts a turn off the LLM-less importer
+ * whenever the pasted node is already stamped inside a rendered frame. That is the
+ * right call for corpus #1, a correction. But the importer stamps `data-figma-id`
+ * on EVERY emitted child node — 38 plain ids across the 3 live frames of
+ * `implement-this-precisely-3` — so once a designer has imported ONE frame,
+ * pasting ANY node from inside it is a provenance hit. Measured (spec review,
+ * 2026-08-06): with a reader over that live project, 38 of 38 stamped nodes routed
+ * to an LLM edit turn for all five canonical fast-path phrasings, and 31 of 31
+ * committed must-stay-deterministic strings flipped. A 16-26s no-model import
+ * became a p50-32s generation turn that lost the fidelity guarantee, and the agent
+ * was handed a directive saying "Do NOT create a new frame directory" — in answer
+ * to a designer asking to import a frame.
+ *
+ * Deliberately re-importing a sub-component is an ORDINARY designer move, so the
+ * rule is: provenance may divert a turn only when the designer has NOT asked for
+ * an import. Two independent signals, both of which state the ask rather than
+ * infer a mood — the standard turnConstraints.ts sets:
+ *
+ *  - FIDELITY WORDING (`detectHiFiIntent`): "Implement this precisely",
+ *    "copy this exactly", "pixel-perfect build of this frame".
+ *  - IMPORT VERBS (above): "import this", "bring this in", "grab this design".
+ *  - A BARE URL with no prose at all — nothing to lose by importing, and it is
+ *    the canonical fast-path ask. Handled by the caller, which is the only place
+ *    that knows the URLs; see turnRouting.ts step 6.
+ *
+ * Measured cost of the veto: it is FALSE for corpus #1 (the motivating
+ * correction), #2, #30 and #39, so every prompt this design fixes still diverts.
+ * It is TRUE for all five committed fast-path phrasings. Pinned both ways in
+ * __tests__/server/figma/planFigmaTurn.test.ts.
+ *
+ * Pure and host-agnostic — this module is BRAIN.
+ */
+export function detectFreshImportIntent(prompt: string): boolean {
+  if (typeof prompt !== "string" || !prompt) return false;
+  return detectHiFiIntent(prompt) || FRESH_IMPORT_PATTERNS.some((re) => re.test(prompt));
 }
 
 /**

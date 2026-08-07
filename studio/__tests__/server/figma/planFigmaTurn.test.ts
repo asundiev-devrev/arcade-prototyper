@@ -14,6 +14,7 @@ import {
 // driver here would make the claim untrue in the file that makes it.
 import { parseFigmaUrl } from "../../../server/figma/figmaNodeUrl";
 import { SCOPED_EDIT_MARKER } from "../../../src/lib/scopedEdit";
+import { detectTurnConstraints } from "../../../server/figma/turnConstraints";
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const corpus = require("../../fixtures/designer-prompts.json") as {
@@ -61,6 +62,29 @@ const LIVE_FRAMES: FrameSource[] = [
 function reader(frames: FrameSource[] = LIVE_FRAMES) {
   return vi.fn(async () => frames);
 }
+
+/**
+ * A reader that DOES stamp U1's node (`1:2`) — the world in which every
+ * must-stay-deterministic string below is a provenance HIT.
+ *
+ * WHY THIS EXISTS, and why the guard was worthless without it. Every
+ * must-stay-deterministic string in this file is appended to `U1`, whose node is
+ * `1:2`, and `LIVE_FRAMES` stamps `5678:118877` — a node in NO frame. So step 6
+ * was never reached and the "fast path must not move" guard passed VACUOUSLY:
+ * measured (spec review, 2026-08-06) swapping in this reader flipped 31 of 31
+ * strings off the importer, including "import this from figma", "bring this in"
+ * and a BARE URL, each becoming `claude`/`provenance` on a p50-32s LLM edit turn
+ * and handed a directive saying "Do NOT create a new frame directory" — in
+ * response to a designer asking to import a frame.
+ *
+ * The importer stamps `data-figma-id` on EVERY emitted child node (38 plain ids
+ * across the 3 live frames of `implement-this-precisely-3`), so once a designer
+ * imports one frame, pasting ANY node from inside it is an `exact` hit. This
+ * reader is that ordinary state of the world, not a contrived one.
+ */
+const STAMPS_U1: FrameSource[] = [
+  { slug: "01-figma-9-9", source: '<div data-figma-id="1:2"/>' },
+];
 
 describe("planFigmaTurn — the prompts this design FIXES", () => {
   // Corpus #1, the motivating correction: "You haven't implemented this
@@ -196,12 +220,14 @@ describe("planFigmaTurn — the fast path must not move", () => {
       ACCEPTED_FLIP,
     );
 
+    // WORLD 1 — no provenance hit (the pasted node is in no frame). This is the
+    // clean fidelity guarantee: nothing but the accepted constraint flip moves.
     const flipped: string[] = [];
     for (const s of mustMiss) {
       const plan = await planFigmaTurn(inputsFor(`${s} ${U1}`), { readFrames: reader() });
       if (plan.kind !== "kit-emit") flipped.push(s);
     }
-    expect(flipped).toEqual([ACCEPTED_FLIP]);
+    expect(flipped, "no provenance hit").toEqual([ACCEPTED_FLIP]);
 
     // …and the one flip is a CONSTRAINT divert, not some other accident.
     const flip = await planFigmaTurn(inputsFor(`${ACCEPTED_FLIP} ${U1}`), {
@@ -209,6 +235,112 @@ describe("planFigmaTurn — the fast path must not move", () => {
     });
     expect(flip.kind).toBe("claude");
     expect(flip.decidedBy).toBe("constraints");
+  });
+
+  // WORLD 2 — THE PASTED NODE IS ALREADY STAMPED. The same 31 strings against a
+  // reader that holds U1's own node (`1:2`), i.e. the ordinary state of a project
+  // mid-iteration: the importer stamps `data-figma-id` on EVERY emitted child, so
+  // after one import any node inside that frame is an `exact` hit.
+  //
+  // THIS IS WHERE THE GUARD ABOVE WAS VACUOUS FOR A WHOLE REVISION. Every string
+  // is appended to U1 (node `1:2`) while LIVE_FRAMES stamps `5678:118877` — a node
+  // in NO frame — so step 6 was never reached and all 31 were "protected" by never
+  // being exercised. Measured (spec review, 2026-08-06): 31 of 31 flipped onto a
+  // p50-32s LLM edit turn, and the agent was handed "Do NOT create a new frame
+  // directory" in answer to "import this from figma".
+  //
+  // THE HONEST STATE AFTER THE FIX: 21 of 31 are protected by a STATED
+  // fresh-import ask (fidelity wording or an import verb). The 10 named below are
+  // NOT, and they are pinned by name rather than papered over. They are all
+  // DESCRIPTIVE prose — the designer says what the design is ("This is the view
+  // once you choose Annual"), never that they want it imported — so nothing
+  // checkable distinguishes them from a correction about a frame that already
+  // draws that node. Closing this gap needs intent, which is exactly the
+  // measurement that CUT the prose gate (§0: a correction and a faithful-copy
+  // string both measure 64 characters), so it is NOT closed with a length rule.
+  //
+  // What the exposure actually costs is bounded and one-directional: it only
+  // applies when the designer has ALREADY imported the pasted node into this
+  // project, and the outcome is a named edit of that frame rather than a duplicate
+  // frame. That is the milder of the two errors — it is visible and one turn
+  // undoes it — and the previous behaviour on those same 10 strings was to stamp a
+  // second copy of a frame the project already had.
+  it("only DESCRIPTIVE faithful-copy prose is exposed when the node is already stamped", async () => {
+    const src = fs.readFileSync(path.resolve(__dirname, "../../lib/figmaUrl.test.ts"), "utf8");
+    const mustMiss: string[] = [];
+    for (const listName of ["copies", "negatedOrDescriptive", "provenance", "bulleted"]) {
+      const block = new RegExp(`const ${listName}\\s*=\\s*\\[([\\s\\S]*?)\\n {4}\\];`).exec(src);
+      for (const m of block![1].matchAll(
+        /^\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)\s*,\s*$/gm,
+      )) {
+        // eslint-disable-next-line no-eval
+        const s = eval(m[1]) as string;
+        if (s) mustMiss.push(s);
+      }
+    }
+    const flipped: string[] = [];
+    for (const s of mustMiss) {
+      const plan = await planFigmaTurn(inputsFor(`${s} ${U1}`), {
+        readFrames: reader(STAMPS_U1),
+      });
+      if (plan.kind !== "kit-emit") flipped.push(s);
+    }
+    // Pinned BY NAME so the exposure cannot quietly grow, and so a future
+    // improvement shows up here as strings LEAVING the list.
+    expect(flipped.sort()).toEqual(
+      [
+        "keep everything on a single frame", // the accepted constraint flip
+        "make the transition state match the mockup",
+        "keep the drop shadow on the card",
+        "No need to animate the loader, just draw it as it is in the frame.",
+        "the spinner animates in the prototype but keep it static for now",
+        "the chart animates on load in Figma, ignore that.",
+        "The hero animates but I only need the first keyframe.",
+        "spec says animate on load",
+        "This is the view once you choose Annual.",
+        "The row shows the active style once selected.",
+      ].sort(),
+    );
+    // 21 of 31 protected — the number the fix is worth. Before it: 0 of 31.
+    expect(mustMiss.length - flipped.length).toBe(21);
+  });
+
+  // THE FAST PATH SURVIVES A PROVENANCE HIT — hard constraint 4, and the blocker
+  // the vacuous loop above hid. A designer who has already imported one frame and
+  // then deliberately re-imports a sub-component ("import this <child url>") is
+  // making an ordinary move the design itself names as real; provenance must not
+  // convert it into an LLM edit of the parent that is then told "Do NOT create a
+  // new frame directory".
+  it("a STATED fresh-import ask stays deterministic even when the node is already stamped", async () => {
+    const asks = [
+      U1, // bare URL — the canonical fast path
+      `Implement this precisely: ${U1}`,
+      `import this ${U1}`,
+      `import this from figma ${U1}`,
+      `bring this in ${U1}`,
+      `grab this design ${U1}`,
+      `copy this exactly ${U1}`,
+      `pull this in ${U1}`,
+      `re-import this ${U1}`,
+      `implement both screens precisely ${U1}`,
+      `pixel-perfect build of this frame ${U1}`,
+    ];
+    for (const p of asks) {
+      const plan = await planFigmaTurn(inputsFor(p), { readFrames: reader(STAMPS_U1) });
+      expect(plan.kind, p).toBe("kit-emit");
+      expect(plan.decidedBy, p).toBe("default");
+      expect(plan.targetFrame, p).toBeUndefined();
+    }
+  });
+
+  // …AND THE MOTIVATING CORRECTION MUST STILL DIVERT. The veto above is only
+  // worth having if it does not cost the fix: #1 states no import ask, so it
+  // still becomes a named edit. Both halves in one place, because a veto that
+  // silenced provenance entirely would pass the test above and lose the feature.
+  it("the veto does not cost #1 its divert", async () => {
+    const plan = await planFigmaTurn(inputsFor(P(1)), { readFrames: reader() });
+    expect(plan.decidedBy).toBe("provenance");
+    expect(plan.targetFrame).toBe("01-figma-5678-118876");
   });
 
   // Same 32 strings, against the OTHER must-miss set's owner. The build-intent
@@ -355,6 +487,33 @@ describe("planFigmaTurn — a prompt with NO Figma URL is completely unaffected"
     expect(r).not.toHaveBeenCalled();
   });
 
+  // THE PRICE OF THE SCOPE GUARD, PINNED SO IT IS NOT MISTAKEN FOR COVERAGE.
+  //
+  // Corpus #39 — "You've made ticket page a separate frame — don't do that.
+  // Instead, it should open as a tab in the main frame 'Tabbed Canvas Prototype'" —
+  // is a designer stating the single-frame constraint in so many words, and it has
+  // NO Figma URL. `detectTurnConstraints` fires on it; the cascade never asks,
+  // because step 1 returns first. So #39 gets NO enforcement from routing, in ANY
+  // host.
+  //
+  // That is the brief's hard constraint 2 being honoured, not an oversight: the
+  // guard is structural because a gate written as `kind === "claude" && …` also
+  // fires on ordinary prompts, and that mistake already shipped a "Do NOT create a
+  // new frame directory" directive at a designer who typed "New screen: an error
+  // state with a Try again button". Of the 54 no-URL corpus prompts, #39 is the
+  // ONLY one the detector fires on, so the guard costs exactly one prompt.
+  //
+  // WHAT COVERS #39 IS THE CLAUDE.md.tpl EDIT — and measured, that template renders
+  // only into a Studio project dir, so in the headless host this branch targets, #39
+  // is UNCOVERED. Recorded here, and in §9 of the design spec, rather than presented
+  // as fixed.
+  it("#39 states the constraint but gets no routing enforcement (the guard's price)", async () => {
+    expect(detectTurnConstraints(P(39))).toEqual(["single-frame"]);
+    const plan = await planFigmaTurn(inputsFor(P(39)), { readFrames: reader() });
+    expect(plan.decidedBy).toBe("no-node");
+    expect(plan.constraints).toEqual([]);
+  });
+
   // Every no-URL corpus prompt (54 of 67) must produce the same inert plan.
   it("all 54 no-URL corpus prompts route to no-node with no constraints", async () => {
     const noUrl = corpus.prompts.filter((p) => extractFigmaUrls(p.text).length === 0);
@@ -422,22 +581,39 @@ describe("planFigmaTurn — provenance edge cases at the routing layer", () => {
   // The designer also has an unambiguous escape from the wrong branch and none
   // from the right one: pasting the sub-component's URL in a NEW project imports
   // it cleanly, because provenance is per-project by construction.
+  //
+  // …BUT ONLY WHEN THE PROMPT IS NOT AN IMPORT ASK, which is the correction the
+  // spec review forced. This prompt used to read "import this <child url>", and
+  // that reading was the blocker: a designer literally asking to import a
+  // sub-component was handed an LLM edit turn plus a directive saying "Do NOT
+  // create a new frame directory". Both readings are now pinned, adjacently, so
+  // the boundary is visible in one place rather than inferred from two files.
+  const CHILD_URL = "https://www.figma.com/design/abc/Foo?node-id=5678-118885";
+  const withChild: FrameSource[] = [
+    {
+      slug: "01-figma-5678-118876",
+      // 5678:118885 is a real child id in the live frame, and its asset
+      // 5678-118885.png sits in that frame's assets/ dir.
+      source: '<div data-figma-id="5678:118885"/>',
+    },
+  ];
+
   it("pasting a CHILD of an already-imported frame is an edit of that frame", async () => {
-    const child = "https://www.figma.com/design/abc/Foo?node-id=5678-118885";
-    const withChild: FrameSource[] = [
-      {
-        slug: "01-figma-5678-118876",
-        // 5678:118885 is a real child id in the live frame, and its asset
-        // 5678-118885.png sits in that frame's assets/ dir.
-        source: '<div data-figma-id="5678:118885"/>',
-      },
-    ];
-    const plan = await planFigmaTurn(inputsFor(`import this ${child}`), {
-      readFrames: reader(withChild),
-    });
+    const plan = await planFigmaTurn(
+      inputsFor(`the padding on this card is wrong ${CHILD_URL}`),
+      { readFrames: reader(withChild) },
+    );
     expect(plan.kind).toBe("claude");
     expect(plan.decidedBy).toBe("provenance");
     expect(plan.targetFrame).toBe("01-figma-5678-118876");
+  });
+
+  it("…but asking to IMPORT that same child imports it, per hard constraint 4", async () => {
+    for (const p of [`import this ${CHILD_URL}`, `bring this in ${CHILD_URL}`, CHILD_URL]) {
+      const plan = await planFigmaTurn(inputsFor(p), { readFrames: reader(withChild) });
+      expect(plan.kind, p).toBe("kit-emit");
+      expect(plan.decidedBy, p).toBe("default");
+    }
   });
 
   it("a rejecting reader falls through to the importer rather than failing the turn", async () => {
@@ -460,13 +636,20 @@ describe("planFigmaTurn — provenance edge cases at the routing layer", () => {
 });
 
 /**
- * THE FALLBACK DIRECTION, AND WHY THERE IS NO RESOLVER TO FALL BACK FROM.
+ * THE FALLBACK DIRECTION, AND THE CASCADE'S OWN GUARANTEES.
  *
- * The L4 resolver seam — a host-supplied `resolveTurn?: (q) => Promise<Answer>`
- * asked at step 8, whose failure modes all fell back to the generator — was
- * specified, then CUT on measurement (§0). This block is what keeps the cut
- * honest: it pins the two properties the seam existed to guarantee, so they hold
- * by construction of the cascade rather than by construction of a resolver.
+ * HISTORICAL NOTE, because this block's framing changed under it: the L4 resolver
+ * seam was specified, CUT on measurement (§0), re-measured and cut AGAIN, and then
+ * BUILT in revision 9 once the gate both cuts called impossible turned out to exist
+ * (`detectFreshImportIntent`, written afterwards for a different problem). The seam
+ * now lives in server/figma/resolveTurn.ts and its own behaviour is tested in
+ * resolveTurn.test.ts + planFigmaTurnResolver.test.ts.
+ *
+ * THIS BLOCK IS STILL EXACTLY RIGHT, and is deliberately kept: every test below runs
+ * with NO resolver supplied, which is the primary headless host and the default
+ * everywhere (Studio's adapter is flag-gated off). So it pins what the cascade
+ * guarantees on its OWN, without any host capability — which is what a future
+ * resolver must never be allowed to weaken.
  *
  * Re-measured 2026-08-06 before writing these, because the whole question is
  * whether "no resolver" is a real answer or a silent gap. Exactly SIX prompts
@@ -505,10 +688,12 @@ describe("planFigmaTurn — provenance edge cases at the routing layer", () => {
  *     falls to the generator by the rule below. That is the deterministic fidelity
  *     guarantee destroyed in exactly the headless host the design targets.
  *
- * Hence: no resolver, and step 8 is terminal. The generator fallback the seam
- * promised is what a host now gets by not having the seam at all.
+ * Hence the SHAPE the seam finally took: it is only ever consulted BEHIND the
+ * `asksForImport` gate, so the four bare imports and every stated faithful-copy ask
+ * still reach the importer having woken no host at all — and when no resolver is
+ * supplied, the outcome is exactly what this block asserts.
  */
-describe("planFigmaTurn — the cut resolver seam's guarantees, held by the cascade", () => {
+describe("planFigmaTurn — the cascade's guarantees with NO host capability", () => {
   // GUARANTEE 1 — the fallback DIRECTION (hard constraint 1). When a host
   // capability is missing or broken, the turn must degrade towards the GENERATOR
   // or stay put; it must never gain the LLM-less importer, which would re-create

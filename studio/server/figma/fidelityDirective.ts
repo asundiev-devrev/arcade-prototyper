@@ -17,43 +17,17 @@
  *
  * Pure functions only — detection is keyword-based and the directive is a
  * template string, so both are trivially unit-testable.
+ *
+ * DETECTION MOVED OUT, DIRECTIVE TEXT STAYED (2026-08-06). `HI_FI_PATTERNS` and
+ * `detectHiFiIntent` now live in the zero-import leaf `server/figma/hiFiIntent.ts`
+ * because the ROUTING layer needs the answer and the routing layer is BRAIN — code
+ * that must load in Claude Code / Cursor / Computer with no Studio around it. The
+ * text below is the part that cannot travel: it names the `figmanage` CLI, a binary
+ * no foreign host has. They are re-exported from here so every existing call site
+ * and test is unchanged; see hiFiIntent.ts for the full reasoning.
  */
-
-/**
- * Phrases a designer uses when they want an exact match rather than a quick
- * sketch. Matched case-insensitively anywhere in the prompt. Deliberately
- * tight: a false positive only makes ONE turn slower + more accurate (rarely
- * unwanted), but the set avoids generic words like "match" alone that would
- * fire on "match the brand colors" style asks.
- */
-const HI_FI_PATTERNS: RegExp[] = [
-  /pixel[-\s]?perfect/i,
-  /\bprecise(?:ly)?\b/i,
-  /\bexactly\b/i,
-  /\bexact\s+(?:match|copy|replica|implementation)\b/i,
-  /\bfaithful(?:ly)?\b/i,
-  /\bto the pixel\b/i,
-  /\b1[:\-]to[:\-]1\b/i,
-  /\b1:1\b/,
-  /\bhigh[-\s]?fidelity\b/i,
-  /\bhi[-\s]?fi\b/i,
-  /\bmatch(?:es|ing)?\s+(?:the\s+)?(?:design|figma|reference|mockup|spec)\s+(?:exactly|precisely)\b/i,
-  // "dismiss/ignore/drop your template and implement … " — an explicit signal
-  // that the designer does NOT want the speed shortcut, they want the real
-  // design built. This is exactly how the SoR-nav prompts were phrased.
-  /\b(?:dismiss|ignore|drop|forget|don'?t use)\b[^.]*\btemplate\b/i,
-  /\bimplement\b[^.]*\b(?:precisely|exactly|as[-\s]is|as shown|to spec)\b/i,
-];
-
-/**
- * True when the prompt asks for an exact/precise Figma implementation. The
- * caller has already confirmed a Figma URL is present; this only judges
- * intent, so the directive is gated on (URL ∧ intent).
- */
-export function detectHiFiIntent(prompt: string): boolean {
-  if (typeof prompt !== "string" || !prompt) return false;
-  return HI_FI_PATTERNS.some((re) => re.test(prompt));
-}
+export { HI_FI_PATTERNS, detectHiFiIntent } from "./hiFiIntent";
+import { detectHiFiIntent } from "./hiFiIntent";
 
 export interface HiFiGateContext {
   /** Whether the phase-2 classifier has actually run for this node. Composites

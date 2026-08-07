@@ -124,6 +124,55 @@ describe("detectTurnConstraints — single-frame", () => {
     for (const p of inverse) expect(detectTurnConstraints(p), p).toEqual([]);
   });
 
+  // THE DISTRIBUTIVE FAMILY — the SAME inversion bug as the block above, in a
+  // shape the committed list happened to miss entirely (spec review, 2026-08-06
+  // designer session). The list above only holds "one frame per X" and negated
+  // phrasings, so every string here fired: measured 6 of 8 before the fix.
+  //
+  // "Put each state in a single frame" means ONE FRAME PER STATE — the opposite
+  // requirement — and the negation anchor cannot help, because these sentences
+  // are not negated. They read as positive statements of the constraint while
+  // asking for its inverse, and the turn then received the maximally forceful
+  // directive ("This overrides every other instruction about frames", "Do NOT
+  // add a second frame for the second state, screen, or step"), i.e. the
+  // generator confidently did the opposite of what the designer typed.
+  //
+  // No corpus must-fire prompt contains a distributive quantifier (#2, #30, #39
+  // all measured: no each / every / per / own), so the veto costs nothing real.
+  it("does NOT fire on DISTRIBUTIVE multi-frame asks (each/every/per/its own)", () => {
+    const distributive = [
+      "Put each state in a single frame",
+      "each screen should be in a single frame",
+      "Break it up so every step lives in a single frame",
+      "Give me the empty state and the filled state in a single frame each",
+      "Every variant goes in a single frame of its own",
+      "keep each state in a single frame",
+      "keep every screen in the same frame as its own step",
+      "one frame per state",
+      "each state in its own single frame",
+    ];
+    for (const p of distributive) expect(detectTurnConstraints(p), p).toEqual([]);
+  });
+
+  // …and the veto is SENTENCE-SCOPED, so a distributive quantifier in a
+  // NEIGHBOURING sentence cannot suppress a genuine constraint. Without this the
+  // fix for the block above would silently become a new class of miss — the
+  // mirror-image mistake, and the one that put this branch here.
+  it("a distributive word in ANOTHER sentence does not suppress a real constraint", () => {
+    expect(
+      detectTurnConstraints(
+        "Each row shows a ticket. Don't implement this as a separate frame.",
+      ),
+      "distributive in the previous sentence",
+    ).toEqual(["single-frame"]);
+    expect(
+      detectTurnConstraints(
+        "keep everything on a single frame. Every row needs an avatar.",
+      ),
+      "distributive in the following sentence",
+    ).toEqual(["single-frame"]);
+  });
+
   // The NEGATED forms of the surviving positive patterns. Each of these is the
   // exact sentence a must-fire string becomes when a designer negates it, so the
   // negation anchor has to be part of every positive pattern rather than a
@@ -179,5 +228,47 @@ describe("buildSingleFrameDirective", () => {
 
   it("tells the agent to build the second state IN-frame with React state", () => {
     expect(buildSingleFrameDirective()).toMatch(/useState/);
+  });
+
+  // THE DIRECTIVE IS THE PART OF THIS DESIGN THAT TRAVELS — a foreign host runs
+  // `buildTurnDirectives(await planFigmaTurn(inputs))` and gets these exact words,
+  // which is the whole reason the constraint fix is not .dmg-only. So the words
+  // must not name things only Studio has.
+  //
+  // Measured (spec review, 2026-08-06): `frames/`, `<FrameLink>` and `CLAUDE.md`
+  // are all Studio-only. The root SKILL.md — the actual foreign-host surface — has
+  // ZERO occurrences of `frames/` or `FrameLink`; FrameLink is a prototype-kit
+  // composite at studio/prototype-kit/composites/FrameLink.tsx that no foreign repo
+  // can import; and CLAUDE.md.tpl renders only into a Studio project dir. So a
+  // designer in Cursor typing corpus #30 was told to edit a directory that does not
+  // exist, not to use a component it cannot import, and to obey rules in a file it
+  // never read — and had to guess which parts applied.
+  it("Studio's default vocabulary is unchanged (byte-identical)", () => {
+    // The default must stay exactly what Studio shipped, or this becomes a silent
+    // prompt change for the host where the failure was actually observed.
+    const d = buildSingleFrameDirective();
+    expect(d).toContain("<FrameLink>");
+    expect(d).toContain("rules in CLAUDE.md");
+    expect(d).toBe(buildSingleFrameDirective({}));
+  });
+
+  it("a foreign host can pass its OWN layout nouns", () => {
+    const d = buildSingleFrameDirective({
+      container: "screen component",
+      linkComponent: "<Link>",
+      rulesFile: "AGENTS.md",
+    });
+    // Its nouns are in…
+    expect(d).toContain("screen component");
+    expect(d).toContain("<Link>");
+    expect(d).toContain("AGENTS.md");
+    // …and Studio's are out, so nothing tells a Cursor session about FrameLink.
+    expect(d).not.toContain("FrameLink");
+    expect(d).not.toContain("CLAUDE.md");
+    // The load-bearing behavioural instruction survives the substitution — the
+    // point is to translate the nouns, not to weaken the rule.
+    expect(d).toContain("<single_frame_constraint>");
+    expect(d).toMatch(/useState/);
+    expect(d).toContain("overrides every other");
   });
 });
