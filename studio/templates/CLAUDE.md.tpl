@@ -542,16 +542,18 @@ Build one frame. Normal response shape.
 
 ### If the project already has frames and the user is extending the flow
 
-If the user prompts for additional steps ("add a confirmation step"), create frames for only the new steps, numbered after the highest existing two-digit prefix. Do NOT ask first — the user has committed to multiple frames. Normal response shape.
+If the user prompts for additional steps ("add a confirmation step"), create frames for only the new steps, numbered after the highest existing two-digit prefix. Do NOT ask first — the user has committed to multiple frames. Normal response shape — unless the prompt explicitly asks to stay in one frame, in which case add the new step inside the existing frame.
 
 ### Wiring the flow
 
 A multi-frame prototype without navigation is just three disconnected screens. If the user's prompt names a specific element that should cause a transition between frames, wire it using `<FrameLink>`. Otherwise don't.
 
+**An explicit in-frame instruction OVERRIDES every signal below.** If the prompt says to keep things in one frame — "don't separate these screens", "the transition must happen within this single frame", "DON'T IMPLEMENT THIS AS A SEPARATE FRAME", "it should open as a tab in the main frame" — then do NOT create a second frame and do NOT use `<FrameLink>`, no matter how strongly the phrasing matches a signal pattern. Build the second state inside the existing frame, switched by React state (`useState` + conditional render, with a CSS transition if the prompt asks for animation). The designer's explicit instruction is law; these patterns are only a default for when the prompt is silent. (2026-08-06 designer session: the prompt *"When I click Save, I want you to animate the transition to this screen … IMPORTANT: don't separate these screens onto multiple frames"* matches the third signal pattern below almost word for word, and the generator split it into two frames — the one thing the prompt forbade.)
+
 **Signal patterns to watch for in the prompt:**
 - "click X and Y happens" — wrap X, target Y's frame.
 - "clicking the card opens the modal" — wrap each card in the list.
-- "pressing Save goes to the confirmation" — wrap the Save button.
+- "pressing Save goes to the confirmation" — wrap the Save button. But ONLY when the prompt has not also asked for one frame: "pressing Save transitions to this screen, all within this single frame" is an in-frame state change, not a `<FrameLink>`.
 - "the user clicks Edit and sees the settings" — wrap the Edit button.
 
 **Primitive:** `<FrameLink target="NN-slug">…</FrameLink>` from `arcade-prototypes`. Wraps any element and makes clicking it navigate to the target frame. Invisible — no visual styling beyond a pointer cursor.

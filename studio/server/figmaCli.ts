@@ -2,18 +2,13 @@ import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-export interface ParsedFigmaUrl { fileId: string; nodeId: string; }
-
-export function parseFigmaUrl(url: string): ParsedFigmaUrl | null {
-  try {
-    const u = new URL(url);
-    if (!u.hostname.endsWith("figma.com")) return null;
-    const m = u.pathname.match(/\/(?:file|design|proto)\/([A-Za-z0-9]+)/);
-    const nodeParam = u.searchParams.get("node-id");
-    if (!m || !nodeParam) return null;
-    return { fileId: m[1], nodeId: nodeParam.replace(/-/g, ":") };
-  } catch { return null; }
-}
+// parseFigmaUrl moved to the zero-import leaf ./figma/figmaNodeUrl and is
+// re-exported here so every existing call site (chat.ts, middleware/figma.ts, the
+// figmaCli tests) is untouched. It had to move because it is part of the turn
+// router's INPUT CONTRACT — a foreign host cannot call planFigmaTurn without it —
+// and this module imports node:child_process to drive the figmanage binary, which
+// the brain's portability guard forbids. Same split, same reason, as ./figma/frameSlug.
+export { parseFigmaUrl, type ParsedFigmaUrl } from "./figma/figmaNodeUrl";
 
 /**
  * Run figmanage and collect its output. Treats spawn failures (ENOENT,

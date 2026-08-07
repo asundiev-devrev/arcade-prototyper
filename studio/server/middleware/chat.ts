@@ -24,7 +24,9 @@ import type { ChatMessage, ChimeIn } from "../types";
 import type { StudioEvent } from "../../src/lib/streamJson";
 import { extractFigmaUrl, extractFigmaUrls, detectInteractionIntent } from "../../src/lib/figmaUrl";
 import { parseFigmaUrl, type ParsedFigmaUrl } from "../figmaCli";
-import { classifyFigmaTurn, isScopedEditTurn } from "../figma/turnRouting";
+import { isScopedEditTurn, planFigmaTurn, type FigmaTurnPlan } from "../figma/turnRouting";
+import { buildTurnDirectives, shouldSuppressWholeFrame } from "../figma/turnDirectives";
+import { makeStudioFrameReader } from "../figma/adapters/studioFrameReader";
 import type { IngestResult } from "../figma/types";
 import { frameDir } from "../paths";
 import { getFigmaIngest } from "../figmaIngest";
@@ -319,15 +321,37 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
   // edit like "make this filter open a popover <figma url> <figma url>" got
   // misrouted to the wire branch, which imported url[0] as a whole new frame.
   // See server/figma/turnRouting.ts.
-  const figmaKind = classifyFigmaTurn({
-    hasFigmaNode: Boolean(figmaParsed),
-    wantsGeneration: figmaParsed ? shouldGenerateFromFigma(prompt) : false,
-    hasInteractionIntent: detectInteractionIntent(prompt),
-    figmaUrlCount: figmaUrls.length,
-    prompt,
-  });
-  const isKitEmitTurn = figmaKind === "kit-emit";
-  const isWireTurn = figmaKind === "wire";
+  //
+  // 2026-08-06: this is now the CASCADE (planFigmaTurn), not the bare 3-way
+  // classifier. Steps 1-5 reproduce the decision above exactly; the new layers
+  // only subdivide the branch that used to say "kit-emit" unconditionally, so
+  // they can only take turns OFF the deterministic importer, never onto it. What
+  // they add is a PLAN — which frame this turn edits, and any constraint the
+  // designer stated — that the prompt assembly below turns into directives.
+  // The routing itself is host-agnostic; `makeStudioFrameReader` is the single
+  // Studio binding in the whole feature.
+  //
+  // ORDERING HAZARD: the Bedrock preflight below keys off `isKitEmitTurn`, so the
+  // plan must be computed BEFORE it. Getting that backwards would either run a
+  // Bedrock check for a turn that needs no model, or skip one for a turn that does.
+  const figmaPlan = await planFigmaTurn(
+    {
+      hasFigmaNode: Boolean(figmaParsed),
+      wantsGeneration: figmaParsed ? shouldGenerateFromFigma(prompt) : false,
+      hasInteractionIntent: detectInteractionIntent(prompt),
+      figmaUrlCount: figmaUrls.length,
+      prompt,
+      // {fileKey, nodeId} PAIRS, not bare ids: node ids are only unique within a
+      // Figma file, and multi-file projects exist on disk today.
+      nodeIds: figmaUrls
+        .map((u) => parseFigmaUrl(u))
+        .filter((p): p is ParsedFigmaUrl => Boolean(p))
+        .map((p) => ({ nodeId: p.nodeId, fileKey: p.fileId })),
+    },
+    { readFrames: makeStudioFrameReader(slug, project.frames ?? []) },
+  );
+  const isKitEmitTurn = figmaPlan.kind === "kit-emit";
+  const isWireTurn = figmaPlan.kind === "wire";
 
   // Bedrock-auth pre-check applies only to Claude (Bedrock) turns; the
   // Computer agent uses the DevRev PAT, and kit-emit turns use no LLM at all.
@@ -387,7 +411,7 @@ async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<v
           })
         : isComputerTurn
         ? runComputerBranch({ emit, slug, prompt, project, signal })
-        : runClaudeBranch({ emit, slug, prompt, images, project, signal });
+        : runClaudeBranch({ emit, slug, prompt, images, project, signal, figmaPlan });
       task.then(
         (result) => {
           end(result);
@@ -771,6 +795,12 @@ export async function enrichPromptWithFigmaContext(
   prompt: string,
   images: string[],
   onNarration?: (text: string) => void,
+  /**
+   * The turn's routing plan, when the caller has one. Supplies the target frame
+   * provenance identified and any constraint the designer stated; both become
+   * prompt directives via the brain module server/figma/turnDirectives.ts.
+   */
+  figmaPlan?: FigmaTurnPlan,
 ): Promise<{ prompt: string; images: string[] }> {
   // EVERY Figma node URL in the prompt is reference material, not just the
   // first. A scoped edit like "make this a filter that opens <popover url> and
@@ -789,11 +819,34 @@ export async function enrichPromptWithFigmaContext(
   // absent on a miss. shouldUseHiFi stays only as a digest-SUCCESS upgrade.
   // Computed up front because it also picks the digest-race budget below.
   const explicitHiFi = detectHiFiIntent(prompt);
+  // PLAN DIRECTIVES ARE COMPUTED HERE, BEFORE ANY INGEST, for exactly the reason
+  // stated one comment up: they are derived from the plan alone and need no
+  // digest. The first cut of this feature appended them to `blocks` further down
+  // and was UNREACHABLE on a digest miss — `if (!blocks.length) return { prompt,
+  // images }` fires whenever every Figma reference misses (cold file, or past the
+  // 15s/65s race budget), and on a miss a block is only produced when
+  // `explicitHiFi` is true. Measured, `detectHiFiIntent` is FALSE for corpus #1,
+  // #2, #30 and #39 — every prompt this design fixes — so corpus #30 came back
+  // BYTE-IDENTICAL to the input, 213 chars in and 213 out, with the designer's
+  // all-caps "DON'T IMPLEMENT THIS AS A SEPARATE FRAME!!!" enforced by nothing.
+  // Same bug as review S3.1, one layer along, and the same fix.
+  const planDirectives = buildTurnDirectives(figmaPlan);
   // On a SCOPED EDIT the references are PARTS wired into an existing frame, not
   // whole frames to reproduce. Suppress the per-reference whole-frame hi-fi
   // directive (it drove the agent to duplicate the frame's rows into a
   // referenced popover) and append ONE reframe directive after all blocks.
   const scopedEdit = isScopedEditTurn(prompt);
+  // The SAME suppression, for the same reason, on a single-frame or
+  // provenance-located turn: buildHiFiDirective says "each section has the SAME
+  // number of rows, same order, as the PNG", i.e. build a fresh full frame — which
+  // is the bug when the referenced design is a second STATE of an existing frame.
+  // It fires with no hi-fi wording at all, because shouldUseHiFi's novel-design
+  // upgrade turns it on whenever the classifier matched no high-confidence
+  // template. `scopedEdit` stays its OWN variable: buildScopedEditReferenceDirective
+  // is specifically about right-click edits and must not start appearing on typed
+  // single-frame turns.
+  const suppressWholeFrame =
+    scopedEdit || shouldSuppressWholeFrame(figmaPlan, { explicitHiFi });
   const ingest = await getFigmaIngest();
 
   // Dedup by the PARSED node identity, not the raw URL string. extractFigmaUrls
@@ -841,7 +894,7 @@ export async function enrichPromptWithFigmaContext(
     // resolveFigmaReference (returns {block:null}); this catches a per-URL THROW.
     try {
       const resolved = await resolveFigmaReference({
-        url, parsed, ingest, explicitHiFi, prompt, suppressHiFiDirective: scopedEdit,
+        url, parsed, ingest, explicitHiFi, prompt, suppressHiFiDirective: suppressWholeFrame,
         onNarration: (text) => onNarration?.(label ?? text),
       });
       if (resolved.block) blocks.push(resolved.block);
@@ -851,9 +904,21 @@ export async function enrichPromptWithFigmaContext(
     }
   }
 
-  if (!blocks.length) return { prompt: prompt, images };
+  // DIGEST MISS. The plan directives still ship — they need no digest, and this is
+  // precisely when the designer is most likely to retry (see the planDirectives
+  // comment above). `images` unchanged, because no reference PNG resolved.
+  if (!blocks.length) {
+    if (!planDirectives.length) return { prompt: prompt, images };
+    return { prompt: `${prompt}\n\n${planDirectives.join("\n\n")}`, images };
+  }
   if (scopedEdit) blocks.push(buildScopedEditReferenceDirective());
-  return { prompt: `${prompt}\n\n${blocks.join("\n\n")}`, images: outImages };
+  // Plan directives go LAST — after the <figma_context> blocks and after any
+  // <edit_reference_designs> — so the frame constraint is the final word before the
+  // model starts. buildTurnDirectives owns the order WITHIN that list.
+  return {
+    prompt: `${prompt}\n\n${[...blocks, ...planDirectives].join("\n\n")}`,
+    images: outImages,
+  };
 }
 
 /**
@@ -1097,6 +1162,14 @@ async function runClaudeBranch(ctx: {
   images?: string[];
   project: { sessionId?: string; frames?: Frame[] };
   signal: AbortSignal;
+  /**
+   * The routing plan for this turn, when the caller computed one. ABSENT on the
+   * corrective re-runs (visual-noop, render-verify) and on the wire branch's
+   * inner wiring pass — those prompts carry no Figma URL of their own, so a plan
+   * would be `no-node` anyway. `buildTurnDirectives(undefined)` returns `[]`, so
+   * an absent plan is byte-identical to before this feature existed.
+   */
+  figmaPlan?: FigmaTurnPlan;
 }): Promise<{ ok: boolean; error?: string }> {
   const { emit, slug, project, signal } = ctx;
   const figmaUrl = extractFigmaUrl(ctx.prompt);
@@ -1112,7 +1185,12 @@ async function runClaudeBranch(ctx: {
   // AFTER the turn's claude subprocess has exited — see maybeSeedAfterTurn in
   // handleStart. Do NOT re-add a concurrent launch here.
 
-  const enriched = await enrichPromptWithFigmaContext(ctx.prompt, ctx.images ?? [], narrate);
+  const enriched = await enrichPromptWithFigmaContext(
+    ctx.prompt,
+    ctx.images ?? [],
+    narrate,
+    ctx.figmaPlan,
+  );
   const { images } = enriched;
   // Established projects (existing frames) get a prompt-region edit-context
   // block that (a) names the frames and (b) restates the two hard edit rules.

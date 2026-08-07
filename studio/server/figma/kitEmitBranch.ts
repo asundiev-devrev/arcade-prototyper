@@ -29,6 +29,11 @@ import {
 } from "../figmaCli";
 import { readPrefetchedRawNode } from "../figmaIngest";
 import { planAssets, emitKitFrame, type EmitResult } from "./kitEmit";
+// The slug transform lives in a zero-import leaf so server/figma/provenance.ts
+// (BRAIN — must load in a Claude Code host with no Studio filesystem) can read it
+// without dragging in this module's closure: paths.ts, figmaCli.ts (child_process),
+// claudeBin.ts. One copy of the transform, two consumers.
+import { frameNameFromNode } from "./frameSlug";
 
 export interface KitEmitBranchDeps {
   getNode?: (fileKey: string, nodeId: string) => Promise<any>;
@@ -134,10 +139,6 @@ export function assetCacheDir(root: string, fileKey: string, version: string | n
   const safeKey = fileKey.replace(/[^A-Za-z0-9_-]/g, "_");
   const safeVer = version.replace(/[^A-Za-z0-9_-]/g, "_");
   return path.join(root, "asset-cache", safeKey, safeVer);
-}
-
-function frameNameFromNode(nodeId: string): string {
-  return `figma-${nodeId.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase()}`;
 }
 
 /**
