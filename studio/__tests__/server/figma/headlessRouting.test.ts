@@ -169,6 +169,13 @@ const BRAIN_ENTRYPOINTS = [
   "server/figma/turnConstraints.ts",
   "server/figma/turnDirectives.ts",
   "server/figma/frameSlug.ts",
+  // The CLI's bundle entrypoint — the module a non-Studio host actually loads, via
+  // server/figma/cli/planTurn.mjs. It is the highest-value member of this list
+  // because it is the one file whose import graph becomes a foreign host's bundle:
+  // anything Studio-only re-exported here ships to Cursor / Claude Code and breaks
+  // there, not here. (The .mjs wrapper itself is a Studio-side tool and DOES use
+  // node:fs + esbuild — it is the host adapter, deliberately not on this list.)
+  "server/figma/cli/brainEntry.ts",
   // LAYER 4's SEAM, and being on this list is the entire point of building it the
   // way it is built. The obvious implementation of "ask a model which kind of turn
   // this is" is a `claude --print` subprocess — the systemSynth.ts shape — and that
@@ -456,7 +463,15 @@ describe("brain modules stay decoupled from Studio (transitive)", () => {
     // cannot supply, on prompts that provably need it (corpus #25 and #32, whose
     // prose used to be discarded by an engine with no LLM). The subprocess that
     // answers the question in Studio is an ADAPTER off this list.
+    // THE TWELFTH MODULE is `cli/brainEntry.ts`, and it adds no logic at all — it
+    // is a re-export manifest, the single declared surface a non-Studio host loads
+    // (bundled by `cli/planTurn.mjs`). It earns its place by being the file where
+    // "what the brain exports" is decided in ONE diff: re-export something
+    // Studio-only here and every foreign host's bundle inherits it, which is a
+    // failure that would surface in Cursor rather than in this repo. Its own
+    // imports are all already on this list, so the closure does not grow.
     expect([...all].sort()).toEqual([
+      "server/figma/cli/brainEntry.ts",
       "server/figma/figmaNodeUrl.ts",
       "server/figma/frameSlug.ts",
       "server/figma/generationIntent.ts",

@@ -775,8 +775,45 @@ Read the designer's intent before building. There are two modes, and picking the
 - **Self-review before delivering:** put the reference PNG and your prototype side by side and check section by section — same number of rows, icons only where the PNG shows them and at the right size, header/wordmark rendered (not a stand-in glyph), footer correct. Fix every mismatch in the same build.
 - **If a fetch fails, don't invent the UI.** Retry shallower and build from whatever you did read. A faithful partial beats a confident fabrication.
 
+### FIRST: ask the router what kind of turn this is
+
+Before you build anything from a Figma link, run the router. It answers one
+question you cannot reliably answer by reading the prompt yourself: **is this a new
+screen, or a follow-up on one you already made?**
+
+```bash
+node <skill-dir>/studio/server/figma/cli/planTurn.mjs \
+  --prompt "<the user's message, verbatim>" \
+  --frames "<dir holding the prototypes you've already built, if any>"
+```
+
+Omit `--frames` if there's nothing built yet. Print the output and follow it — it
+tells you which of three things to do, and hands you directives to obey verbatim.
+
+**Why this exists.** Two failures kept happening in real sessions, and both look
+like the agent ignoring the designer:
+
+- *"You haven't implemented this blur properly — try again"* was treated as a
+  request for a **new** screen, so a second copy appeared and the complaint was
+  dropped. The router catches this by checking whether the pasted Figma node is
+  already present in something you built — a fact on disk, not a guess about tone.
+- *"don't separate these screens onto multiple frames"* was ignored, and the second
+  screen became its own file anyway. The router surfaces stated constraints like
+  this as directives that override the normal flow-splitting rules.
+
+**Trust it over your own reading of the prompt.** Judging "is this a correction?"
+from wording alone was measured on 67 real designer messages and got it right 27%
+of the time — the misses are ordinary English with no complaint keyword ("the avatar
+is misaligned", "repair the broken frame", "revert that change").
+
+If the command fails or isn't there, carry on with the workflow below — it degrades
+to today's behaviour and is never a reason to stop.
+
 ### Figma-to-prototype workflow
 
+0. **Run the router** (above) and obey its ACTION line. If it says EDIT an existing
+   file, edit that file — do not start a new one, and skip straight to the change
+   the user asked for.
 1. **Parse the URL** → file key + node id (convert the dash to a colon).
 2. **Export the frame as a reference PNG** (`--format png --scale 2`), fetch the URL, and look at it. This is what "looks right" means.
 3. **Read the node tree** (`get-nodes --depth 2`, drilling deeper into subtrees as needed) — in hi-fi mode this is mandatory; in fast mode it's optional but helps for structure.
