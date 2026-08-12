@@ -3,9 +3,14 @@
  * anything from arcade-prototypes (the studio-only prototyping kit).
  *
  * Rationale: arcade-gen is now a published production package. The prototype-kit
- * stays behind with arcade-studio and is intentionally more opinionated than a
- * production library should be. A back-import would couple the production
- * library to a prototyping concern.
+ * is intentionally more opinionated than a production library should be, so a
+ * back-import would couple the production library to a prototyping concern.
+ *
+ * NOTE: the kit is no longer "studio-only" — Arcade Headless (the primary host
+ * as of 2026-08-12) aliases the same directory. Do not add Studio-specific
+ * assumptions to it on the strength of its path; the sibling
+ * __tests__/prototype-kit/kit-self-contained.test.ts guards that direction,
+ * which is the one that actually broke.
  *
  * Since the repo split, arcade-gen lives at $ARCADE_GEN_ROOT (default ~/arcade-gen).
  * The test is skipped if the clone isn't present so CI without it still passes.

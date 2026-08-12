@@ -12,10 +12,12 @@
       "types": "./dist/arcade-components.d.ts",
       "default": "./dist/arcade-components.js"
     },
-    "./manifest": "./dist/KIT-MANIFEST.md"
+    "./manifest": "./dist/KIT-MANIFEST.md",
+    "./styles.css": "./styles.css"
   },
   "files": [
-    "dist"
+    "dist",
+    "styles.css"
   ],
   "sideEffects": false,
   "scripts": {
@@ -26,7 +28,7 @@
     "react-markdown": "^10.1.0"
   },
   "peerDependencies": {
-    "@xorkavi/arcade-gen": "^1.0.0",
+    "@xorkavi/arcade-gen": "^2.0.0",
     "react": ">=19.0.0",
     "react-dom": ">=19.0.0"
   },

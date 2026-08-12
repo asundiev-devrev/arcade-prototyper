@@ -74,7 +74,11 @@ export function SkillCard({
         {action && <span className="shrink-0">{action}</span>}
       </div>
       <div className="flex flex-1 flex-col gap-1">
-        <span className="text-body-medium-bold text-(--fg-neutral-prominent)">
+        {/* `text-body-bold`, NOT `text-body-medium-bold` — the latter is not in
+            the DevRev ramp (arcade-gen ships 32 entries and that is not one), so
+            it resolved to nothing and the title rendered at the inherited size.
+            arcade-gen's own CardSkill titles its card with `text-body-bold`. */}
+        <span className="text-body-bold text-(--fg-neutral-prominent)">
           {title}
         </span>
         {description && (
