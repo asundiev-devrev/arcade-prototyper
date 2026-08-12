@@ -43,10 +43,13 @@ export function FrameLink({ target, children }: FrameLinkProps) {
   function navigate() {
     try {
       const source = currentFrameSlug();
-      window.parent?.postMessage(
-        { type: "arcade-studio:navigate", target, ...(source ? { source } : {}) },
-        "*",
-      );
+      const msg = { type: "arcade-studio:navigate", target, ...(source ? { source } : {}) };
+      // Try parent window first (Studio), fall back to self (headless host)
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage(msg, "*");
+      } else {
+        window.postMessage(msg, "*");
+      }
     } catch {
       // Cross-origin guard. Studio's iframes are always same-origin, so in
       // practice this never throws; swallow defensively for safety.
