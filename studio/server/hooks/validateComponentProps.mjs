@@ -23,17 +23,60 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import ts from "typescript"; // direct studio dep; default import yields the module namespace
 
-// LOCKED type facts (verified vs the real Radix types — do NOT lump):
+// LOCKED type facts (verified vs the real Radix types in arcade-gen 2.0.0 —
+// do NOT lump):
 //   Select (react-select) / Tabs (react-tabs): string-only value/defaultValue;
-//     NO `multiple` prop; the kit has NO multi-select for these.
-//   ToggleGroup / Accordion (react-toggle-group / -accordion): a discriminated
-//     union on `type` — type="single" → string, type="multiple" → string[].
-//     NO boolean `multiple` prop; multi-select is expressed via type="multiple".
+//     NO `multiple` prop. Multi-value lives in MultiSelect / Combobox instead.
+//   SegmentedControl / Accordion (react-toggle-group / -accordion): a
+//     discriminated union on `type` — type="single" → string, type="multiple"
+//     → string[]. NO boolean `multiple` prop; multi-select is type="multiple".
+//
+// NOTE on the name: in arcade-gen 1.x the segmented control was exported as
+// `ToggleGroup`. 2.0 renamed it to `SegmentedControl` and reused the
+// `ToggleGroup` name for an unrelated component (labelled toggle rows) that is
+// NOT compound and takes `label`, not `value`. So `ToggleGroup` is deliberately
+// absent from these sets — see COMPOUND_ONLY_IN_V1 below, which catches the
+// stale `<ToggleGroup.Root>` shape directly.
 const STRING_ONLY_COMPONENTS = new Set(["Select", "Tabs"]);
-const UNION_TYPE_COMPONENTS = new Set(["ToggleGroup", "Accordion"]);
+const UNION_TYPE_COMPONENTS = new Set(["SegmentedControl", "Accordion"]);
 // None of the four take a boolean `multiple` prop (native <select>/<input> do,
 // but those are lowercase HTML tags — never matched by kitComponentOf).
-const NO_MULTIPLE_PROP = new Set(["Select", "Tabs", "ToggleGroup", "Accordion"]);
+const NO_MULTIPLE_PROP = new Set(["Select", "Tabs", "SegmentedControl", "Accordion"]);
+
+/**
+ * Components that WERE compound in arcade-gen 1.x but are not in 2.x, mapped to
+ * the export that carries the old shape. `<ToggleGroup.Root>` still parses and
+ * still passes the import validator (the `ToggleGroup` export exists!), but
+ * `ToggleGroup.Root` is `undefined` at runtime, so React throws "Element type
+ * is invalid" and the frame white-screens. This is the one v1→v2 break that no
+ * other guard catches, so it gets an explicit rule.
+ */
+const COMPOUND_ONLY_IN_V1 = new Map([["ToggleGroup", "SegmentedControl"]]);
+
+/**
+ * Exports that are RENDERABLE components carrying sub-parts — `declare const X:
+ * ForwardRefExoticComponent<…> & { Item: … }` — plus `SplitButton`, which has no
+ * sub-parts at all. None of them has a `.Root`, so `<X.Root>` is `undefined` and
+ * white-screens the frame exactly like `<ToggleGroup.Root>` does.
+ *
+ * `ToggleGroup` is deliberately NOT here: it belongs to the same class but gets
+ * the richer v1→v2 migration message from COMPOUND_ONLY_IN_V1 above.
+ *
+ * Values are the correct shape to write instead. Kept as a short literal map
+ * rather than parsed from the barrel because this hook runs on every Write and
+ * must stay cheap; __tests__/templates/claude-md-component-names.test.ts asserts
+ * the underlying facts against arcade-gen's shipped type declarations, so a kit
+ * bump that makes any of these compound fails there.
+ */
+const NO_ROOT_SUBPART = new Map([
+  [
+    "SplitButton",
+    '<SplitButton variant="primary"> with <SplitButtonItem> children (SplitButtonItem is its own top-level import, not SplitButton.Item)',
+  ],
+  ["Card", "<Card> directly — its sub-parts are Card.Connector / Card.Skill / Card.File / Card.Image"],
+  ["CardRadioSelect", "<CardRadioSelect> directly, with <CardRadioSelect.Item> children"],
+  ["Grid", "<Grid> directly, with <Grid.Item> children"],
+]);
 
 /**
  * The kit-component name for a JSX tag, or null when it's not a capitalized
@@ -52,6 +95,22 @@ export function kitComponentOf(tagNode) {
   ) {
     const name = tagNode.expression.text;
     if (name && name[0] === name[0].toUpperCase()) return name;
+  }
+  return null;
+}
+
+/**
+ * The sub-part name of a compound tag — `<Select.Root>` → "Root",
+ * `<ToggleGroup.Item>` → "Item". Null for non-member tags. Uses `.name.text`
+ * for the same parentless-node reason documented on `attr()` below.
+ */
+export function kitSubpartOf(tagNode) {
+  if (
+    tagNode &&
+    ts.isPropertyAccessExpression(tagNode) &&
+    ts.isIdentifier(tagNode.name)
+  ) {
+    return tagNode.name.text;
   }
   return null;
 }
@@ -129,6 +188,36 @@ export function detectComponentPropViolations(source) {
     if (opening) {
       const comp = kitComponentOf(opening.tagName);
       if (comp) {
+        // 0) the arcade-gen 1.x compound shape on a name that is no longer
+        // compound in 2.x. `<ToggleGroup.Root>` type-checks nowhere and is
+        // `undefined` at runtime → "Element type is invalid" white-screen.
+        const replacement = COMPOUND_ONLY_IN_V1.get(comp);
+        if (replacement) {
+          const subpart = kitSubpartOf(opening.tagName);
+          if (subpart === "Root") {
+            out.push({
+              component: comp,
+              issue: "removed-compound-root",
+              message: `<${comp}.Root> no longer exists — \`${comp}\` is not a compound component. The row of mutually exclusive pills is now \`${replacement}\`: use <${replacement}.Root> + <${replacement}.Item value="…">. Leaving \`${comp}.Root\` in place renders nothing and crashes the frame.`,
+            });
+          } else if (subpart === "Item" && attr(opening, "value")) {
+            out.push({
+              component: comp,
+              issue: "renamed-item-prop",
+              message: `<${comp}.Item> takes \`label\` (plus optional \`description\`/\`pressed\`/\`onPressedChange\`), not \`value\`. If you wanted the segmented pill row, switch the whole group to \`${replacement}\`, whose \`.Item\` does take \`value\`.`,
+            });
+          }
+        }
+        // 0b) `.Root` on an export that has no `.Root`. Same crash class as
+        // above, different cause: these were never compound in either version.
+        const shouldWrite = NO_ROOT_SUBPART.get(comp);
+        if (shouldWrite && kitSubpartOf(opening.tagName) === "Root") {
+          out.push({
+            component: comp,
+            issue: "no-root-subpart",
+            message: `<${comp}.Root> does not exist — \`${comp}\` is not a compound component. Write ${shouldWrite}. \`${comp}.Root\` is \`undefined\` at runtime, which crashes the whole frame.`,
+          });
+        }
         // 1) invented boolean `multiple` prop — none of the four take it.
         if (NO_MULTIPLE_PROP.has(comp) && attr(opening, "multiple")) {
           out.push({

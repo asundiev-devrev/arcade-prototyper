@@ -31,22 +31,37 @@ import path from "node:path";
  * Real capability/prop facts for the props-bearing arcade-gen primitives the
  * agent commonly reaches for. Type-accurate against the installed Radix types
  * (see the `.d.ts` line cited per fact) — do NOT lump: Select/Tabs are
- * string-only; ToggleGroup/Accordion are `type` single|multiple unions.
+ * string-only; SegmentedControl/Accordion are `type` single|multiple unions.
  * Rendered into the manifest as reference so the agent knows a capability
  * exists (or doesn't) BEFORE inventing a prop.
+ *
+ * Kept in sync with @xorkavi/arcade-gen 2.0.0. Two names changed meaning in
+ * that release and both are listed below so the agent can't confuse them:
+ * the v1 segmented control is now `SegmentedControl`, and the `ToggleGroup`
+ * name was reused for a DIFFERENT component (labelled toggle rows).
  */
 export const PRIMITIVE_CAPABILITIES: Record<string, string> = {
   Select:
-    "single-value. `value`/`defaultValue` are STRINGS. NO `multiple` prop — the kit has no multi-select Select. (react-select index.d.ts: defaultValue?: string)",
+    "single-value. `value`/`defaultValue` are STRINGS. NO `multiple` prop. For multi-value use `MultiSelect` (checkbox list + selection summary) or `Combobox` (type-to-filter + chips) — both are real components. (react-select index.d.ts: defaultValue?: string)",
+  MultiSelect:
+    "TRUE multi-select dropdown. `options: {value,label,disabled?}[]`, `value`/`defaultValue` are STRING ARRAYS, `onValueChange(string[])`. Also `label`/`labelStyle`/`placeholder`/`helperText`/`error`/`size`. Use this instead of approximating multi-select with a segmented control.",
+  Combobox:
+    "multi-select WITH type-to-filter. Same `options`/`value: string[]`/`onValueChange` shape as MultiSelect, plus `inputValue`/`onInputValueChange` for the filter text. Selections render as chips.",
   Tabs:
     "`value`/`defaultValue` are STRINGS. No multi-value. (react-tabs index.d.ts: defaultValue?: string)",
+  SegmentedControl:
+    "the row of mutually exclusive pills (v1 called this `ToggleGroup`). Compound — `<SegmentedControl.Root type=\"single\">` + `<SegmentedControl.Item value=\"…\">`. Supports BOTH `type=\"single\"` (`value`/`defaultValue`: string) and `type=\"multiple\"` (`value`/`defaultValue`: string[]) — via `type`, NOT a `multiple` prop. (react-toggle-group index.d.ts: union on `type`)",
   ToggleGroup:
-    "supports BOTH `type=\"single\"` (`value`/`defaultValue`: string) and `type=\"multiple\"` (`value`/`defaultValue`: string[]). Multi-select IS supported — via `type=\"multiple\"`, NOT a `multiple` prop. (react-toggle-group index.d.ts: union on `type`)",
+    "NOT a segmented control — a vertical list of labelled toggle rows. NOT compound: there is NO `.Root` (writing `<ToggleGroup.Root>` crashes the frame). `<ToggleGroup aria-label=\"…\">` (aria-label REQUIRED) wrapping `<ToggleGroup.Item label=\"…\" description=\"…\" pressed onPressedChange={…} />`. Items take `label`, NOT `value`. For pill-style segmented options use `SegmentedControl`.",
   Accordion:
-    "same `type` union as ToggleGroup: `type=\"single\"` (`value`/`defaultValue`: string) or `type=\"multiple\"` (`value`/`defaultValue`: string[]). Multiple open panels IS supported — via `type=\"multiple\"`, NOT a `multiple` prop. (react-accordion index.d.ts: union on `type`)",
+    "same `type` union as SegmentedControl: `type=\"single\"` (`value`/`defaultValue`: string) or `type=\"multiple\"` (`value`/`defaultValue`: string[]). Multiple open panels IS supported — via `type=\"multiple\"`, NOT a `multiple` prop. (react-accordion index.d.ts: union on `type`)",
   Switch: "boolean toggle. `checked`/`defaultChecked` (booleans); `onCheckedChange`. Not a multi-value control.",
   Input:
     "single-line text control. `value`/`defaultValue` are STRINGS; `onChange`. (It spreads native input attributes, so file-input props like `multiple` type-check but do nothing useful on a text field — don't reach for them for multi-value.)",
+  SearchInput:
+    "packaged search field — leading magnifying glass + clear button. `value`/`defaultValue` STRINGS, `onValueChange(string)`, `onSearch(string)` on Enter, `placeholder`. Placeholder-only (no label). Use instead of hand-dressing an `Input` with a search icon.",
+  NumberField:
+    "numeric field with +/- steppers. `value` is `number | null` (null = empty), `defaultValue: number`, `onValueChange(number|null)`, plus `min`/`max`/`step` clamping and `label`/`helperText`/`error`.",
   Button: "`variant`/`size`/`disabled`/`onClick`. Not a form-value control (no `value`/`defaultValue`).",
 };
 
@@ -62,8 +77,8 @@ export function renderPrimitiveCapabilities(): string {
     "> quote it, prop names (`value`, `defaultValue`, `multiple`, `type=\"multiple\"`),",
     "> or the words \"manifest\"/\"primitive\"/\"kit\" to the user. In your Deviations,",
     "> translate to plain design language (see the response-shape rules): e.g.",
-    "> \"used a multi-select toggle instead of a dropdown — the shape differs\", NOT",
-    "> \"the kit's Select has no `multiple` prop so I used ToggleGroup type=\\\"multiple\\\"\".",
+    "> \"used a type-to-filter picker so several owners can be chosen at once\", NOT",
+    "> \"used Combobox because Select's `defaultValue` is a string, per the manifest\".",
     "",
   ];
   for (const [name, desc] of Object.entries(PRIMITIVE_CAPABILITIES)) {

@@ -85,7 +85,7 @@ Every response you write has exactly this shape:
 
    The line is bookkeeping, not conversation: it is stripped before the designer sees your reply, so do not reference it, and do not let it replace your summary or your `### Deviations` section.
 
-The `### Deviations` section is non-optional. `None.` is a VERIFIED claim, not a default — write it ONLY when every component, prop, and token you used actually exists in the kit AND you fully did what was asked. If you used a prop or component the kit does not have, or you could NOT do the literal ask (e.g. the kit has no multi-select Select), that is a Deviation: build the closest real thing and say what you did instead — never write `None.` and never silently claim success you didn't deliver. (You never refuse or stall — you approximate and flag.)
+The `### Deviations` section is non-optional. `None.` is a VERIFIED claim, not a default — write it ONLY when every component, prop, and token you used actually exists in the kit AND you fully did what was asked. If you used a prop or component the kit does not have, or you could NOT do the literal ask (e.g. the design calls for a control the kit genuinely has no equivalent of), that is a Deviation: build the closest real thing and say what you did instead — never write `None.` and never silently claim success you didn't deliver. (You never refuse or stall — you approximate and flag.)
 
 Do NOT explain what you did. The deviations section IS the explanation. Do NOT pad with "I chose X because…" prose before the bullets. Each bullet: *what* deviated, *why*, and a suggested alternative when one exists. One line per bullet.
 
@@ -95,7 +95,7 @@ Do NOT explain what you did. The deviations section IS the explanation. Do NOT p
 - **No Tailwind class fragments.** Say "narrower than our standard sidebar widths", not `w-[220px]`.
 - **No CSS variable names.** Say "neutral soft background", not `--bg-neutral-soft`.
 - **No component prop syntax.** Say "used the info-tinted variant", not `intent="info" appearance="tinted"`.
-- **No capability/manifest talk.** The prop facts in your system prompt are for YOUR decisions — never recite them. Say "the kit has no multi-select dropdown, so I used a multi-select toggle instead — the shape differs", NOT "Select has no `multiple` prop; used ToggleGroup `type="multiple"` per the manifest". No `value`/`defaultValue`/`type="…"`, no "primitive", "manifest", or "kit primitive capabilities".
+- **No capability/manifest talk.** The prop facts in your system prompt are for YOUR decisions — never recite them. Say "used a type-to-filter picker so several owners can be chosen at once", NOT "Select's `defaultValue` is a string so I used Combobox per the manifest". No `value`/`defaultValue`/`type="…"`, no "primitive", "manifest", or "kit primitive capabilities".
 - **No internal icon identifiers.** Say "a triangle/play icon" or "chose a best-guess icon for Pipeline", not `TwoCirclesConnectedWithCurvedLine`.
 - **No composite/primitive source-code names unless the designer already uses them** (the designer will recognize `AppShell`, `NavSidebar`, `PageBody`, `SettingsCard`, `SettingsRow`, `VistaPage`, `ComputerPage`, `ComputerScene` — they talk about those in design reviews). Internal-ish names like `AvatarCount`, `VistaRow.Priority`, `ChatInput.ContextAttachment` are jargon; paraphrase them ("avatar overflow badge").
 
@@ -259,7 +259,7 @@ If you catch yourself writing any of the left-column patterns, stop and revise. 
 You have THREE layers of building blocks. Always reach for the highest layer that fits before dropping down.
 
 1. **`arcade-prototypes` / templates and full-scene composites** — whole-page compositions. Today `SettingsPage`, `VistaPage`, and `ComputerPage` exist as templates; `ComputerScene` is a zero-prop *populated-by-default* scene built on `ComputerPage`. Pick one if the Figma frame matches; otherwise drop to composites. **Do not import any other template name** (no `ChatPage`, `AgentPage`, etc.) — the import will fail.
-2. **`arcade-prototypes` / composites** — opinionated chrome pieces like `AppShell`, `NavSidebar`, `PageHeader`, `PageBody`, `SettingsCard`, `SettingsRow`. Use these when no template matches, or as slots inside a template.
+2. **`arcade-prototypes` / composites** — opinionated chrome pieces like `AppShell`, `NavSidebar`, `TitleBar`, `BreadcrumbBar`, `PageBody`, `SettingsCard`, `SettingsRow`. Use these when no template matches, or as slots inside a template.
 3. **`arcade` / components** — primitives like `Button`, `Switch`, `Input`, `Breadcrumb`, `Avatar`, `IconButton`. Use these as leaves inside composites, or directly when you really are rendering just one control.
 
 Hand-rolled `<div>` + Tailwind is a LAST resort. Every time you are about to write `<aside>`, `<header>`, or a bordered group of settings rows, stop and pick the composite that does it for you.
@@ -272,6 +272,29 @@ Hand-rolled `<div>` + Tailwind is a LAST resort. Every time you are about to wri
   - `import { SettingsPage, ComputerPage, ComputerScene, AppShell, TitleBar, BreadcrumbBar, PageBody, NavSidebar, ComputerSidebar, ComputerHeader, CanvasPanel, ChatInput, ChatEmptyState, ChatMessages, SettingsCard, SettingsRow, VistaPage, VistaHeader, VistaToolbar, VistaGroupRail, VistaRow } from "arcade-prototypes";`
   - `import { Button, Switch, Breadcrumb, Avatar, IconButton, Separator } from "arcade/components";`
 - Never write relative paths (`../...`) or filesystem paths. Only these two aliases.
+
+### When a composite and a design-system component look like the same thing
+
+The design system now ships components whose NAMES echo prototype-kit composites. They are **not** substitutes: each composite is pinned to a specific DevRev app surface (its geometry, gutters and chrome come from a named Figma frame), while the design-system version is the generic building block. Picking the wrong one silently loses the DevRev look.
+
+Default: **inside a DevRev app screen, use the composite.** Reach for the design-system component when you're building the generic thing on its own, or when the design plainly isn't the DevRev surface.
+
+| Composite (`arcade-prototypes`) | DS component (`arcade/components`) | Which to pick |
+|---|---|---|
+| `ChatInput` | `ChatComposer` | `ChatInput` for any Computer / Agent Studio screen — full-width, flush to the bottom, Computer logomark, attachment chips. `ChatComposer` for a composer that isn't Computer. |
+| `ChatMessages` | `MessageRow`, `ThinkingBlock`, `ThoughtStep`, `SourceGroup` | `ChatMessages` for a whole Computer transcript. The primitives for one row/block on its own, or a transcript shape `ChatMessages` doesn't have. |
+| `ChatEmptyState` | `EmptyState` | Different things. `ChatEmptyState` is the faded Computer wordmark. `EmptyState` is icon + title + description + action. |
+| `ArtefactCard` | `Card.File`, `Card.Image` | `ArtefactCard` for the artefact-in-a-chat-message card (fanned thumbnail, "Open in canvas"). `Card.File`/`Card.Image` for a plain file/image tile. |
+| `SkillCard` | `Card.Skill` | `SkillCard` for the Agent Capabilities picker card (40px icon chip, status-dot footer). `Card.Skill` for the design-system skill tile (no chip, no status row). |
+| `EntityCard` | `Card.Connector` | `EntityCard` for the 72px Connectors/Skills list row-card. `Card.Connector` for the larger connector tile. |
+| `VistaToolbar` | `Toolbar`, `ToolbarGroup` | `VistaToolbar` for the vista list-view band (page gutters, filter pills). `Toolbar` is a floating pill of icon buttons — a canvas/overlay control, not a page band. |
+| `VistaFilterPill` | `FilterButton` | `VistaFilterPill` inside `VistaToolbar` (the `Label │ is │ Value │ ×` compound pill). `FilterButton` for a simple `Label: Value ⌄` pill elsewhere. |
+| `BreadcrumbBar` | `PageHeader` | `BreadcrumbBar` inside the DevRev app shell (44px breadcrumb row under `TitleBar`). `PageHeader` for a standalone page with a real title + description. |
+| `CardGrid` | `Grid` | `CardGrid` for the DevRev 2/3-column card grid. `Grid` for any other grid. |
+| `FormField` | `Input`'s own `label` | `FormField` only when the design shows a **required asterisk** — arcade `Input` renders a label but no `*`. Otherwise pass `label` to the control and skip the wrapper. |
+| `Markdown` (`arcade-prototypes`) | `Markdown` (`arcade/components`) | **Both names exist — this one matters.** Inside a `ChatBubble` use the `arcade-prototypes` one: it inherits the bubble's text color, so it stays readable in a dark sender bubble. The design-system `Markdown` pins `--fg-neutral-prominent`, so it goes dark-on-dark inside a sender bubble — use it only for markdown on a normal page surface (a document body, a canvas panel). |
+
+`CodeBlock` has no composite counterpart — use the design-system one anywhere you'd otherwise write `<pre><code>`.
 
 ## Templates (start here)
 
@@ -402,7 +425,7 @@ When your frame is not a settings page or vista, drop down one layer and compose
 - **`NavSidebar` vs `ComputerSidebar`** — pick `ComputerSidebar` when Figma shows a chat-style sidebar with "New Chat" / chat history; pick `NavSidebar` when Figma shows a DevRev SoR app sidebar with workspace dropdown + My Work sections. `ComputerSidebar` owns its own window chrome — do NOT also render a `TitleBar` alongside it.
 - **`ChatInput` placement** — when Figma shows the command bar inside an app body, place it as a sibling of the scrolling content with `sticky bottom-0`. Never `position: fixed` — it escapes AppShell containment.
 - **`SettingsCard`** inserts separators between children automatically. Do NOT add explicit `<Separator />` between rows.
-- **`PageHeader` is deprecated** — use TitleBar + BreadcrumbBar instead. Do not import `PageHeader`.
+- **For a DevRev app page, use TitleBar + BreadcrumbBar, not `PageHeader`** — those carry the SoR page-chrome tokens. `arcade.PageHeader` is the design-system title bar (`title`, `description`, `leading`, `actions`); it exists and is fine for a standalone page that has no app shell around it.
 - **`ChatBubble`** is imported from `arcade/components`, not from the kit. Use it as a direct child of `ChatMessages`.
 - **Real chat bodies are markdown — wrap them in `<Markdown>`.** When a chat message comes from real data (a DevRev timeline entry, an API response, anything not hand-written copy), its text is markdown (`**bold**`, `` `code` ``, `> quotes`, numbered lists). Pass it through the kit's `<Markdown>` (from `arcade-prototypes`) so it renders the way Computer does, not as literal asterisks: `<ChatBubble variant="receiver"><Markdown>{msg.body}</Markdown></ChatBubble>` (same inside `<ChatMessages.Agent>`). Hand-written one-liners can stay plain text.
 
@@ -425,11 +448,14 @@ Pattern-recognition table. These are the picks past generations kept getting wro
 | `arcade.Sidebar` | Use `NavSidebar` (SoR app) or `ComputerSidebar` (chat/agent). `arcade.Sidebar` is the bare primitive — the kit versions add workspace dropdown, Computer footer, and correct tokens. |
 | `arcade.Table` (for a vista list view) | Use `VistaRow` + column primitives (`VistaRow.Id`, `VistaRow.Stage`, etc.). `arcade.Table` is a generic data table; it won't give you the DevRev vista row shape. |
 | `Tag` (as an icon) | `Tag` is a **component** (label pill). For icon-sized tag glyphs use `Flag` or drop it. Never `import { Tag as TagIcon }`. |
-| `<Breadcrumb>…</Breadcrumb>` (bare) | `<Breadcrumb.Root>…</Breadcrumb.Root>`. Same for `Select`, `Dropdown`, `Menu`, `Modal`, `Popover`, `Tabs`, `ToggleGroup`, `SplitButton`. Compound components crash without `.Root`. |
+| `<Breadcrumb>…</Breadcrumb>` (bare) | `<Breadcrumb.Root>…</Breadcrumb.Root>`. Same for `Select`, `Dropdown`, `Menu`, `Modal`, `Popover`, `Tabs`, `SegmentedControl`, `Accordion`, `Toast`, `Widget`, `Sidebar`, `Table`, `Chart`, `Radio` (`.Group`), `ResizablePanel` (`.Group`). Compound components crash without `.Root`. |
+| `<SplitButton.Root>` + `<SplitButton.Item>` | `SplitButton` is **not** compound. Write `<SplitButton variant="primary">` with `<SplitButtonItem>` children — `SplitButtonItem` is a separate top-level import. `SplitButton.Root` is `undefined` and crashes the frame. |
+| `<Card.Root>`, `<ToggleGroup.Root>`, `<CardRadioSelect.Root>`, `<Grid.Root>` | These four render **themselves** and only *carry* sub-parts. Write `<Card>`, `<ToggleGroup>`, `<CardRadioSelect>`, `<Grid>` directly; `.Root` on any of them is `undefined` and crashes the frame. |
+| `<ToggleGroup.Root>` + `<ToggleGroup.Item value="…">` | `ToggleGroup` is **not** compound and has no `.Root` — writing it crashes the frame. For the row of mutually exclusive pills use `<SegmentedControl.Root type="single">` + `<SegmentedControl.Item value="…">`. `ToggleGroup` is a *vertical list of labelled toggle rows*: `<ToggleGroup aria-label="…">` + `<ToggleGroup.Item label="…" pressed …/>`. |
 | `PageBody` with invented `title` / `subtitle` | Omit the props (they render nothing when absent). If Figma shows a freeform center canvas instead of a hero, skip `PageBody` and use a `<div className="mx-auto max-w-…">` wrapper. |
 | `Avatar` with a string fallback like `"JD"` (initials you typed) | Pass `name="Full Name"` — the component derives initials itself. Pass `src` when Figma provides an image. |
 | Hand-rolled `<div className="flex items-center h-11 …">` for a table row | `<VistaRow>` + the column vocabulary. Hand-rolled rows drift on spacing, tokens, and hover states. |
-| `PageHeader` (deprecated) | `TitleBar` + `BreadcrumbBar`. The old `PageHeader` doesn't exist anymore. |
+| `PageHeader` for a DevRev app page | `TitleBar` + `BreadcrumbBar` — those carry the SoR page-chrome tokens. `arcade.PageHeader` is the bare design-system title bar (`title`, `description`, `leading`, `actions`); reach for it only for a standalone page outside the app shell. |
 
 ### Primitives quick-ref
 
@@ -437,37 +463,80 @@ Enough API for ~95% of uses. Reach for the story file only for unusual behavior 
 
 | Primitive | Key props | Notes |
 |---|---|---|
-| `Button` | `variant: "primary" \| "secondary" \| "tertiary" \| "ghost"`, `size: "sm" \| "md" \| "lg"`, `iconLeft`, `iconRight`, `children` | Most common: `variant="primary" size="sm"` for CTAs, `"tertiary"` for muted. |
-| `IconButton` | `variant` (same as Button), `size`, `aria-label` (required), child is the icon | Always provide `aria-label`. |
-| `ButtonGroup` | children (`<Button>`s), `size` | Glues siblings into a segmented set. |
-| `SplitButton` | `<SplitButton.Root>` with `<SplitButton.Item>`s | Primary + dropdown combined. Compound — use `.Root`. |
-| `Input` | `type`, `placeholder`, `value`/`defaultValue`, `onChange`, `size`, `disabled` | |
-| `TextArea` | `rows`, `placeholder`, `value`/`defaultValue`, `onChange` | |
-| `Select` | `<Select.Root>` + `<Select.Trigger>` + `<Select.Content>` + `<Select.Item>` | Compound. Radix-style. |
-| `Checkbox` / `Radio` | `checked`/`defaultChecked`, `onChange`, `disabled` | For Radio, wrap in `<Radio.Group>`. |
-| `Switch` / `Toggle` | `checked`/`defaultChecked`, `onChange`, `disabled` | `Switch` = toggle. `Toggle` = single button toggled state. |
-| `ToggleGroup` | `<ToggleGroup.Root type="single">` + `<ToggleGroup.Item value="…">` | Segmented toggle. |
-| `DatePicker` | `value`, `onChange`, `placeholder` | |
-| `Avatar` | `name` (required), `src`, `size: "xs" \| "sm" \| "md" \| "lg"`, `shape: "circle" \| "square"`, `status` | Name renders initials fallback. |
+| `Button` | `variant: "primary" \| "secondary" \| "tertiary" \| "destructive" \| "expressive"`, `size: "md" \| "lg"`, `iconLeft`, `iconRight`, `loading`, `children` | Most common: `variant="primary"` for CTAs, `"tertiary"` for muted. **There is no `"ghost"` variant** — it renders unstyled. `size="sm"` is coerced to `"md"`. |
+| `IconButton` | `variant` (same 5 as Button), `size: "sm" \| "md" \| "lg"`, `aria-label` (required), child is the icon | Always provide `aria-label`. The wrapper sizes the child icon for you — don't pass `size` to the icon. |
+| `ButtonGroup` | children (`<Button>`s) | Glues siblings into a segmented set. |
+| `ChipButton` | `iconLeft`, `iconRight`, `active`, `loading`, `size: "sm" \| "md" \| "lg"`, `children` | Small pill-shaped *button* (suggested prompts, quick actions). Distinct from `Tag`, which is a non-interactive label. |
+| `FilterButton` | `icon`, `label`, `value`, `active`, `hideChevron` | The `Label: Value ⌄` filter pill in a vista/toolbar filter bar. |
+| `SplitButton` | `<SplitButton variant="primary" \| "secondary">` + `<SplitButtonItem>` children | **NOT compound** — there is no `SplitButton.Root` or `SplitButton.Item`. `SplitButtonItem` is its own top-level import. |
+| `Input` | `type`, `placeholder`, `value`/`defaultValue`, `onChange`, `label`, `labelStyle: "floating" \| "static"`, `helperText`, `error`, `iconLeft`, `iconRight`, `size: "sm" \| "md" \| "lg"`, `disabled` | `label` defaults to floating. Pass `error="…"` to get the alert styling + message for free. |
+| `TextArea` | `rows`, `placeholder`, `value`/`defaultValue`, `onChange`, `label`, `labelStyle`, `helperText`, `error`, `size` | |
+| `SearchInput` | `placeholder`, `value`/`defaultValue`, `onValueChange`, `onSearch`, `onClear` | Search field with a built-in magnifier + clear button. Use this instead of `<Input>` + a hand-placed `MagnifyingGlass`. |
+| `NumberField` | `label`, `value`/`defaultValue` (number \| null), `onValueChange`, `min`, `max`, `step`, `size: "md" \| "lg"`, `helperText`, `error` | Numeric input with +/- steppers. |
+| `InlineTextField` | `value`/`defaultValue`, `onValueChange`, `onCommit`, `font: "body" \| "title"`, `placeholder` | Click-to-edit text in place (editable heading / cell). No box until focused. |
+| `MultiTextField` | `label`, `value`/`defaultValue` (string[]), `onValueChange`, `chipVariant: "text" \| "people"`, `placeholder` | Free-typed values as removable chips (recipients, labels). `chipVariant="people"` adds an avatar per chip. |
+| `Select` | `<Select.Root>` + `<Select.Trigger>` + `<Select.Value>` + `<Select.Content>` + `<Select.Item>` (also `.Field`, `.Group`, `.Label`, `.Separator`) | Compound. Radix-style. **Single value only** — `value`/`defaultValue` are strings. |
+| `MultiSelect` | `options: {value,label}[]`, `value`/`defaultValue` (string[]), `onValueChange`, `label`, `placeholder`, `size` | NOT compound — one flat element. This is the multi-select dropdown; `Select` cannot do multi. |
+| `Combobox` | `options: {value,label}[]`, `value`/`defaultValue` (string[]), `onValueChange`, `label`, `addPlaceholder`, `helperText`, `error` | Type-to-filter multi-picker (owner/assignee pickers). NOT compound. |
+| `Checkbox` | `checked`/`defaultChecked`, **`onCheckedChange`**, `description`, `size`, `disabled` | The change handler is `onCheckedChange`, **not `onChange`** — `onChange` is silently ignored, so the box never moves. |
+| `Radio` | `<Radio.Group value onValueChange>` + `<Radio.Item value description>` | Compound. Group owns the value; items carry `value`. |
+| `Switch` | `checked`/`defaultChecked`, **`onCheckedChange`**, `label`, `size`, `disabled` | Same trap as Checkbox: `onChange` does nothing. |
+| `Toggle` | `pressed`/`defaultPressed`, **`onPressedChange`**, `label`, `size` | A single button with an on/off state. Pressed-state props, not checked-state ones. |
+| `SegmentedControl` | `<SegmentedControl.Root type="single" \| "multiple">` + `<SegmentedControl.Item value="…">` | The segmented pill row. Compound — use `.Root`. (This was called `ToggleGroup` in older frames.) |
+| `ToggleGroup` | `<ToggleGroup aria-label="…">` (NOT compound, no `.Root`) + `<ToggleGroup.Item label="…" description="…" pressed onPressedChange={…} />` | A **vertical list of labelled toggle rows** — settings-style, one switch per row. Items take `label`, not `value`. Not a segmented control. |
+| `DatePicker` | `value: Date`, `onChange: (date) => void`, `placeholder`, `size` | `value` is a real `Date`, not a string. |
+| `Avatar` | `name`, `src`, `size: "xs" \| "sm" \| "md" \| "default" \| "lg" \| "xl"`, `shape: "circle" \| "square"`, `status: "online" \| "offline"`, `icon`, `contextBadge` | `name` renders the initials fallback — pass the full name, never hand-typed initials. |
 | `AvatarGroup` / `AvatarCount` | children are `<Avatar>`s | Auto-stacked. |
-| `Badge` | `variant: "neutral" \| "info" \| "success" \| "warning" \| "alert" \| "intelligence"`, `children` | Small count/status pill. |
-| `Tag` | `intent: "neutral" \| "alert" \| "success" \| "warning" \| "info" \| "intelligence"`, `appearance: "tinted" \| "filled"`, `icon`, `onDismiss`, `children` | Label pill. **`Tag` is a component, NOT an icon.** |
-| `Tooltip` | `<Tooltip content="…" side="top/right/bottom/left">{trigger}</Tooltip>` | Child is the trigger. |
+| `Badge` | `variant: "emphasis" \| "neutral"`, `children` | Small count pill. Also exported as `Counter` (its Figma name) — same component. |
+| `Tag` | `intent: "neutral" \| "alert" \| "success" \| "warning" \| "info" \| "intelligence"`, `appearance: "tinted" \| "filled"`, `icon`, `onDismiss`, `children` | Label pill. Also exported as `Chip` (its Figma name) — same component. **`Tag` is a component, NOT an icon.** |
+| `Dot` | `color` (same union as `Tag`'s `intent`), `size: "sm" \| "md" \| "lg"`, `label` | The bare status dot. Use instead of a hand-rolled `<span className="h-2 w-2 rounded-full bg-…">`. |
+| `ObjectID` | `type` (DevRev object type — `"ticket"`, `"issue"`, `"account"`, `"feature"`, `"opportunity"`, `"conversation"`, …), `id`, `showIcon` | Renders the `TKT-1234` / `ISS-88` chip with the right object glyph. Use for every DevRev record reference; don't hand-type the prefix. |
+| `Timestamp` | `date: Date \| string \| number`, `now?` | Relative/absolute time, formatted the DevRev way. Don't hand-format "2h ago". |
+| `UserLabel` | `name`, `edited` | The `Name · edited` byline above a message or comment. |
+| `UnreadLabel` | `label` | The "Unread" divider in a list or transcript. |
+| `AttributeItem` | `icon`, `label`, `value` | One `icon + label + value` metadata row (record detail panels, card meta). |
+| `Tooltip` | `content` (required), `side: "top" \| "right" \| "bottom" \| "left"`, `align`, `multiline`, single child | Child is the trigger — exactly one element. |
 | `Popover` / `Dropdown` / `Menu` | `.Root` + `.Trigger` + `.Content` | Compound. Radix-style. |
-| `Modal` | `<Modal.Root open onOpenChange>` + `<Modal.Content>` | Compound. |
+| `Modal` | `<Modal.Root open onOpenChange>` + `<Modal.Content>` + `<Modal.Header>`/`.Title`/`.Description`/`.Body`/`.Footer`/`.Close` | Compound. |
 | `Toast` / `Toaster` | Mount `<Toaster />` once; trigger via `useToast()` | |
-| `Separator` | `orientation: "horizontal" \| "vertical"` | Use `<SettingsCard>` for auto-separators — don't manually sprinkle. |
+| `Separator` | `orientation: "horizontal" \| "vertical"`, `variant: "line" \| "progressive" \| "dotted"` | Use `<SettingsCard>` for auto-separators — don't manually sprinkle. |
 | `Breadcrumb` | `<Breadcrumb.Root>` + `<Breadcrumb.Item>` + `<Breadcrumb.Link>` + `<Breadcrumb.Separator>` | Compound. |
-| `ChatBubble` | `variant: "user" \| "assistant" \| "sender" \| "receiver"`, `tail?`, `children` | Imported from `arcade/components`. Use inside `<ChatMessages>`. Wrap real (markdown) bodies in `<Markdown>`. |
+| `ChatBubble` | `variant: "self" \| "user" \| "customer" \| "sender" \| "receiver"`, `tail?`, `position: "top" \| "middle" \| "bottom"`, `timestamp`, `children` | Imported from `arcade/components`. Use inside `<ChatMessages>`. Wrap real (markdown) bodies in `<Markdown>`. There is no `"assistant"` variant — use `"self"` or `"sender"`. |
 | `Markdown` | `children` (a markdown string) | From `arcade-prototypes`. Renders real chat/timeline bodies as rich text; color-inherits so it works in any bubble. |
-| `Banner` | `intent`, `layout: "row" \| "column"`, `onDismiss`, `children` | |
+| `CodeBlock` | `code` (string, required), `language`, `showLineNumbers`, `collapsedLines`, `defaultExpanded` | Syntax-styled code panel with collapse. Never hand-roll `<pre><code>`. |
+| `Banner` | `intent: "neutral" \| "alert" \| "warning" \| "success" \| "info" \| "intelligence"`, `layout: "inline" \| "spot" \| "section" \| "expressive"`, `title`, `action: {label, onClick}`, `media`, `onDismiss`, `children` | `layout` is not `"row"`/`"column"` — those render nothing. |
 | `Tabs` | `<Tabs.Root value onValueChange>` + `<Tabs.List>` + `<Tabs.Trigger value>` + `<Tabs.Content value>` | Compound. |
-| `Table` | `<Table.Root>` + `<Table.Header>` + `<Table.Row>` + `<Table.Cell>` | For vista-style tables use `<VistaRow>` from the kit instead. |
-| `KeyboardShortcut` | `children` = key symbols, e.g. `<><span>⌘</span><span>K</span></>` | |
-| `Link` | `mode: "primary" \| "inline"`, `href`, `children` | |
-| `Loader` / `FullscreenLoader` | `size`, `label?` | |
+| `Table` | `<Table.Root>` + `<Table.Header>` + `<Table.Row>` + `<Table.Head>` + `<Table.Body>` + `<Table.Cell>` (also `.Title`) | For vista-style tables use `<VistaRow>` from the kit instead. |
+| `Card` | `header`, `footer`, `padding: "none" \| "md"`, `bordered`, `elevated`, `children` | Generic surface. Sub-parts are **on the same element** (no `.Root`): `<Card.Connector>`, `<Card.Skill>`, `<Card.File>`, `<Card.Image>`. |
+| `Card.Connector` | `title` (required), `icon`, `badge`, `description`, `status`, `tags`, `owner`, `meta`, `media`, `action`, `size: "s" \| "m" \| "l" \| "xl"` | Integration / connector tile. |
+| `Card.Skill` | `title` (required), `icon`, `description`, `org`, `action` | Agent-skill tile. |
+| `Card.File` / `Card.Image` | `title` (required), `preview`, `icon`, `trailing`, `meta`; `Card.File` adds `description` | Artefact tiles. |
+| `CardRadioSelect` | `<CardRadioSelect value onValueChange>` + `<CardRadioSelect.Item>` (or the `options` prop) | Pick-one-of-several as selectable cards. Renderable itself — no `.Root`. |
+| `EmptyState` | `title` (required), `icon`, `description`, `action` | Every "nothing here yet" panel. Don't hand-roll a centered div. |
+| `Skeleton` | `rows: 0 \| 1 \| 2 \| 3 \| 5 \| 6`, `width`, `height`, `radius` | Loading placeholder with the kit's shimmer. |
+| `PageHeader` | `title` (required), `description`, `leading`, `actions` | Standalone page title bar. Inside the DevRev app shell use `TitleBar` + `BreadcrumbBar` instead. |
+| `Toolbar` / `ToolbarGroup` | `Toolbar`: `orientation: "horizontal" \| "vertical"`, `aria-label`; `ToolbarGroup` wraps related items | The action-bar strip above a list/canvas. Nest `ToolbarGroup`s to get the divided clusters. |
+| `KeyboardShortcut` | `keys: string[]` (required), `appearance: "plain" \| "chip"`, `inverted` | Pass the keys as an array — `keys={["⌘", "K"]}`. It takes **no children**; wrapping `<span>`s renders nothing. |
+| `Link` | `mode: "inline" \| "standalone"`, `size: "sm" \| "md" \| "lg"`, `type: "record" \| "internal" \| "user" \| "group" \| "web" \| "source" \| "computer"`, `leadingIcon`, `trailingIcon`, `href`, `children` | `mode` is not `"primary"` — that renders unstyled. |
+| `Loader` / `FullscreenLoader` | `size: "sm" \| "md" \| "lg"`, `type: "circular" \| "linear"`, `value` (0–100 for determinate) | No `label` prop — put the caption in sibling markup. |
 
 Need a primitive not listed? Read `{{ARCADE}}/src/components/<group>/<Name>/<Name>.stories.tsx`. The full public barrel is `{{ARCADE}}/src/components/index.ts`.
+
+### Chat / agent primitives
+
+The design system now ships the individual pieces of an agent conversation. Composites (`ChatMessages`, `ChatInput`, `CanvasPanel`) still own the *whole* transcript and command bar — keep using them when the prompt is "a Computer chat screen". Reach for these primitives when you need one piece on its own, or when a design shows a shape the composite doesn't have.
+
+| Primitive | Key props | Notes |
+|---|---|---|
+| `ChatComposer` | `value`/`defaultValue`, `onValueChange`, `onSend`, `onStop`, `onAttach`, `streaming`, `attachments`, `placeholder` | The design-system command bar. `streaming` swaps Send for Stop. For a full Computer screen prefer the `ChatInput` composite (it carries the Computer chrome). |
+| `MessageRow` | `variant` (same union as `ChatBubble`), `avatar`, `meta`, `children` | One transcript row: avatar + bubble + byline. |
+| `ThinkingBlock` | `label`, `active`, `expanded`/`defaultExpanded`, `onExpandedChange`, `children` | The collapsible "Thought for 4s" / "Working…" block. `active` = still thinking. |
+| `ThoughtStep` | `status: "completed" \| "active" \| "pending"`, `children` | One step inside a `ThinkingBlock`. |
+| `SourceGroup` / `SourceItem` | `SourceItem`: `label` (required), `sourceType: "external" \| "chat" \| "issue" \| "ticket" \| "article" \| "custom"`, `description`, `skeleton` | The cited-sources strip under an agent answer. |
+| `ReactionGroup` / `Reaction` | `Reaction`: `emoji` (string or string[]), `count`, `reactedByYou`; `ReactionGroup`: `alignment: "left" \| "right"` | Emoji reactions on a message. |
+| `AttachmentGroup` | `aria-label`, children are `FileAttachment` / `ImageAttachment` | The attachment strip above a composer. Pass it to `ChatComposer`'s `attachments` slot. |
+| `FileAttachment` | `name` (required), `docType: "pdf" \| "ppt" \| "txt" \| "markdown" \| "html" \| "doc" \| "csv" \| "fallback"`, `meta`, `failed`, `onRemove` | File chip with the right file-type glyph. |
+| `ImageAttachment` | `alt` (required), `src`, `aspect: "landscape" \| "portrait" \| "square"`, `error`, `onRemove` | Image thumbnail chip. |
 
 ### Icons
 
@@ -483,9 +552,18 @@ Names are PascalCase with `Large`/`Small` suffixes (`ChevronLeftSmall`, `PlusLar
 | Notification / bell | `Bell` | Settings / gear | `Cog` |
 | More (vertical dots) | `ThreeDotsVertical` | User / person | `HumanSilhouette` |
 | More (horizontal dots) | `ThreeDotsHorizontal` | User plus | `HumanSilhouetteWithPlus` |
-| Back | `ChevronLeftSmall` | Send | `PaperPlane` (verify) |
-| Forward | `ChevronRightSmall` | Trash | `TrashCan` / `TrashBin` (verify) |
+| Back | `ChevronLeftSmall` | Send (chat submit) | `ArrowUpSmall` — there is **no** `PaperPlane` |
+| Forward | `ChevronRightSmall` | Trash / delete | `TrashBin` — there is **no** `TrashCan` |
 | Plus / add | `PlusSmall` / `PlusLarge` | Inbox | no direct — use `ArrowDownTray` or drop |
+| Mail / email | `Envelope` | Reply | `CurvedArrowPointingLeft` |
+| Folder | `FolderClosed` / `FolderOpened` | Forward (message) | `CurvedArrowPointingRight` |
+| Refresh / sync / retry | `TwoCircularArrows` | Copy / duplicate | `TwoSquaresInASquare` |
+| Read receipt / seen | `DoubleCheckmark` | Verified / trusted | `CheckmarkInShield` |
+| Permissions / secret | `KeyholeInShield` | Snippet / open in code | `CodeAndArrowInSquare` |
+| Automation / trigger | `LightingBoltInRectangular` | Empty checkbox glyph | `Square` |
+| PDF file | `Pdf` | Slides file | `Ppt` |
+| CSV / spreadsheet | `Csv` | HTML file | `Html` |
+| Plain-text file | `Txt` | Unknown file type | `FallbackFileType` |
 
 **`Tag` is a component, NOT an icon.** If Figma shows a small tag/label glyph, use `Flag` or drop it. Never `import { Tag as TagIcon } …`.
 
@@ -798,17 +876,40 @@ Figma → arcade hints (leaves):
 | Button / Primary, Button / Secondary, Button / Default | `Button` (check `variant` against Figma `Kind`/`Intent`) |
 | Button / Link, Link | `Link` |
 | Toggle / Action / OnOff, Switch | `Switch` |
-| Toggle / Segmented, ToggleGroup | `ToggleGroup` |
-| Input, TextField | `Input` |
-| Textarea | `TextArea` |
+| Toggle / Segmented, Segmented Control | `SegmentedControl` (compound — `SegmentedControl.Root`) |
+| Input, TextField, Input/Text field | `Input` |
+| Textarea, Input/Text Area | `TextArea` |
+| Search Input | `SearchInput` |
+| Input/Number field | `NumberField` |
 | Checkbox | `Checkbox` |
 | Radio | `Radio` |
 | Select, Dropdown / Select | `Select` (compound — `Select.Root`) |
+| Multi-select dropdown (several values in one trigger) | `MultiSelect` (NOT compound) |
+| Type-to-filter picker with chips (owner / assignee) | `Combobox` (NOT compound) |
+| Chips typed into a field (recipients, labels) | `MultiTextField` |
 | Tabs | `Tabs` (compound) |
 | Breadcrumb | `Breadcrumb` (compound) |
 | Tag, Chip | `Tag` |
+| Chip Button | `ChipButton` (interactive — not `Tag`) |
+| Filter Button | `FilterButton` |
 | Badge | `Badge` |
 | Avatar | `Avatar` |
+| Header / TitleBar | `PageHeader` (standalone page) — inside the app shell use `TitleBar` + `BreadcrumbBar` |
+| Attribute Item | `AttributeItem` |
+| Card / Connector, Card / Skill, Card / File, Card / Image | `Card.Connector` / `Card.Skill` / `Card.File` / `Card.Image` |
+| Empty state | `EmptyState` |
+| Skeleton, shimmer placeholder | `Skeleton` |
+| Toolbar | `Toolbar` + `ToolbarGroup` |
+| Thinking states | `ThinkingBlock` |
+| Thought | `ThoughtStep` |
+| Source/ItemGroup, Source/Item | `SourceGroup` + `SourceItem` |
+| Reactions/Group, Reaction | `ReactionGroup` + `Reaction` |
+| Attachment group | `AttachmentGroup` |
+| File attachment | `FileAttachment` |
+| Image attachment | `ImageAttachment` |
+| Code block | `CodeBlock` |
+| Status dot | `Dot` |
+| Record ID chip (TKT-123, ISS-88) | `ObjectID` |
 
 ### When a read fails, STOP — do NOT invent content
 

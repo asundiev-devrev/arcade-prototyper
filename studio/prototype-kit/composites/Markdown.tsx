@@ -29,6 +29,15 @@
  *   <ChatMessages.Agent thoughts={<ChatMessages.Thoughts label="Thought for 4s" />}>
  *     <Markdown>{message.body}</Markdown>
  *   </ChatMessages.Agent>
+ *
+ * @counterexample Do NOT import `Markdown` from `arcade/components` for a chat
+ *   bubble. The design system ships its own `Markdown`, but it pins
+ *   `--fg-neutral-prominent`, so inside a dark sender bubble the body renders
+ *   dark-on-dark. Use the design-system one only for markdown on a normal page
+ *   surface (a document body, a canvas panel); in a bubble, import `Markdown`
+ *   from `arcade-prototypes`.
+ * @counterexample Do NOT hand-roll `<pre><code>` for a fenced code block inside
+ *   prose you're rendering yourself — use `CodeBlock` from `arcade/components`.
  */
 import ReactMarkdown, { type Components } from "react-markdown";
 

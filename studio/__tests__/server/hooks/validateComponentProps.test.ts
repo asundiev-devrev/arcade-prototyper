@@ -29,14 +29,70 @@ describe("detectComponentPropViolations — positives (must flag)", () => {
   it("flags Tabs.Root multiple", () => {
     expect(V(`<Tabs.Root multiple />`)).toBeGreaterThan(0);
   });
-  it("flags ToggleGroup.Root multiple (use type= instead)", () => {
-    expect(V(`<ToggleGroup.Root multiple />`)).toBeGreaterThan(0);
+  it("flags SegmentedControl.Root multiple (use type= instead)", () => {
+    expect(V(`<SegmentedControl.Root multiple />`)).toBeGreaterThan(0);
   });
-  it("flags array defaultValue on ToggleGroup.Root type='single'", () => {
-    expect(V(`<ToggleGroup.Root type="single" defaultValue={["a","b"]} />`)).toBeGreaterThan(0);
+  it("flags array defaultValue on SegmentedControl.Root type='single'", () => {
+    expect(V(`<SegmentedControl.Root type="single" defaultValue={["a","b"]} />`)).toBeGreaterThan(0);
   });
-  it("flags array defaultValue on ToggleGroup.Root with type ABSENT", () => {
-    expect(V(`<ToggleGroup.Root defaultValue={["a","b"]} />`)).toBeGreaterThan(0);
+  it("flags array defaultValue on SegmentedControl.Root with type ABSENT", () => {
+    expect(V(`<SegmentedControl.Root defaultValue={["a","b"]} />`)).toBeGreaterThan(0);
+  });
+});
+
+// arcade-gen 2.0 renamed the v1 segmented control to `SegmentedControl` and
+// reused the `ToggleGroup` name for a DIFFERENT, non-compound component. The
+// stale `<ToggleGroup.Root>` shape still imports cleanly (the export exists) but
+// is `undefined` at runtime → "Element type is invalid" white-screen. Nothing
+// else in the pipeline catches it, so it gets its own rule.
+describe("detectComponentPropViolations — v1→v2 ToggleGroup migration", () => {
+  it("flags <ToggleGroup.Root> — no longer a compound component", () => {
+    const v = detectComponentPropViolations(`<ToggleGroup.Root type="single" />`);
+    expect(v.length).toBeGreaterThan(0);
+    expect(v.some((x: { issue: string }) => x.issue === "removed-compound-root")).toBe(true);
+  });
+  it("names SegmentedControl as the replacement in the message", () => {
+    const v = detectComponentPropViolations(`<ToggleGroup.Root />`);
+    expect(v[0].message).toContain("SegmentedControl");
+  });
+  it("flags a v1-shaped <ToggleGroup.Item value=…> (v2 takes `label`)", () => {
+    const v = detectComponentPropViolations(`<ToggleGroup.Item value="left">Left</ToggleGroup.Item>`);
+    expect(v.some((x: { issue: string }) => x.issue === "renamed-item-prop")).toBe(true);
+  });
+  it("does NOT flag the correct v2 ToggleGroup shape", () => {
+    expect(
+      V(`<ToggleGroup aria-label="Notifications"><ToggleGroup.Item label="Email" pressed /></ToggleGroup>`),
+    ).toBe(0);
+  });
+  it("does NOT flag ToggleGroup.Item carrying only v2 props", () => {
+    expect(V(`<ToggleGroup.Item label="Email" description="Daily digest" onPressedChange={f} />`)).toBe(0);
+  });
+});
+
+// Same white-screen class as ToggleGroup.Root, different cause: these exports
+// render themselves and merely CARRY sub-parts (or have none at all), so they
+// have no `.Root`. The generation rules used to tell the agent SplitButton was
+// compound.
+describe("detectComponentPropViolations — `.Root` on a non-compound export", () => {
+  it("flags <SplitButton.Root> and names SplitButtonItem", () => {
+    const v = detectComponentPropViolations(`<SplitButton.Root><SplitButton.Item/></SplitButton.Root>`);
+    expect(v.some((x: { issue: string }) => x.issue === "no-root-subpart")).toBe(true);
+    expect(v[0].message).toContain("SplitButtonItem");
+  });
+  it("flags <Card.Root> and names the real sub-parts", () => {
+    const v = detectComponentPropViolations(`<Card.Root />`);
+    expect(v.some((x: { issue: string }) => x.issue === "no-root-subpart")).toBe(true);
+    expect(v[0].message).toContain("Card.Connector");
+  });
+  it("flags <Grid.Root> and <CardRadioSelect.Root>", () => {
+    expect(V(`<Grid.Root />`)).toBeGreaterThan(0);
+    expect(V(`<CardRadioSelect.Root />`)).toBeGreaterThan(0);
+  });
+  it("does NOT flag the correct shapes", () => {
+    expect(V(`<Card padding="md"><Card.File title="a.pdf" /></Card>`)).toBe(0);
+    expect(V(`<Grid><Grid.Item/></Grid>`)).toBe(0);
+    expect(V(`<CardRadioSelect defaultValue="a"><CardRadioSelect.Item value="a"/></CardRadioSelect>`)).toBe(0);
+    expect(V(`<SplitButton variant="primary"><SplitButtonItem>Save</SplitButtonItem></SplitButton>`)).toBe(0);
   });
 });
 
@@ -53,17 +109,17 @@ describe("detectComponentPropViolations — exemptions (must NOT flag)", () => {
   it("does NOT flag native <input multiple>", () => {
     expect(V(`<input type="file" multiple />`)).toBe(0);
   });
-  it("does NOT flag a valid multi-toggle ToggleGroup type='multiple' with array", () => {
-    expect(V(`<ToggleGroup.Root type="multiple" defaultValue={["a","b"]} />`)).toBe(0);
+  it("does NOT flag a valid multi-toggle SegmentedControl type='multiple' with array", () => {
+    expect(V(`<SegmentedControl.Root type="multiple" defaultValue={["a","b"]} />`)).toBe(0);
   });
-  it("does NOT flag ToggleGroup type='multiple' value array", () => {
-    expect(V(`<ToggleGroup.Root type="multiple" value={["a"]} />`)).toBe(0);
+  it("does NOT flag SegmentedControl type='multiple' value array", () => {
+    expect(V(`<SegmentedControl.Root type="multiple" value={["a"]} />`)).toBe(0);
   });
   it("does NOT flag a DYNAMIC type (may resolve to multiple)", () => {
-    expect(V(`<ToggleGroup.Root type={mode} defaultValue={["a","b"]} />`)).toBe(0);
+    expect(V(`<SegmentedControl.Root type={mode} defaultValue={["a","b"]} />`)).toBe(0);
   });
-  it("does NOT flag ToggleGroup type='single' with a string defaultValue", () => {
-    expect(V(`<ToggleGroup.Root type="single" defaultValue="a" />`)).toBe(0);
+  it("does NOT flag SegmentedControl type='single' with a string defaultValue", () => {
+    expect(V(`<SegmentedControl.Root type="single" defaultValue="a" />`)).toBe(0);
   });
   it("does NOT flag unrelated components", () => {
     expect(V(`<Button multiple /><Card value={["a"]} />`)).toBe(0);
@@ -164,11 +220,23 @@ describe("validateComponentProps hook (integration)", () => {
   });
 
   it("exits 0 on a valid multi-toggle through the binary", () => {
-    const file = tmpFrame(`export default () => <ToggleGroup.Root type="multiple" defaultValue={["a","b"]} />;`);
+    const file = tmpFrame(`export default () => <SegmentedControl.Root type="multiple" defaultValue={["a","b"]} />;`);
     const proc = runHook({
       tool_name: "Write",
       tool_input: { file_path: file, content: fs.readFileSync(file, "utf-8") },
     });
     expect(proc.status).toBe(0);
+  });
+
+  it("exits 2 and points at SegmentedControl for a stale <ToggleGroup.Root> frame", () => {
+    const file = tmpFrame(
+      `export default () => (<ToggleGroup.Root type="single" defaultValue="a"><ToggleGroup.Item value="a">A</ToggleGroup.Item></ToggleGroup.Root>);`,
+    );
+    const proc = runHook({
+      tool_name: "Write",
+      tool_input: { file_path: file, content: fs.readFileSync(file, "utf-8") },
+    });
+    expect(proc.status).toBe(2);
+    expect(proc.stderr).toContain("SegmentedControl");
   });
 });
