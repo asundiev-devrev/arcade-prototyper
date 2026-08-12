@@ -1036,6 +1036,127 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
   const nodeBox = (n: RawNode, px: number, py: number, flex: FlexCtx): Style =>
     flex.inFlex ? flexChildStyle(n, flex.parentMode, tok) : boxStyle(n, px, py, tok);
 
+  // ---- C4: the Computer sidebar -------------------------------------------
+  //
+  // `Sidebar` is the one mapped component whose VALUE is its structure, so it
+  // can't be a one-line emit like Button. arcade-gen's Sidebar is a compound
+  // (Root / Header / Footer / Section / Item), and a Figma sidebar carries the
+  // matching shape: a Header, some `Group` blocks each holding a "Group label"
+  // and an "Items" slot of rows, and a Footer.
+  //
+  // Why the inner pieces are matched by NAME here, when kitMappings refuses
+  // generic names globally: `Group`, `Header` and `Footer` are LOCAL components
+  // in the designer's file (no published key to match), and names that generic
+  // would be reckless in the global table. Inside an instance we have already
+  // identified BY KEY as the Arcade sidebar, they are unambiguous.
+  //
+  // Anything unrecognised falls through to `emit`, so a piece we don't model
+  // (traffic lights, gradient blur) still renders faithfully — the pixel floor
+  // holds. And if the subtree doesn't look like a structured sidebar at all, the
+  // caller abandons this path entirely rather than emit a wrong skeleton.
+
+  /** The visible text a "Group label" instance carries — the Section heading. */
+  function sidebarSectionTitle(group: RawNode): string {
+    const label = (group.children ?? []).find((c: RawNode) => {
+      if (hidden(c)) return false;
+      const { setName } = resolveIdentity(c.componentId, ctx.components, ctx.componentSets);
+      return /group label/i.test(String(setName ?? "")) || /group label/i.test(String(c.name ?? ""));
+    });
+    const texts = visibleTexts(label ?? group).filter((t) => t.trim() && t.trim() !== "Slot");
+    return texts[0] ?? "";
+  }
+
+  /**
+   * Does this subtree actually look like the Arcade sidebar we model? Requires a
+   * real row or group inside. A Figma "Sidebar" instance that has been gutted or
+   * heavily overridden is better served by faithful pixels than by a
+   * <Sidebar.Root> whose sections we guessed.
+   */
+  function looksLikeStructuredSidebar(n: RawNode): boolean {
+    let hit = false;
+    (function scan(node: RawNode) {
+      if (hit || hidden(node)) return;
+      // Reuse the same resolution the emitter uses, so "is this a row?" can never
+      // drift from what the row case actually matches on.
+      if (kitForNode(node, ctx)?.kit === "SidebarItem") { hit = true; return; }
+      const { setName } = resolveIdentity(node.componentId, ctx.components, ctx.componentSets);
+      if (/^group$/i.test(String(setName ?? node.name ?? ""))) { hit = true; return; }
+      for (const c of node.children ?? []) scan(c);
+    })(n);
+    return hit;
+  }
+
+  /** Children of a kit compound FLOW — the component owns its own layout, so a
+   *  Figma-absolute box would fight it. */
+  const SIDEBAR_FLOW: FlexCtx = { inFlex: true, parentMode: "VERTICAL" };
+
+  /** Purely decorative sidebar layers with no component meaning. Emitting them
+   *  inside Sidebar.Root would stack a full-height overlay over the content. */
+  const SIDEBAR_DECOR = /gradient blur|progressive shadow|_focus ring/i;
+
+  /** A sidebar `Group` block — by layer name OR resolved set name. Both are
+   *  checked because a designer's wrapper frame may be auto-named ("Frame
+   *  2147223869") while the instance inside still resolves to the Group set. */
+  function isSidebarGroup(c: RawNode): boolean {
+    const { setName } = resolveIdentity(c.componentId, ctx.components, ctx.componentSets);
+    return /^group$/i.test(String(c.name ?? "")) || /^group$/i.test(String(setName ?? ""));
+  }
+
+  /**
+   * `chrome` guards against DOUBLE-WRAPPING. A designer's sidebar commonly has a
+   * "Footer" FRAME whose only child is a "Footer" INSTANCE, and matching both
+   * produced nested <Sidebar.Footer> elements. Once we are inside a chrome
+   * wrapper, deeper same-named nodes are just content.
+   */
+  function emitSidebarChild(c: RawNode, ind: number, chrome = false): void {
+    if (hidden(c)) return;
+    const pad = "  ".repeat(ind);
+    const name = String(c.name ?? "");
+    const { setName } = resolveIdentity(c.componentId, ctx.components, ctx.componentSets);
+    const set = String(setName ?? "");
+    const b = c.absoluteBoundingBox ?? {};
+    const kids = (c.children ?? []).filter((x: RawNode) => !hidden(x));
+
+    if (SIDEBAR_DECOR.test(name)) return;
+
+    if (!chrome && (/^header$/i.test(name) || /^header$/i.test(set))) {
+      lines.push(`${pad}<Sidebar.Header>`);
+      for (const x of kids) emit(x, b.x ?? 0, b.y ?? 0, ind + 1, SIDEBAR_FLOW);
+      lines.push(`${pad}</Sidebar.Header>`);
+      return;
+    }
+    if (!chrome && (/^footer$/i.test(name) || /^footer$/i.test(set))) {
+      lines.push(`${pad}<Sidebar.Footer>`);
+      for (const x of kids) emitSidebarChild(x, ind + 1, true);
+      lines.push(`${pad}</Sidebar.Footer>`);
+      return;
+    }
+    if (isSidebarGroup(c)) {
+      const title = sidebarSectionTitle(c);
+      // `title` is REQUIRED on Sidebar.Section. With no heading text there is
+      // nothing honest to put there, so keep the block as faithful markup.
+      if (!title) { emit(c, b.x ?? 0, b.y ?? 0, ind, SIDEBAR_FLOW); return; }
+      // Only the rows go inside — the label became the title, and re-emitting it
+      // would print the heading twice.
+      const items = kids.filter((x: RawNode) => !/group label/i.test(String(x.name ?? "")));
+      lines.push(`${pad}<Sidebar.Section title=${JSON.stringify(title)}>`);
+      for (const x of items) {
+        for (const row of (x.children ?? []).filter((r: RawNode) => !hidden(r))) {
+          emit(row, (x.absoluteBoundingBox ?? {}).x ?? 0, (x.absoluteBoundingBox ?? {}).y ?? 0, ind + 1, SIDEBAR_FLOW);
+        }
+      }
+      lines.push(`${pad}</Sidebar.Section>`);
+      return;
+    }
+    // A plain wrapper frame (e.g. "Sessions & messages") — pass through so its
+    // Group children still become Sections rather than being buried in a div.
+    if (c.type === "FRAME" && kids.length && kids.some(isSidebarGroup)) {
+      for (const x of kids) emitSidebarChild(x, ind, chrome);
+      return;
+    }
+    emit(c, b.x ?? 0, b.y ?? 0, ind, SIDEBAR_FLOW);
+  }
+
   function emitAvatar(n: RawNode, px: number, py: number, pad: string, flex: FlexCtx, opts2: { type?: string } = {}): void {
     usedKit.add("Avatar");
     kitInstanceCount++;
@@ -1253,6 +1374,67 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
             ? `defaultValue=${JSON.stringify(value)}`
             : `placeholder=${JSON.stringify("")}`;
           lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><TextArea ${attrs} /></div>`);
+          return;
+        }
+        // ---- C4: the Computer sidebar ----
+        case "Sidebar": {
+          // COMPOUND — must enter through `Sidebar.Root`. Rendering the bare
+          // namespace object throws "Element type is invalid" and white-screens
+          // the frame. (Deliberately not writing that shape out even in a
+          // comment: kit-mapping-hygiene.test.ts text-greps this file for it,
+          // and a safety net that a comment can defeat is not a safety net.)
+          if (!looksLikeStructuredSidebar(n)) break; // → faithful markup
+          usedKit.add("Sidebar");
+          kitInstanceCount++;
+          const kids = (n.children ?? []).filter((c: RawNode) => !hidden(c));
+          // Keep the Figma box so the rail stays where and how big it was; the
+          // Root then owns everything inside it.
+          const s = nodeBox(n, px, py, flex);
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(s)}>`);
+          lines.push(`${pad}  <Sidebar.Root>`);
+          for (const c of kids) emitSidebarChild(c, ind + 2);
+          lines.push(`${pad}  </Sidebar.Root>`);
+          lines.push(`${pad}</div>`);
+          return;
+        }
+        case "SidebarItem": {
+          // One conversation/session row. `Sidebar.Item` takes the label as
+          // children plus an optional leading icon; the row's own text is the
+          // label. usedKit registers `Sidebar` — Item is a sub-part, not an export.
+          usedKit.add("Sidebar");
+          kitInstanceCount++;
+          const texts = visibleTexts(n).filter((t) => t.trim() && t.trim() !== "Slot");
+          const label = texts[0] ?? "";
+          if (!label) break; // nothing to name the row with → faithful markup
+          const glyph = innerIcon(n, ctx.components, ctx.componentSets);
+          if (glyph) usedKit.add(glyph);
+          const attrs = glyph ? ` icon={<${glyph} size={16} />}` : "";
+          lines.push(`${pad}<Sidebar.Item${attrs}>${escText(label)}</Sidebar.Item>`);
+          return;
+        }
+        case "Separator": {
+          // 0.3 "Separator/Progressive" → the kit's progressive variant. The
+          // orientation comes from the box: a wide, short node is horizontal.
+          usedKit.add("Separator");
+          kitInstanceCount++;
+          const w = b.width ?? 0, h = b.height ?? 0;
+          const orientation = h > w ? "vertical" : "horizontal";
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(nodeBox(n, px, py, flex))}><Separator orientation="${orientation}" variant="progressive" /></div>`);
+          return;
+        }
+        case "AttachmentGroup": {
+          // A strip of attachment chips. Its children are the individual
+          // attachments, several of which map on their own (File attachment →
+          // FileAttachment), so recurse rather than absorb them.
+          usedKit.add("AttachmentGroup");
+          kitInstanceCount++;
+          const kids = (n.children ?? []).filter((c: RawNode) => !hidden(c));
+          if (!kids.length) break; // an empty group renders nothing useful
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(nodeBox(n, px, py, flex))}>`);
+          lines.push(`${pad}  <AttachmentGroup aria-label="Attachments">`);
+          for (const c of kids) emit(c, b.x ?? px, b.y ?? py, ind + 2, { inFlex: true, parentMode: "HORIZONTAL" });
+          lines.push(`${pad}  </AttachmentGroup>`);
+          lines.push(`${pad}</div>`);
           return;
         }
         // ---- C3: arcade-gen 2.0 additions ----

@@ -1210,8 +1210,15 @@ describe("kit mappings hygiene", () => {
       ...Object.entries(SET_KEY_TO_KIT).map(([key, kit]) => ({ kit, key, name: "x" })),
       ...Object.entries(SET_NAME_TO_KIT).map(([name, kit]) => ({ kit, name })),
     ];
+    // Mappings whose emit case is STRUCTURE-DEPENDENT: they deliberately fall
+    // back to faithful markup when the instance doesn't carry the shape they
+    // model, so a synthetic one-TEXT-child probe can't satisfy them. That is the
+    // pixel-floor rule (never lose a painted visual to a guessed skeleton), not
+    // the bug this test hunts. Each is covered by its own positive test below.
+    const STRUCTURE_DEPENDENT = new Set(["Sidebar"]);
     const noEmitCase: string[] = [];
     for (const { kit, key, name } of routes) {
+      if (STRUCTURE_DEPENDENT.has(kit)) continue;
       const node: any = {
         id: `n_${kit}`, type: "INSTANCE", componentId: `c_${kit}`,
         absoluteBoundingBox: bbox(0, 0, 120, 40),
@@ -1750,5 +1757,152 @@ describe("emit — arcade-gen 2.0 components (matched by Figma set name)", () =>
       expect(r.source, `${setName} resolved to ${kit} but emitted no component`).toContain(`<${kit}`);
       expect(r.kitImports, `${setName} emitted ${kit} without importing it`).toContain(kit);
     }
+  });
+});
+
+// --- C4: the Computer sidebar ----------------------------------------------
+//
+// Shapes below mirror the real structure read off a live Computer screen
+// ("C - Scheduled tasks", frame 2207:29527): a Sidebar instance holding a
+// Header, a wrapper frame of `Group` instances (each a "Group label" + an
+// "Items" slot of `Items/Expanded` rows), and a Footer.
+//
+// This is the one mapping whose VALUE is its structure, so it gets real
+// structural coverage rather than the generic one-TEXT-child probe.
+
+const SIDEBAR_SET_KEY = "96a5f2ff79cc6d393e32f21da6fb11bafeb76552";
+const SIDEBAR_ITEM_SET_KEY = "51e257d3301b2a73905778b8b4ce321d99b86f56";
+
+/** `Items/Expanded` row: a leading icon slot + the conversation title. */
+function sidebarRow(id: string, title: string) {
+  return {
+    id, type: "INSTANCE", componentId: `c_row_${id}`, name: "Items/Expanded",
+    absoluteBoundingBox: bbox(0, 0, 240, 28),
+    children: [{ id: `${id}-t`, type: "TEXT", characters: title, absoluteBoundingBox: bbox(20, 6, 168, 16) }],
+  };
+}
+
+/** `Group` instance: a "Group label" carrying the heading + an "Items" slot. */
+function sidebarGroup(id: string, title: string, rows: any[]) {
+  return {
+    id, type: "INSTANCE", componentId: `c_group_${id}`, name: "Group",
+    absoluteBoundingBox: bbox(0, 0, 240, 62),
+    children: [
+      {
+        id: `${id}-label`, type: "INSTANCE", componentId: `c_label_${id}`,
+        name: "Group label", absoluteBoundingBox: bbox(0, 0, 240, 20),
+        children: [{ id: `${id}-lt`, type: "TEXT", characters: title, absoluteBoundingBox: bbox(8, 2, 100, 16) }],
+      },
+      { id: `${id}-items`, type: "SLOT", name: "Items", absoluteBoundingBox: bbox(0, 20, 240, 28), children: rows },
+    ],
+  };
+}
+
+function computerSidebarDoc(groups: any[], extra: any[] = []) {
+  const node: any = {
+    id: "sb", type: "INSTANCE", componentId: "c_sb",
+    absoluteBoundingBox: bbox(0, 0, 240, 1146),
+    children: [
+      { id: "sb-header", type: "INSTANCE", componentId: "c_hd", name: "Header", absoluteBoundingBox: bbox(0, 0, 240, 48), children: [] },
+      { id: "sb-wrap", type: "FRAME", name: "Sessions & messages", absoluteBoundingBox: bbox(0, 48, 240, 898), children: groups },
+      { id: "sb-blur", type: "FRAME", name: "Gradient blur", absoluteBoundingBox: bbox(0, 700, 243, 422), children: [] },
+      { id: "sb-footer", type: "FRAME", name: "Footer", absoluteBoundingBox: bbox(0, 998, 240, 148), children: extra },
+    ],
+  };
+  const maps: any = {
+    components: {
+      c_sb: { key: "v", name: "Property 1=Chat history", componentSetId: "s_sb" },
+      c_hd: { key: "v", name: "Header", componentSetId: "s_hd" },
+    },
+    componentSets: {
+      s_sb: { key: SIDEBAR_SET_KEY, name: "Sidebar" },
+      s_hd: { key: "local-header", name: "Header" },
+    },
+    assetFiles: new Map(),
+  };
+  for (const g of groups) {
+    maps.components[`c_group_${g.id}`] = { key: "v", name: "x", componentSetId: `s_group_${g.id}` };
+    maps.componentSets[`s_group_${g.id}`] = { key: `local-group-${g.id}`, name: "Group" };
+    for (const row of g.children[1].children) {
+      maps.components[`c_row_${row.id}`] = { key: "v", name: "x", componentSetId: `s_row_${row.id}` };
+      maps.componentSets[`s_row_${row.id}`] = { key: SIDEBAR_ITEM_SET_KEY, name: "Items/Expanded" };
+    }
+  }
+  return emitKitFrame(frameNode("0", [node]), maps);
+}
+
+describe("emit — Computer sidebar (compound)", () => {
+  it("emits Sidebar.Root, never the bare compound", () => {
+    const r = computerSidebarDoc([sidebarGroup("g1", "Pins", [sidebarRow("r1", "Sales call prep")])]);
+    expect(r.source).toContain("<Sidebar.Root>");
+    // The crash shape: a bare compound object is not a valid React element.
+    expect(r.source).not.toMatch(/<Sidebar\s*[/>]/);
+    expect(r.kitImports).toContain("Sidebar");
+  });
+
+  it("turns each Figma Group into a Sidebar.Section titled from its Group label", () => {
+    const r = computerSidebarDoc([
+      sidebarGroup("g1", "Pins", [sidebarRow("r1", "Sales call prep")]),
+      sidebarGroup("g2", "Direct messages", [sidebarRow("r2", "Creative Framework Review")]),
+    ]);
+    expect(r.source).toContain('<Sidebar.Section title="Pins">');
+    expect(r.source).toContain('<Sidebar.Section title="Direct messages">');
+  });
+
+  it("does NOT print the group heading twice (label becomes the title)", () => {
+    const r = computerSidebarDoc([sidebarGroup("g1", "Pins", [sidebarRow("r1", "Sales call prep")])]);
+    expect(r.source.match(/Pins/g)?.length).toBe(1);
+  });
+
+  it("emits each row as a Sidebar.Item carrying its conversation title", () => {
+    const r = computerSidebarDoc([
+      sidebarGroup("g1", "Pins", [
+        sidebarRow("r1", "Sales call prep"),
+        sidebarRow("r2", "Design Collaboration Workshop"),
+      ]),
+    ]);
+    expect(r.source).toContain("<Sidebar.Item>Sales call prep</Sidebar.Item>");
+    expect(r.source).toContain("<Sidebar.Item>Design Collaboration Workshop</Sidebar.Item>");
+  });
+
+  it("wraps Header and Footer in their own sub-parts", () => {
+    const r = computerSidebarDoc([sidebarGroup("g1", "Pins", [sidebarRow("r1", "A")])]);
+    expect(r.source).toContain("<Sidebar.Header>");
+    expect(r.source).toContain("<Sidebar.Footer>");
+  });
+
+  it("drops decorative overlays that would cover the rail", () => {
+    const r = computerSidebarDoc([sidebarGroup("g1", "Pins", [sidebarRow("r1", "A")])]);
+    // "Gradient blur" is a full-height decoration; inside Sidebar.Root it would
+    // paint over every row.
+    expect(r.source).not.toContain("sb-blur");
+  });
+
+  it("falls back to faithful markup for a Sidebar with no group/row structure", () => {
+    // Pixel floor: an overridden or gutted sidebar keeps its pixels rather than
+    // becoming an empty 240px rail.
+    const node: any = {
+      id: "sb", type: "INSTANCE", componentId: "c_sb",
+      absoluteBoundingBox: bbox(0, 0, 240, 1146),
+      children: [{ id: "sb-t", type: "TEXT", characters: "just some text", absoluteBoundingBox: bbox(8, 8, 100, 16) }],
+    };
+    const r = emitKitFrame(frameNode("0", [node]), {
+      components: { c_sb: { key: "v", name: "x", componentSetId: "s_sb" } },
+      componentSets: { s_sb: { key: SIDEBAR_SET_KEY, name: "Sidebar" } },
+      assetFiles: new Map(),
+    });
+    expect(r.source).not.toContain("<Sidebar.Root>");
+    expect(r.source).toContain("just some text");
+  });
+
+  it("keeps a group as faithful markup when it has no heading text", () => {
+    // Sidebar.Section requires `title`; inventing one would put words in the
+    // designer's mouth.
+    const g = sidebarGroup("g1", "", [sidebarRow("r1", "A")]);
+    g.children[0].children = [];
+    const r = computerSidebarDoc([g]);
+    expect(r.source).not.toContain("<Sidebar.Section");
+    // the rows still map on their own key
+    expect(r.source).toContain("<Sidebar.Item>A</Sidebar.Item>");
   });
 });

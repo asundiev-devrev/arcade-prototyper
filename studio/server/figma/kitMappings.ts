@@ -50,6 +50,33 @@ export const SET_KEY_TO_KIT: Record<string, string> = {
   "62304142aad2baf93fd56949820a5989f2715349": "ChipButton", // 0.3 "Chip Button"
   e4341909fd0d33d86b5284326349c6f2d678a70c: "FilterButton", // 0.3 "Filter Button"
   a11a736d2e3ef8673c0f3b57e18301cfcd0fbd37: "FileAttachment", // 0.3 "File attachment"
+  // C4 — the Computer sidebar and its parts. Keys captured live 2026-08-12 from
+  // a real Computer screen ("C - Scheduled tasks", frame 2207:29527) and
+  // confirmed against the kit library's published set list.
+  //
+  // `Sidebar` is the set arcade-gen's own Sidebar.tsx cites as its source
+  // ("Navigation page 8964:32926, Sidebar set 14510:10657" — that node IS this
+  // key), so this is a 1:1 component match, not an approximation. It is a
+  // COMPOUND: the emit case builds <Sidebar.Root> and never <Sidebar/>.
+  "96a5f2ff79cc6d393e32f21da6fb11bafeb76552": "Sidebar", // 0.3 "Sidebar"
+  "51e257d3301b2a73905778b8b4ce321d99b86f56": "SidebarItem", // 0.3 "Items/Expanded" → Sidebar.Item
+  "31849ab9b4e941d9e77ac29361573f053dbb0990": "Button", // 0.3 "Computer Action" (the New-session CTA)
+  "4b433b10b30118026ca3e392fd033011bab3b57c": "IconButton", // 0.3 "History Action"
+  e539550dff09b141b8915a1faeba26c2ef441cfb: "AvatarGroup", // 0.3 "Avatar Stack/Linear/Circle"
+  // Computer input parts. NOTE the composer ITSELF is deliberately absent: on
+  // the screen above it is a component LOCAL to the design file (key
+  // 4854423e90…), not the library's, so a key can't match it — and its set is
+  // named the bare word "Input", which is arcade-gen's TEXT FIELD. A name row
+  // for it would turn every text field in every design into a ChatComposer.
+  // Map it once the library's own "Computer input / Input" set key is known.
+  "31dfb4585b6b3f8ec66c4068b2a29088957564a8": "AttachmentGroup", // 0.3 "Attachment group"
+  "25833cd9063c5ad0aba0ac61e3abdde65916ac8e": "AttachmentGroup", // 0.3 "Text pasted attachment group"
+  "5ca8c57f76581c9a3b325c9a4364fe6c0e15c75b": "Separator", // 0.3 "Separator/Progressive"
+  // DELIBERATELY NOT MAPPED: 0.3 "Group label" (21d4cbb7df…). Inside a sidebar
+  // its text becomes the REQUIRED `title` of the enclosing <Sidebar.Section>, so
+  // emitting it again as its own component would duplicate the heading. The
+  // Sidebar emit case consumes it. On its own, outside a sidebar, faithful
+  // markup is the right answer for it anyway.
   // DELIBERATELY OMITTED (kept as faithful static markup — a wrong component is
   // worse than the current default): Menu (0375c0ba…), Modal Content
   // (8122e871…), Popover (6a9dc99a…) are Radix-portal compounds whose VALUE is
@@ -150,6 +177,7 @@ export const FILE_ATTACHMENT_DOC_TYPES: Record<string, string> = {
 export const PSEUDO_KIT_RENDERS: Record<string, string> = {
   ImageAvatar: "Avatar", // Avatar with src = exported photo PNG
   AccountAvatar: "Avatar", // Avatar type="account" shape="square"
+  SidebarItem: "Sidebar", // <Sidebar.Item> — a sub-part, not its own export
 };
 
 /** Figma icon set name → arcade-gen icon export. Every value must exist in
