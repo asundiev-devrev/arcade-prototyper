@@ -18,8 +18,46 @@ describe("componentMap", () => {
     expect(findComponentMapping("NotAThing")).toBeNull();
   });
 
-  it("covers the curated primitives + composite sub-parts", () => {
-    expect(COMPONENT_ENTRIES).toHaveLength(20);
+  it("covers the curated primitives + composite sub-parts + the 2.0 additions", () => {
+    expect(COMPONENT_ENTRIES).toHaveLength(25);
+  });
+
+  it("maps the arcade-gen 2.0 components to their published set keys", () => {
+    const expected: Array<[string, string, string]> = [
+      ["SearchInput", "Search Input", "19d5b8170133af3b1411a5be16b94621b558c816"],
+      ["ChipButton", "Chip Button", "62304142aad2baf93fd56949820a5989f2715349"],
+      ["FilterButton", "Filter Button", "e4341909fd0d33d86b5284326349c6f2d678a70c"],
+      ["NumberField", "Input/Number field", "4c4e26eb174a90e98da63a36f351946ad43498a5"],
+      ["FileAttachment", "File attachment", "a11a736d2e3ef8673c0f3b57e18301cfcd0fbd37"],
+    ];
+    for (const [name, setName, key] of expected) {
+      const m = findComponentMapping(name);
+      expect(m, name).not.toBeNull();
+      expect(m!.status, name).toBe("mapped");
+      expect(m!.figma?.setName, name).toBe(setName);
+      expect(m!.figma?.componentSetKey, name).toBe(key);
+    }
+  });
+
+  it("drives the pressed look from `Active / Pressed`, never from `State`", () => {
+    // The 0.3 sets put the pressed look on its own axis; `State` only carries
+    // idle/hover. An entry that pointed `active` at `State` would export a chip
+    // that never looks pressed.
+    for (const name of ["ChipButton", "FilterButton"]) {
+      const axes = findComponentMapping(name)!.variants;
+      const active = axes.find((v) => v.prop === "active");
+      expect(active, `${name} should drive active`).toBeDefined();
+      expect(active!.figmaProp, name).toBe("Active / Pressed");
+      expect(axes.some((v) => v.figmaProp === "State"), `${name} must not drive State`).toBe(false);
+    }
+  });
+
+  it("never maps FileAttachment's docType onto the Failed error state", () => {
+    // `Failed` is the ninth option on the Document axis but it is a STATE, not a
+    // file type. Emitting it as a docType would render no glyph at all.
+    const docType = findComponentMapping("FileAttachment")!.variants.find((v) => v.prop === "docType");
+    expect(docType!.figmaProp).toBe("Document");
+    expect(Object.values(docType!.valueMap)).not.toContain("Failed");
   });
 
   it("maps ComputerSidebar.Item to the labeled 'Chat Item' row (not the wordmark 'Computer Item')", () => {

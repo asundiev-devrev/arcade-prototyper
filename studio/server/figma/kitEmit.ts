@@ -31,6 +31,8 @@ import {
   TAG_APPEARANCE_MAP,
   ICON_SET_NAME_TO_KIT,
   NON_RENDERABLE_KIT_EXPORTS,
+  FILE_ATTACHMENT_DOC_TYPES,
+  FIGMA_DOCUMENT_TO_DOC_TYPE,
 } from "./kitMappings";
 import { readColorVar } from "./resolveTokens";
 import { resolveKitTokenVar, type ColorProperty } from "./kitTokens";
@@ -1251,6 +1253,129 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
             ? `defaultValue=${JSON.stringify(value)}`
             : `placeholder=${JSON.stringify("")}`;
           lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><TextArea ${attrs} /></div>`);
+          return;
+        }
+        // ---- C3: arcade-gen 2.0 additions ----
+        // Same admission test as C1: a single forwardRef component with no Radix
+        // portal and no open-state requirement, whose REQUIRED props are all
+        // derivable from the instance's own text. Anything needing an exported
+        // image (ImageAttachment), a real Date (Timestamp) or a live open panel
+        // stays unmapped so the node keeps its faithful markup.
+        case "SearchInput": {
+          usedKit.add("SearchInput");
+          kitInstanceCount++;
+          const texts = visibleTexts(n).filter((t) => t.trim() && t.trim() !== "Slot");
+          // 0.3 "Search Input" carries a `Placeholder` variant (True/False), so
+          // the tree tells us whether the visible text is the placeholder or a
+          // typed value — we don't have to guess. Placeholder=False means a real
+          // query is in the field, which also shows the clear button.
+          const text = texts[0] ?? "Search";
+          const isValue = String(p.Placeholder ?? "True") === "False";
+          const attr = isValue
+            ? `defaultValue=${JSON.stringify(text)}`
+            : `placeholder=${JSON.stringify(text)}`;
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><SearchInput ${attr} /></div>`);
+          return;
+        }
+        case "NumberField": {
+          usedKit.add("NumberField");
+          kitInstanceCount++;
+          const texts = visibleTexts(n).filter((t) => t.trim() && t.trim() !== "Slot");
+          // 0.3 `Type` = Floating label | Default | Small. Floating label is the
+          // set's DEFAULT and the kit ignores `size` in that mode (fixed 56px
+          // field), so passing a size there would be a lie. Static-label modes
+          // map Small → kit "md" (28px) and Default → kit "lg" (40px).
+          const type = String(p.Type ?? "Floating label");
+          const staticSize = type === "Small" ? "md" : type === "Default" ? "lg" : "";
+          const num = texts.map((t) => Number(t.replace(/[, ]/g, ""))).find((v) => Number.isFinite(v));
+          // `value`/`defaultValue` are number | null in the kit — a string would
+          // break the steppers, so a non-numeric text becomes the label instead.
+          const label = texts.find((t) => !Number.isFinite(Number(t.replace(/[, ]/g, ""))));
+          const state = String(p.State ?? "");
+          const attrs = [
+            staticSize ? `size="${staticSize}" labelStyle="static"` : "",
+            label ? `label=${JSON.stringify(label)}` : "",
+            num !== undefined ? `defaultValue={${num}}` : "",
+            state === "Disabled" ? "disabled" : "",
+            state === "Read only" ? "readOnly" : "",
+            state === "Alert" ? `error="Invalid"` : "",
+          ].filter(Boolean).join(" ");
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><NumberField ${attrs} /></div>`);
+          return;
+        }
+        case "ChipButton": {
+          usedKit.add("ChipButton");
+          kitInstanceCount++;
+          const texts = visibleTexts(n).filter((t) => t.trim() && t.trim() !== "Slot");
+          const label = texts[0] ?? "Action";
+          const szv = SIZE_VALUE_MAP[p.Size ?? ""];
+          // The pressed look is its OWN axis, `Active / Pressed` (False|True) —
+          // NOT `State`, whose options are only Idle | "Hover / Press".
+          const attrs = [
+            szv ? `size="${szv}"` : "",
+            String(p["Active / Pressed"] ?? "") === "True" ? "active" : "",
+            String(p.Loading ?? "") === "True" ? "loading" : "",
+            String(p.Disabled ?? "") === "True" ? "disabled" : "",
+          ].filter(Boolean).join(" ");
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><ChipButton${attrs ? ` ${attrs}` : ""}>${escText(label)}</ChipButton></div>`);
+          return;
+        }
+        case "FilterButton": {
+          usedKit.add("FilterButton");
+          kitInstanceCount++;
+          // Figma "Filter Button" reads `Label` then `Value` in tree order.
+          const texts = visibleTexts(n).filter((t) => t.trim() && t.trim() !== "Slot");
+          const attrs = [
+            texts[0] ? `label=${JSON.stringify(texts[0])}` : "",
+            texts[1] ? `value=${JSON.stringify(texts[1])}` : "",
+            // Same axis naming as Chip Button: `Active / Pressed`, not `State`.
+            String(p["Active / Pressed"] ?? "") === "True" ? "active" : "",
+            String(p.Disabled ?? "") === "True" ? "disabled" : "",
+          ].filter(Boolean).join(" ");
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><FilterButton ${attrs} /></div>`);
+          return;
+        }
+        case "AttributeItem": {
+          // `label` is REQUIRED; value is optional. Tree order is label then value.
+          // Register the import only AFTER the guard below — breaking out after
+          // usedKit.add() would emit an import for a component that never renders.
+          const texts = visibleTexts(n).filter((t) => t.trim() && t.trim() !== "Slot");
+          const label = texts[0] ?? "";
+          if (!label) break; // no text to carry — fall through to faithful markup
+          usedKit.add("AttributeItem");
+          kitInstanceCount++;
+          const attrs = [
+            `label=${JSON.stringify(label)}`,
+            texts[1] ? `value=${JSON.stringify(texts[1])}` : "",
+          ].filter(Boolean).join(" ");
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><AttributeItem ${attrs} /></div>`);
+          return;
+        }
+        case "FileAttachment": {
+          // `name` is REQUIRED and the kit picks the glyph from `docType`.
+          const texts = visibleTexts(n).filter((t) => t.trim() && t.trim() !== "Slot");
+          const name = texts[0];
+          if (!name) break; // no filename — faithful markup beats an empty chip
+          usedKit.add("FileAttachment");
+          kitInstanceCount++;
+          // 0.3 "File attachment" states the type outright on its `Document` axis
+          // (PDF | PPT | TXT | Markdown | HTML | DOC | CSV | Fallback | Failed),
+          // so prefer that over guessing from the filename. `Failed` is the error
+          // state, not a file type — it maps to the `failed` prop instead.
+          const docVariant = String(p.Document ?? "");
+          const failed = docVariant === "Failed";
+          const ext = (name.split(".").pop() ?? "").toLowerCase();
+          const docType =
+            (!failed && FIGMA_DOCUMENT_TO_DOC_TYPE[docVariant]) ||
+            FILE_ATTACHMENT_DOC_TYPES[ext] ||
+            "";
+          const attrs = [
+            `name=${JSON.stringify(name)}`,
+            docType ? `docType="${docType}"` : "",
+            texts[1] ? `meta=${JSON.stringify(texts[1])}` : "",
+            failed ? "failed" : "",
+          ].filter(Boolean).join(" ");
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><FileAttachment ${attrs} /></div>`);
           return;
         }
         case "KeyboardShortcut": {

@@ -39,6 +39,17 @@ export const SET_KEY_TO_KIT: Record<string, string> = {
   d43e5c28c7a26c01ebdbb7123751565a8955b52e: "TextArea", // 0.3 "Input/Text Area"
   "4bd8ce6785fee3244a829595d70e612350b5ecbd": "KeyboardShortcut", // 0.3 "Shortcut"
   "8ba9681b10fd5324ac7e381013e727ff8836e9d2": "SplitButton", // 0.3 "Split Button"
+  // C3 — arcade-gen 2.0 components. Keys captured live from
+  // GET /v1/files/a2uKnm88LxRXEWAL1kOqeQ/component_sets (2026-08-12), so these
+  // are the real published set keys, not names. That matters here more than
+  // usual: the same file also publishes "[🔴DEPRECATED] Chip Button",
+  // "[🔴DEPRECATED]Number Field" and "[DLS]File Attachment" — near-identical
+  // names for OLD components. Key matching can't pick the wrong twin.
+  "19d5b8170133af3b1411a5be16b94621b558c816": "SearchInput", // 0.3 "Search Input"
+  "4c4e26eb174a90e98da63a36f351946ad43498a5": "NumberField", // 0.3 "Input/Number field"
+  "62304142aad2baf93fd56949820a5989f2715349": "ChipButton", // 0.3 "Chip Button"
+  e4341909fd0d33d86b5284326349c6f2d678a70c: "FilterButton", // 0.3 "Filter Button"
+  a11a736d2e3ef8673c0f3b57e18301cfcd0fbd37: "FileAttachment", // 0.3 "File attachment"
   // DELIBERATELY OMITTED (kept as faithful static markup — a wrong component is
   // worse than the current default): Menu (0375c0ba…), Modal Content
   // (8122e871…), Popover (6a9dc99a…) are Radix-portal compounds whose VALUE is
@@ -67,6 +78,64 @@ export const SET_NAME_TO_KIT: Record<string, string> = {
   "Avatar Group": "AvatarGroup",
   "Ghost Button": "IconButton",
   "Icon Button": "IconButton",
+  // C3 — arcade-gen 2.0 components. These Figma set names are quoted verbatim in
+  // arcade-gen's own type declarations (the components were built FROM these
+  // sets), so the name→kit link is the library author's, not a guess. They're
+  // also specific enough to clear the collision bar above: no other DevRev
+  // generation ships a set called "Chip Button" or "Input/Number field".
+  // Each one has a matching emit case in kitEmit.ts — a name with no case falls
+  // back to faithful markup, which is safe but pointless.
+  //
+  // All but "Attribute Item" ALSO have their published set key in
+  // SET_KEY_TO_KIT above, so these rows only fire for detached/local copies.
+  "Search Input": "SearchInput",
+  "Input/Number field": "NumberField",
+  "Chip Button": "ChipButton",
+  "Filter Button": "FilterButton",
+  // UNVERIFIED against the published library: arcade-gen's types cite a Figma
+  // set called "Attribute Item", but no such published component or set exists
+  // in a2uKnm88LxRXEWAL1kOqeQ (checked 2026-08-12) — it likely lives in a file
+  // we haven't indexed. Name-only, so it simply never fires until such a set
+  // shows up in a designer's file; harmless either way.
+  "Attribute Item": "AttributeItem",
+  "File attachment": "FileAttachment",
+};
+
+/**
+ * Filename extension → arcade-gen `FileAttachmentDocType`. The kit picks the
+ * file glyph from `docType`; an unmapped extension is simply omitted so the
+ * component uses its own "fallback" glyph. Keys are lowercased extensions.
+ */
+/**
+ * 0.3 "File attachment" `Document` variant option → arcade-gen
+ * `FileAttachmentDocType`. Captured live from the component set's
+ * componentPropertyDefinitions (node 13747:1735, 2026-08-12). The set's ninth
+ * option, `Failed`, is deliberately absent: it is the error STATE, not a file
+ * type, and maps to the `failed` prop instead.
+ */
+export const FIGMA_DOCUMENT_TO_DOC_TYPE: Record<string, string> = {
+  PDF: "pdf",
+  PPT: "ppt",
+  TXT: "txt",
+  Markdown: "markdown",
+  HTML: "html",
+  DOC: "doc",
+  CSV: "csv",
+  Fallback: "fallback",
+};
+
+export const FILE_ATTACHMENT_DOC_TYPES: Record<string, string> = {
+  pdf: "pdf",
+  ppt: "ppt",
+  pptx: "ppt",
+  txt: "txt",
+  md: "markdown",
+  markdown: "markdown",
+  html: "html",
+  htm: "html",
+  doc: "doc",
+  docx: "doc",
+  csv: "csv",
 };
 
 /**
@@ -158,6 +227,51 @@ export const ICON_SET_NAME_TO_KIT: Record<string, string> = {
   "Programing, Data/Programming, Code, Language": "Mcp",
   "Drag Horizontal Lines": "ThreeBarsHorizontal",
   "two.human.silhouttes": "TwoHumanSilhouettes",
+  // ---- Bare published set names, captured live 2026-08-12 ----
+  // Every row above pairs a kit icon with a name like "Icons/Bell". That prefix
+  // is how the set surfaces when it's nested under an Icons frame — but the sets
+  // are PUBLISHED under their bare dotted names ("Bell", "Magnifying.glass"),
+  // which is what a consuming file reports for a direct library instance. So the
+  // prefixed rows alone missed the most common case. Verified against
+  // GET /v1/files/a2uKnm88LxRXEWAL1kOqeQ/component_sets — all 521 Icons-page
+  // sets — so each name below is a real set, not a guess.
+  Window: "Window",
+  Computer: "Computer",
+  Bell: "Bell",
+  Clock: "Clock",
+  Document: "Document",
+  Eye: "Eye",
+  Book: "Book",
+  Paperclip: "Paperclip",
+  Pin: "Pin",
+  Globe: "Globe",
+  Calendar: "Calendar",
+  Flag: "Flag",
+  Lock: "Lock",
+  Cog: "Cog",
+  Camera: "Camera",
+  Photo: "Photo",
+  Placeholder: "Placeholder",
+  "Chat.bubbles": "ChatBubbles",
+  "Magnifying.glass": "MagnifyingGlass",
+  "Magnifying.glass.in.square": "MagnifyingGlassInSquare",
+  "Dot.in.left.window": "DotInLeftWindow",
+  "Dot.in.right.window": "DotInRightWindow",
+  "Arrows.up.and.down": "ArrowsUpAndDown",
+  "Horizontal.lines.with.circles": "HorizontalLinesWithCircles",
+  "Human.silhouette.with.plus": "HumanSilhouetteWithPlus",
+  "Agent.studio": "AgentStudio",
+  "Arrow.pointing.into.tray": "ArrowPointingIntoTray",
+  "Plus.circles.cross": "PlusCirclesCross",
+  "Three.bars.horizontal": "ThreeBarsHorizontal",
+  "Three.dots.vertical": "ThreeDotsVertical",
+  "Three.dots.horizontal": "ThreeDotsHorizontal",
+  "Trash.bin": "TrashBin",
+  "Chinese.character.with.letter.a": "ChineseCharacterWithLetterA",
+  "Plus.small": "PlusSmall",
+  "Plus.in.chat.bubble": "PlusInChatBubble",
+  "Chevron.left.small": "ChevronLeftSmall",
+  "Chevron.right.small": "ChevronRightSmall",
 };
 
 /** Figma variant value → arcade-gen prop value. */
@@ -249,9 +363,16 @@ export type KitMatch =
  */
 export const NON_RENDERABLE_KIT_EXPORTS = new Set<string>([
   "Accordion", "Breadcrumb", "Chart", "Dropdown", "Menu", "Modal", "Popover",
-  "Radio", "ResizablePanel", "Select", "Sidebar", "Table", "Tabs", "Toast",
-  "ToggleGroup", "Widget",
+  "Radio", "ResizablePanel", "SegmentedControl", "Select", "Sidebar", "Table",
+  "Tabs", "Toast", "Widget",
 ]);
+// Re-derived against arcade-gen 2.0.0: the 16 names above are exactly the
+// `declare const X: { … }` pure-namespace exports in index.d.mts. Deliberately
+// ABSENT (they are real renderable components that merely carry sub-parts —
+// `declare const X: ForwardRefExoticComponent<…> & { … }`): Card,
+// CardRadioSelect, Grid, ToggleGroup. Note `SegmentedControl` replaced
+// `ToggleGroup` here in 2.0 — the segmented control is the compound one now,
+// while `ToggleGroup` became a renderable labelled-toggle-row list.
 
 /**
  * Resolve an INSTANCE node's kit identity. `setKey`/`setName` come from

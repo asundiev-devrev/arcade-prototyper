@@ -186,6 +186,79 @@ export const COMPONENT_ENTRIES: FigmaComponentMapping[] = [
     note: "Provider, no UI component analogue in 0.3. Always degrades to fallback (renders its children's frame). Expected ambiguous.",
   },
 
+  // --- arcade-gen 2.0 components ---
+  // Keys AND variant axes captured live 2026-08-12 from
+  //   GET /v1/files/a2uKnm88LxRXEWAL1kOqeQ/component_sets
+  //   GET /v1/files/a2uKnm88LxRXEWAL1kOqeQ/nodes?ids=…  (componentPropertyDefinitions)
+  // so the axis names and option spellings below are the file's, not inferred.
+  // Two traps worth knowing before editing these:
+  //  1. The pressed look is its own `Active / Pressed` axis (spaces around the
+  //     slash are part of the name). `State` is only idle/hover.
+  //  2. The file still publishes deprecated twins ([🔴DEPRECATED] Chip Button,
+  //     [🔴DEPRECATED]Number Field, [DLS]File Attachment, [DLS]Search Input).
+  //     These entries are keyed, so they can never resolve to one.
+  {
+    arcadeGen: "SearchInput",
+    status: "mapped",
+    generation: "0.3",
+    figma: { componentSetKey: "19d5b8170133af3b1411a5be16b94621b558c816", setName: "Search Input" },
+    variants: [],
+    textNode: { strategy: "by-name", name: "Placeholder" },
+    note: "Axes are Placeholder(True/False) and Focus(True/False) — both are STATES, not props the kit exposes, so none is driven and the set defaults (empty, unfocused) apply. The query/placeholder text is the TEXT node named 'Placeholder'.",
+  },
+  {
+    arcadeGen: "ChipButton",
+    status: "mapped",
+    generation: "0.3",
+    figma: { componentSetKey: "62304142aad2baf93fd56949820a5989f2715349", setName: "Chip Button" },
+    variants: [
+      { prop: "size", figmaProp: "Size", valueMap: { sm: "Small", md: "Default", lg: "Large" } },
+      { prop: "active", figmaProp: "Active / Pressed", valueMap: { true: "True", false: "False" } },
+      { prop: "loading", figmaProp: "Loading", valueMap: { true: "True", false: "False" } },
+      { prop: "disabled", figmaProp: "Disabled", valueMap: { true: "True", false: "False" } },
+    ],
+    textNode: { strategy: "by-name", name: "Chip" },
+    note: "Set default is Size=Small. `active` drives the 'Active / Pressed' axis — NOT `State`, whose only options are Idle | 'Hover / Press'. Skeleton axis left at default.",
+  },
+  {
+    arcadeGen: "FilterButton",
+    status: "mapped",
+    generation: "0.3",
+    figma: { componentSetKey: "e4341909fd0d33d86b5284326349c6f2d678a70c", setName: "Filter Button" },
+    variants: [
+      { prop: "active", figmaProp: "Active / Pressed", valueMap: { true: "True", false: "False" } },
+      { prop: "disabled", figmaProp: "Disabled", valueMap: { true: "True", false: "False" } },
+    ],
+    note: "Deliberately NO textNode hint: the set nests TWO TEXT nodes both named 'Label' (one holds the label, one holds the value), so a by-name write would land on whichever matched first and could print the label into the value slot. Variants export correctly; the text stays at the set default until the pair is disambiguated live. The `Has Value#19936:37` boolean toggles the value segment.",
+  },
+  {
+    arcadeGen: "NumberField",
+    status: "mapped",
+    generation: "0.3",
+    figma: { componentSetKey: "4c4e26eb174a90e98da63a36f351946ad43498a5", setName: "Input/Number field" },
+    variants: [
+      { prop: "size", figmaProp: "Type", valueMap: { md: "Small", lg: "Default" } },
+    ],
+    note: "`Type` = Floating label | Default | Small, and it is a SINGLE axis carrying what the kit splits across two props (`size` and `labelStyle`). We drive it from `size` because that's the visible geometry: md → Small (28px), lg → Default (40px). A kit labelStyle='floating' should map to Type='Floating label' but can't share the axis; the set default IS Floating label, so an unsized field already lands there. State axis (Idle…Alert/Success) left at default.",
+  },
+  {
+    arcadeGen: "FileAttachment",
+    status: "mapped",
+    generation: "0.3",
+    figma: { componentSetKey: "a11a736d2e3ef8673c0f3b57e18301cfcd0fbd37", setName: "File attachment" },
+    variants: [
+      {
+        prop: "docType",
+        figmaProp: "Document",
+        valueMap: {
+          pdf: "PDF", ppt: "PPT", txt: "TXT", markdown: "Markdown",
+          html: "HTML", doc: "DOC", csv: "CSV", fallback: "Fallback",
+        },
+      },
+    ],
+    note: "One axis, `Document`, whose ninth option `Failed` is the error STATE rather than a file type — the kit models that as a separate `failed` boolean, which therefore can't be expressed on this axis (a failed export lands on its docType glyph instead). No textNode hint: the filename node is named after its own content ('Design document'), so the name isn't stable across instances.",
+  },
+
   // --- Composite sub-parts surfaced by the fiber walk (the widen work) ---
   // The fiber tree exposes a frame's composite SUB-PARTS by name; these map to
   // real 0.3 primitives so the sidebar/chrome become real instances, not boxes.

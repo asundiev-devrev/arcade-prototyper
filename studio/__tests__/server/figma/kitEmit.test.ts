@@ -1537,3 +1537,218 @@ describe("emitKitFrame — blur", () => {
     expect(r.source).not.toContain("filter:");
   });
 });
+
+// --- C3: arcade-gen 2.0 additions -----------------------------------------
+//
+// These match on the component-set NAME (tier 3), not a published key — the
+// names are the ones arcade-gen's own type declarations cite as the source
+// Figma sets. Every required prop must be filled from the instance's text or
+// the frame white-screens, so each case is asserted on the exact prop shape.
+
+/** Instance matched by set NAME with several TEXT children + variant props. */
+function namedInstance(
+  id: string,
+  setName: string,
+  texts: string[],
+  variants: Record<string, string> = {},
+) {
+  const doc = frameNode("0", [{
+    id,
+    type: "INSTANCE",
+    componentId: `c:${id}`,
+    absoluteBoundingBox: bbox(10, 10, 240, 40),
+    componentProperties: Object.fromEntries(
+      Object.entries(variants).map(([k, v]) => [k, { value: v, type: "VARIANT" }]),
+    ),
+    children: texts.map((t, i) => ({
+      id: `${id}-t${i}`,
+      type: "TEXT",
+      characters: t,
+      absoluteBoundingBox: bbox(12, 12 + i * 18, 200, 16),
+    })),
+  }]);
+  const maps = {
+    // A key that is NOT in SET_KEY_TO_KIT, so resolution must fall to the name.
+    components: { [`c:${id}`]: { key: "v", name: `${setName} variant`, componentSetId: `s:${id}` } },
+    componentSets: { [`s:${id}`]: { key: `unpublished-${id}`, name: setName } },
+    assetFiles: new Map(),
+  };
+  return emitKitFrame(doc, maps);
+}
+
+describe("emit — arcade-gen 2.0 components (matched by Figma set name)", () => {
+  it("emits SearchInput with the text as PLACEHOLDER by default", () => {
+    // Placeholder is the set's default variant, so an unset instance is an empty
+    // field. A defaultValue would render a fake already-searched state with "×".
+    const r = namedInstance("s1", "Search Input", ["Search issues"]);
+    expect(r.source).toContain('<SearchInput placeholder="Search issues"');
+    expect(r.source).not.toContain("defaultValue");
+    expect(r.kitImports).toContain("SearchInput");
+  });
+
+  it("emits SearchInput with a defaultValue when Figma Placeholder=False", () => {
+    // Placeholder=False means a real query sits in the field.
+    const r = namedInstance("s2", "Search Input", ["SLA breach"], { Placeholder: "False" });
+    expect(r.source).toContain('defaultValue="SLA breach"');
+    expect(r.source).not.toContain("placeholder=");
+  });
+
+  it("emits NumberField with size + static label from Figma Type=Small", () => {
+    const r = namedInstance("n1", "Input/Number field", ["Priority", "42"], { Type: "Small" });
+    expect(r.source).toContain('size="md"'); // Figma Type=Small → 28px field
+    expect(r.source).toContain('labelStyle="static"');
+    expect(r.source).toContain('label="Priority"');
+    expect(r.source).toContain("defaultValue={42}");
+    // The kit's value is `number | null` — a quoted string would break steppers.
+    expect(r.source).not.toContain('defaultValue="42"');
+  });
+
+  it("maps Figma Type=Default to the 40px NumberField size", () => {
+    const r = namedInstance("n2", "Input/Number field", ["Count"], { Type: "Default" });
+    expect(r.source).toContain('size="lg"');
+  });
+
+  it("passes NO size for Type=Floating label — the kit ignores it in that mode", () => {
+    // "Floating label" is the SET DEFAULT, so this is the common case. The kit
+    // pins a 56px field in floating mode, so any size we passed would be a lie.
+    const r = namedInstance("n4", "Input/Number field", ["Estimate"], { Type: "Floating label" });
+    expect(r.source).toContain("<NumberField");
+    expect(r.source).not.toContain("size=");
+    expect(r.source).not.toContain("labelStyle=");
+  });
+
+  it("maps NumberField State to disabled / readOnly / error", () => {
+    expect(namedInstance("n5", "Input/Number field", ["A"], { State: "Disabled" }).source).toContain("disabled");
+    expect(namedInstance("n6", "Input/Number field", ["A"], { State: "Read only" }).source).toContain("readOnly");
+    expect(namedInstance("n7", "Input/Number field", ["A"], { State: "Alert" }).source).toContain('error="Invalid"');
+  });
+
+  it("omits NumberField defaultValue when no text parses as a number", () => {
+    const r = namedInstance("n3", "Input/Number field", ["Estimate"]);
+    expect(r.source).toContain('label="Estimate"');
+    expect(r.source).not.toContain("defaultValue");
+  });
+
+  it("reads ChipButton's pressed look from `Active / Pressed`, not `State`", () => {
+    // The 0.3 set's `State` axis is only Idle | "Hover / Press" — the pressed
+    // look lives on its own `Active / Pressed` axis. Keying on State silently
+    // dropped every active chip.
+    const r = namedInstance("c1", "Chip Button", ["Summarise"], {
+      Size: "Small",
+      "Active / Pressed": "True",
+    });
+    expect(r.source).toContain('size="sm"');
+    expect(r.source).toContain("active");
+    expect(r.source).toContain(">Summarise</ChipButton>");
+    expect(r.kitImports).toContain("ChipButton");
+  });
+
+  it("does NOT mark a ChipButton active for State=Hover / Press", () => {
+    const r = namedInstance("c2", "Chip Button", ["Summarise"], { State: "Hover / Press" });
+    expect(r.source).not.toContain("active");
+  });
+
+  it("emits FilterButton with label and value from tree order", () => {
+    const r = namedInstance("f1", "Filter Button", ["Owner", "Nuska"]);
+    expect(r.source).toContain('label="Owner"');
+    expect(r.source).toContain('value="Nuska"');
+    expect(r.kitImports).toContain("FilterButton");
+  });
+
+  it("reads FilterButton's active look from `Active / Pressed` too", () => {
+    const r = namedInstance("f2", "Filter Button", ["Stage"], { "Active / Pressed": "True" });
+    expect(r.source).toContain("active");
+  });
+
+  it("emits AttributeItem with the REQUIRED label", () => {
+    const r = namedInstance("a1", "Attribute Item", ["Stage", "In review"]);
+    expect(r.source).toContain('label="Stage"');
+    expect(r.source).toContain('value="In review"');
+    expect(r.kitImports).toContain("AttributeItem");
+  });
+
+  it("falls back to faithful markup when AttributeItem has no text for its required label", () => {
+    const r = namedInstance("a2", "Attribute Item", []);
+    expect(r.source).not.toContain("<AttributeItem");
+    expect(r.kitImports).not.toContain("AttributeItem");
+  });
+
+  it("prefers Figma's `Document` variant over the filename extension", () => {
+    // The set states the type outright. When the two disagree (a mislabelled
+    // filename), the variant is the designer's intent.
+    const r = namedInstance("fa0", "File attachment", ["deck.pdf"], { Document: "PPT" });
+    expect(r.source).toContain('docType="ppt"');
+    expect(r.source).not.toContain('docType="pdf"');
+  });
+
+  it("maps Figma Document=Failed to the `failed` prop, not a docType", () => {
+    // `Failed` is the ninth option on the Document axis but it is an error STATE,
+    // not a file type — passing it as docType would render no glyph at all.
+    const r = namedInstance("fa7", "File attachment", ["broken.pdf"], { Document: "Failed" });
+    expect(r.source).toContain("failed");
+    expect(r.source).not.toContain('docType="failed"');
+    // Falls back to the extension for the glyph so the chip still looks like a PDF.
+    expect(r.source).toContain('docType="pdf"');
+  });
+
+  it("emits FileAttachment with docType derived from the filename extension", () => {
+    const r = namedInstance("fa1", "File attachment", ["Q3 brief.pdf", "240 KB"]);
+    expect(r.source).toContain('name="Q3 brief.pdf"');
+    expect(r.source).toContain('docType="pdf"');
+    expect(r.source).toContain('meta="240 KB"');
+    expect(r.kitImports).toContain("FileAttachment");
+  });
+
+  it("maps .docx/.pptx/.md to their doc types and omits an unknown extension", () => {
+    expect(namedInstance("fa2", "File attachment", ["spec.docx"]).source).toContain('docType="doc"');
+    expect(namedInstance("fa3", "File attachment", ["deck.pptx"]).source).toContain('docType="ppt"');
+    expect(namedInstance("fa4", "File attachment", ["notes.md"]).source).toContain('docType="markdown"');
+    const unknown = namedInstance("fa5", "File attachment", ["archive.xyz"]);
+    expect(unknown.source).toContain('name="archive.xyz"');
+    expect(unknown.source).not.toContain("docType=");
+  });
+
+  it("falls back to faithful markup when FileAttachment has no filename", () => {
+    const r = namedInstance("fa6", "File attachment", []);
+    expect(r.source).not.toContain("<FileAttachment");
+  });
+
+  it("matches the C3 components by published SET KEY, not just by name", () => {
+    // The 0.3 library also publishes "[🔴DEPRECATED] Chip Button",
+    // "[🔴DEPRECATED]Number Field" and "[DLS]File Attachment". Key matching is
+    // what stops a deprecated twin resolving to the modern kit component, so the
+    // keys must be present and must win over the name tier.
+    const byKey: Array<[string, string]> = [
+      ["19d5b8170133af3b1411a5be16b94621b558c816", "SearchInput"],
+      ["4c4e26eb174a90e98da63a36f351946ad43498a5", "NumberField"],
+      ["62304142aad2baf93fd56949820a5989f2715349", "ChipButton"],
+      ["e4341909fd0d33d86b5284326349c6f2d678a70c", "FilterButton"],
+      ["a11a736d2e3ef8673c0f3b57e18301cfcd0fbd37", "FileAttachment"],
+    ];
+    for (const [key, kit] of byKey) {
+      expect(SET_KEY_TO_KIT[key], `${kit} lost its published set key`).toBe(kit);
+      // A set whose NAME is unknown still resolves through the key.
+      expect(matchKit(key, "Some Detached Copy")).toEqual({ kind: "component", kit });
+    }
+  });
+
+  it("every C3 name maps to a real kit export with an emit case", () => {
+    // Guard the pointless-mapping failure mode: a SET_NAME_TO_KIT row with no
+    // emit case resolves, then falls through to static markup — silently
+    // costing a kit match. Each of these must actually emit its component.
+    const cases: Array<[string, string[], string]> = [
+      ["Search Input", ["x"], "SearchInput"],
+      ["Input/Number field", ["x"], "NumberField"],
+      ["Chip Button", ["x"], "ChipButton"],
+      ["Filter Button", ["x"], "FilterButton"],
+      ["Attribute Item", ["x"], "AttributeItem"],
+      ["File attachment", ["x.pdf"], "FileAttachment"],
+    ];
+    for (const [setName, texts, kit] of cases) {
+      expect(SET_NAME_TO_KIT[setName], `${setName} missing from SET_NAME_TO_KIT`).toBe(kit);
+      const r = namedInstance(`g-${kit}`, setName, texts);
+      expect(r.source, `${setName} resolved to ${kit} but emitted no component`).toContain(`<${kit}`);
+      expect(r.kitImports, `${setName} emitted ${kit} without importing it`).toContain(kit);
+    }
+  });
+});
