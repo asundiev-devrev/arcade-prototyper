@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { createRequire } from "node:module";
 // @ts-expect-error — .mjs import of a pure-JS module with no types
 import {
   extractTokenNames,
@@ -262,16 +263,33 @@ describe("validateTokenClasses hook (dead-ref integration)", () => {
     expect(p.status).toBe(2);
     expect(p.stderr).toMatch(/bg-orange-subtle/);
   });
-  it("exit 2 with the real value for an ADS-real-but-kit-absent token", () => {
+  // arcade-gen 2.0.0 closed the ADS-vs-kit token gap: every colour in
+  // ADS_COLOR_SEED is now emitted by the kit's own tokens.css, so the
+  // "ADS-real but kit-absent" lane has no live cases left. The seeded token
+  // below used to exit 2 with its hex (#FCECD2); it now renders, so it passes.
+  it("exit 0 for a seeded expressive token the kit now ships (2.0.0)", () => {
     const f = tmpFrame(`export default () => <div className="bg-(--bg-expressive-orange-subtle)" />;`);
     const p = runHook({ tool_name: "Write", tool_input: { file_path: f, content: fs.readFileSync(f, "utf-8") } });
-    expect(p.status).toBe(2);
-    expect(p.stderr).toMatch(/#FCECD2/i);
+    expect(p.status).toBe(0);
   });
   it("exit 0 for a kit-shipped *-on-prominent token (rev-4 regression guard)", () => {
     const f = tmpFrame(`export default () => <div className="text-(--fg-neutral-on-prominent)" />;`);
     const p = runHook({ tool_name: "Write", tool_input: { file_path: f, content: fs.readFileSync(f, "utf-8") } });
     expect(p.status).toBe(0);
+  });
+
+  // Drift guard replacing the old kit-absent case above. As long as this
+  // passes, the ADS seed is pure redundancy. When ADS next runs ahead of the
+  // kit this fails, which is the signal to re-check the dead-ref lane (and
+  // that the listed tokens genuinely don't render).
+  it("every ADS_COLOR_SEED token is shipped by the installed kit", async () => {
+    const { ADS_COLOR_SEED } = await import("../../../server/figma/adsColorSeed.mjs");
+    const kitTokensCss = fs.readFileSync(
+      path.join(path.dirname(createRequire(import.meta.url).resolve("@xorkavi/arcade-gen")), "tokens.css"),
+      "utf-8",
+    );
+    const absent = Object.keys(ADS_COLOR_SEED).filter((n) => !kitTokensCss.includes(`--${n}:`));
+    expect(absent, `seed tokens the kit does not ship: ${absent.join(", ")}`).toEqual([]);
   });
   it("exit 0 for --radius-bubble (real, in tailwind.css @theme)", () => {
     const f = tmpFrame(`export default () => <div className="rounded-(--radius-bubble)" />;`);

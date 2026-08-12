@@ -57,7 +57,7 @@ const COMPONENT_CATALOG: { name: string; doc: string }[] = [
   { name: "ButtonGroup", doc: "A row of related buttons joined together." },
   { name: "SplitButton", doc: "A button with an attached dropdown of more actions." },
   { name: "Toggle", doc: "A button that flips between on and off." },
-  { name: "ToggleGroup", doc: "A set of toggles where one or more can be active." },
+  { name: "SegmentedControl", doc: "A row of mutually exclusive options; one is always selected." },
   { name: "Link", doc: "Styled inline navigation link." },
   // Inputs
   { name: "Input", doc: "Single-line text field." },

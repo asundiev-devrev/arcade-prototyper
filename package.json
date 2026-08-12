@@ -28,7 +28,7 @@
     "@tailwindcss/oxide": "^4.2.4",
     "@tailwindcss/vite": "^4.3.0",
     "@vitejs/plugin-react": "^6.0.2",
-    "@xorkavi/arcade-gen": "^1.0.0",
+    "@xorkavi/arcade-gen": "^2.0.0",
     "chokidar": "^4.0.0",
     "electron-updater": "^6.8.3",
     "esbuild": "^0.28.1",

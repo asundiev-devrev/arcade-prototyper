@@ -4,7 +4,7 @@ import { render, screen } from "@testing-library/react";
 import { LeftPaneTabToggle } from "../../src/components/shell/LeftPaneTabToggle";
 
 vi.mock("@xorkavi/arcade-gen", () => ({
-  ToggleGroup: {
+  SegmentedControl: {
     Root: ({ children, "aria-label": label }: any) => <div aria-label={label}>{children}</div>,
     Item: ({ children, value }: any) => <button value={value}>{children}</button>,
   },

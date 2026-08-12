@@ -1,10 +1,34 @@
 /*
- * Consumer-side patches for @xorkavi/arcade-gen@1.0.0 ChatBubble.
+ * Consumer-side patches for @xorkavi/arcade-gen ChatBubble.
  *
- * Upstream references dimension tokens that the current ADS token export
- * does not emit, and its tail SVG path is authored top-down so it renders
- * upside-down when absolute-positioned at the bubble's bottom. Fix both
- * here without forking arcade-gen.
+ * Written against 1.0.0, which (a) referenced bubble dimension tokens the ADS
+ * export didn't emit, and (b) authored its tail SVG path top-down so the tail
+ * rendered upside-down once absolute-positioned at the bubble's bottom.
+ *
+ * STATUS against 2.0.0 (re-checked 2026-08-12 — read before editing):
+ *
+ *  - The four `--component-bubble-*` definitions below are now DEAD. 2.0.0
+ *    reads `--bubble-padding-x`, `--bubble-padding-y` and `--corner-bubble`
+ *    instead, and its own tokens.css ships all three plus the per-role
+ *    bg/fg/stroke tokens. Nothing in the kit reads the old names any more.
+ *    Harmless, but they no longer patch anything.
+ *
+ *  - `bottom: 0` in the tail rule is now REDUNDANT: 2.0.0's Tail() sets
+ *    `absolute bottom-0` itself.
+ *
+ *  - `transform: scaleY(-1)` is UNVERIFIED against 2.0.0 and is the one line
+ *    here that can do harm. The selector still matches (2.0.0 emits
+ *    `rounded-br-none` / `rounded-bl-none` via ROLE_CLASSES.squaredCorner, and
+ *    the tail svg is still a direct child carrying `-right-3` / `-left-3`), but
+ *    the path data was REWRITTEN — it now starts at y=12 rather than y=0. If
+ *    2.0.0 authors the path bottom-up, this flip makes a correct tail point the
+ *    wrong way. Deciding it needs one rendered chat frame with `tail`, not a
+ *    reading of the path data. Left in place deliberately: an unverified change
+ *    to bubble rendering is worse than an unverified line that has shipped.
+ *
+ * This file is injected into EVERY generated frame (frameMountPlugin and the
+ * Cloudflare share bundler) and its custom properties feed the token-class
+ * validator, so a wrong rule here is visible in every chat prototype.
  */
 
 :root {

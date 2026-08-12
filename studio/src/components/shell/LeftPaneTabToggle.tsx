@@ -1,4 +1,4 @@
-import { ToggleGroup } from "@xorkavi/arcade-gen";
+import { SegmentedControl } from "@xorkavi/arcade-gen";
 import type { LeftPaneTab } from "./LeftPaneTabs";
 
 /**
@@ -13,7 +13,7 @@ export function LeftPaneTabToggle({
   onTabChange: (tab: LeftPaneTab) => void;
 }) {
   return (
-    <ToggleGroup.Root
+    <SegmentedControl.Root
       type="single"
       value={tab}
       // Radix single-type fires "" when the active item is re-clicked;
@@ -21,9 +21,9 @@ export function LeftPaneTabToggle({
       onValueChange={(v) => v && onTabChange(v as LeftPaneTab)}
       aria-label="Left pane view"
     >
-      <ToggleGroup.Item value="chat">Chat</ToggleGroup.Item>
-      <ToggleGroup.Item value="assets">Assets</ToggleGroup.Item>
-      <ToggleGroup.Item value="memory">Memory</ToggleGroup.Item>
-    </ToggleGroup.Root>
+      <SegmentedControl.Item value="chat">Chat</SegmentedControl.Item>
+      <SegmentedControl.Item value="assets">Assets</SegmentedControl.Item>
+      <SegmentedControl.Item value="memory">Memory</SegmentedControl.Item>
+    </SegmentedControl.Root>
   );
 }

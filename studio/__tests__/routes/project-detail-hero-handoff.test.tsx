@@ -99,7 +99,7 @@ vi.mock("@xorkavi/arcade-gen", async () => {
     React.forwardRef((props: any, ref: any) =>
       React.createElement(tag, { ...props, ref }),
     );
-  const ToggleGroup: any = {
+  const SegmentedControl: any = {
     Root: ({ children }: any) => React.createElement("div", null, children),
     Item: ({ children, ...rest }: any) =>
       React.createElement("button", rest, children),
@@ -108,7 +108,7 @@ vi.mock("@xorkavi/arcade-gen", async () => {
     Button: passthrough("button"),
     IconButton: passthrough("button"),
     Tooltip: ({ children }: any) => React.createElement("div", null, children),
-    ToggleGroup,
+    SegmentedControl,
     useToast: () => ({ toast: () => {}, dismiss: () => {} }),
   };
 });

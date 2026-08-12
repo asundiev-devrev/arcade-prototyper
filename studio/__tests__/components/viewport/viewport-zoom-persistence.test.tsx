@@ -15,7 +15,7 @@ vi.mock("@xorkavi/arcade-gen", async () => {
     Item: ({ children, ...rest }: any) =>
       React.createElement("button", rest, children),
   };
-  const ToggleGroup: any = {
+  const SegmentedControl: any = {
     Root: ({ children }: any) => React.createElement("div", null, children),
     Item: ({ children, ...rest }: any) =>
       React.createElement("button", rest, children),
@@ -26,7 +26,7 @@ vi.mock("@xorkavi/arcade-gen", async () => {
     Tooltip: ({ children }: any) => children,
     useToast: () => ({ toast: () => {} }),
     Menu,
-    ToggleGroup,
+    SegmentedControl,
     ArrowUpRightSmall: () => null,
     ChevronDownSmall: () => null,
     ThreeDotsHorizontal: () => null,

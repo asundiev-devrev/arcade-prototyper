@@ -13,14 +13,14 @@ import { render, cleanup } from "@testing-library/react";
 // representative root that forwards data-* to the rendered DOM.
 vi.mock("@xorkavi/arcade-gen", () => {
   const React = require("react");
-  // ToggleGroup mock mirrors the real compound shape (Root + Item). Root
+  // SegmentedControl mock mirrors the real compound shape (Root + Item). Root
   // forwards className + all props to a <div> exactly as arcade-gen does, so
   // the shim's injected vertical class is observable on the rendered root.
-  const ToggleGroupRoot = React.forwardRef<HTMLDivElement, any>((props, ref) => {
+  const SegmentedControlRoot = React.forwardRef<HTMLDivElement, any>((props, ref) => {
     const { className, children, ...rest } = props;
     return React.createElement("div", { ...rest, ref, className }, children);
   });
-  const ToggleGroupItem = React.forwardRef<HTMLButtonElement, any>((props, ref) => {
+  const SegmentedControlItem = React.forwardRef<HTMLButtonElement, any>((props, ref) => {
     return React.createElement("button", { ...props, ref });
   });
   return {
@@ -39,7 +39,7 @@ vi.mock("@xorkavi/arcade-gen", () => {
         timestamp ? React.createElement("time", null, timestamp) : null,
       );
     }),
-    ToggleGroup: Object.assign({}, { Root: ToggleGroupRoot, Item: ToggleGroupItem }),
+    SegmentedControl: Object.assign({}, { Root: SegmentedControlRoot, Item: SegmentedControlItem }),
   };
 });
 
@@ -47,7 +47,7 @@ import {
   Button,
   IconButton,
   ChatBubble,
-  ToggleGroup,
+  SegmentedControl,
 } from "../../prototype-kit/arcade-components";
 
 /**
@@ -217,15 +217,15 @@ describe("arcade-components shim — type narrowing", () => {
   });
 });
 
-describe("arcade-components shim — ToggleGroup orientation", () => {
+describe("arcade-components shim — SegmentedControl orientation", () => {
   afterEach(() => cleanup());
 
   it("adds a column layout class to the root when orientation=\"vertical\"", () => {
     const { container } = render(
-      <ToggleGroup.Root type="single" orientation="vertical">
-        <ToggleGroup.Item value="a">A</ToggleGroup.Item>
-        <ToggleGroup.Item value="b">B</ToggleGroup.Item>
-      </ToggleGroup.Root>,
+      <SegmentedControl.Root type="single" orientation="vertical">
+        <SegmentedControl.Item value="a">A</SegmentedControl.Item>
+        <SegmentedControl.Item value="b">B</SegmentedControl.Item>
+      </SegmentedControl.Root>,
     );
     // The root is the mock's first div; the shim must have injected flex-col.
     const root = container.firstElementChild as HTMLElement;
@@ -236,9 +236,9 @@ describe("arcade-components shim — ToggleGroup orientation", () => {
 
   it("does NOT add the column class for horizontal (default)", () => {
     const { container } = render(
-      <ToggleGroup.Root type="single" orientation="horizontal">
-        <ToggleGroup.Item value="a">A</ToggleGroup.Item>
-      </ToggleGroup.Root>,
+      <SegmentedControl.Root type="single" orientation="horizontal">
+        <SegmentedControl.Item value="a">A</SegmentedControl.Item>
+      </SegmentedControl.Root>,
     );
     const root = container.firstElementChild as HTMLElement;
     expect(root.className ?? "").not.toContain("flex-col");
@@ -246,9 +246,9 @@ describe("arcade-components shim — ToggleGroup orientation", () => {
 
   it("does NOT add the column class when orientation is omitted", () => {
     const { container } = render(
-      <ToggleGroup.Root type="single">
-        <ToggleGroup.Item value="a">A</ToggleGroup.Item>
-      </ToggleGroup.Root>,
+      <SegmentedControl.Root type="single">
+        <SegmentedControl.Item value="a">A</SegmentedControl.Item>
+      </SegmentedControl.Root>,
     );
     const root = container.firstElementChild as HTMLElement;
     expect(root.className ?? "").not.toContain("flex-col");
@@ -256,9 +256,9 @@ describe("arcade-components shim — ToggleGroup orientation", () => {
 
   it("preserves a caller-supplied className alongside the vertical class", () => {
     const { container } = render(
-      <ToggleGroup.Root type="single" orientation="vertical" className="custom-x">
-        <ToggleGroup.Item value="a">A</ToggleGroup.Item>
-      </ToggleGroup.Root>,
+      <SegmentedControl.Root type="single" orientation="vertical" className="custom-x">
+        <SegmentedControl.Item value="a">A</SegmentedControl.Item>
+      </SegmentedControl.Root>,
     );
     const root = container.firstElementChild as HTMLElement;
     expect(root.className).toContain("flex-col");

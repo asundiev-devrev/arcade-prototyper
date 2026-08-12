@@ -31,7 +31,7 @@ import {
   Button as RawButton,
   IconButton as RawIconButton,
   ChatBubble as RawChatBubble,
-  ToggleGroup as RawToggleGroup,
+  SegmentedControl as RawSegmentedControl,
   type ButtonProps as RawButtonProps,
   type IconButtonProps as RawIconButtonProps,
   type ChatBubbleProps as RawChatBubbleProps,
@@ -111,9 +111,12 @@ export const ChatBubble = React.forwardRef<HTMLDivElement, RawChatBubbleProps>(
   },
 );
 
-// ToggleGroup.Root — honor `orientation="vertical"` with a real column layout.
+// SegmentedControl.Root — honor `orientation="vertical"` with a real column
+// layout. (In arcade-gen 1.x this compound was named `ToggleGroup`; 2.0 renamed
+// it to `SegmentedControl` and gave the `ToggleGroup` name to a different
+// component — a list of labelled toggle rows.)
 //
-// arcade-gen's ToggleGroup.Root hardcodes `inline-flex items-center` (a row)
+// arcade-gen's SegmentedControl.Root hardcodes `inline-flex items-center` (a row)
 // and spreads `orientation` only to headless Radix, which sets data-orientation
 // + arrow-key direction but does NO layout. So `orientation="vertical"` reaches
 // the DOM yet renders horizontal — a real prop that is visually inert. The
@@ -130,15 +133,15 @@ export const ChatBubble = React.forwardRef<HTMLDivElement, RawChatBubbleProps>(
 // and the winner would depend on stylesheet rule order — fragile. Centered
 // content-width pills stacked vertically is the correct vertical look anyway.
 // Horizontal (default) is untouched — pass-through, kit renders as before.
-type ToggleGroupRootProps = React.ComponentProps<typeof RawToggleGroup.Root>;
+type SegmentedControlRootProps = React.ComponentProps<typeof RawSegmentedControl.Root>;
 
-const VerticalToggleGroupRoot: React.ForwardRefExoticComponent<
-  ToggleGroupRootProps & React.RefAttributes<HTMLDivElement>
-> = React.forwardRef<HTMLDivElement, ToggleGroupRootProps>(
-  function ToggleGroupRoot({ orientation, className, ...props }, ref) {
+const VerticalSegmentedControlRoot: React.ForwardRefExoticComponent<
+  SegmentedControlRootProps & React.RefAttributes<HTMLDivElement>
+> = React.forwardRef<HTMLDivElement, SegmentedControlRootProps>(
+  function SegmentedControlRoot({ orientation, className, ...props }, ref) {
     const verticalClass = orientation === "vertical" ? "flex-col" : undefined;
     return (
-      <RawToggleGroup.Root
+      <RawSegmentedControl.Root
         ref={ref}
         orientation={orientation}
         className={[verticalClass, className].filter(Boolean).join(" ") || undefined}
@@ -151,8 +154,8 @@ const VerticalToggleGroupRoot: React.ForwardRefExoticComponent<
 // Explicit type: the inferred Object.assign type references Radix's internal
 // package path (non-portable, TS2742). We only override Root; Item and any
 // other sub-parts pass through from the raw compound unchanged.
-export const ToggleGroup: Omit<typeof RawToggleGroup, "Root"> & {
-  Root: typeof VerticalToggleGroupRoot;
-} = Object.assign({}, RawToggleGroup, {
-  Root: VerticalToggleGroupRoot,
+export const SegmentedControl: Omit<typeof RawSegmentedControl, "Root"> & {
+  Root: typeof VerticalSegmentedControlRoot;
+} = Object.assign({}, RawSegmentedControl, {
+  Root: VerticalSegmentedControlRoot,
 });
