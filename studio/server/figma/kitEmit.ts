@@ -1060,6 +1060,39 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
    *  button is never blank), else a spacer. Returns { jsx, kit } where kit is
    *  the kit-icon name to import (if any). */
   /**
+   * Geometry a substituted CONTROL must adopt from Figma.
+   *
+   * A kit component sizes itself from its `size` prop — but that is a DEFAULT,
+   * and Figma states the real box and corner radius explicitly. For controls,
+   * those are design decisions, not incidental: 0.3 "Computer Action" is 170x40
+   * with cornerRadius 20 and layoutSizingHorizontal FILL — a pill spanning its
+   * row. Emitted with size="lg" alone it hugged its label at 144px with the kit's
+   * 4px corners, so it read as a different component entirely.
+   *
+   * This is the general rule, not a fix for one button: where we swap a Figma
+   * instance for a kit control, the control adopts that instance's box and
+   * radius. The positioned wrapper already carries the exact Figma box, so 100%
+   * reproduces it and still holds when the wrapper is laid out in flow. Kit
+   * controls spread ...props onto their root element, so `style` reaches the DOM.
+   *
+   * Deliberately NOT applied to components whose size is semantic rather than
+   * geometric (Avatar picks a size token from its px width; Tag hugs its label).
+   */
+  function controlBoxStyle(n: RawNode): string {
+    const b = n.absoluteBoundingBox ?? {};
+    const parts = ['width: "100%"', 'height: "100%"'];
+    const r = Number(n.cornerRadius ?? NaN);
+    if (Number.isFinite(r) && r > 0) {
+      const short = Math.min(b.width ?? 0, b.height ?? 0);
+      // A radius at or past half the short side is a pill/circle. Say that
+      // outright — a literal 20px on a 40px box is a circle only by coincidence
+      // of those two numbers, and breaks the moment either changes.
+      parts.push(short && r >= short / 2 ? 'borderRadius: "9999px"' : `borderRadius: "${Math.round(r)}px"`);
+    }
+    return ` style={{${parts.join(", ")}}}`;
+  }
+
+  /**
    * The node a button's glyph comes from, plus its kit icon name when it has one.
    * Needed because the glyph's own BOX and ROTATION matter and `innerIcon` only
    * returns a name.
@@ -1214,7 +1247,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
           const szv = SIZE_VALUE_MAP[p.Size ?? ""] ?? controlSizeFromBox(n, "md");
           const g = buttonGlyph(n);
           if (g.kit) usedKit.add(g.kit);
-          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><IconButton variant="${v}" size="${szv}"${g.dimmed ? " disabled" : ""} aria-label="action">${g.jsx}</IconButton></div>`);
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><IconButton variant="${v}" size="${szv}"${g.dimmed ? " disabled" : ""} aria-label="action"${controlBoxStyle(n)}>${g.jsx}</IconButton></div>`);
           return;
         }
         case "Button": {
@@ -1231,7 +1264,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
             kitInstanceCount++;
             const g = buttonGlyph(n);
             if (g.kit) usedKit.add(g.kit);
-            lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><IconButton variant="${v}" size="${szv}"${g.dimmed ? " disabled" : ""} aria-label="action">${g.jsx}</IconButton></div>`);
+            lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><IconButton variant="${v}" size="${szv}"${g.dimmed ? " disabled" : ""} aria-label="action"${controlBoxStyle(n)}>${g.jsx}</IconButton></div>`);
             return;
           }
           usedKit.add("Button");
@@ -1244,7 +1277,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
           const leadW = Math.round(leadGlyph.node?.absoluteBoundingBox?.width ?? 0);
           const leadSize = leadW >= 12 && leadW <= 32 ? leadW : 16;
           const lead = icon ? ` iconLeft={<${icon} size={${leadSize}} />}` : "";
-          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><Button variant="${v}" size="${szv}"${lead}>${escText(String(label))}</Button></div>`);
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><Button variant="${v}" size="${szv}"${lead}${controlBoxStyle(n)}>${escText(String(label))}</Button></div>`);
           return;
         }
         case "Checkbox": {

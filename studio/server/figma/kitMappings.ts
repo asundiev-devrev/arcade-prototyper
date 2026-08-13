@@ -333,9 +333,10 @@ export const ICON_SET_NAME_TO_KIT: Record<string, string> = {
  *
  * NOTE on shape: the design draws both fully rounded, and in arcade-gen 2.0 only
  * `primary`/`expressive` are pill/circular — `secondary` is square-cornered. The
- * pill comes from Figma's own wrapper radius, which the emitter already keeps
- * (borderRadius + overflow:hidden on the positioned box), so the variant only has
- * to get the FILL right.
+ * wrapper's radius does NOT rescue this (an earlier note here claimed it did and
+ * was wrong: the wrapper's own background is stripped, so it clips nothing and the
+ * control's 4px corners showed through). The radius is passed to the control
+ * itself — see controlBoxStyle in kitEmit.
  */
 export const SET_NAME_DEFAULT_VARIANT: Record<string, string> = {
   "Computer Action": "secondary",

@@ -1934,3 +1934,61 @@ describe("control fidelity", () => {
     expect(r.source).toContain('size="sm"');
   });
 });
+
+// --- A substituted control adopts Figma's box and radius --------------------
+//
+// The general rule, not a fix for one button. A kit component sizes itself from
+// its `size` prop, but that is a DEFAULT — Figma states the real box and corner
+// radius, and for controls those are design decisions. 0.3 "Computer Action" is
+// 170x40 with cornerRadius 20 and layoutSizingHorizontal FILL: a pill spanning
+// its row. Emitted with size="lg" alone it hugged its label at 144px with the
+// kit's 4px corners and read as a different component.
+
+/** A control instance with an explicit Figma box and corner radius. */
+function control(id: string, setKey: string, w: number, h: number, cornerRadius?: number, label?: string) {
+  const node: any = {
+    id, type: "INSTANCE", componentId: `c_${id}`,
+    absoluteBoundingBox: bbox(0, 0, w, h),
+    ...(cornerRadius !== undefined ? { cornerRadius } : {}),
+    children: label
+      ? [{ id: `${id}-t`, type: "TEXT", characters: label, absoluteBoundingBox: bbox(8, 8, w - 16, 16) }]
+      : [],
+  };
+  return emitKitFrame(frameNode("0", [node]), {
+    components: { [`c_${id}`]: { key: "v", name: "x", componentSetId: `s_${id}` } },
+    componentSets: { [`s_${id}`]: { key: setKey, name: "x" } },
+    assetFiles: new Map(),
+  });
+}
+
+const BUTTON_KEY = "0b87fe4f9790e1c0053da61c767edbaa1c46826d";
+const ICONBUTTON_KEY = "3abc28fac47cbde78a253917b98d8b34eabfb218";
+
+describe("substituted controls adopt Figma geometry", () => {
+  it("fills the Figma box instead of hugging its content", () => {
+    const r = control("b1", BUTTON_KEY, 170, 40, 20, "New session");
+    expect(r.source).toContain('width: "100%"');
+    expect(r.source).toContain('height: "100%"');
+    // the wrapper still carries the real Figma box, so 100% == 170x40
+    expect(r.source).toContain('width: "170px"');
+  });
+
+  it("reads a pill/circle from the radius rather than emitting a literal px", () => {
+    // r >= half the short side is fully rounded — saying "20px" would be a circle
+    // only by coincidence of those two numbers.
+    expect(control("b2", BUTTON_KEY, 170, 40, 20, "Go").source).toContain('borderRadius: "9999px"');
+    expect(control("b3", ICONBUTTON_KEY, 40, 40, 20).source).toContain('borderRadius: "9999px"');
+  });
+
+  it("keeps a genuine corner radius as a px value", () => {
+    const r = control("b4", ICONBUTTON_KEY, 28, 28, 4);
+    expect(r.source).toContain('borderRadius: "4px"');
+    expect(r.source).not.toContain('borderRadius: "9999px"');
+  });
+
+  it("omits borderRadius when Figma declares none", () => {
+    const r = control("b5", BUTTON_KEY, 100, 32, undefined, "Plain");
+    expect(r.source).toContain('width: "100%"');
+    expect(r.source).not.toMatch(/borderRadius: "\d/);
+  });
+});
