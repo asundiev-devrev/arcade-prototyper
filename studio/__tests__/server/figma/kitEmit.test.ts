@@ -1992,3 +1992,57 @@ describe("substituted controls adopt Figma geometry", () => {
     expect(r.source).not.toMatch(/borderRadius: "\d/);
   });
 });
+
+// --- Interactive states from Figma variants ---------------------------------
+//
+// Figma declares row states as variants — 0.3 "Items/Expanded" has
+// `State: Idle | Hover` and `Active: False | True` — but the payload carries only
+// the SELECTED variant, so a faithful emit reproduces one frozen state and the
+// rows sit inert. The sibling variants' fills are bound to design VARIABLES, and
+// the kit ships that exact pair (--navigation-bg-hover matches the Hover
+// variant's 6% fill), so the state is expressible as a token without a second
+// network call to read another variant.
+
+function statefulInstance(id: string, props: Record<string, string>) {
+  const node: any = {
+    id, type: "INSTANCE", componentId: `c_${id}`,
+    absoluteBoundingBox: bbox(0, 0, 240, 28),
+    componentProperties: Object.fromEntries(
+      Object.entries(props).map(([k, v]) => [k, { value: v, type: "VARIANT" }]),
+    ),
+    children: [{ id: `${id}-t`, type: "TEXT", characters: "Row", absoluteBoundingBox: bbox(8, 6, 200, 16) }],
+  };
+  return emitKitFrame(frameNode("0", [node]), {
+    // an UNMAPPED set: a substituted kit control brings its own hover
+    components: { [`c_${id}`]: { key: "v", name: "x", componentSetId: `s_${id}` } },
+    componentSets: { [`s_${id}`]: { key: `local-${id}`, name: "Items/Expanded" } },
+    assetFiles: new Map(),
+  });
+}
+
+describe("interactive states", () => {
+  it("gives a stateful row a token-based hover", () => {
+    const r = statefulInstance("row", { State: "Idle", Active: "False" });
+    expect(r.source).toContain("hover:bg-[var(--navigation-bg-hover)]");
+    expect(r.source).toContain("cursor-pointer");
+  });
+
+  it("uses the arbitrary-value form, not the bg-(--x) shorthand", () => {
+    // The shorthand is ambiguous for colours and Tailwind generated NO rule for
+    // it — the class sat on the element doing nothing.
+    const r = statefulInstance("row2", { State: "Idle" });
+    expect(r.source).not.toContain("hover:bg-(--navigation");
+  });
+
+  it("matches the axis by NAME, since 0.3 spells it inconsistently", () => {
+    // "State" on rows, "States" on Icon Button, ":idle"/":hover" values elsewhere.
+    expect(statefulInstance("s1", { States: "Idle" }).source).toContain("hover:bg-[var(");
+    expect(statefulInstance("s2", { State: ":idle" }).source).toContain("hover:bg-[var(");
+  });
+
+  it("leaves a non-interactive instance alone", () => {
+    const r = statefulInstance("plain", { Type: "Default" });
+    expect(r.source).not.toContain("hover:bg-[var(");
+    expect(r.source).not.toContain("cursor-pointer");
+  });
+});

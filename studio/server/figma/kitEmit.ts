@@ -1060,6 +1060,39 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
    *  button is never blank), else a spacer. Returns { jsx, kit } where kit is
    *  the kit-icon name to import (if any). */
   /**
+   * Interactive-state classes for an UNMAPPED instance that Figma marks stateful.
+   *
+   * Figma's list rows declare their states as variants — 0.3 "Items/Expanded" has
+   * `State: Idle | Hover` and `Active: False | True` — but only the SELECTED
+   * variant is in the payload, so a faithful emit reproduces one frozen state and
+   * the rows sit there inert. The sibling variants' fills are bound to design
+   * VARIABLES, and the kit ships exactly that pair, theme-aware:
+   *   --navigation-bg-hover  = #8985870f  (matches the Hover variant's 6% fill)
+   *   --navigation-bg-active = --bg-neutral-soft (matches Active=True's 34% fill)
+   * so the state can be expressed as a token rather than a hex sampled from
+   * another variant — which would also need a second network call to read.
+   *
+   * Only for UNMAPPED nodes: a substituted kit control brings its own hover.
+   * Only the HOVER is emitted as a class — Active=True is already painted by the
+   * variant's own fill, and an inline style would beat a class anyway.
+   *
+   * Axis naming is inconsistent across 0.3 ("State" on rows, "States" on Icon
+   * Button, ":idle"/":hover" values on Filter Button), so match the axis by name
+   * rather than its value.
+   */
+  function interactiveStateClass(n: RawNode): string {
+    if (n.type !== "INSTANCE") return "";
+    const keys = Object.keys(instanceProps(n));
+    const stateful = keys.some((k) => /^states?$/i.test(k));
+    if (!stateful) return "";
+    // `hover:bg-[var(--x)]`, NOT the `bg-(--x)` shorthand: the shorthand is
+    // ambiguous for colours and Tailwind generated no rule for it at all — the
+    // class sat on the element doing nothing (cursor-pointer alongside it worked,
+    // which is what made the miss obvious).
+    return ` className="cursor-pointer transition-colors hover:bg-[var(--navigation-bg-hover)]"`;
+  }
+
+  /**
    * Geometry a substituted CONTROL must adopt from Figma.
    *
    * A kit component sizes itself from its `size` prop — but that is a DEFAULT,
@@ -1741,13 +1774,13 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
       ? { ...nodeBox(n, px, py, flex), ...flexContainerStyle(n) }
       : nodeBox(n, px, py, flex);
     if (!kids.length) {
-      lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(s)} />`);
+      lines.push(`${pad}<div${figmaIdAttr(n)}${interactiveStateClass(n)} style=${sx(s)} />`);
       return;
     }
     const childCtx: FlexCtx = flexHere
       ? { inFlex: true, parentMode: n.layoutMode }
       : ABSOLUTE_CTX;
-    lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(s)}>`);
+    lines.push(`${pad}<div${figmaIdAttr(n)}${interactiveStateClass(n)} style=${sx(s)}>`);
     for (const c of kids) emit(c, b.x ?? px, b.y ?? py, ind + 1, childCtx);
     lines.push(`${pad}</div>`);
   }
