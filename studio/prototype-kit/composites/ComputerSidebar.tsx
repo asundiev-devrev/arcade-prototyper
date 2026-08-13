@@ -130,58 +130,64 @@ function Root({
   const inlineWidth = collapsed ? undefined : width;
   return (
     <SidebarCtx.Provider value={canvasOpen}>
+      {/* The SURFACE is the design system's Sidebar.Root — that's where the
+          sidebar background token and Figma's width live, and nesting it also
+          supplies the real SidebarContext so Sidebar.Section / Sidebar.Item get
+          the true collapsed state instead of the context default.
+          This composite keeps only what the DS has no notion of: the inline
+          resize width, the container-query rail, and the canvas-aware widths.
+          `!w-full` because arcade-gen's `cn` is plain clsx with NO
+          tailwind-merge — a bare `w-full` would not beat its `w-60`. */}
       <div
         data-collapsed={collapsed ? "true" : undefined}
         style={inlineWidth != null ? { width: inlineWidth } : undefined}
         className={[
-          "group/sidebar flex flex-col h-full shrink-0 bg-(--surface-overlay) border-r border-(--stroke-neutral-subtle)",
+          "group/sidebar flex h-full shrink-0",
           "transition-[width] duration-200 ease-[cubic-bezier(0.33,1,0.68,1)] overflow-hidden",
           collapsed ? "w-16" : "",
-          // Width-forced rail: when the container is narrow, force 64px even if
-          // not React-collapsed. !important beats the inline width above.
           "@max-[600px]:!w-16",
           canvasOpen ? "@max-[900px]:!w-16" : "",
         ].join(" ")}
       >
-        {showWindowChrome ? <WindowChrome onToggle={onToggleCollapse} /> : null}
+        <Sidebar.Root collapsed={collapsed} className="!w-full overflow-hidden">
+          {showWindowChrome ? <WindowChrome onToggle={onToggleCollapse} /> : null}
 
-        {workspace ? <Brand label={workspace} /> : null}
+          {workspace ? <Brand label={workspace} /> : null}
 
-        {hasActionRow ? (
-          <div className={[
-            "flex items-center gap-2 px-3 pt-2 pb-3",
-            "group-data-[collapsed=true]/sidebar:flex-col group-data-[collapsed=true]/sidebar:items-center group-data-[collapsed=true]/sidebar:gap-1.5 group-data-[collapsed=true]/sidebar:px-0",
-            "@max-[600px]:flex-col @max-[600px]:items-center @max-[600px]:gap-1.5 @max-[600px]:px-0",
-            canvasOpen ? "@max-[900px]:flex-col @max-[900px]:items-center @max-[900px]:gap-1.5 @max-[900px]:px-0" : "",
-          ].join(" ")}>
-            {primary}
-            {history}
-          </div>
-        ) : null}
+          {hasActionRow ? (
+            <div className={[
+              "flex items-center gap-2 px-3 pt-2 pb-3",
+              "group-data-[collapsed=true]/sidebar:flex-col group-data-[collapsed=true]/sidebar:items-center group-data-[collapsed=true]/sidebar:gap-1.5 group-data-[collapsed=true]/sidebar:px-0",
+              "@max-[600px]:flex-col @max-[600px]:items-center @max-[600px]:gap-1.5 @max-[600px]:px-0",
+              canvasOpen ? "@max-[900px]:flex-col @max-[900px]:items-center @max-[900px]:gap-1.5 @max-[900px]:px-0" : "",
+            ].join(" ")}>
+              {primary}
+              {history}
+            </div>
+          ) : null}
 
-        <nav className="flex-1 min-h-0 overflow-auto">
-          {banner ? <div className="px-2 pt-2">{banner}</div> : null}
-          {children}
-        </nav>
+          <nav className="flex-1 min-h-0 overflow-auto">
+            {banner ? <div className="px-2 pt-2">{banner}</div> : null}
+            {children}
+          </nav>
 
-        {agentStudio ? <div className={[
-          "px-2 pb-1 shrink-0",
-          "group-data-[collapsed=true]/sidebar:px-0 @max-[600px]:px-0",
-          canvasOpen ? "@max-[900px]:px-0" : "",
-        ].join(" ")}>{agentStudio}</div> : null}
+          {agentStudio ? <div className={[
+            "px-2 pb-1 shrink-0",
+            "group-data-[collapsed=true]/sidebar:px-0 @max-[600px]:px-0",
+            canvasOpen ? "@max-[900px]:px-0" : "",
+          ].join(" ")}>{agentStudio}</div> : null}
 
-        {user ? (
-          <div className={[
-            "flex items-center gap-2 px-2 py-2 shrink-0 group-data-[collapsed=true]/sidebar:justify-center",
-          ].join(" ")}>
-            <div className="flex-1 min-w-0 px-1">{user}</div>
-            {footerAction ? <div className={[
-              "shrink-0 group-data-[collapsed=true]/sidebar:hidden",
-              "@max-[600px]:hidden",
-              canvasOpen ? "@max-[900px]:hidden" : "",
-            ].join(" ")}>{footerAction}</div> : null}
-          </div>
-        ) : null}
+          {user ? (
+            <Sidebar.Footer className="flex items-center gap-2 px-2 py-2 shrink-0 group-data-[collapsed=true]/sidebar:justify-center">
+              <div className="flex-1 min-w-0 px-1">{user}</div>
+              {footerAction ? <div className={[
+                "shrink-0 group-data-[collapsed=true]/sidebar:hidden",
+                "@max-[600px]:hidden",
+                canvasOpen ? "@max-[900px]:hidden" : "",
+              ].join(" ")}>{footerAction}</div> : null}
+            </Sidebar.Footer>
+          ) : null}
+        </Sidebar.Root>
       </div>
       {/* Right-edge resize handle — only in the expanded docked state. Hidden
           when React-collapsed or width-forced to the rail. */}

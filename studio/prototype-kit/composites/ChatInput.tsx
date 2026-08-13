@@ -144,9 +144,15 @@ function Root({
                 : undefined
             }
           />
-          {trailing ? (
-            <div className="shrink-0 flex items-center gap-1">{trailing}</div>
-          ) : null}
+          {/* `trailing` is deliberately NOT rendered.
+              It existed when this composite drew its own input row and the caller
+              supplied the action buttons. ChatComposer now owns that row — attach
+              on the left, send/stop on the right — so honouring `trailing` painted
+              a SECOND attach "+" and a second send button beside the composer's
+              own. Frames written against the old API still pass
+              `trailing={<ChatInput.AddAttachmentButton />}`; ignoring it renders
+              them correctly instead of doubling up. Use `onAttach` / `onSubmit` /
+              `streaming` to drive the real buttons. */}
         </div>
       </div>
     </div>
