@@ -58,20 +58,40 @@ export const SET_KEY_TO_KIT: Record<string, string> = {
   // ("Navigation page 8964:32926, Sidebar set 14510:10657" — that node IS this
   // key), so this is a 1:1 component match, not an approximation. It is a
   // COMPOUND: the emit case builds <Sidebar.Root> and never <Sidebar/>.
-  "96a5f2ff79cc6d393e32f21da6fb11bafeb76552": "Sidebar", // 0.3 "Sidebar"
-  "51e257d3301b2a73905778b8b4ce321d99b86f56": "SidebarItem", // 0.3 "Items/Expanded" → Sidebar.Item
+  // DELIBERATELY NOT MAPPED — 0.3 "Sidebar" (96a5f2ff…) and "Items/Expanded"
+  // (51e257d3…). Both were mapped for one day and both had to come out; the
+  // reasons are different and worth keeping.
+  //
+  // "Sidebar" is a COMPOUND. Emitting <Sidebar.Root> hands layout to the kit,
+  // which is incompatible with an importer whose whole promise is Figma's own
+  // geometry: children kept their absolute left/top (resolving against an
+  // ancestor outside the compound) and horizontal rows got flexGrow in a
+  // vertical container. Measured against the design, "Pins" landed at y=362
+  // instead of 112. Leaf-only mapping renders it pixel-exact.
+  //
+  // "Items/Expanded" LOOKS like a leaf and is not: a mapped instance absorbs its
+  // whole subtree, and these rows contain the person avatars, the unread dots,
+  // the avatar stack with its "+9" count and the leading glyphs. Mapping the row
+  // deleted all of that AND repainted it with the kit's row surface and line
+  // height — grey blocks, washed-out text, no truncation, and "More" overlapping
+  // "Messages" where a 28px Figma box met a taller component. Left unmapped, the
+  // row keeps the design's text and spacing and its avatars still map as real
+  // <Avatar>s on their own.
   "31849ab9b4e941d9e77ac29361573f053dbb0990": "Button", // 0.3 "Computer Action" (the New-session CTA)
   "4b433b10b30118026ca3e392fd033011bab3b57c": "IconButton", // 0.3 "History Action"
-  e539550dff09b141b8915a1faeba26c2ef441cfb: "AvatarGroup", // 0.3 "Avatar Stack/Linear/Circle"
   // Computer input parts. NOTE the composer ITSELF is deliberately absent: on
   // the screen above it is a component LOCAL to the design file (key
   // 4854423e90…), not the library's, so a key can't match it — and its set is
   // named the bare word "Input", which is arcade-gen's TEXT FIELD. A name row
   // for it would turn every text field in every design into a ChatComposer.
   // Map it once the library's own "Computer input / Input" set key is known.
-  "31dfb4585b6b3f8ec66c4068b2a29088957564a8": "AttachmentGroup", // 0.3 "Attachment group"
-  "25833cd9063c5ad0aba0ac61e3abdde65916ac8e": "AttachmentGroup", // 0.3 "Text pasted attachment group"
   "5ca8c57f76581c9a3b325c9a4364fe6c0e15c75b": "Separator", // 0.3 "Separator/Progressive"
+  // NOT MAPPED, same reason as the row above: these are GROUP wrappers, and a
+  // mapped instance absorbs its subtree. "Avatar Stack/Linear/Circle"
+  // (e539550d…) lost the stack's "+9" overflow count; "Attachment group"
+  // (31dfb458…) and "Text pasted attachment group" (25833cd9…) would re-flow
+  // children Figma had already placed. Unmapped, each child still maps on its
+  // own — the stack's faces are real <Avatar>s — and nothing moves.
   // DELIBERATELY NOT MAPPED: 0.3 "Group label" (21d4cbb7df…). Inside a sidebar
   // its text becomes the REQUIRED `title` of the enclosing <Sidebar.Section>, so
   // emitting it again as its own component would duplicate the heading. The
@@ -177,7 +197,6 @@ export const FILE_ATTACHMENT_DOC_TYPES: Record<string, string> = {
 export const PSEUDO_KIT_RENDERS: Record<string, string> = {
   ImageAvatar: "Avatar", // Avatar with src = exported photo PNG
   AccountAvatar: "Avatar", // Avatar type="account" shape="square"
-  SidebarItem: "Sidebar", // <Sidebar.Item> — a sub-part, not its own export
 };
 
 /** Figma icon set name → arcade-gen icon export. Every value must exist in

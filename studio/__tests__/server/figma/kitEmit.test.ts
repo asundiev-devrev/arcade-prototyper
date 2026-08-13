@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   planAssets,
   emitKitFrame,
@@ -1760,149 +1762,85 @@ describe("emit — arcade-gen 2.0 components (matched by Figma set name)", () =>
   });
 });
 
-// --- C4: the Computer sidebar ----------------------------------------------
+// --- C4: the Computer sidebar — LEAF-ONLY, by design ------------------------
 //
-// Shapes below mirror the real structure read off a live Computer screen
-// ("C - Scheduled tasks", frame 2207:29527): a Sidebar instance holding a
-// Header, a wrapper frame of `Group` instances (each a "Group label" + an
-// "Items" slot of `Items/Expanded` rows), and a Footer.
+// The sidebar set and its row set were both mapped for one day and both came
+// back out. The rule they violated is the same one twice: NEVER map an instance
+// whose value is the subtree inside it, because a mapped instance absorbs that
+// subtree.
 //
-// This is the one mapping whose VALUE is its structure, so it gets real
-// structural coverage rather than the generic one-TEXT-child probe.
-
+//  - 0.3 "Sidebar" is a compound. <Sidebar.Root> takes over layout, which an
+//    importer built on Figma's own geometry cannot honour. Measured on a real
+//    screen, "Pins" landed at y=362 against a design that puts it at 112.
+//  - 0.3 "Items/Expanded" looks like a leaf and isn't: the rows carry person
+//    avatars, unread dots and an avatar stack with a "+9" count. Mapping the row
+//    deleted all three and repainted it in the kit's row surface — grey blocks,
+//    washed-out text, no ellipsis, "More" overlapping "Messages".
+//  - "Avatar Stack/Linear/Circle" and the two attachment groups are group
+//    wrappers with the same failure mode (the stack lost its "+9").
+//
+// Left unmapped, every one of those children still maps on its own and nothing
+// moves. Verified in the live host: 7/7 sampled labels pixel-exact against Figma,
+// 13 real <Avatar>s, ellipsis truncation intact.
 const SIDEBAR_SET_KEY = "96a5f2ff79cc6d393e32f21da6fb11bafeb76552";
-const SIDEBAR_ITEM_SET_KEY = "51e257d3301b2a73905778b8b4ce321d99b86f56";
+const SIDEBAR_ROW_SET_KEY = "51e257d3301b2a73905778b8b4ce321d99b86f56";
+const AVATAR_STACK_SET_KEY = "e539550dff09b141b8915a1faeba26c2ef441cfb";
 
-/** `Items/Expanded` row: a leading icon slot + the conversation title. */
-function sidebarRow(id: string, title: string) {
-  return {
-    id, type: "INSTANCE", componentId: `c_row_${id}`, name: "Items/Expanded",
-    absoluteBoundingBox: bbox(0, 0, 240, 28),
-    children: [{ id: `${id}-t`, type: "TEXT", characters: title, absoluteBoundingBox: bbox(20, 6, 168, 16) }],
-  };
-}
-
-/** `Group` instance: a "Group label" carrying the heading + an "Items" slot. */
-function sidebarGroup(id: string, title: string, rows: any[]) {
-  return {
-    id, type: "INSTANCE", componentId: `c_group_${id}`, name: "Group",
-    absoluteBoundingBox: bbox(0, 0, 240, 62),
-    children: [
-      {
-        id: `${id}-label`, type: "INSTANCE", componentId: `c_label_${id}`,
-        name: "Group label", absoluteBoundingBox: bbox(0, 0, 240, 20),
-        children: [{ id: `${id}-lt`, type: "TEXT", characters: title, absoluteBoundingBox: bbox(8, 2, 100, 16) }],
-      },
-      { id: `${id}-items`, type: "SLOT", name: "Items", absoluteBoundingBox: bbox(0, 20, 240, 28), children: rows },
-    ],
-  };
-}
-
-function computerSidebarDoc(groups: any[], extra: any[] = []) {
-  const node: any = {
-    id: "sb", type: "INSTANCE", componentId: "c_sb",
-    absoluteBoundingBox: bbox(0, 0, 240, 1146),
-    children: [
-      { id: "sb-header", type: "INSTANCE", componentId: "c_hd", name: "Header", absoluteBoundingBox: bbox(0, 0, 240, 48), children: [] },
-      { id: "sb-wrap", type: "FRAME", name: "Sessions & messages", absoluteBoundingBox: bbox(0, 48, 240, 898), children: groups },
-      { id: "sb-blur", type: "FRAME", name: "Gradient blur", absoluteBoundingBox: bbox(0, 700, 243, 422), children: [] },
-      { id: "sb-footer", type: "FRAME", name: "Footer", absoluteBoundingBox: bbox(0, 998, 240, 148), children: extra },
-    ],
-  };
-  const maps: any = {
-    components: {
-      c_sb: { key: "v", name: "Property 1=Chat history", componentSetId: "s_sb" },
-      c_hd: { key: "v", name: "Header", componentSetId: "s_hd" },
-    },
-    componentSets: {
-      s_sb: { key: SIDEBAR_SET_KEY, name: "Sidebar" },
-      s_hd: { key: "local-header", name: "Header" },
-    },
-    assetFiles: new Map(),
-  };
-  for (const g of groups) {
-    maps.components[`c_group_${g.id}`] = { key: "v", name: "x", componentSetId: `s_group_${g.id}` };
-    maps.componentSets[`s_group_${g.id}`] = { key: `local-group-${g.id}`, name: "Group" };
-    for (const row of g.children[1].children) {
-      maps.components[`c_row_${row.id}`] = { key: "v", name: "x", componentSetId: `s_row_${row.id}` };
-      maps.componentSets[`s_row_${row.id}`] = { key: SIDEBAR_ITEM_SET_KEY, name: "Items/Expanded" };
+describe("Computer sidebar stays leaf-only", () => {
+  it("does not map the sidebar compound or the row/group wrappers", () => {
+    for (const key of [SIDEBAR_SET_KEY, SIDEBAR_ROW_SET_KEY, AVATAR_STACK_SET_KEY]) {
+      expect(SET_KEY_TO_KIT[key], `${key} must stay unmapped — see the note above`).toBeUndefined();
     }
-  }
-  return emitKitFrame(frameNode("0", [node]), maps);
-}
-
-describe("emit — Computer sidebar (compound)", () => {
-  it("emits Sidebar.Root, never the bare compound", () => {
-    const r = computerSidebarDoc([sidebarGroup("g1", "Pins", [sidebarRow("r1", "Sales call prep")])]);
-    expect(r.source).toContain("<Sidebar.Root>");
-    // The crash shape: a bare compound object is not a valid React element.
-    expect(r.source).not.toMatch(/<Sidebar\s*[/>]/);
-    expect(r.kitImports).toContain("Sidebar");
+    expect(Object.values(SET_KEY_TO_KIT)).not.toContain("Sidebar");
+    expect(Object.values(SET_KEY_TO_KIT)).not.toContain("AttachmentGroup");
   });
 
-  it("turns each Figma Group into a Sidebar.Section titled from its Group label", () => {
-    const r = computerSidebarDoc([
-      sidebarGroup("g1", "Pins", [sidebarRow("r1", "Sales call prep")]),
-      sidebarGroup("g2", "Direct messages", [sidebarRow("r2", "Creative Framework Review")]),
-    ]);
-    expect(r.source).toContain('<Sidebar.Section title="Pins">');
-    expect(r.source).toContain('<Sidebar.Section title="Direct messages">');
+  it("never emits a Sidebar sub-part", () => {
+    // A dotted sub-part means something re-introduced the compound path.
+    const src = readFileSync(join(__dirname, "../../../server/figma/kitEmit.ts"), "utf-8");
+    expect(/<Sidebar\./.test(src)).toBe(false);
   });
 
-  it("does NOT print the group heading twice (label becomes the title)", () => {
-    const r = computerSidebarDoc([sidebarGroup("g1", "Pins", [sidebarRow("r1", "Sales call prep")])]);
-    expect(r.source.match(/Pins/g)?.length).toBe(1);
-  });
-
-  it("emits each row as a Sidebar.Item carrying its conversation title", () => {
-    const r = computerSidebarDoc([
-      sidebarGroup("g1", "Pins", [
-        sidebarRow("r1", "Sales call prep"),
-        sidebarRow("r2", "Design Collaboration Workshop"),
-      ]),
-    ]);
-    expect(r.source).toContain("<Sidebar.Item>Sales call prep</Sidebar.Item>");
-    expect(r.source).toContain("<Sidebar.Item>Design Collaboration Workshop</Sidebar.Item>");
-  });
-
-  it("wraps Header and Footer in their own sub-parts", () => {
-    const r = computerSidebarDoc([sidebarGroup("g1", "Pins", [sidebarRow("r1", "A")])]);
-    expect(r.source).toContain("<Sidebar.Header>");
-    expect(r.source).toContain("<Sidebar.Footer>");
-  });
-
-  it("drops decorative overlays that would cover the rail", () => {
-    const r = computerSidebarDoc([sidebarGroup("g1", "Pins", [sidebarRow("r1", "A")])]);
-    // "Gradient blur" is a full-height decoration; inside Sidebar.Root it would
-    // paint over every row.
-    expect(r.source).not.toContain("sb-blur");
-  });
-
-  it("falls back to faithful markup for a Sidebar with no group/row structure", () => {
-    // Pixel floor: an overridden or gutted sidebar keeps its pixels rather than
-    // becoming an empty 240px rail.
+  it("leaves a sidebar instance as faithful markup, keeping its subtree", () => {
+    // The whole point: the rail's own content survives instead of being absorbed.
+    const row = {
+      id: "row", type: "INSTANCE", componentId: "c_row", name: "Items/Expanded",
+      absoluteBoundingBox: bbox(0, 20, 240, 28),
+      children: [{ id: "row-t", type: "TEXT", characters: "Sales call prep", absoluteBoundingBox: bbox(22, 26, 168, 16) }],
+    };
     const node: any = {
       id: "sb", type: "INSTANCE", componentId: "c_sb",
       absoluteBoundingBox: bbox(0, 0, 240, 1146),
-      children: [{ id: "sb-t", type: "TEXT", characters: "just some text", absoluteBoundingBox: bbox(8, 8, 100, 16) }],
+      children: [row],
     };
     const r = emitKitFrame(frameNode("0", [node]), {
-      components: { c_sb: { key: "v", name: "x", componentSetId: "s_sb" } },
-      componentSets: { s_sb: { key: SIDEBAR_SET_KEY, name: "Sidebar" } },
+      components: {
+        c_sb: { key: "v", name: "x", componentSetId: "s_sb" },
+        c_row: { key: "v", name: "x", componentSetId: "s_row" },
+      },
+      componentSets: {
+        s_sb: { key: SIDEBAR_SET_KEY, name: "Sidebar" },
+        s_row: { key: SIDEBAR_ROW_SET_KEY, name: "Items/Expanded" },
+      },
       assetFiles: new Map(),
     });
-    expect(r.source).not.toContain("<Sidebar.Root>");
-    expect(r.source).toContain("just some text");
+    expect(r.source).not.toContain("<Sidebar");
+    // the row's text is still there, at its Figma position
+    expect(r.source).toContain("Sales call prep");
+    expect(r.source).toContain('left: "22px"');
   });
 
-  it("keeps a group as faithful markup when it has no heading text", () => {
-    // Sidebar.Section requires `title`; inventing one would put words in the
-    // designer's mouth.
-    const g = sidebarGroup("g1", "", [sidebarRow("r1", "A")]);
-    g.children[0].children = [];
-    const r = computerSidebarDoc([g]);
-    expect(r.source).not.toContain("<Sidebar.Section");
-    // the rows still map on their own key
-    expect(r.source).toContain("<Sidebar.Item>A</Sidebar.Item>");
+  it("still maps the true leaves inside the rail", () => {
+    // Separator/Progressive is a genuine leaf: nothing inside it to lose.
+    const node: any = {
+      id: "sep", type: "INSTANCE", componentId: "c_sep",
+      absoluteBoundingBox: bbox(0, 0, 240, 6), children: [],
+    };
+    const r = emitKitFrame(frameNode("0", [node]), {
+      components: { c_sep: { key: "v", name: "x", componentSetId: "s_sep" } },
+      componentSets: { s_sep: { key: "5ca8c57f76581c9a3b325c9a4364fe6c0e15c75b", name: "Separator/Progressive" } },
+      assetFiles: new Map(),
+    });
+    expect(r.source).toContain('<Separator orientation="horizontal" variant="progressive" />');
   });
 });
