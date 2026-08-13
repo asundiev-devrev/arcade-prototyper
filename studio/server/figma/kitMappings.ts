@@ -245,6 +245,7 @@ export const ICON_SET_NAME_TO_KIT: Record<string, string> = {
   "Icons/Agent.studio": "AgentStudio",
   "Icons/Arrow.pointing.into.tray": "ArrowPointingIntoTray",
   "Icons/Cross": "CrossSmall",
+  "Cross.large": "CrossLarge", // the sidebar close button glyph (20px)
   "Icons/Plus.circles.cross": "PlusCirclesCross",
   "Icons/Three.bars.horizontal": "ThreeBarsHorizontal",
   "Icons/Three.dots.vertical": "ThreeDotsVertical",
@@ -319,6 +320,26 @@ export const ICON_SET_NAME_TO_KIT: Record<string, string> = {
   "Plus.in.chat.bubble": "PlusInChatBubble",
   "Chevron.left.small": "ChevronLeftSmall",
   "Chevron.right.small": "ChevronRightSmall",
+};
+
+/**
+ * Default control variant for 0.3 sets that expose NO `Variant` property.
+ *
+ * "Computer Action" (the New-session CTA) and "History Action" (its close button)
+ * are both light-grey in the design, but neither carries a Variant prop — so the
+ * generic fallbacks made them `primary` (solid black) and `tertiary` (no surface).
+ * Keyed by SET NAME because that's what identifies the component; the values are
+ * arcade-gen variant names.
+ *
+ * NOTE on shape: the design draws both fully rounded, and in arcade-gen 2.0 only
+ * `primary`/`expressive` are pill/circular — `secondary` is square-cornered. The
+ * pill comes from Figma's own wrapper radius, which the emitter already keeps
+ * (borderRadius + overflow:hidden on the positioned box), so the variant only has
+ * to get the FILL right.
+ */
+export const SET_NAME_DEFAULT_VARIANT: Record<string, string> = {
+  "Computer Action": "secondary",
+  "History Action": "secondary",
 };
 
 /** Figma variant value → arcade-gen prop value. */

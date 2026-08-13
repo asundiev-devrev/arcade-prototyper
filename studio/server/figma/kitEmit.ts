@@ -30,6 +30,7 @@ import {
   TAG_INTENT_MAP,
   TAG_APPEARANCE_MAP,
   ICON_SET_NAME_TO_KIT,
+  SET_NAME_DEFAULT_VARIANT,
   NON_RENDERABLE_KIT_EXPORTS,
   FILE_ATTACHMENT_DOC_TYPES,
   FIGMA_DOCUMENT_TO_DOC_TYPE,
@@ -1058,13 +1059,96 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
    *  inner instance maps, else the original glyph exported as an SVG (so the
    *  button is never blank), else a spacer. Returns { jsx, kit } where kit is
    *  the kit-icon name to import (if any). */
-  function buttonGlyph(n: RawNode, size = 16): { jsx: string; kit: string | null } {
-    const icon = innerIcon(n, ctx.components, ctx.componentSets);
-    if (icon) return { jsx: `<${icon} size={${size}} />`, kit: icon };
+  /**
+   * The node a button's glyph comes from, plus its kit icon name when it has one.
+   * Needed because the glyph's own BOX and ROTATION matter and `innerIcon` only
+   * returns a name.
+   */
+  function glyphSource(n: RawNode): { node: RawNode | null; kit: string | null } {
+    let found: { node: RawNode; kit: string | null } | null = null;
+    (function scan(m: RawNode): void {
+      if (found || hidden(m)) return;
+      if (/focus ring/i.test(String(m.name ?? ""))) return;
+      if (m.type === "INSTANCE") {
+        const { setName } = resolveIdentity(m.componentId, ctx.components, ctx.componentSets);
+        const kit = setName ? ICON_SET_NAME_TO_KIT[setName] : undefined;
+        if (kit && !NON_RENDERABLE_KIT_EXPORTS.has(kit)) { found = { node: m, kit }; return; }
+      }
+      for (const c of m.children ?? []) scan(c);
+    })(n);
+    return found ?? { node: null, kit: null };
+  }
+
+  /**
+   * A button's glyph.
+   *
+   * Two things this must NOT do, both learned from the Computer sidebar chrome:
+   *
+   *  - hardcode 16px. The design's glyphs are 20px (Sidebar.Left) and 24px
+   *    (Chevron.Right); rendering every one at 16 made all three chrome buttons
+   *    visibly smaller than the reference. Size comes from the glyph's own box.
+   *  - substitute a kit icon by NAME while dropping the node's ROTATION. The
+   *    sidebar's back button is a `Chevron.Right` turned 180°; mapping it by name
+   *    rendered a right-pointing chevron, i.e. a back button pointing forwards.
+   *    The rotation is re-applied around the kit glyph so it stays a real
+   *    component instead of falling back to an exported image.
+   */
+  function buttonGlyph(n: RawNode, sizeHint?: number): { jsx: string; kit: string | null; dimmed: boolean } {
+    const src = glyphSource(n);
+    // A DIMMED glyph is how 0.3 spells "disabled" on these buttons: the sidebar's
+    // forward chevron carries opacity 0.6 while its Disabled variant reads
+    // "False". Reading the variant alone rendered it fully enabled. The kit's own
+    // disabled state is opacity-50 + pointer-events-none — a hair lighter than
+    // 0.6, and it carries the intent rather than just the look.
+    const dimmed = Number(src.node?.opacity ?? 1) < 0.9
+      || (n.children ?? []).some((c: RawNode) => Number(c.opacity ?? 1) < 0.9);
+    const w = Math.round(src.node?.absoluteBoundingBox?.width ?? 0);
+    // Clamp to the kit's icon scale; a stray oversized box shouldn't produce a
+    // 60px glyph inside a 28px button.
+    const size = sizeHint ?? (w >= 12 && w <= 32 ? w : 16);
+    const deg = Math.round(((Number(src.node?.rotation ?? 0) * 180) / Math.PI + 360) % 360);
+    if (src.kit) {
+      const glyph = `<${src.kit} size={${size}} />`;
+      const jsx = deg
+        ? `<span style={{display: "flex", transform: "rotate(${deg}deg)"}}>${glyph}</span>`
+        : glyph;
+      return { jsx, kit: src.kit, dimmed };
+    }
     const gid = glyphExportId(n, broken);
     const v = gid ? assetRef(gid) : null;
-    if (v) return { jsx: `<img src={${v}} width={${size}} height={${size}} alt="" />`, kit: null };
-    return { jsx: "<span />", kit: null };
+    if (v) {
+      // Size the IMAGE from the exported node's own box too. glyphSource only
+      // finds kit-mapped glyphs, so for an exported one (the sidebar's
+      // Icons/Sidebar.Left, which arcade-gen has no icon for) `size` was still
+      // the 16px fallback while the design drew it at 20.
+      const gw = Math.round(findNodeById(n, gid as string)?.absoluteBoundingBox?.width ?? 0);
+      const isz = sizeHint ?? (gw >= 12 && gw <= 32 ? gw : size);
+      return { jsx: `<img src={${v}} width={${isz}} height={${isz}} alt="" />`, kit: null, dimmed };
+    }
+    return { jsx: "<span />", kit: null, dimmed };
+  }
+
+  /** Locate a descendant by id, for reading its geometry back. */
+  function findNodeById(root: RawNode, id: string): RawNode | null {
+    if (root?.id === id) return root;
+    for (const c of root?.children ?? []) {
+      const hit = findNodeById(c, id);
+      if (hit) return hit;
+    }
+    return null;
+  }
+
+  /**
+   * Control size when Figma carries no `Size` variant, read off the node's own
+   * height. 0.3 "Computer Action" and "History Action" are both 40px tall and
+   * expose no Size prop, so the `md` default rendered them a size too small.
+   */
+  function controlSizeFromBox(n: RawNode, fallback: string): string {
+    const h = Math.round(n.absoluteBoundingBox?.height ?? 0);
+    if (!h) return fallback;
+    if (h >= 36) return "lg";
+    if (h >= 24) return "md";
+    return "sm";
   }
 
   function emit(n: RawNode, px: number, py: number, ind: number, flex: FlexCtx): void {
@@ -1123,16 +1207,22 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
         case "IconButton": {
           usedKit.add("IconButton");
           kitInstanceCount++;
-          const v = VARIANT_VALUE_MAP[p.Variant ?? p.Varient ?? ""] ?? "tertiary";
-          const szv = SIZE_VALUE_MAP[p.Size ?? ""] ?? "md";
+          const setNm = String(resolveIdentity(n.componentId, ctx.components, ctx.componentSets).setName ?? "");
+          const v = VARIANT_VALUE_MAP[p.Variant ?? p.Varient ?? ""]
+            ?? SET_NAME_DEFAULT_VARIANT[setNm]
+            ?? "tertiary";
+          const szv = SIZE_VALUE_MAP[p.Size ?? ""] ?? controlSizeFromBox(n, "md");
           const g = buttonGlyph(n);
           if (g.kit) usedKit.add(g.kit);
-          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><IconButton variant="${v}" size="${szv}" aria-label="action">${g.jsx}</IconButton></div>`);
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><IconButton variant="${v}" size="${szv}"${g.dimmed ? " disabled" : ""} aria-label="action">${g.jsx}</IconButton></div>`);
           return;
         }
         case "Button": {
-          const v = VARIANT_VALUE_MAP[p.Variant ?? p.Varient ?? ""] ?? "primary";
-          const szv = SIZE_VALUE_MAP[p.Size ?? ""] ?? "md";
+          const setNm = String(resolveIdentity(n.componentId, ctx.components, ctx.componentSets).setName ?? "");
+          const v = VARIANT_VALUE_MAP[p.Variant ?? p.Varient ?? ""]
+            ?? SET_NAME_DEFAULT_VARIANT[setNm]
+            ?? "primary";
+          const szv = SIZE_VALUE_MAP[p.Size ?? ""] ?? controlSizeFromBox(n, "md");
           const icon = innerIcon(n, ctx.components, ctx.componentSets);
           const texts = visibleTexts(n).filter((t) => t.trim() && t.trim() !== "Slot");
           const label = p["✏️ Content"] ?? (texts.length ? texts[0] : null);
@@ -1141,13 +1231,19 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
             kitInstanceCount++;
             const g = buttonGlyph(n);
             if (g.kit) usedKit.add(g.kit);
-            lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><IconButton variant="${v}" size="${szv}" aria-label="action">${g.jsx}</IconButton></div>`);
+            lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><IconButton variant="${v}" size="${szv}"${g.dimmed ? " disabled" : ""} aria-label="action">${g.jsx}</IconButton></div>`);
             return;
           }
           usedKit.add("Button");
           kitInstanceCount++;
           if (icon) usedKit.add(icon);
-          const lead = icon ? ` iconLeft={<${icon} size={16} />}` : "";
+          // Leading-icon size from the glyph's own box, for the same reason as
+          // buttonGlyph: a hardcoded 16 undersized every icon the design drew at
+          // 20 or 24.
+          const leadGlyph = glyphSource(n);
+          const leadW = Math.round(leadGlyph.node?.absoluteBoundingBox?.width ?? 0);
+          const leadSize = leadW >= 12 && leadW <= 32 ? leadW : 16;
+          const lead = icon ? ` iconLeft={<${icon} size={${leadSize}} />}` : "";
           lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><Button variant="${v}" size="${szv}"${lead}>${escText(String(label))}</Button></div>`);
           return;
         }

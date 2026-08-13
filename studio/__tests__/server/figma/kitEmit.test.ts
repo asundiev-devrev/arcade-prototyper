@@ -18,6 +18,7 @@ import {
   TAG_INTENT_MAP,
   TAG_APPEARANCE_MAP,
   NON_RENDERABLE_KIT_EXPORTS,
+  SET_NAME_DEFAULT_VARIANT,
 } from "../../../server/figma/kitMappings";
 import {
   kitExportNames,
@@ -1842,5 +1843,94 @@ describe("Computer sidebar stays leaf-only", () => {
       assetFiles: new Map(),
     });
     expect(r.source).toContain('<Separator orientation="horizontal" variant="progressive" />');
+  });
+});
+
+// --- Control fidelity: size, variant, glyph orientation ---------------------
+//
+// Five defects the Computer sidebar's chrome surfaced, all from the emitter
+// filling in a default where Figma had the answer. Each assertion below is one of
+// them; the design values come from the live file (frame 2207:29527).
+
+/** An icon-button instance with a glyph child of a given box, rotation, opacity. */
+function iconBtn(id: string, opts: {
+  box?: number; glyphSet?: string; glyphW?: number; rotation?: number;
+  glyphOpacity?: number; setName?: string; props?: Record<string, string>;
+} = {}) {
+  const box = opts.box ?? 28;
+  const node: any = {
+    id, type: "INSTANCE", componentId: `c_${id}`,
+    absoluteBoundingBox: bbox(0, 0, box, box),
+    componentProperties: Object.fromEntries(
+      Object.entries(opts.props ?? {}).map(([k, v]) => [k, { value: v, type: "VARIANT" }]),
+    ),
+    children: [{
+      id: `${id}-g`, type: "INSTANCE", componentId: `c_${id}_g`,
+      name: opts.glyphSet ?? "Icons/Bell",
+      absoluteBoundingBox: bbox(4, 4, opts.glyphW ?? 20, opts.glyphW ?? 20),
+      ...(opts.rotation !== undefined ? { rotation: opts.rotation } : {}),
+      ...(opts.glyphOpacity !== undefined ? { opacity: opts.glyphOpacity } : {}),
+      children: [{ id: `${id}-v`, type: "VECTOR", absoluteBoundingBox: bbox(6, 6, 12, 12) }],
+    }],
+  };
+  const maps: any = {
+    components: {
+      [`c_${id}`]: { key: "v", name: "x", componentSetId: `s_${id}` },
+      [`c_${id}_g`]: { key: "v", name: "x", componentSetId: `s_${id}_g` },
+    },
+    componentSets: {
+      [`s_${id}`]: { key: "3abc28fac47cbde78a253917b98d8b34eabfb218", name: opts.setName ?? "Icon Button" },
+      [`s_${id}_g`]: { key: `local-${id}`, name: opts.glyphSet ?? "Icons/Bell" },
+    },
+    assetFiles: new Map(),
+  };
+  return emitKitFrame(frameNode("0", [node]), maps);
+}
+
+describe("control fidelity", () => {
+  it("sizes a button glyph from its Figma box, not a hardcoded 16", () => {
+    // The sidebar drew these at 20 and 24; every one rendered at 16.
+    expect(iconBtn("g20", { glyphW: 20 }).source).toContain("size={20}");
+    expect(iconBtn("g24", { glyphW: 24 }).source).toContain("size={24}");
+  });
+
+  it("keeps a rotated glyph pointing the right way", () => {
+    // The back button is a Chevron.Right turned 180°. Substituting the kit icon
+    // by name dropped the rotation, so the back button pointed forwards.
+    const r = iconBtn("rot", { glyphSet: "Icons / Chevron.Right", rotation: Math.PI });
+    expect(r.source).toContain('transform: "rotate(180deg)"');
+    expect(r.source).toContain("<ChevronRightSmall");
+  });
+
+  it("leaves an unrotated glyph untransformed", () => {
+    expect(iconBtn("norot", { glyphSet: "Icons / Chevron.Right" }).source).not.toContain("rotate(");
+  });
+
+  it("reads `disabled` from a dimmed glyph, which is how 0.3 spells it", () => {
+    // The forward chevron carries opacity 0.6 while its Disabled variant is
+    // "False"; trusting the variant alone rendered it enabled.
+    expect(iconBtn("dim", { glyphOpacity: 0.6 }).source).toContain("disabled");
+    expect(iconBtn("lit", { glyphOpacity: 1 }).source).not.toContain("disabled");
+  });
+
+  it("derives control size from the box when Figma has no Size variant", () => {
+    // 0.3 "History Action" is 40px tall and exposes no Size prop — the `md`
+    // default made it a size too small.
+    expect(iconBtn("big", { box: 40 }).source).toContain('size="lg"');
+    expect(iconBtn("mid", { box: 28 }).source).toContain('size="md"');
+  });
+
+  it("honours a per-set default variant for sets with no Variant prop", () => {
+    // "History Action" is grey in the design; the generic fallback made it
+    // tertiary (no surface at all).
+    const r = iconBtn("hist", { box: 40, setName: "History Action" });
+    expect(r.source).toContain('variant="secondary"');
+    expect(SET_NAME_DEFAULT_VARIANT["Computer Action"]).toBe("secondary");
+  });
+
+  it("still prefers an explicit Figma Variant/Size over either default", () => {
+    const r = iconBtn("expl", { box: 40, setName: "History Action", props: { Variant: "Primary", Size: "Small" } });
+    expect(r.source).toContain('variant="primary"');
+    expect(r.source).toContain('size="sm"');
   });
 });
