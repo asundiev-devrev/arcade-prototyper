@@ -1,4 +1,14 @@
 /**
+ * DEPRECATED — use `ChatComposer` from `arcade/components` instead.
+ *
+ * Kept working so existing frames keep rendering. Do not use in new work.
+ *
+ * Why: `ChatComposer` IS the Figma Computer input set (attach left, send/stop
+ * right, auto-growing, attachments slot). This wrapper adds a bar around it, used
+ * to default its left slot to a PAUSE glyph, and still accepts a `trailing` slot
+ * that duplicated the composer's own buttons (now ignored for that reason).
+ */
+/**
  * ChatInput — Computer / Agent Studio chat input composite.
  *
  * Matches Figma "Computer Input Field" (component set 153:8373 in the

@@ -1,4 +1,19 @@
 /**
+ * DEPRECATED — build Computer/chat sidebars from `arcade.Sidebar.*` leaves instead
+ * (`Sidebar.Root` / `Header` / `Section` / `Item` / `HistoryItem` / `Footer`).
+ *
+ * Kept working so existing frames keep rendering. Do not use in new work.
+ *
+ * Why: this composite renders furniture NOBODY ASKED FOR, by default — a
+ * "New Chat" pill, a history clock, window chrome with back/forward arrows, an
+ * "Agent Studio" wordmark, a DevRev brand mark. So every generated screen
+ * inherited one fixed opinion of what a Computer sidebar contains, regardless of
+ * the design being reproduced, and no prompt could override it. It was authored
+ * against a Figma *prototype* file rather than the real component sets, before
+ * arcade-gen shipped the sidebar parts. See examples/ComputerPage.tsx for the
+ * leaf recipe.
+ */
+/**
  * ComputerSidebar — chat-app sidebar composite for "Computer" / Agent Studio.
  *
  * Matches Figma "_Sidebar" in the "C - May Release" file

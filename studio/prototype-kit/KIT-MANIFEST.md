@@ -660,54 +660,14 @@ or message, they should write their own block.
 ## ChatInput (composite)
 _source: `composites/ChatInput.tsx`_
 
-ChatInput — Computer / Agent Studio chat input composite.
+DEPRECATED — use `ChatComposer` from `arcade/components` instead.
 
-Matches Figma "Computer Input Field" (component set 153:8373 in the
-"Untitled" prototype file). A full-width command bar flush with the
-bottom of the chat body: no shadow, no rounded corners, just a top
-border separating it from the conversation above.
+Kept working so existing frames keep rendering. Do not use in new work.
 
-  ┌──────────────────────────────────────────────────────────────┐
-  │ [Context chip] [File ✓] [File 40%] ...         ← attachments │
-  │ [Logo] Ask me anything             [+]   [↑/■] ← input row   │
-  └──────────────────────────────────────────────────────────────┘
-
-Intentional opinions:
-- The bar spans the full chat-column width and hugs the bottom (no
-  fixed width pill, no drop shadow, no rounded corners). The caller
-  should NOT wrap it in extra padding — render it as a direct child
-  of the chat column, below the scrolling body.
-- Attachments sit above the input row when present and horizontally
-  scroll if they overflow.
-- Leading defaults to the arcade `Computer` logomark (the product mark
-  shown on the left of the input pill in Figma). Pass `leading` to
-  override with a different product logo or custom mark.
-- Trailing is a slot — the caller decides which buttons to render
-  (add + send, or add + stop when streaming, or just +, etc.).
-  Three helpers are provided: ChatInput.AddAttachmentButton,
-  ChatInput.SendButton, ChatInput.StopButton.
-
-Slots:
-- `attachments` (optional) — a row of <ChatInput.ContextAttachment /> or
-  <ChatInput.FileAttachment />. Hidden when not provided.
-- `leading` (optional) — icon/mark on the far left. Defaults to the
-  arcade `<Computer />` logomark.
-- `trailing` (optional) — action buttons on the far right. Typically one
-  or two of the helpers below. When not provided, no trailing buttons
-  are rendered.
-- `placeholder` (optional) — input placeholder, default "Ask me anything".
-- `value`, `onChange` (optional) — controlled input. Uncontrolled if omitted.
-- `inputRef` (optional) — forward to the underlying <input>.
-
-Compound:
-- `ChatInput.ContextAttachment` — dashed-border chip for external-service
-  contexts (Notion tab, URL, etc.). Props: icon, title, subtitle.
-- `ChatInput.FileAttachment` — solid-border card for a file. Props: kind
-  (e.g. "PDF"), name, progress (number 0-100 → renders Uploading overlay;
-  omit → Indexed state).
-- `ChatInput.AddAttachmentButton` — the "+" icon button.
-- `ChatInput.SendButton` — filled accent circle with an up-arrow.
-- `ChatInput.StopButton` — secondary circle with a stop square.
+Why: `ChatComposer` IS the Figma Computer input set (attach left, send/stop
+right, auto-growing, attachments slot). This wrapper adds a bar around it, used
+to default its left slot to a PAUSE glyph, and still accepts a `trailing` slot
+that duplicated the composer's own buttons (now ignored for that reason).
 
 **Compound:** `ChatInput.ContextAttachment`, `ChatInput.FileAttachment`, `ChatInput.AddAttachmentButton`, `ChatInput.SendButton`, `ChatInput.StopButton`, `ChatInput.ComputerLogo`
 
@@ -924,47 +884,19 @@ type ComputerSceneProps = {
 ## ComputerSidebar (composite)
 _source: `composites/ComputerSidebar.tsx`_
 
-ComputerSidebar — chat-app sidebar composite for "Computer" / Agent Studio.
+DEPRECATED — build Computer/chat sidebars from `arcade.Sidebar.*` leaves instead
+(`Sidebar.Root` / `Header` / `Section` / `Item` / `HistoryItem` / `Footer`).
 
-Matches Figma "_Sidebar" in the "C - May Release" file
-(node 7253:101676). This is DIFFERENT from `NavSidebar`:
+Kept working so existing frames keep rendering. Do not use in new work.
 
-- `NavSidebar` is for the DevRev SoR desktop app (lives below a shared
-  TitleBar; workspace dropdown header; Computer footer).
-- `ComputerSidebar` is for the Computer chat interface. It owns its own
-  window chrome (traffic lights + collapse + nav arrows), then a primary
-  action row ("New Chat" + history), then chat groups with items, then a
-  user footer (avatar + name + subtitle + bell).
-
-Because it owns window chrome, pages using `ComputerSidebar` typically do
-NOT use `TitleBar` on top — the sidebar IS the title bar on the left, and
-the main canvas has no top chrome.
-
-Slots:
-- `workspace` (optional) — when provided, renders a brand pill (mark +
-  label + chevron) below the chrome. Computer sidebars typically omit
-  this (chrome goes straight into the action row). NavSidebar uses a
-  separate BrandHeader for the DevRev SoR app — don't confuse the two.
-- `primaryAction` (optional) — primary CTA pill on the left of the actions
-  row. **Defaults to a "New Chat" button** when the prop is omitted.
-  Pass `null` to suppress; pass your own button to override.
-- `historyAction` (optional) — icon button to the right of the primary
-  action. **Defaults to a history clock IconButton** when omitted.
-  Pass `null` to suppress; pass your own IconButton to override.
-- `showWindowChrome` (optional, default true) — set to false if your page
-  renders its own TitleBar above the sidebar.
-- `agentStudioLink` (optional) — renders an "Agent Studio" link row directly
-  above the user footer. **Defaults to a built-in link** when omitted.
-  Pass `null` to suppress; pass a custom node to override.
-- `user` (optional) — the user footer block. Pass a <ComputerSidebar.User />.
-  When omitted, the footer is not rendered.
-- `footerAction` (optional) — icon button on the right of the user footer
-  (typically a <Bell /> notifications icon).
-- `children` — ComputerSidebar.Group / ComputerSidebar.Item tree.
-
-Usage tips:
-- Chat items should use the arcade `<Avatar name="..." src="..." size="sm" />`
-  component for leading content — never a raw string letter placeholder.
+Why: this composite renders furniture NOBODY ASKED FOR, by default — a
+"New Chat" pill, a history clock, window chrome with back/forward arrows, an
+"Agent Studio" wordmark, a DevRev brand mark. So every generated screen
+inherited one fixed opinion of what a Computer sidebar contains, regardless of
+the design being reproduced, and no prompt could override it. It was authored
+against a Figma *prototype* file rather than the real component sets, before
+arcade-gen shipped the sidebar parts. See examples/ComputerPage.tsx for the
+leaf recipe.
 
 **Compound:** `ComputerSidebar.Group`, `ComputerSidebar.Item`, `ComputerSidebar.User`, `ComputerSidebar.Banner`
 

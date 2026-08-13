@@ -281,7 +281,7 @@ Default: **inside a DevRev app screen, use the composite.** Reach for the design
 
 | Composite (`arcade-prototypes`) | DS component (`arcade/components`) | Which to pick |
 |---|---|---|
-| `ChatInput` | `ChatComposer` | `ChatInput` for any Computer / Agent Studio screen — full-width, flush to the bottom, Computer logomark, attachment chips. `ChatComposer` for a composer that isn't Computer. |
+| `ChatInput` | `ChatComposer` | **`ChatComposer` — always, including Computer.** It IS the Figma Computer input set: attach on the left, send/stop on the right, auto-growing, attachments slot. `ChatInput` is the deprecated kit wrapper: it defaulted its left slot to a *pause glyph* and adds a bar the composer already draws. |
 | `ChatMessages` | `MessageRow`, `ThinkingBlock`, `ThoughtStep`, `SourceGroup` | `ChatMessages` for a whole Computer transcript. The primitives for one row/block on its own, or a transcript shape `ChatMessages` doesn't have. |
 | `ChatEmptyState` | `EmptyState` | Different things. `ChatEmptyState` is the faded Computer wordmark. `EmptyState` is icon + title + description + action. |
 | `ArtefactCard` | `Card.File`, `Card.Image` | `ArtefactCard` for the artefact-in-a-chat-message card (fanned thumbnail, "Open in canvas"). `Card.File`/`Card.Image` for a plain file/image tile. |
@@ -319,7 +319,18 @@ import { ComputerScene } from "arcade-prototypes";
 export default function Frame() { return <ComputerScene />; }
 ```
 
-**When the prompt says ANY of these, `<ComputerScene />` is the right starting point** — do NOT hand-roll a `ComputerPage` slot graph from scratch:
+**`ComputerScene` is for a DEMO-QUALITY FILLER screen only — when the prompt names
+no specific content.** It embeds the deprecated `ComputerSidebar`, so it carries
+that composite's invented furniture (a "New Chat" pill, a history clock,
+back/forward window chrome, an "Agent Studio" wordmark) whatever the design shows.
+
+**The moment the prompt describes the CONTENT — specific sessions, specific
+messages, a particular reply — build it from leaves instead** (see "Computer chat
+screens — assemble from design-system leaves" below). "Create a Computer chat
+screen with a conversation session and a few messages, the last one asking X" is
+the leaf recipe, not `ComputerScene`.
+
+With that caveat, when the prompt says ANY of these and names no content, `<ComputerScene />` is a reasonable starting point — do NOT hand-roll a `ComputerPage` slot graph from scratch:
 
 - "a Computer chat screen", "a Computer chat", "Computer screen"
 - "Agent Studio screen", "Agent Studio chat"
@@ -380,6 +391,57 @@ Override these **semantic** tokens. Do NOT override `--core-neutrals-*` primitiv
 back many tokens and changing one corrupts everything neutral. Sample the target colors
 from the Figma PNG (the PNG is your source for color + layout).
 
+### Computer chat screens — assemble from design-system leaves
+
+`ComputerPage` supplies the LAYOUT ONLY (slots: `sidebar`, `header`, `children`,
+`chatInput`, optional `panel`). Fill the `sidebar` and `chatInput` slots with
+design-system leaves, not with kit wrappers:
+
+```tsx
+<ComputerPage
+  sidebar={
+    <Sidebar.Root>
+      <Sidebar.Header>{/* only the actions THIS design shows */}</Sidebar.Header>
+      <Sidebar.Section title="Sessions">
+        <Sidebar.HistoryItem active timestamp="2:45 PM">London weather</Sidebar.HistoryItem>
+      </Sidebar.Section>
+      <Sidebar.Section title="Chats">
+        <Sidebar.Item icon={<Avatar name="Jamie Lee" size="sm" />}>Jamie Lee</Sidebar.Item>
+      </Sidebar.Section>
+      <Sidebar.Footer>
+        <Sidebar.Item icon={<Avatar name="Ava Wright" size="sm" />}>Ava Wright</Sidebar.Item>
+      </Sidebar.Footer>
+    </Sidebar.Root>
+  }
+  header={<ComputerHeader title="London weather" />}
+  chatInput={<ChatComposer placeholder="Ask me anything" />}
+>
+  <ChatBubble variant="sender" tail>What's the weather in London</ChatBubble>
+  <ThinkingBlock label="Thought for 3s">
+    <ThoughtStep>Checked the forecast</ThoughtStep>
+  </ThinkingBlock>
+  <ChatBubble variant="receiver" tail>Mild and mostly dry today.</ChatBubble>
+</ComputerPage>
+```
+
+- **Conversations are `Sidebar.HistoryItem`** (it carries the timestamp and Figma's
+  truncation). `Sidebar.Item` is for people, links, everything else.
+- **`ChatComposer` draws its own attach and send/stop buttons.** Never add more.
+- **Put only what the design shows in `Sidebar.Header`.** If there is no history
+  clock in the reference, do not add one.
+
+#### Deprecated: `ComputerSidebar` and `ChatInput`
+
+Both still work, so existing frames keep rendering — but do NOT reach for them in
+new work. They were written before the design system shipped these parts, against
+a Figma *prototype* file rather than the real component sets, and they render
+**invented furniture by default**: a "New Chat" pill, a history clock, window
+chrome with back/forward arrows, an "Agent Studio" wordmark, a pause glyph inside
+the input. Every generated screen inherited one fixed opinion of what a Computer
+sidebar contains, whatever the design actually showed, and no prompt could
+override it. The leaves above give you the same look with the freedom to match the
+reference.
+
 ### `ComputerPage` — for custom Computer page shapes
 
 For Computer / Agent Studio chat screens whose **shape** differs from the canonical scene (a different sidebar, a custom transcript, a non-default header). `ComputerPage` is the slot graph: caller provides `sidebar`, `header`, `chatInput`, `children`, optional `panel`. Composes `ComputerSidebar` (which OWNS its own window chrome) + `ComputerHeader` + a body slot + `ChatInput`. Full prop signature + slot docs are in `KIT-MANIFEST.md`.
@@ -387,9 +449,9 @@ For Computer / Agent Studio chat screens whose **shape** differs from the canoni
 **Pick `ComputerPage` over `ComputerScene` only when** the override props on `ComputerScene` (state, withCanvasPanel, headerTitle, user fields, activeSessionId) cannot express the requested deviation — i.e. when the *shape* of the sidebar / header / transcript itself differs from the canonical scene. If the prompt is generic, default to `ComputerScene`.
 
 Cross-cutting rules for Computer pages:
-- Computer pages do NOT use a `TitleBar`. `ComputerSidebar` owns the window chrome (traffic lights, collapse, nav arrows). Stacking a `TitleBar` on top doubles the chrome.
+- Computer pages do NOT use a `TitleBar`. If the design shows window chrome (traffic lights, collapse, nav arrows), put it in `Sidebar.Header` — and only if the design actually shows it.
 - The `header` slot is `ComputerHeader` — borderless 48px row with the conversation title pill on the left and an action cluster on the right. Do NOT wrap it in your own `<header>` or add a bottom border; the body sits flush against it.
-- The `chatInput` slot is `ChatInput` — full-width, bottom-flush, with its own top border. Do NOT wrap it in extra padding or a max-width column at the template level.
+- The `chatInput` slot is `ChatComposer`. Do NOT wrap it in extra padding, a max-width column, or your own action buttons — it draws its own attach and send/stop.
 - Body content is `ChatMessages` for an active conversation or `ChatEmptyState` for a fresh chat. Render exactly one of them as the only child of the body slot — don't mix transcript markup and the empty wordmark.
 - The optional `panel` is a `CanvasPanel` (or compatible aside) — it supplies its own width / border-l / surface tokens.
 
@@ -422,8 +484,8 @@ When your frame is not a settings page or vista, drop down one layer and compose
 
 **Look up every prop + slot in `KIT-MANIFEST.md`.** Do NOT rely on memory for composite APIs. The only things not in the manifest (because they require cross-composite coordination) are these tie-breakers:
 
-- **`NavSidebar` vs `ComputerSidebar`** — pick `ComputerSidebar` when Figma shows a chat-style sidebar with "New Chat" / chat history; pick `NavSidebar` when Figma shows a DevRev SoR app sidebar with workspace dropdown + My Work sections. `ComputerSidebar` owns its own window chrome — do NOT also render a `TitleBar` alongside it.
-- **`ChatInput` placement** — when Figma shows the command bar inside an app body, place it as a sibling of the scrolling content with `sticky bottom-0`. Never `position: fixed` — it escapes AppShell containment.
+- **Computer/chat sidebar → build it from `arcade.Sidebar.*` leaves. `NavSidebar` is only for a DevRev SoR app sidebar** (workspace dropdown + My Work sections). The retired `ComputerSidebar` rendered a "New Chat" pill, a history clock, window chrome with back/forward arrows and an "Agent Studio" wordmark *by default*, so every screen got one fixed opinion of the sidebar's contents regardless of the design. Compose exactly what the design shows — see the leaf recipe below.
+- **Composer placement** — when Figma shows the command bar inside an app body, place `ChatComposer` as a sibling of the scrolling content with `sticky bottom-0`. Never `position: fixed` — it escapes AppShell containment.
 - **`SettingsCard`** inserts separators between children automatically. Do NOT add explicit `<Separator />` between rows.
 - **For a DevRev app page, use TitleBar + BreadcrumbBar, not `PageHeader`** — those carry the SoR page-chrome tokens. `arcade.PageHeader` is the design-system title bar (`title`, `description`, `leading`, `actions`); it exists and is fine for a standalone page that has no app shell around it.
 - **`ChatBubble`** is imported from `arcade/components`, not from the kit. Use it as a direct child of `ChatMessages`.
@@ -439,7 +501,7 @@ Arcade primitives are leaves inside composites — the `action` in a `SettingsRo
 
 **Never render the bare compound name** (`<Breadcrumb>…</Breadcrumb>`, `<Select>…</Select>`). Compound components are plain objects with no default render — they crash with `Element type is invalid`. Always enter via `.Root`.
 
-**Do NOT use `arcade.Sidebar` for the main navigation sidebar** — that's what the kit's `NavSidebar` / `ComputerSidebar` are for. `arcade.Sidebar` is the bare primitive.
+**`arcade.Sidebar` IS the right choice for a Computer / chat sidebar.** Use `NavSidebar` only for a DevRev SoR app navigation sidebar (workspace dropdown + My Work). This rule used to say the opposite, which is why generated Computer screens never reached for the design system's own sidebar.
 
 ### Common wrong choices (recurring failures)
 
@@ -447,7 +509,7 @@ Pattern-recognition table. These are the picks past generations kept getting wro
 
 | You're tempted to use | Pick this instead when… |
 |---|---|
-| `arcade.Sidebar` | Use `NavSidebar` (SoR app) or `ComputerSidebar` (chat/agent). `arcade.Sidebar` is the bare primitive — the kit versions add workspace dropdown, Computer footer, and correct tokens. |
+| ~~`arcade.Sidebar`~~ | **No longer a wrong choice.** For chat/agent sidebars it is the RIGHT choice (`Sidebar.Root/Header/Section/Item/HistoryItem/Footer`). `NavSidebar` remains correct for a SoR app sidebar. |
 | `arcade.Table` (for a vista list view) | Use `VistaRow` + column primitives (`VistaRow.Id`, `VistaRow.Stage`, etc.). `arcade.Table` is a generic data table; it won't give you the DevRev vista row shape. |
 | `Tag` (as an icon) | `Tag` is a **component** (label pill). For icon-sized tag glyphs use `Flag` or drop it. Never `import { Tag as TagIcon }`. |
 | `<Breadcrumb>…</Breadcrumb>` (bare) | `<Breadcrumb.Root>…</Breadcrumb.Root>`. Same for `Select`, `Dropdown`, `Menu`, `Modal`, `Popover`, `Tabs`, `SegmentedControl`, `Accordion`, `Toast`, `Widget`, `Sidebar`, `Table`, `Chart`, `Radio` (`.Group`), `ResizablePanel` (`.Group`). Compound components crash without `.Root`. |
@@ -857,8 +919,8 @@ Figma → prototype-kit hints:
 |---|---|
 | Sidebar / My Work + Teams + Multiplayer Sidebar (or any DevRev SoR app sidebar) | `NavSidebar` |
 | Whole Computer / Agent Studio chat screen (chat-style sidebar + thread title + transcript or empty wordmark + command bar at bottom, optionally with an artefacts rail) | `ComputerScene` (zero-prop populated scene). Drop to `ComputerPage` only when the requested shape differs from the canonical scene. |
-| _Sidebar / Computer sidebar (chat/agent UI with New Chat + chat history) | `ComputerSidebar` |
-| Computer Input Field / chat command bar / "Ask me anything" pill | `ChatInput` |
+| _Sidebar / Computer sidebar (chat/agent UI with New Chat + chat history) | `Sidebar.Root` + `Sidebar.Section` + `Sidebar.HistoryItem` (conversations) / `Sidebar.Item` (everything else) |
+| Computer Input Field / chat command bar / "Ask me anything" pill | `ChatComposer` |
 | Top bar with conversation title + chevron + right-side action cluster (Computer chat) | `ComputerHeader` |
 | Right-side panel with step progress + grouped artefacts (Created / Sources / Folders) | `CanvasPanel` |
 | Empty-state chat with a faded Computer logomark centered in the body | `ChatEmptyState` |
