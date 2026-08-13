@@ -48,28 +48,15 @@
  * - `ChatInput.SendButton` — filled accent circle with an up-arrow.
  * - `ChatInput.StopButton` — secondary circle with a stop square.
  */
+import { forwardRef, type ChangeEvent, type ReactNode, type Ref } from "react";
 import {
-  forwardRef,
-  useLayoutEffect,
-  useRef,
-  type ChangeEvent,
-  type ReactNode,
-  type Ref,
-} from "react";
-import { Button, IconButton, ArrowUpSmall, PlusSmall, Computer } from "@xorkavi/arcade-gen";
-
-/**
- * Inline pause-glyph (two vertical bars) used by the default ChatInput leading
- * when the caller doesn't override. Mirrors the colleague Computer prototype.
- */
-function PauseGlyph({ size = 16 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-      <rect x="4" y="3.5" width="2.25" height="9" rx="0.75" />
-      <rect x="9.75" y="3.5" width="2.25" height="9" rx="0.75" />
-    </svg>
-  );
-}
+  Button,
+  ChatComposer,
+  IconButton,
+  ArrowUpSmall,
+  PlusSmall,
+  Computer,
+} from "@xorkavi/arcade-gen";
 
 /* ─── Root ──────────────────────────────────────────────────────────────── */
 
@@ -91,13 +78,16 @@ type RootProps = {
   inputRef?: Ref<HTMLInputElement | HTMLTextAreaElement>;
   autoFocus?: boolean;
   /**
-   * When true, renders a textarea that grows with content (up to `maxRows`)
-   * instead of a single-line input. Enter submits; Shift+Enter inserts a
-   * newline. Defaults to false to preserve existing single-line behavior.
+   * Accepted for backwards compatibility and ignored: ChatComposer is always a
+   * multi-line auto-growing surface (Enter sends, Shift+Enter newlines), which
+   * is what the `multiline` flag used to opt into.
    */
   multiline?: boolean;
-  /** Max visible rows before the textarea starts scrolling. Default 8. */
   maxRows?: number;
+  /** Swaps the send button for a stop button (Figma "Idle with stop"). */
+  streaming?: boolean;
+  onStop?: () => void;
+  onAttach?: () => void;
 };
 
 function Root({
@@ -110,10 +100,9 @@ function Root({
   defaultValue,
   onChange,
   onSubmit,
-  inputRef,
-  autoFocus,
-  multiline = false,
-  maxRows = 8,
+  streaming,
+  onStop,
+  onAttach,
 }: RootProps) {
   return (
     // Outer bar spans full width (border-top + surface edge-to-edge, matching
@@ -121,125 +110,46 @@ function Root({
     // transcript so the composer aligns with the messages above it.
     <div className="w-full px-4 py-3 border-t border-(--stroke-neutral-subtle) bg-(--surface-overlay)">
       <div className="flex flex-col gap-2 w-full max-w-[860px] mx-auto">
-      {attachments ? (
-        <div className="flex items-center gap-2 overflow-x-auto scrollbar-none -mx-1 px-1">
-          {attachments}
-        </div>
-      ) : null}
-      {hint ? (
-        <div className="flex items-center justify-center text-caption text-(--fg-neutral-subtle) px-2">
-          {hint}
-        </div>
-      ) : null}
-      <div className="flex items-center gap-2 min-w-0">
-        <span className="shrink-0 flex items-center justify-center text-(--fg-neutral-prominent)">
-          {leading ?? <DefaultLeading />}
-        </span>
-        {multiline ? (
-          <AutoGrowTextarea
-            ref={inputRef as Ref<HTMLTextAreaElement>}
-            value={value}
-            defaultValue={defaultValue}
-            placeholder={placeholder}
-            onChange={onChange as (e: ChangeEvent<HTMLTextAreaElement>) => void}
-            onSubmit={onSubmit}
-            autoFocus={autoFocus}
-            maxRows={maxRows}
-          />
-        ) : (
-          <input
-            ref={inputRef as Ref<HTMLInputElement>}
-            type="text"
-            placeholder={placeholder}
-            value={value}
-            defaultValue={defaultValue}
-            onChange={onChange as (e: ChangeEvent<HTMLInputElement>) => void}
-            autoFocus={autoFocus}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && onSubmit) {
-                e.preventDefault();
-                onSubmit((e.target as HTMLInputElement).value);
-              }
-            }}
-            className="flex-1 min-w-0 bg-transparent border-0 outline-none text-body text-(--fg-neutral-prominent) placeholder:text-(--fg-neutral-subtle)"
-          />
-        )}
-        {trailing ? (
-          <div className="shrink-0 flex items-center gap-1">{trailing}</div>
+        {hint ? (
+          <div className="flex items-center justify-center text-caption text-(--fg-neutral-subtle) px-2">
+            {hint}
+          </div>
         ) : null}
-      </div>
+        <div className="flex items-end gap-2 min-w-0">
+          {/* `leading` is now opt-in. It used to default to a PAUSE glyph (two
+              vertical strokes) "matching a colleague's prototype" — so every
+              generated Computer screen showed a permanent pause bar inside its
+              input. ChatComposer brings the real attach affordance. */}
+          {leading ? (
+            <span className="shrink-0 flex items-center justify-center text-(--fg-neutral-prominent)">
+              {leading}
+            </span>
+          ) : null}
+          <ChatComposer
+            className="flex-1 min-w-0"
+            placeholder={placeholder}
+            value={value}
+            defaultValue={defaultValue}
+            attachments={attachments}
+            streaming={streaming}
+            onStop={onStop}
+            onAttach={onAttach}
+            onSend={onSubmit}
+            // The kit's onChange has always been event-shaped; ChatComposer
+            // reports a plain string. Adapt rather than break existing frames.
+            onValueChange={
+              onChange
+                ? (next: string) =>
+                    onChange({ target: { value: next } } as ChangeEvent<HTMLInputElement>)
+                : undefined
+            }
+          />
+          {trailing ? (
+            <div className="shrink-0 flex items-center gap-1">{trailing}</div>
+          ) : null}
+        </div>
       </div>
     </div>
-  );
-}
-
-/* ─── Auto-growing textarea (used when multiline=true) ──────────────────── */
-
-type AutoGrowTextareaProps = {
-  value?: string;
-  defaultValue?: string;
-  placeholder?: string;
-  onChange?: (e: ChangeEvent<HTMLTextAreaElement>) => void;
-  onSubmit?: (value: string) => void;
-  autoFocus?: boolean;
-  maxRows: number;
-};
-
-const AutoGrowTextarea = forwardRef<HTMLTextAreaElement, AutoGrowTextareaProps>(
-  function AutoGrowTextarea(
-    { value, defaultValue, placeholder, onChange, onSubmit, autoFocus, maxRows },
-    forwardedRef,
-  ) {
-    const localRef = useRef<HTMLTextAreaElement | null>(null);
-
-    const setRef = (node: HTMLTextAreaElement | null) => {
-      localRef.current = node;
-      if (typeof forwardedRef === "function") forwardedRef(node);
-      else if (forwardedRef) (forwardedRef as { current: HTMLTextAreaElement | null }).current = node;
-    };
-
-    useLayoutEffect(() => {
-      const el = localRef.current;
-      if (!el) return;
-      el.style.height = "auto";
-      const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 20;
-      const max = lineHeight * maxRows;
-      el.style.height = `${Math.min(el.scrollHeight, max)}px`;
-      el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
-    }, [value, maxRows]);
-
-    return (
-      <textarea
-        ref={setRef}
-        rows={1}
-        placeholder={placeholder}
-        value={value}
-        defaultValue={defaultValue}
-        onChange={onChange}
-        autoFocus={autoFocus}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey && onSubmit) {
-            e.preventDefault();
-            onSubmit((e.target as HTMLTextAreaElement).value);
-          }
-        }}
-        className="flex-1 min-w-0 resize-none bg-transparent border-0 outline-none text-body text-(--fg-neutral-prominent) placeholder:text-(--fg-neutral-subtle) leading-[1.4]"
-      />
-    );
-  },
-);
-
-/* ─── Default leading (pause glyph — matches colleague Computer prototype) ─ */
-
-function DefaultLeading() {
-  return (
-    <button
-      type="button"
-      aria-label="Pause"
-      className="flex items-center justify-center w-8 h-8 rounded-square text-(--fg-neutral-subtle) hover:bg-(--bg-neutral-soft) hover:text-(--fg-neutral-prominent) transition-colors"
-    >
-      <PauseGlyph size={16} />
-    </button>
   );
 }
 

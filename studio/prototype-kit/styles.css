@@ -331,3 +331,21 @@
   letter-spacing: var(--typography-system-small-letter-spacing, -0.11px);
   font-variation-settings: "wght" var(--font-weight-bold, 650);
 }
+
+/* ── Upstream token correction ──────────────────────────────────────────────
+ *
+ * arcade-gen 2.0 defines `--component-sidebar-item-bg-idle` as rgba(33,30,32,.15)
+ * — a visible dark wash on an IDLE sidebar row. Every non-selected row therefore
+ * paints DARKER than the selected one, which inverts the whole list: measured
+ * 2026-08-13, idle rows rgba(33,30,32,0.15) vs active rgb(242,241,242).
+ *
+ * An idle row is transparent in the product, so neutralise it here rather than
+ * hand-rolling the row (the point of delegating to Sidebar.Item is to inherit the
+ * real geometry and states). Hover/active tokens are left untouched.
+ *
+ * Remove this once arcade-gen ships a corrected token — worth reporting upstream
+ * alongside the SVG attribute warnings (fill-rule/clip-rule instead of camelCase).
+ */
+:root {
+  --component-sidebar-item-bg-idle: transparent;
+}

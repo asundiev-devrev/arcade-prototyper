@@ -52,6 +52,7 @@ import {
   AgentStudio,
   IconButton,
   Button,
+  Sidebar,
   ThreeDotsHorizontal,
   DotInLeftWindow,
   Menu,
@@ -367,30 +368,39 @@ type GroupProps = {
 
 function Group({ title, trailing, children, hideOnCollapse = false }: GroupProps) {
   const canvasOpen = useContext(SidebarCtx);
+  const hideCls = [
+    "pt-1.5 pb-1",
+    hideOnCollapse ? "group-data-[collapsed=true]/sidebar:hidden @max-[600px]:hidden" : "",
+    hideOnCollapse && canvasOpen ? "@max-[900px]:hidden" : "",
+  ].join(" ");
+
+  // Common case: delegate the label to the design system's Sidebar.Section, which
+  // carries Figma's section-label treatment. The hand-rolled version used
+  // `text-caption` sentence case AND force-rendered a "+" button whenever the
+  // caller didn't pass `trailing` — so every generated sidebar sprouted plus
+  // icons nobody asked for, next to labels styled unlike the product.
+  if (typeof title === "string" && !trailing) {
+    return (
+      <div className={hideCls}>
+        <Sidebar.Section title={title}>
+          <div className="flex flex-col gap-0.5">{children}</div>
+        </Sidebar.Section>
+      </div>
+    );
+  }
+
+  // Custom header path: only when the caller supplies `trailing` (or a non-string
+  // title). No phantom "+" here either — an action appears because it was asked for.
   return (
-    <div className={[
-      "pt-1.5 pb-1",
-      hideOnCollapse ? "group-data-[collapsed=true]/sidebar:hidden @max-[600px]:hidden" : "",
-      hideOnCollapse && canvasOpen ? "@max-[900px]:hidden" : "",
-    ].join(" ")}>
+    <div className={hideCls}>
       {title || trailing ? (
         <div className={[
-          "flex items-center justify-between px-3 py-2 mx-1 rounded-square hover:bg-(--bg-neutral-soft) transition-colors group-data-[collapsed=true]/sidebar:hidden",
+          "flex items-center justify-between px-3 py-2 mx-1 rounded-square group-data-[collapsed=true]/sidebar:hidden",
           "@max-[600px]:hidden",
           canvasOpen ? "@max-[900px]:hidden" : "",
         ].join(" ")}>
-          <span className="text-caption text-(--fg-neutral-subtle)">
-            {title}
-          </span>
-          {trailing ?? (
-            <button
-              type="button"
-              aria-label="Add"
-              className="text-(--fg-neutral-subtle) hover:text-(--fg-neutral-prominent) w-[22px] h-[22px] flex items-center justify-center rounded-square hover:bg-(--control-bg-neutral-subtle-hover)"
-            >
-              <PlusSmall size={14} />
-            </button>
-          )}
+          <span className="text-caption text-(--fg-neutral-subtle)">{title}</span>
+          {trailing}
         </div>
       ) : null}
       <div className="flex flex-col px-2 gap-0.5">{children}</div>
@@ -421,26 +431,26 @@ const Item = forwardRef<HTMLDivElement, ItemProps>(function Item(
   ref,
 ) {
   const canvasOpen = useContext(SidebarCtx);
-  const strong = active || emphasis === "strong";
+  // Delegate the row itself to the design system. The kit used to draw its own
+  // (h-9, its own hover/active tokens); Sidebar.Item is the Figma row, so rows
+  // now match the product instead of approximating it. The collapse-aware classes
+  // stay here because they're this composite's container-query behaviour, which
+  // the DS component has no notion of.
   return (
-    <div
+    <Sidebar.Item
       ref={ref}
-      role="button"
-      tabIndex={0}
-      data-active={active ? "true" : undefined}
+      active={active}
+      icon={leading}
       onClick={onClick}
+      label={typeof children === "string" ? children : undefined}
       className={[
-        "group/item flex items-center gap-2.5 h-9 pl-3 pr-2.5 rounded-square-x2 text-body cursor-pointer select-none transition-colors",
-        active
-          ? "bg-(--control-bg-neutral-subtle-active)"
-          : "hover:bg-(--bg-neutral-soft)",
-        strong ? "text-(--fg-neutral-prominent) font-semibold" : "text-(--fg-neutral-prominent)",
+        "group/item",
+        emphasis === "strong" && !active ? "font-semibold" : "",
         "group-data-[collapsed=true]/sidebar:justify-center",
         "@max-[600px]:justify-center",
         canvasOpen ? "@max-[900px]:justify-center" : "",
       ].join(" ")}
     >
-      {leading ? <span className="shrink-0 w-5 h-5 flex items-center justify-center text-(--fg-neutral-subtle)">{leading}</span> : null}
       <span className={[
         "min-w-0 flex-1 truncate group-data-[collapsed=true]/sidebar:hidden",
         "@max-[600px]:hidden",
@@ -466,7 +476,7 @@ const Item = forwardRef<HTMLDivElement, ItemProps>(function Item(
           ) : null}
         </span>
       ) : null}
-    </div>
+    </Sidebar.Item>
   );
 });
 
