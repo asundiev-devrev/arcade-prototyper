@@ -377,6 +377,79 @@ export const PRIMITIVE_MAPPINGS: MappingEntry[] = [
     judgmentNote:
       "Production raw-design-system does not export ChatBubble. Translate by lifting the host feature's bubble markup pattern (variant 'sender' = right-aligned filled, 'receiver' = left-aligned subtle).",
   },
+  // --- Chat shell leaves ---------------------------------------------------
+  // These four became reachable from the composites when the Computer wrappers
+  // were retired: chat screens are now built from these DS leaves directly
+  // instead of from a wrapper that injected its own furniture. They are
+  // prototyping-kit surfaces, so like ChatBubble none has a raw-design-system
+  // counterpart — every one is a judgment translation.
+  {
+    studio: { source: "arcade", name: "ChatComposer" },
+    production: { source: rawDs("ChatComposer"), name: "ChatComposer" },
+    propDeltas: [
+      { from: "value", to: "value" },
+      { from: "defaultValue", to: "defaultValue" },
+      { from: "onValueChange", to: "onChange", note: "Studio hands you the string; production TextArea-style inputs hand you the event — read `e.target.value`." },
+      { from: "onSend", to: "onSend", note: "No production equivalent. Wire to the feature's own submit handler (Enter key + send button both)." },
+      { from: "onStop", to: "onStop", note: "Only meaningful while streaming; production chat features own their own abort wiring." },
+      { from: "onAttach", to: "onAttach" },
+      { from: "streaming", to: "streaming", note: "Studio swaps the send button for a stop button. Production has no such state — gate the two buttons on the feature's own streaming flag." },
+      { from: "attachments", to: "attachments", note: "Slot rendered above the input row." },
+      { from: "placeholder", to: "placeholder" },
+      { from: "disabled", to: "disabled" },
+    ],
+    slotNotes: [
+      "No 1:1 production component. The composer is an assembly: TextArea + two IconButtons (attach, send/stop) + an attachments row. Search the target feature (e.g. agent-platform/feature/chat) for its existing composer before rebuilding.",
+      "The auto-growing multi-line behaviour is Studio's; production TextArea does not grow by default.",
+    ],
+    translationClass: "judgment",
+    judgmentNote:
+      "Production raw-design-system does not export ChatComposer. Translate as TextArea + IconButton(attach) + IconButton(send|stop), keeping the send/stop swap driven by the feature's streaming state.",
+  },
+  {
+    studio: { source: "arcade", name: "ThinkingBlock" },
+    production: { source: rawDs("ThinkingBlock"), name: "ThinkingBlock" },
+    propDeltas: [
+      { from: "label", to: "label", note: "Collapsed pill copy — 'Thinking' while streaming, 'Thought for 8s' once done." },
+      { from: "active", to: "active", note: "Studio pulses the label. Production has no pulse primitive; either drop the animation or add it at the feature level." },
+      { from: "defaultExpanded", to: "defaultOpen" },
+      { from: "expanded", to: "open" },
+      { from: "onExpandedChange", to: "onOpenChange" },
+    ],
+    slotNotes: [
+      "No 1:1 production component. This is a disclosure: translate to the target repo's collapsible/accordion pattern with a pill-styled trigger.",
+      "Children are ThoughtStep nodes — translate those together with this one, not separately.",
+    ],
+    translationClass: "judgment",
+    judgmentNote:
+      "Production raw-design-system does not export ThinkingBlock. Translate as the feature's collapsible with a pill trigger; the pulsing 'active' treatment has no production equivalent.",
+  },
+  {
+    studio: { source: "arcade", name: "ThoughtStep" },
+    production: { source: rawDs("ThoughtStep"), name: "ThoughtStep" },
+    propDeltas: [
+      { from: "status", to: "status", note: "Studio's ThoughtStepStatus drives the leading marker (completed / active / pending). Production has no such component — carry the status through to whatever marker the feature uses." },
+    ],
+    slotNotes: [
+      "No 1:1 production component. A single row inside ThinkingBlock: leading status marker + text. Translate as a styled div, matching the surrounding feature's step list.",
+    ],
+    translationClass: "judgment",
+    judgmentNote:
+      "Production raw-design-system does not export ThoughtStep. Translate as a status-marked row inside whatever collapsible replaced ThinkingBlock.",
+  },
+  {
+    studio: { source: "arcade", name: "Sidebar" },
+    production: { source: rawDs("Sidebar"), name: "Sidebar" },
+    propDeltas: [],
+    slotNotes: [
+      "Sidebar is COMPOUND, not a single element: Sidebar.Root / .Header / .Footer / .Section / .Item / .HistoryItem. Each part needs its own translation decision — a bare rename of the root will not compile.",
+      "No 1:1 production component. devrev-web features build their own navigation shells; find the target app's existing sidebar and map the parts onto its structure rather than porting this one.",
+      "Do NOT reach for the retired Computer wrappers as a shortcut — they injected New Chat / clock / nav-arrow furniture no caller could remove, which is why they were retired.",
+    ],
+    translationClass: "judgment",
+    judgmentNote:
+      "Production raw-design-system does not export Sidebar. Compound surface (Root/Header/Footer/Section/Item/HistoryItem) — translate part-by-part onto the target app's own navigation shell.",
+  },
   {
     studio: { source: "arcade", name: "Tag" },
     production: { source: rawDs("Chip"), name: "Chip" },
