@@ -1180,7 +1180,31 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
    */
   function controlBoxStyle(n: RawNode): string {
     const b = n.absoluteBoundingBox ?? {};
-    const parts = ['width: "100%"', 'height: "100%"'];
+    // `minWidth: 0` is load-bearing, not tidiness. arcade-gen's Select trigger
+    // carries `min-w-[160px]`, which BEATS an inline `width: 100%` — so a 95px
+    // Figma slot rendered a 160px control, and because the slot centres its child
+    // the 65px of overflow split both ways and covered the search button beside it.
+    // Any DS control with a min-width would do the same, so neutralise it here
+    // rather than per component.
+    // `whiteSpace: "nowrap"` because pinning a control to Figma's box can leave it
+    // narrower than the DS component's natural content width (padding + label +
+    // chevron): "Filter by" wrapped onto two lines inside its 95px slot. The design
+    // never wraps these labels.
+    const parts = [
+      'width: "100%"', 'height: "100%"', 'minWidth: 0', 'maxWidth: "100%"',
+      'whiteSpace: "nowrap"',
+    ];
+    // Carry Figma's own fill. A substituted control otherwise falls back to the DS
+    // default — which for the Select trigger is transparent, where the design draws
+    // a grey "Filter by" pill. The component still brings its type, chevron,
+    // spacing and states; only the surface follows the design.
+    for (const f of n.fills ?? []) {
+      const v = paintCss(f);
+      if (v) {
+        parts.push(`background: ${JSON.stringify(v)}`);
+        break;
+      }
+    }
     const r = Number(n.cornerRadius ?? NaN);
     if (Number.isFinite(r) && r > 0) {
       const short = Math.min(b.width ?? 0, b.height ?? 0);

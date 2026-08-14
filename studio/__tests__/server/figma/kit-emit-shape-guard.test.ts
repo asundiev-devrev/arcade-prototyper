@@ -97,3 +97,27 @@ describe("the computer wordmark reuses the kit's glyph", () => {
     expect(SRC).toMatch(/sn === "Computer Action" && !containsText\(n\)/);
   });
 });
+
+describe("a substituted control is pinned to its Figma box", () => {
+  it("neutralises the design system's own min-width", () => {
+    // arcade-gen's Select trigger carries min-w-[160px], which BEATS an inline
+    // width:100% — a 95px Figma slot rendered a 160px control, and because the slot
+    // centres its child the overflow split both ways and covered the search button
+    // next to it. Any DS control with a min-width would do the same.
+    expect(SRC).toMatch(/minWidth: 0/);
+    expect(SRC).toMatch(/maxWidth: "100%"/);
+  });
+
+  it("carries Figma's own fill so the surface matches the design", () => {
+    // Otherwise the component's default wins — transparent for the Select trigger,
+    // where the design draws a grey "Filter by" pill.
+    const fn = SRC.slice(SRC.indexOf("function controlBoxStyle"));
+    // Scope to the function, but generously — the explanatory comments in front of
+    // the fill loop are longer than the code.
+    expect(fn.slice(0, 3000)).toMatch(/parts\.push\(`background: \$\{JSON\.stringify\(v\)\}`\)/);
+  });
+
+  it("stops labels wrapping inside a tight box", () => {
+    expect(SRC).toMatch(/whiteSpace: "nowrap"/);
+  });
+});
