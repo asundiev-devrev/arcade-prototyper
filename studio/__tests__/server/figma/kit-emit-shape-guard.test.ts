@@ -75,3 +75,25 @@ describe("KeyboardShortcut keeps every key", () => {
     expect(SRC).not.toMatch(/const combo = texts\[0\] \?\? "⌘K"/);
   });
 });
+
+describe("the computer wordmark reuses the kit's glyph", () => {
+  it("emits comp + the Computer glyph + ter instead of flattening vector letters", () => {
+    // The design draws "computer" as individual VECTOR glyphs with no text nodes, so
+    // a faithful emit paints each letter as its filled bbox (a row of black blocks)
+    // and a control substitution stretches one letter across the pill. The kit
+    // already solved this — NavSidebar's ComputerWordmark is "comp" + the arcade-gen
+    // `Computer` glyph as the "u" + "ter" — so rebuild it from that same glyph.
+    expect(SRC).toMatch(/sn === "Computer Action"/);
+    expect(SRC).toMatch(/comp<Computer size=/);
+    // The closing "ter" sits at the end of a template literal, so match the
+    // glyph-then-text boundary rather than full markup (the </span> is concatenated
+    // from the next string).
+    expect(SRC).toMatch(/\/>ter/);
+  });
+
+  it("keeps the wordmark out of the way when the instance has real text", () => {
+    // Guarded by !containsText so a variant that DOES carry live copy is not
+    // overwritten with a hardcoded wordmark.
+    expect(SRC).toMatch(/sn === "Computer Action" && !containsText\(n\)/);
+  });
+});

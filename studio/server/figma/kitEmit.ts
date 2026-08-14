@@ -1327,6 +1327,38 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
       }
     }
 
+    // The "computer" WORDMARK pill. Not a shape the mapping table can express: the
+    // lettering is individual VECTOR glyphs (no text nodes), so a faithful emit
+    // paints each letter as its filled bounding box — a row of black blocks — and a
+    // control substitution stretches one letter across the pill. The shape guard
+    // stops the substitution but can't supply the artwork.
+    //
+    // The kit already solves this: NavSidebar's `ComputerWordmark` renders
+    // "comp" + the arcade-gen `Computer` glyph standing in for the "u" + "ter".
+    // Rebuild that here from the same glyph — kitEmit imports from
+    // `arcade/components` only (no composite tier), so it can't call the kit's
+    // component, but it CAN use the one real asset the kit is built from.
+    // Keep the pill's own Figma box/fill; only the contents come from the kit.
+    if (n.type === "INSTANCE") {
+      const { setName: sn } = resolveIdentity(n.componentId, ctx.components, ctx.componentSets);
+      if (sn === "Computer Action" && !containsText(n)) {
+        usedKit.add("Computer");
+        kitInstanceCount++;
+        if (n.type === "INSTANCE") matchedInstances++;
+        const box = nodeBox(n, px, py, flex);
+        // Scale the wordmark to the pill: the design's is 15px text in a 40px pill.
+        const fs2 = Math.max(11, Math.round((b.height ?? 40) * 0.375));
+        const gsz = Math.max(9, Math.round(fs2 * 0.867));
+        lines.push(
+          `${pad}<div${figmaIdAttr(n)} style=${sx({ ...box, display: "flex", alignItems: "center", justifyContent: "center" })}>` +
+          `<span style={{display: "inline-flex", alignItems: "baseline", fontSize: "${fs2}px", fontWeight: 500, letterSpacing: "-0.02em"}}>` +
+          `comp<Computer size={${gsz}} style={{alignSelf: "center", margin: "0 1px"}} />ter` +
+          `</span></div>`,
+        );
+        return;
+      }
+    }
+
     if (k) {
       const p = instanceProps(n);
       const w = b.width ?? 16;
