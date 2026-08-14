@@ -186,17 +186,27 @@ function isBaseComponent(setName: string): boolean {
  * doesn't spam the log. Pure + exported so it's unit-testable.
  */
 export function formatCoverage(
-  result: { totalInstances: number; matchedInstances: number; unmatchedSets: Record<string, number> },
+  result: {
+    totalInstances: number;
+    matchedInstances: number;
+    unmatchedSets: Record<string, number>;
+    shapeRejected?: string[];
+  },
   topN = 5,
 ): string {
-  const { totalInstances, matchedInstances, unmatchedSets } = result;
+  const { totalInstances, matchedInstances, unmatchedSets, shapeRejected } = result;
   const pct = totalInstances > 0 ? Math.round((matchedInstances / totalInstances) * 100) : 0;
   const top = Object.entries(unmatchedSets)
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .slice(0, topN)
     .map(([name, count]) => `${name} ×${count}`);
   const backlog = top.length ? ` — top unmatched: ${top.join(", ")}` : "";
-  return `${matchedInstances}/${totalInstances} instances are real kit components (${pct}%)${backlog}`;
+  // A shape-vetoed mapping is NOT the same as "no mapping exists" — say so, or the
+  // next person goes looking for a mapping that is already there.
+  const vetoed = shapeRejected?.length
+    ? ` — shape-vetoed: ${shapeRejected.slice(0, topN).join(", ")}`
+    : "";
+  return `${matchedInstances}/${totalInstances} instances are real kit components (${pct}%)${backlog}${vetoed}`;
 }
 
 /**

@@ -979,6 +979,12 @@ export interface EmitResult {
   /** Set NAME → count for instances that did NOT match any kit mapping. The
    *  curation backlog: the highest-count names are the best next mappings. */
   unmatchedSets: Record<string, number>;
+  /** Mappings the shape guard vetoed, as `Kit←SetName WxH`. These matched by NAME
+   *  but the component could not occupy the box Figma drew (a 216x40 wordmark pill
+   *  matched `IconButton`; a 28x28 search button matched `Select`). Distinct from
+   *  `unmatchedSets`: the mapping EXISTS and is wrong for this node, so the answer
+   *  is a better mapping rule, not a new entry. */
+  shapeRejected: string[];
 }
 
 export interface EmitOptions extends EmitContext {
@@ -1013,6 +1019,11 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
   let totalInstances = 0;
   let matchedInstances = 0;
   const unmatchedSets: Record<string, number> = {};
+  // Mappings the shape guard turned down, e.g. "IconButton←Search bar 216x40".
+  // Surfaced in the coverage line: a silent rejection reads as "no match found"
+  // when it was really "matched, then vetoed", which sends the next person
+  // hunting for a missing mapping that already exists.
+  const shapeRejected: string[] = [];
   const tok = makeTokenResolver(opts.variables ?? null);
 
   const assetRef = (nodeId: string): string | null => {
@@ -1038,14 +1049,29 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
     flex.inFlex ? flexChildStyle(n, flex.parentMode, tok) : boxStyle(n, px, py, tok);
 
   function emitAvatar(n: RawNode, px: number, py: number, pad: string, flex: FlexCtx, opts2: { type?: string } = {}): void {
-    usedKit.add("Avatar");
-    kitInstanceCount++;
     const b = n.absoluteBoundingBox ?? {};
     const p = instanceProps(n);
     const img = avatarImgId(n);
     const v = img ? assetRef(img) : null;
     const init = p["↪️ Avatar Initials"] ?? p["Avatar Initials"] ?? p["Account Initial"] ?? "";
-    const name = typeof init === "string" && init && init !== "False" ? init : "User";
+    // NO FABRICATED NAME. This used to fall back to "User", and arcade-gen's
+    // Avatar renders `name`'s initial whenever it has no image — so every avatar
+    // Figma leaves EMPTY (initials layer switched off, no photo) came out as a
+    // visible "U". One import had 24 avatars where the design paints ~6.
+    // `showInitials` needs a truthy name, so an empty string yields the bare
+    // circle Figma actually draws. Never add a pixel the design doesn't have.
+    const name = typeof init === "string" && init && init !== "False" ? init : "";
+
+    // An avatar with NEITHER a photo NOR initials paints nothing in Figma — the
+    // designer switched the letter layer off and left no image. arcade-gen's Avatar
+    // has no "empty" state: with no name it falls back to a generic person glyph,
+    // so emitting one invents a visual the design does not have. (First pass here
+    // dropped a fabricated name="User", which only traded a "U" for that glyph —
+    // 17 phantom avatars either way on one screen.) Emit nothing at all.
+    if (!v && !name) return;
+
+    usedKit.add("Avatar");
+    kitInstanceCount++;
     const attrs = [
       v ? `src={${v}}` : "",
       `name=${JSON.stringify(String(name))}`,
@@ -1054,6 +1080,47 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
     ].filter(Boolean).join(" ");
     lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><Avatar ${attrs} /></div>`);
   }
+
+  /**
+   * Would this kit component plausibly occupy the box Figma drew?
+   *
+   * Name matching alone put a 216x40 WORDMARK PILL into an `IconButton` (which
+   * blew one letter of "computer" up to fill the pill) and a 28x28 SEARCH BUTTON
+   * into a `Select` (which rendered the words "Select…" where the design has a
+   * magnifier). Both are the same failure: the matched component belongs to a
+   * different SHAPE CLASS than the node, and geometry is the cheap tell — an icon
+   * button is never 5x wider than tall, a dropdown is never a 1:1 square.
+   *
+   * Deliberately narrow. This only rejects shapes that are impossible for the
+   * component, never merely unusual, because a false rejection silently downgrades
+   * a good mapping to flat pixels. A rejected node falls through to the faithful
+   * path, so the screen still looks right — it just carries a div instead of a
+   * component, and the rejection is reported in the coverage line.
+   */
+  // Shape rules, as a TABLE rather than a switch: the mapping-hygiene test scans
+  // kitEmit for `case "X":` to check every mapping has an emit case, and shape rules
+  // written as cases read to it like emit cases that render nothing.
+  //
+  // DELIBERATELY EXTREME thresholds, and only for the two substitutions observed to
+  // fail. A first pass used moderate ratios (1.6 / 1.5) across every square-ish and
+  // label-bearing control, and it vetoed NINE sound mappings in the hygiene fixtures
+  // — a false veto silently downgrades a good component to flat pixels, which is
+  // worse than the bug being fixed. So: only veto shapes that cannot be a mistake.
+  //   IconButton at ratio >= 3   — the wordmark pill was 216x40 (5.4)
+  //   Select     at ratio <= 1.1 — the search button was 28x28 (1.0)
+  // Widen only with a real failing import in hand.
+
+  function mappingFitsBox(kit: string, b: { width?: number; height?: number }): boolean {
+    const w = b.width ?? 0;
+    const h = b.height ?? 0;
+    if (w <= 0 || h <= 0) return true; // no geometry to judge — don't guess
+    const ratio = w / h;
+    if (kit === "IconButton") return ratio < 3;
+    if (kit === "Select") return ratio > 1.1;
+    return true;
+  }
+
+
 
   /** The glyph a kit IconButton/Button should render: a kit icon if the
    *  inner instance maps, else the original glyph exported as an SVG (so the
@@ -1221,7 +1288,16 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
     if (hidden(n)) return;
     const pad = "  ".repeat(ind);
     const b = n.absoluteBoundingBox ?? {};
-    const k = kitForNode(n, ctx);
+    let k = kitForNode(n, ctx);
+
+    // Shape sanity check BEFORE the coverage tally, so a rejected mapping counts
+    // as unmatched rather than inflating the kit percentage with a component that
+    // renders the wrong thing.
+    if (k && k.kind === "component" && !mappingFitsBox(k.kit, b)) {
+      const { setName } = resolveIdentity(n.componentId, ctx.components, ctx.componentSets);
+      shapeRejected.push(`${k.kit}←${setName ?? n.name ?? "?"} ${Math.round(b.width ?? 0)}x${Math.round(b.height ?? 0)}`);
+      k = null;
+    }
 
     // C3 — classify every visible instance for coverage telemetry. We only
     // count an instance as "matched" when it ACTUALLY emits as a kit component
@@ -1293,6 +1369,20 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
           const texts = visibleTexts(n).filter((t) => t.trim() && t.trim() !== "Slot");
           const label = p["✏️ Content"] ?? (texts.length ? texts[0] : null);
           if (p.Label === false || !label) {
+            // A labelless Button downgrades to an IconButton — but ONLY if the box
+            // is actually icon-button shaped. This is how a 216x40 SEARCH PILL
+            // containing the "computer" wordmark became an icon button: the
+            // wordmark is a vector, not text, so `label` was null and the downgrade
+            // fired regardless of geometry, blowing one letter up to fill the pill.
+            // A wide labelless box is not an icon button — decline the substitution
+            // and let the faithful path paint the artwork at its real size.
+            if (!mappingFitsBox("IconButton", b)) {
+              if (n.type === "INSTANCE") matchedInstances--;
+              shapeRejected.push(
+                `IconButton←${setNm || n.name || "?"} ${Math.round(b.width ?? 0)}x${Math.round(b.height ?? 0)}`,
+              );
+              break;
+            }
             usedKit.add("IconButton");
             kitInstanceCount++;
             const g = buttonGlyph(n);
@@ -1365,7 +1455,11 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
           kitInstanceCount++;
           const texts = visibleTexts(n).filter((t) => t.trim() && t.trim() !== "Slot");
           const placeholder = texts[0] ?? "Select…";
-          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><Select.Root><Select.Trigger><Select.Value placeholder=${JSON.stringify(placeholder)} /></Select.Trigger></Select.Root></div>`);
+          // Adopt Figma's box, like the other substituted controls do. Without this
+          // the trigger renders at its own natural width and spills out of the slot
+          // Figma drew — a 95px "Filter by" grew wide enough to sit on top of the
+          // search button beside it.
+          lines.push(`${pad}<div${figmaIdAttr(n)} style=${sx(centerBox(n, px, py, flex))}><Select.Root><Select.Trigger${controlBoxStyle(n)}><Select.Value placeholder=${JSON.stringify(placeholder)} /></Select.Trigger></Select.Root></div>`);
           return;
         }
         case "Breadcrumb": {
@@ -1560,7 +1654,11 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
           kitInstanceCount++;
           // FIX 4: Strip "Slot" placeholder to match Banner/TextArea/SplitButton.
           const texts = visibleTexts(n).filter((t) => t.trim() && t.trim() !== "Slot");
-          const combo = texts[0] ?? "⌘K";
+          // JOIN every text layer. Taking texts[0] dropped the "K" from a pill
+          // that draws "⌘" and "K" as two separate layers — the shortcut rendered
+          // as a lone ⌘. Joining also handles the single-layer "⌘K" form, which
+          // the splitter below breaks apart anyway.
+          const combo = texts.length ? texts.join(" ") : "⌘K";
           // Split on common separators (⌘K, "Cmd K", "Ctrl+Shift+P") into labels.
           const keys = combo.split(/[\s+]+/).flatMap((seg) =>
             // keep multi-char words whole; split bare glyph runs like "⌘K" into ⌘,K
@@ -1839,5 +1937,6 @@ ${lines.join("\n")}
     totalInstances,
     matchedInstances,
     unmatchedSets,
+    shapeRejected,
   };
 }

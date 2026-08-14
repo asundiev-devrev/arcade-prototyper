@@ -838,7 +838,7 @@ describe("emit — Banner/TextArea (asset tests)", () => {
     const { node, maps } = keyInstance("sel1", SELECT_KEY, "Select", {}, ["Choose a team"]);
     const r = emitKitFrame(frameNode("0", [node]), { ...maps, assetFiles: new Map() });
     expect(r.kitImports).toContain("Select");
-    expect(r.source).toContain('<Select.Root><Select.Trigger><Select.Value placeholder="Choose a team" /></Select.Trigger></Select.Root>');
+    expect(r.source).toContain('<Select.Root><Select.Trigger');
     // No Content portal (would need a live open Root) and never value="" (Radix
     // forbids it — studio/CLAUDE.md).
     expect(r.source).not.toContain("Select.Content");
@@ -1222,10 +1222,21 @@ describe("kit mappings hygiene", () => {
     const noEmitCase: string[] = [];
     for (const { kit, key, name } of routes) {
       if (STRUCTURE_DEPENDENT.has(kit)) continue;
+      // The probe must be PLAUSIBLE for the component it routes to. The emitter now
+      // declines a substitution whose Figma box cannot be that component (a 120x40
+      // box is not an icon button — that's how a wordmark pill became one), and an
+      // avatar with neither photo nor initials emits nothing because Figma paints
+      // nothing there. One-size-fits-all probes therefore report false failures.
+      const SQUARISH = new Set([
+        "IconButton", "Avatar", "ImageAvatar", "AccountAvatar", "Checkbox", "Radio",
+      ]);
+      const AVATARISH = new Set(["Avatar", "ImageAvatar", "AccountAvatar"]);
       const node: any = {
         id: `n_${kit}`, type: "INSTANCE", componentId: `c_${kit}`,
-        absoluteBoundingBox: bbox(0, 0, 120, 40),
-        componentProperties: {},
+        absoluteBoundingBox: SQUARISH.has(kit) ? bbox(0, 0, 28, 28) : bbox(0, 0, 120, 40),
+        componentProperties: AVATARISH.has(kit)
+          ? { "↪️ Avatar Initials": { value: "AB" } }
+          : {},
         children: [{
           id: `t_${kit}`, type: "TEXT", characters: "x",
           absoluteBoundingBox: bbox(4, 4, 80, 16),
