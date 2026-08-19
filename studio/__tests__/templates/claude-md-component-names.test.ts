@@ -25,6 +25,7 @@ import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { PRIMITIVE_CAPABILITIES } from "../../server/kitManifest";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -133,15 +134,82 @@ function compoundMembers(decl: string): Map<string, Set<string>> {
 const BARREL = barrelExports(DECL);
 const MEMBERS = compoundMembers(DECL);
 
-/** prototype-kit's own barrel (`arcade-prototypes`) — composites + templates. */
+/**
+ * prototype-kit's own barrel (`arcade-prototypes`) — composites + templates.
+ *
+ * VALUE exports only, parsed from the export statements. The previous version
+ * matched any capitalized word in the file, which swallowed comment prose
+ * ("Composites"), path segments and `export type` prop-type names. Every
+ * spurious member SILENTLY DISABLED the sub-part assertion for that name
+ * (`if (KIT.has(r.root)) continue`), so a loose match here did not merely
+ * over-report — it switched off the check this file exists to perform.
+ */
 function kitExports(): Set<string> {
   const src = fs.readFileSync(path.join(STUDIO, "prototype-kit/index.ts"), "utf-8");
   const out = new Set<string>();
-  for (const m of src.matchAll(/\b([A-Z][A-Za-z0-9]*)\b/g)) out.add(m[1]);
+  for (const m of src.matchAll(/^export \{([^}]*)\} from/gm)) {
+    for (const token of m[1].split(",")) {
+      const name = token.trim().replace(/^[\w$]+\s+as\s+/, "");
+      if (/^[A-Z][A-Za-z0-9]*$/.test(name)) out.add(name);
+    }
+  }
   return out;
 }
 
 const KIT = kitExports();
+
+/**
+ * Coverage floors.
+ *
+ * A name-based assertion cannot see its own extractor going quiet. If a future
+ * arcade-gen bump reformats the bundled declaration, `compoundMembers` returns an
+ * empty map, every sub-part check below falls through `if (!members) continue`,
+ * and the suite passes green while verifying nothing at all — the exact silent rot
+ * this file was written to stop, one level up. Counts are the only thing that
+ * notices. Raise them deliberately as the kit grows; never lower one to green a run.
+ */
+const FLOORS = {
+  barrel: 250,
+  compounds: 20,
+  kit: 34,
+  subPartsChecked: 75,
+  // The capability prose is prop-heavy; only a handful of entries name a
+  // sub-part at all. Small, but it still catches the extractor going quiet.
+  capabilityRefsChecked: 3,
+};
+
+// ---- Capability prose (rendered into KIT-MANIFEST, so it carries template weight) ----
+
+/**
+ * Sub-component shapes the capability prose quotes in order to WARN against them
+ * ("writing `<ToggleGroup.Root>` crashes the frame"). Each is asserted ABSENT from
+ * the barrel below, so the day one becomes real the warning is a lie and this test
+ * says so — the same bidirectional contract as DOCUMENTED_AS_ABSENT above.
+ */
+const CAPABILITY_BROKEN_SHAPES = ["ToggleGroup.Root"];
+
+/** Backticked tokens in the prose that are not component references. */
+const CAPABILITY_NOT_COMPONENTS = new Set([...NOT_COMPONENTS, "STRINGS", "TRUE", "NO", "NOT"]);
+
+type CapRef = { root: string; sub: string | null; where: string };
+
+/** Component references made by the capability prose, in both `X.Y` and <X.Y> form. */
+function capabilityRefs(): CapRef[] {
+  const refs: CapRef[] = [];
+  for (const [where, prose] of Object.entries(PRIMITIVE_CAPABILITIES)) {
+    for (const m of prose.matchAll(/<([A-Z][A-Za-z0-9]*)(?:\.([A-Z][A-Za-z0-9]*))?\b/g)) {
+      refs.push({ root: m[1], sub: m[2] ?? null, where });
+    }
+    for (const m of prose.matchAll(/`([^`]+)`/g)) {
+      const id = m[1].trim().match(/^<?([A-Z][A-Za-z0-9]*)(?:\.([A-Z][A-Za-z0-9]*))?\/?>?$/);
+      if (id) refs.push({ root: id[1], sub: id[2] ?? null, where });
+    }
+  }
+  return refs;
+}
+
+const CAP_REFS = capabilityRefs();
+
 
 // ---- What the template claims ----
 
@@ -191,6 +259,9 @@ function templateRefs(): Ref[] {
 
 const REFS = templateRefs();
 
+/** How many sub-part claims the assertion below actually compared, not just saw. */
+let subPartsChecked = 0;
+
 describe("CLAUDE.md.tpl component names", () => {
   it("extracts a meaningful number of component references", () => {
     // Sanity floor: if the extractor silently stops matching, the two real
@@ -221,6 +292,7 @@ describe("CLAUDE.md.tpl component names", () => {
       if (KIT.has(r.root)) continue;
       const members = MEMBERS.get(r.root);
       if (!members) continue;
+      subPartsChecked++;
       if (!members.has(r.sub)) {
         bogus.push(`${r.root}.${r.sub} (${r.where}) — real sub-parts: ${[...members].join(", ")}`);
       }
@@ -251,6 +323,24 @@ describe("CLAUDE.md.tpl component names", () => {
     expect(BARREL.has("SplitButtonItem")).toBe(true);
   });
 
+  it("the derived truth it checks against is actually populated", () => {
+    // Floors, not names: see FLOORS above. Each of these silently going empty
+    // turns one of the assertions in this file into a no-op that still passes.
+    expect(BARREL.size, "barrel exports collapsed — is the `export { … }` line still one line?").toBeGreaterThanOrEqual(FLOORS.barrel);
+    expect(MEMBERS.size, "compound member extraction collapsed — did the declaration format change?").toBeGreaterThanOrEqual(FLOORS.compounds);
+    expect(KIT.size, "prototype-kit export parsing collapsed").toBeGreaterThanOrEqual(FLOORS.kit);
+  });
+
+  it("it compared a meaningful number of sub-part claims, not just skipped them", () => {
+    // Every skip path in the assertion above (kit component, no derivable members)
+    // is a claim that went UNVERIFIED. Without this, widening a skip would read as
+    // a pass.
+    expect(
+      subPartsChecked,
+      `only ${subPartsChecked} sub-part claims were actually compared against the barrel — the rest hit a skip path`,
+    ).toBeGreaterThanOrEqual(FLOORS.subPartsChecked);
+  });
+
   it("the exports the write-hook says have no `.Root` really have none", () => {
     // Mirrors NO_ROOT_SUBPART in server/hooks/validateComponentProps.mjs, which
     // hardcodes this set to stay cheap on every Write. If a kit bump makes one
@@ -260,5 +350,77 @@ describe("CLAUDE.md.tpl component names", () => {
       expect(BARREL.has(name), `${name} vanished from the barrel`).toBe(true);
       expect(MEMBERS.get(name)?.has("Root") ?? false, `${name} gained a .Root`).toBe(false);
     }
+  });
+});
+
+/**
+ * The same guard, applied to `PRIMITIVE_CAPABILITIES` in server/kitManifest.ts.
+ *
+ * That prose is rendered into KIT-MANIFEST.md and read by the generating agent, so a
+ * wrong fact there lands with exactly the force of a wrong fact in CLAUDE.md.tpl —
+ * but kitManifest.test.ts only asserts that certain STRINGS appear in it, which a
+ * confidently-wrong claim passes. Deliberately NOT checked here: whether an arbitrary
+ * prop name exists. Input/Button take theirs from `ButtonHTMLAttributes` and
+ * `VariantProps`, Select/Tabs/Accordion from the Radix primitive types, and Switch
+ * through an `Omit<ToggleProps, …>` intersection — a positive prop-existence check
+ * would need real type resolution and would otherwise fire on valid props. Compound
+ * SHAPE is the part that is fully derivable, and it is the part that has burned us.
+ */
+describe("PRIMITIVE_CAPABILITIES facts", () => {
+  it("names only components that exist", () => {
+    const unknown = Object.keys(PRIMITIVE_CAPABILITIES).filter((n) => !BARREL.has(n) && !KIT.has(n));
+    expect(unknown, `the capability table documents components no barrel exports: ${unknown.join(", ")}`).toEqual([]);
+  });
+
+  it("covers a meaningful number of primitives", () => {
+    expect(Object.keys(PRIMITIVE_CAPABILITIES).length).toBeGreaterThanOrEqual(12);
+  });
+
+  it("every component it mentions in passing exists too", () => {
+    // The prose steers the agent sideways ("use `MultiSelect` or `Combobox` instead"),
+    // and a rename would leave it recommending a component that no longer exists.
+    const unresolved = [
+      ...new Set(
+        CAP_REFS.filter(
+          (r) => !CAPABILITY_NOT_COMPONENTS.has(r.root) && !BARREL.has(r.root) && !KIT.has(r.root),
+        ).map((r) => `${r.root} (in the ${r.where} entry)`),
+      ),
+    ].sort();
+    expect(unresolved, `the capability table recommends components that do not exist:\n  ${unresolved.join("\n  ")}`).toEqual([]);
+  });
+
+  it("every sub-part it writes positively is real", () => {
+    let checked = 0;
+    const bogus: string[] = [];
+    for (const r of CAP_REFS) {
+      if (!r.sub || CAPABILITY_NOT_COMPONENTS.has(r.root)) continue;
+      if (CAPABILITY_BROKEN_SHAPES.includes(`${r.root}.${r.sub}`)) continue; // quoted to warn against
+      if (KIT.has(r.root)) continue;
+      const members = MEMBERS.get(r.root);
+      if (!members) continue;
+      checked++;
+      if (!members.has(r.sub)) {
+        bogus.push(`${r.root}.${r.sub} (in the ${r.where} entry) — real sub-parts: ${[...members].join(", ")}`);
+      }
+    }
+    expect(
+      checked,
+      "no capability sub-part claim was actually compared — the extractor or the prose format moved",
+    ).toBeGreaterThanOrEqual(FLOORS.capabilityRefsChecked);
+    expect(
+      [...new Set(bogus)].sort(),
+      `the capability table tells the agent to write sub-components that render \`undefined\`:\n  ${bogus.join("\n  ")}`,
+    ).toEqual([]);
+  });
+
+  it("the shapes it warns are broken really are broken", () => {
+    const nowReal = CAPABILITY_BROKEN_SHAPES.filter((shape) => {
+      const [root, sub] = shape.split(".");
+      return MEMBERS.get(root)?.has(sub) ?? false;
+    });
+    expect(
+      nowReal,
+      `${nowReal.join(", ")} exists now — the capability table still warns it crashes the frame. Update the prose.`,
+    ).toEqual([]);
   });
 });
