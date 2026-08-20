@@ -1,4 +1,5 @@
 import type { CompactComponent, CompactLayout, CompactNode, CompactStyle, CompactText, NodeType, SizeAxis } from "./types";
+import { inkPaint } from "./resolveTokens";
 
 // Real Figma frames are routinely 9–11 deep (nested auto-layout frames + groups
 // that survive compactTree's passthrough-collapse pass). 8 was too aggressive
@@ -235,8 +236,9 @@ function readStyle(n: any): CompactStyle | undefined {
 }
 
 function solidFillHex(paints: any): string | undefined {
-  if (!Array.isArray(paints)) return undefined;
-  const solid = paints.find((p) => p?.type === "SOLID" && p.visible !== false);
+  // inkPaint, not "first visible solid": a theme-aware colour is a stack whose visible
+  // layer is the opaque one, so the naive read reported the half-opacity switch layer.
+  const solid = inkPaint(paints);
   if (!solid?.color) return undefined;
   const { r, g, b } = solid.color;
   const toHex = (v: number) => Math.round(v * 255).toString(16).padStart(2, "0").toUpperCase();

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveTokens } from "../../../server/figma/resolveTokens";
+import { inkPaint, readColorVar, resolveTokens } from "../../../server/figma/resolveTokens";
 import { compactTree } from "../../../server/figma/compactTree";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -89,5 +89,48 @@ describe("resolveTokens", () => {
     const { tree: resolved, tokens } = resolveTokens(tree, rawById, variables);
     expect(resolved.children?.[0].style?.fill).toBe("surface/raised");
     expect(tokens.colors["surface/raised"]).toBe("#E6E6E6");
+  });
+});
+
+// A theme-aware colour in Figma is not one paint. It is a stack: a half-opacity
+// COLOR_DODGE layer, an opaque MULTIPLY layer carrying the colour variable, and a
+// zero-opacity NORMAL white — the switch that lets one component serve both themes.
+// Reading "the first visible solid" picked the dodge layer, so every secondary string
+// in an imported screen arrived at half strength and unbound. Both halves of that bug
+// are guarded here, because either one alone still ships the wrong colour.
+describe("inkPaint — the paint a person actually sees", () => {
+  const grey = { r: 0.478, g: 0.459, b: 0.475, a: 1 };
+  const themeStack = [
+    { opacity: 0.5, blendMode: "COLOR_DODGE", type: "SOLID", color: grey },
+    {
+      blendMode: "MULTIPLY", type: "SOLID", color: grey,
+      boundVariables: { color: { type: "VARIABLE_ALIAS", id: "VariableID:fg/1" } },
+    },
+    { opacity: 0, blendMode: "NORMAL", type: "SOLID", color: { r: 1, g: 1, b: 1, a: 1 } },
+  ];
+
+  it("picks the opaque layer out of a theme-switching stack", () => {
+    expect(inkPaint(themeStack)?.blendMode).toBe("MULTIPLY");
+    expect(inkPaint(themeStack)?.opacity).toBeUndefined(); // i.e. fully opaque
+  });
+
+  it("keeps genuinely translucent paint translucent", () => {
+    // A disabled label really is drawn at 40%. Nothing in the stack is opaque, so the
+    // first visible paint wins and the alpha survives — otherwise this fix would trade
+    // one wrong colour for another.
+    const faded = [{ opacity: 0.4, type: "SOLID", color: grey }];
+    expect(inkPaint(faded)?.opacity).toBe(0.4);
+  });
+
+  it("ignores hidden and zero-opacity paints", () => {
+    expect(inkPaint([{ type: "SOLID", visible: false, color: grey }])).toBeUndefined();
+    expect(inkPaint([{ type: "SOLID", opacity: 0, color: grey }])).toBeUndefined();
+    expect(inkPaint([])).toBeUndefined();
+    expect(inkPaint(undefined)).toBeUndefined();
+  });
+
+  it("finds the variable the ink layer is bound to, not the unbound switch above it", () => {
+    const vars = { "VariableID:fg/1": { name: "fg/secondary" } };
+    expect(readColorVar(themeStack as any[], vars)).toBe("fg/secondary");
   });
 });

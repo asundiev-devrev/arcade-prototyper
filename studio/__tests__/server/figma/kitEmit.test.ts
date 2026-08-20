@@ -2057,3 +2057,52 @@ describe("interactive states", () => {
     expect(r.source).not.toContain("cursor-pointer");
   });
 });
+
+// The bug that made this necessary: the metric scored an imported screen 92 while every
+// secondary string on it rendered visibly lighter than the design. Figma draws a
+// theme-aware colour as a stack (half-opacity COLOR_DODGE, opaque MULTIPLY, zero-opacity
+// white); the emitter took the first visible solid, i.e. the 50% switch layer. So these
+// assert the emitted CSS, not the helper — a correct helper wired to nothing still ships
+// pale text.
+describe("theme-switching paint stacks emit the colour on screen", () => {
+  const grey = { r: 0.47843137383461, g: 0.4588235318660736, b: 0.4745098054409027, a: 1 };
+  const themeStack = (color: any = grey) => [
+    { opacity: 0.5, blendMode: "COLOR_DODGE", type: "SOLID", color },
+    {
+      blendMode: "MULTIPLY", type: "SOLID", color,
+      boundVariables: { color: { type: "VARIABLE_ALIAS", id: "VariableID:fg/1" } },
+    },
+    { opacity: 0, blendMode: "NORMAL", type: "SOLID", color: { r: 1, g: 1, b: 1, a: 1 } },
+  ];
+  const emit = (child: any) =>
+    emitKitFrame(frameNode("0", [child]), { components: {}, componentSets: {}, assetFiles: new Map() }).source;
+
+  it("paints text at full strength", () => {
+    const source = emit({
+      id: "t1", type: "TEXT", characters: "Last week of every quarter on Wed at 10am",
+      absoluteBoundingBox: bbox(8, 8, 240, 16),
+      style: { fontFamily: "Inter", fontSize: 12, fontWeight: 400, lineHeightPx: 16 },
+      fills: themeStack(),
+    });
+    expect(source).toMatch(/color: "#7a7579"/);
+    expect(source).not.toMatch(/rgba\(122,117,121/);
+  });
+
+  it("paints a surface at full strength", () => {
+    const source = emit({
+      id: "card", type: "FRAME", absoluteBoundingBox: bbox(0, 0, 200, 80), fills: themeStack(),
+    });
+    expect(source).toMatch(/background: "#7a7579"/);
+    expect(source).not.toMatch(/rgba\(122,117,121/);
+  });
+
+  it("still honours a genuinely translucent fill", () => {
+    const source = emit({
+      id: "t2", type: "TEXT", characters: "Disabled",
+      absoluteBoundingBox: bbox(8, 8, 60, 16),
+      style: { fontFamily: "Inter", fontSize: 12, fontWeight: 400, lineHeightPx: 16 },
+      fills: [{ opacity: 0.4, type: "SOLID", color: grey }],
+    });
+    expect(source).toMatch(/color: "rgba\(122,117,121,0.4\)"/);
+  });
+});

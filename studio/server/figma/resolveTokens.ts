@@ -72,15 +72,50 @@ export function resolveTokens(
 }
 
 /**
- * The Figma variable NAME bound to the first visible solid paint's color, or
+ * The paint that decides the ink a person actually sees.
+ *
+ * Figma draws a theme-aware colour as a STACK, not as one paint: a half-opacity
+ * COLOR_DODGE layer, an opaque MULTIPLY layer bound to the colour variable, and a
+ * zero-opacity NORMAL white. That is the machinery that lets one component flip
+ * between light and dark; only the opaque layer is ink, the other two are switches.
+ *
+ * Reading "the first visible solid" therefore picked the 50% dodge layer, and every
+ * theme-aware string imported at half strength — measurably lighter on screen than
+ * the design — while also losing its token, because the dodge layer carries no
+ * boundVariables.
+ *
+ * So: an opaque paint hides everything beneath it and is the ink. Only when no paint
+ * is opaque does the first visible one win, which keeps genuinely translucent text
+ * (a disabled label at 40%) translucent.
+ */
+export function inkPaint(paints: any): any | undefined {
+  if (!Array.isArray(paints)) return undefined;
+  const strength = (p: any) => (p.opacity ?? 1) * (p.color?.a ?? 1);
+  const visible = paints.filter((p) => p?.type === "SOLID" && p.visible !== false && strength(p) > 0);
+  if (!visible.length) return undefined;
+  const opaque = visible.filter((p) => strength(p) >= 0.999);
+  // Later paints render above earlier ones, so the last opaque paint is the top of the stack.
+  return opaque.length ? opaque[opaque.length - 1] : visible[0];
+}
+
+/**
+ * The Figma variable NAME bound to the paint that carries the visible ink, or
  * undefined when no paint is bound. Shared with the kit-emit engine
  * (kitEmit.ts) so both color paths read the same binding — the kit-emit branch
  * borrows ONLY this reader and does its own name → kit-token transform, rather
  * than re-running the compacted-tree rewrite above (which kit-emit doesn't use).
+ *
+ * When the ink paint itself is unbound, any bound sibling still wins over nothing:
+ * a token is theme-correct where a baked hex is only correct in one theme.
  */
 export function readColorVar(paints: any[], vars: Record<string, any>): string | undefined {
-  const solid = paints.find((p) => p?.type === "SOLID" && p.visible !== false);
-  const aliasId = solid?.boundVariables?.color?.id;
+  const ink = inkPaint(paints);
+  const bound = ink?.boundVariables?.color?.id
+    ? ink
+    : Array.isArray(paints)
+      ? paints.find((p) => p?.type === "SOLID" && p.visible !== false && p.boundVariables?.color?.id)
+      : undefined;
+  const aliasId = bound?.boundVariables?.color?.id;
   if (!aliasId) return undefined;
   return vars[aliasId]?.name;
 }

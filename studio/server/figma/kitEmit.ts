@@ -35,7 +35,7 @@ import {
   FILE_ATTACHMENT_DOC_TYPES,
   FIGMA_DOCUMENT_TO_DOC_TYPE,
 } from "./kitMappings";
-import { readColorVar } from "./resolveTokens";
+import { inkPaint, readColorVar } from "./resolveTokens";
 import { resolveKitTokenVar, type ColorProperty } from "./kitTokens";
 
 // ---------------------------------------------------------------------------
@@ -461,7 +461,10 @@ function paintStyle(n: RawNode, tok?: TokenResolver | null): Style {
   const s: Style = {};
   if (typeof n.opacity === "number" && n.opacity < 1) s.opacity = Math.round(n.opacity * 1000) / 1000;
   if (n.type !== "TEXT") {
-    for (const f of n.fills ?? []) {
+    // The ink paint first, then the raw order. A theme-aware surface is a stack of
+    // blend-mode paints whose visible colour is the opaque one rather than the first
+    // (see inkPaint); falling through keeps gradients and images working as before.
+    for (const f of [inkPaint(n.fills), ...(n.fills ?? [])].filter(Boolean)) {
       const v = paintCss(f);
       if (v) {
         // SOLID fills can map to a kit token; gradients can't (no single var).
@@ -676,12 +679,10 @@ function textStyle(n: RawNode, tok?: TokenResolver | null): Style {
   if (st.lineHeightPx) s.lineHeight = `${st.lineHeightPx}px`;
   if (st.letterSpacing) s.letterSpacing = `${st.letterSpacing.toFixed(2)}px`;
   s.textAlign = ({ LEFT: "left", CENTER: "center", RIGHT: "right", JUSTIFIED: "justify" } as any)[st.textAlignHorizontal] ?? "left";
-  for (const f of n.fills ?? []) {
-    if (f.type === "SOLID" && f.visible !== false) {
-      const hex = rgba(f.color, f.opacity ?? 1);
-      s.color = tok ? tok.colorFor(n.fills, "color", hex) : hex;
-      break;
-    }
+  const ink = inkPaint(n.fills);
+  if (ink) {
+    const hex = rgba(ink.color, ink.opacity ?? 1);
+    s.color = tok ? tok.colorFor(n.fills, "color", hex) : hex;
   }
   if (st.textTruncation === "ENDING") {
     s.whiteSpace = "nowrap"; s.overflow = "hidden"; s.textOverflow = "ellipsis";
@@ -724,17 +725,15 @@ function centerBox(n: RawNode, px: number, py: number, ctx?: { inFlex?: boolean;
 function vectorColor(n: RawNode, tok?: TokenResolver | null): string | null {
   if (hidden(n)) return null;
   if (GRAPHIC_TYPES.has(n.type)) {
-    for (const f of n.fills ?? []) {
-      if (f.type === "SOLID" && f.visible !== false) {
-        const hex = rgba(f.color, f.opacity ?? 1);
-        return tok ? tok.colorFor(n.fills, "color", hex) : hex;
-      }
+    const fill = inkPaint(n.fills);
+    if (fill) {
+      const hex = rgba(fill.color, fill.opacity ?? 1);
+      return tok ? tok.colorFor(n.fills, "color", hex) : hex;
     }
-    for (const st of n.strokes ?? []) {
-      if (st.type === "SOLID" && st.visible !== false) {
-        const hex = rgba(st.color, st.opacity ?? 1);
-        return tok ? tok.colorFor(n.strokes, "color", hex) : hex;
-      }
+    const stroke = inkPaint(n.strokes);
+    if (stroke) {
+      const hex = rgba(stroke.color, stroke.opacity ?? 1);
+      return tok ? tok.colorFor(n.strokes, "color", hex) : hex;
     }
   }
   for (const c of n.children ?? []) {
@@ -779,11 +778,10 @@ function escTextWithBreaks(t: string): string {
  * present) else literal hex. Returns null when the override carries no fill.
  */
 function overrideColor(ov: any, tok?: TokenResolver | null): string | null {
-  for (const f of ov?.fills ?? []) {
-    if (f.type === "SOLID" && f.visible !== false) {
-      const hex = rgba(f.color, f.opacity ?? 1);
-      return tok ? tok.colorFor(ov.fills, "color", hex) : hex;
-    }
+  const ink = inkPaint(ov?.fills);
+  if (ink) {
+    const hex = rgba(ink.color, ink.opacity ?? 1);
+    return tok ? tok.colorFor(ov.fills, "color", hex) : hex;
   }
   return null;
 }
@@ -1198,7 +1196,7 @@ export function emitKitFrame(doc: RawNode, opts: EmitOptions): EmitResult {
     // default — which for the Select trigger is transparent, where the design draws
     // a grey "Filter by" pill. The component still brings its type, chevron,
     // spacing and states; only the surface follows the design.
-    for (const f of n.fills ?? []) {
+    for (const f of [inkPaint(n.fills), ...(n.fills ?? [])].filter(Boolean)) {
       const v = paintCss(f);
       if (v) {
         parts.push(`background: ${JSON.stringify(v)}`);
