@@ -1012,11 +1012,12 @@ For a frame built from a Figma URL, there is a number for how close it landed. R
 pnpm fidelity <slug>
 ```
 
-It renders the frame, fetches the same node from Figma, and prints one score out of 100, four components (presence / placement / colour / text), and the **worst regions named by their Figma layer trail**. Requirements: the preview must be running, and the frame must have been imported (the importer writes `frames/<slug>/source.json`, which is where the command learns which design to compare against). For a frame with no Figma source, pass `--figma=<url>`; without either, skip this section.
+It renders the frame, fetches the same node from Figma, and prints one score out of 100, four components (presence / placement / colour / text), and the **worst regions named by their Figma layer trail** — plus `compare.png`, the two screens side by side with those regions boxed. Requirements: the preview must be running, and the frame must have been imported (the importer writes `frames/<slug>/source.json`, which is where the command learns which design to compare against). For a frame with no Figma source, pass `--figma=<url>`; without either, skip this section.
 
 How to use it:
 
 - Run it once when the import finishes. That is the baseline.
+- **Look at `compare.png`** (its path is printed under `images`). It is the design and your render side by side with every finding boxed and numbered on both halves. Read it before you edit: if the region it points at looks right to you on the render, the harness is wrong and the fix is in the harness, not the frame.
 - Fix **the first worst region it names** — not something else you noticed, and not "general polish".
 - Run the same command again. It remembers the previous scores, prints the ladder, and tells you whether to go again or stop. It stops itself when the frame is unchanged, when the last edit bought less than a point, or at four attempts. Obey it — do not keep editing after a STOP, and do not re-run hoping for a different number.
 - `pnpm fidelity <slug> --restart` starts a fresh ladder, which is what a re-import wants.
